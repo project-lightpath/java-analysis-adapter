@@ -1,0 +1,202 @@
+{
+  "schemaVersion": "0.1.0",
+  "adr": "ADR-001",
+  "jiraIssue": "FLPATH-5000",
+  "statusVocabulary": [
+    "existing_support",
+    "configuration_work",
+    "confirmed_gap",
+    "unverified"
+  ],
+  "provider": {
+    "name": "Eclipse JDT Language Server",
+    "version": "1.63.0",
+    "role": "evaluation_starting_point",
+    "release": "202610191322",
+    "runtimeRequirementObserved": "Java 25"
+  },
+  "fixture": {
+    "name": "java21-quarkus-readiness-fixture",
+    "framework": "quarkus",
+    "javaRelease": 21,
+    "quarkusVersion": "3.40.1",
+    "buildTool": "Maven",
+    "productionProfile": "production",
+    "testProfile": "test",
+    "generatedSourceRoot": "generated-src/main/java"
+  },
+  "frameworks": [
+    {
+      "id": "quarkus",
+      "name": "Quarkus",
+      "version": "3.40.1",
+      "fixtureId": "java21-quarkus",
+      "javaRelease": 21,
+      "role": "primary Java 21 fixture"
+    },
+    {
+      "id": "spring-boot",
+      "name": "Spring Boot",
+      "version": "2.7.18",
+      "fixtureId": "fsi-spring-boot",
+      "javaRelease": 17,
+      "manifest": "spike/baselines/fsi-spring-boot.json",
+      "role": "framework and lifecycle baseline"
+    }
+  ],
+  "frameworkCoverage": [
+    {
+      "framework": "quarkus",
+      "fixtureId": "java21-quarkus",
+      "caseIds": [
+        "direct-call",
+        "interface-dispatch",
+        "cdi-injection",
+        "framework-entrypoint",
+        "callback-lambda",
+        "service-loader",
+        "reflection",
+        "dynamic-proxy",
+        "generated-source",
+        "build-profile"
+      ]
+    },
+    {
+      "framework": "spring-boot",
+      "fixtureId": "fsi-spring-boot",
+      "caseIds": [
+        "spring-mvc-entrypoint",
+        "transfer-controller-to-service",
+        "transaction-service-to-audit",
+        "transaction-service-to-jpa",
+        "spring-bean-callback",
+        "startup-callback"
+      ]
+    }
+  ],
+  "referenceBaselines": [
+    {
+      "id": "fsi-spring-boot",
+      "manifest": "spike/baselines/fsi-spring-boot.json",
+      "framework": "spring-boot",
+      "role": "Spring framework acceptance baseline"
+    }
+  ],
+  "requiredEvidence": [
+    "provider_version",
+    "framework_identity",
+    "framework_fixture_result",
+    "java_version",
+    "build_tool_version",
+    "source_fingerprint",
+    "dependency_fingerprint",
+    "build_profile",
+    "generated_source_fingerprint",
+    "analyzer_configuration",
+    "command",
+    "coverage_status",
+    "limitations",
+    "framework_entrypoint_evidence",
+    "framework_model_contract",
+    "analysis_context_contract",
+    "synthetic_framework_fact_evidence"
+  ],
+  "cases": [
+    {
+      "id": "direct-call",
+      "feature": "direct source call",
+      "fixtureSymbol": "com.projectlightpath.fixture.target.ServerUserAuthService#handleUserAuthRequestMessage",
+      "expectedRelationship": "definite",
+      "expectedOutcome": "definite_static_path",
+      "classification": "existing_support",
+      "mvpImpact": "baseline required",
+      "evidence": "probe incoming call hierarchy for UserAuthPublicKey#doAuth"
+    },
+    {
+      "id": "interface-dispatch",
+      "feature": "interface/virtual dispatch",
+      "fixtureSymbol": "com.projectlightpath.fixture.service.TransferService#transfer",
+      "expectedRelationship": "possible_or_definite",
+      "expectedOutcome": "possible_static_path",
+      "classification": "existing_support",
+      "mvpImpact": "must preserve uncertainty",
+      "evidence": "compare interface target and concrete implementation call hierarchy"
+    },
+    {
+      "id": "cdi-injection",
+      "feature": "CDI constructor injection",
+      "fixtureSymbol": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "expectedRelationship": "possible",
+      "expectedOutcome": "possible_static_path",
+      "classification": "configuration_work",
+      "mvpImpact": "requires CDI enrichment or abstention"
+    },
+    {
+      "id": "framework-entrypoint",
+      "feature": "Quarkus REST/HTTP entrypoint",
+      "fixtureSymbol": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "expectedRelationship": "framework_owned",
+      "expectedOutcome": "possible_static_path",
+      "classification": "confirmed_gap",
+      "mvpImpact": "framework route metadata must be represented separately from Java callers",
+      "evidence": "probe incoming call hierarchy for TransferResource#transfer and inspect @Path/@POST metadata"
+    },
+    {
+      "id": "callback-lambda",
+      "feature": "callback and lambda dispatch",
+      "fixtureSymbol": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+      "expectedRelationship": "possible_or_definite",
+      "expectedOutcome": "possible_static_path",
+      "classification": "existing_support",
+      "mvpImpact": "must record invokedynamic/callback limits",
+      "evidence": "probe callback target and inspect generated call relationships"
+    },
+    {
+      "id": "service-loader",
+      "feature": "ServiceLoader provider binding",
+      "fixtureSymbol": "com.projectlightpath.fixture.audit.AuditProvider#record",
+      "expectedRelationship": "possible_or_unresolved",
+      "expectedOutcome": "possible_static_path",
+      "classification": "configuration_work",
+      "mvpImpact": "service metadata must be an AnalysisContext input"
+    },
+    {
+      "id": "reflection",
+      "feature": "reflection and Method.invoke",
+      "fixtureSymbol": "com.projectlightpath.fixture.reflective.ReflectiveTarget#validate",
+      "expectedRelationship": "unresolved",
+      "expectedOutcome": "unknown",
+      "classification": "confirmed_gap",
+      "mvpImpact": "never infer a definite edge from a string target"
+    },
+    {
+      "id": "dynamic-proxy",
+      "feature": "java.lang.reflect.Proxy",
+      "fixtureSymbol": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+      "expectedRelationship": "unresolved",
+      "expectedOutcome": "unknown",
+      "classification": "confirmed_gap",
+      "mvpImpact": "proxy registration/modeling must be explicit"
+    },
+    {
+      "id": "generated-source",
+      "feature": "generated source root",
+      "fixtureSymbol": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+      "expectedRelationship": "definite_when_included",
+      "expectedOutcome": "definite_static_path",
+      "classification": "existing_support",
+      "mvpImpact": "generated sources must be fingerprinted and included in the profile",
+      "evidence": "run once with generated-src and once without it"
+    },
+    {
+      "id": "build-profile",
+      "feature": "production/test Maven profiles",
+      "fixtureSymbol": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "expectedRelationship": "context_dependent",
+      "expectedOutcome": "partial",
+      "classification": "configuration_work",
+      "mvpImpact": "profile selection must be recorded in AnalysisContext",
+      "evidence": "record production and test profile fingerprints separately"
+    }
+  ]
+}

@@ -1,0 +1,356 @@
+{
+  "schemaVersion": "0.1.0",
+  "artifact": "FrameworkModel",
+  "issue": "FLPATH-5000",
+  "purpose": "Declarative framework enrichment rules for turning verified Quarkus and Spring Boot metadata into separate synthetic call facts.",
+  "scope": "spike_only_no_production_adapter",
+  "certaintyPolicy": {
+    "states": [
+      "definite",
+      "possible",
+      "unresolved"
+    ],
+    "rules": [
+      {
+        "state": "definite",
+        "requires": [
+          "selected AnalysisContext",
+          "one target after framework metadata and profile filtering",
+          "source, bytecode, or framework metadata that identifies the edge",
+          "no open-world or unmodeled runtime step"
+        ]
+      },
+      {
+        "state": "possible",
+        "requires": [
+          "selected AnalysisContext",
+          "bounded candidate set",
+          "evidence identifies the candidate set but not one runtime target"
+        ]
+      },
+      {
+        "state": "unresolved",
+        "requires": [
+          "missing framework metadata, open-world behavior, or unconstrained dynamic target"
+        ]
+      }
+    ],
+    "promotionGuard": "Never promote possible or unresolved framework/dynamic behavior to definite without new unique evidence in the selected AnalysisContext."
+  },
+  "edgeTypes": [
+    {
+      "id": "framework_entrypoint",
+      "description": "A framework-owned external event or dispatcher invokes an application method.",
+      "evidenceSemantics": {
+        "claim": "registered_or_effective_framework_mapping",
+        "providerCallerAbsence": "not_evidence_of_absence",
+        "applicationReferencePresence": "not_evidence_of_route_registration",
+        "coveragePolicy": "enumerate_all_bounded_routes_that_could_reach_the_target",
+        "runtimeSelectionInputs": [
+          "httpMethod",
+          "pathTemplate",
+          "consumes",
+          "produces",
+          "headers",
+          "parameters",
+          "activeAnalysisContext"
+        ]
+      },
+      "allowedCertainty": [
+        "definite",
+        "possible",
+        "unresolved"
+      ]
+    },
+    {
+      "id": "dependency_injection",
+      "description": "A framework injection point binds to a bean candidate or bean constructor.",
+      "allowedCertainty": [
+        "definite",
+        "possible",
+        "unresolved"
+      ]
+    },
+    {
+      "id": "proxy_dispatch",
+      "description": "A generated framework proxy, interceptor, or decorator dispatches to an application method.",
+      "allowedCertainty": [
+        "definite",
+        "possible",
+        "unresolved"
+      ]
+    },
+    {
+      "id": "lifecycle_callback",
+      "description": "A framework lifecycle owner invokes a bean, factory, runner, or callback method.",
+      "allowedCertainty": [
+        "definite",
+        "possible",
+        "unresolved"
+      ]
+    },
+    {
+      "id": "generated_implementation",
+      "description": "Framework metadata binds an abstraction to generated application or framework implementation code.",
+      "allowedCertainty": [
+        "definite",
+        "possible",
+        "unresolved"
+      ]
+    }
+  ],
+  "frameworks": [
+    {
+      "id": "quarkus",
+      "name": "Quarkus",
+      "version": "3.40.1",
+      "fixtureId": "java21-quarkus",
+      "metadataSources": [
+        {
+          "id": "quarkus-rest-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "patterns": [
+            "jakarta.ws.rs.Path",
+            "jakarta.ws.rs.POST",
+            "jakarta.ws.rs.GET"
+          ],
+          "supports": [
+            "framework_entrypoint"
+          ]
+        },
+        {
+          "id": "quarkus-cdi-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "patterns": [
+            "jakarta.inject.Inject",
+            "jakarta.enterprise.context.ApplicationScoped"
+          ],
+          "supports": [
+            "dependency_injection",
+            "proxy_dispatch"
+          ]
+        },
+        {
+          "id": "quarkus-arc-bean-index",
+          "kind": "framework_build_metadata",
+          "status": "not_captured",
+          "patterns": [
+            "Arc bean types",
+            "qualifiers",
+            "alternatives",
+            "producer methods",
+            "generated client proxy targets"
+          ],
+          "supports": [
+            "dependency_injection",
+            "proxy_dispatch"
+          ]
+        },
+        {
+          "id": "quarkus-generated-source-root",
+          "kind": "generated_source_root",
+          "status": "observed",
+          "patterns": [
+            "generated-src/main/java"
+          ],
+          "supports": [
+            "generated_implementation"
+          ]
+        },
+        {
+          "id": "quarkus-service-descriptors",
+          "kind": "service_loader_descriptor",
+          "status": "observed",
+          "patterns": [
+            "META-INF/services"
+          ],
+          "supports": []
+        }
+      ],
+      "resolutionRules": [
+        {
+          "id": "quarkus-unique-rest-route",
+          "edgeType": "framework_entrypoint",
+          "when": "One effective @Path plus HTTP method maps to one application method in the selected profile.",
+          "certainty": "definite",
+          "claim": "registered_route_mapping",
+          "doesNotRequire": [
+            "incoming Java caller fact"
+          ],
+          "fallback": "possible for bounded route candidates; unresolved when route metadata or profile context is missing."
+        },
+        {
+          "id": "quarkus-unique-cdi-bean",
+          "edgeType": "dependency_injection",
+          "when": "One eligible bean remains after type, qualifier, alternative, and profile filtering.",
+          "certainty": "definite",
+          "fallback": "possible for a bounded source-visible candidate when Arc metadata is not captured; unresolved when type, qualifier, profile, or open-world dependency context is missing."
+        },
+        {
+          "id": "quarkus-generated-client-proxy",
+          "edgeType": "proxy_dispatch",
+          "when": "The bean type is known but the generated proxy/interceptor implementation is not captured.",
+          "certainty": "possible",
+          "fallback": "unresolved when the proxy target type is not bounded."
+        },
+        {
+          "id": "quarkus-generated-source-binding",
+          "edgeType": "generated_implementation",
+          "when": "The generated source root is selected and the generated symbol resolves uniquely.",
+          "certainty": "definite",
+          "fallback": "possible for a bounded generated implementation without source; unresolved when generation metadata is absent."
+        }
+      ],
+      "abstentions": [
+        {
+          "id": "quarkus-open-reflection",
+          "behavior": "unresolved",
+          "trigger": "Class.forName, Method.invoke, or equivalent target is not constrained by metadata.",
+          "reason": "A string or reflective call does not identify a unique method."
+        },
+        {
+          "id": "quarkus-unbounded-proxy",
+          "behavior": "unresolved",
+          "trigger": "Proxy target interfaces or handler bindings are not bounded by source/configuration evidence.",
+          "reason": "Generated proxy identity cannot be inferred from Proxy usage alone."
+        }
+      ]
+    },
+    {
+      "id": "spring-boot",
+      "name": "Spring Boot",
+      "version": "2.7.18",
+      "fixtureId": "fsi-spring-boot",
+      "metadataSources": [
+        {
+          "id": "spring-web-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "patterns": [
+            "org.springframework.web.bind.annotation.RequestMapping",
+            "org.springframework.web.bind.annotation.PostMapping",
+            "org.springframework.web.bind.annotation.RestController"
+          ],
+          "supports": [
+            "framework_entrypoint"
+          ]
+        },
+        {
+          "id": "spring-bean-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "patterns": [
+            "org.springframework.stereotype.Component",
+            "org.springframework.stereotype.Service",
+            "org.springframework.context.annotation.Configuration",
+            "org.springframework.context.annotation.Bean"
+          ],
+          "supports": [
+            "dependency_injection",
+            "lifecycle_callback"
+          ]
+        },
+        {
+          "id": "spring-bean-definition-registry",
+          "kind": "runtime_or_build_metadata",
+          "status": "not_captured",
+          "patterns": [
+            "component scan",
+            "profiles",
+            "conditions",
+            "primary and qualifier selection"
+          ],
+          "supports": [
+            "dependency_injection",
+            "lifecycle_callback",
+            "proxy_dispatch"
+          ]
+        },
+        {
+          "id": "spring-data-repository-contract",
+          "kind": "source_interface_metadata",
+          "status": "observed",
+          "patterns": [
+            "org.springframework.data.repository.Repository",
+            "org.springframework.data.jpa.repository.JpaRepository"
+          ],
+          "supports": [
+            "generated_implementation",
+            "proxy_dispatch"
+          ]
+        },
+        {
+          "id": "spring-aop-advisor-metadata",
+          "kind": "runtime_or_build_metadata",
+          "status": "not_captured",
+          "patterns": [
+            "@Transactional",
+            "Spring Security filter chain",
+            "JDK proxy",
+            "CGLIB proxy"
+          ],
+          "supports": [
+            "proxy_dispatch"
+          ]
+        }
+      ],
+      "resolutionRules": [
+        {
+          "id": "spring-unique-mvc-route",
+          "edgeType": "framework_entrypoint",
+          "when": "One effective @RequestMapping plus HTTP method maps to one controller method in the selected context.",
+          "certainty": "definite",
+          "claim": "registered_route_mapping",
+          "doesNotRequire": [
+            "incoming Java caller fact"
+          ],
+          "fallback": "possible for bounded route candidates; unresolved when effective properties or route metadata is missing."
+        },
+        {
+          "id": "spring-unique-component-bean",
+          "edgeType": "dependency_injection",
+          "when": "One component or @Bean candidate remains after profile, condition, qualifier, and primary filtering.",
+          "certainty": "definite",
+          "fallback": "possible for a bounded source-visible candidate when the bean registry is not captured; unresolved when profiles, conditions, qualifiers, or the effective ApplicationContext are missing."
+        },
+        {
+          "id": "spring-aop-proxy-target",
+          "edgeType": "proxy_dispatch",
+          "when": "An advisor identifies a bounded target method but generated proxy/interceptor order is not captured.",
+          "certainty": "possible",
+          "fallback": "unresolved when advisor or target metadata is missing."
+        },
+        {
+          "id": "spring-data-generated-repository",
+          "edgeType": "generated_implementation",
+          "when": "A repository interface and Spring Data factory contract identify a bounded generated implementation.",
+          "certainty": "possible",
+          "fallback": "unresolved when repository factory or effective context metadata is missing."
+        },
+        {
+          "id": "spring-lifecycle-callback",
+          "edgeType": "lifecycle_callback",
+          "when": "A @Bean method or CommandLineRunner implementation is selected in the effective application context.",
+          "certainty": "possible",
+          "fallback": "unresolved when conditional configuration or startup ordering is not known."
+        }
+      ],
+      "abstentions": [
+        {
+          "id": "spring-conditional-bean-open-world",
+          "behavior": "unresolved",
+          "trigger": "Profiles, conditions, external properties, or component-scan boundaries are missing.",
+          "reason": "Source annotations alone do not prove that a bean is instantiated in the selected context."
+        },
+        {
+          "id": "spring-open-reflection",
+          "behavior": "unresolved",
+          "trigger": "Reflection or dynamically selected proxy target is not constrained by Spring metadata.",
+          "reason": "Framework ownership does not make an open-world target unique."
+        }
+      ]
+    }
+  ]
+}

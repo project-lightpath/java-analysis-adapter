@@ -1,0 +1,180 @@
+{
+  "schemaVersion": "0.2.0",
+  "issue": "FLPATH-5000",
+  "adr": "ADR-001",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContextId": "spring-boot-production",
+  "provider": {
+    "name": "SootUp",
+    "version": "3.0.0",
+    "algorithms": [
+      "cha",
+      "rta"
+    ]
+  },
+  "fixture": {
+    "id": "fsi-spring-boot",
+    "framework": "spring-boot",
+    "frameworkName": "Spring Boot",
+    "javaRelease": 17,
+    "profile": "production",
+    "applicationClasses": 52,
+    "applicationMethods": 287
+  },
+  "authority": {
+    "targetBuildVerified": true,
+    "analysisScope": "production",
+    "hostPathsOmitted": true
+  },
+  "provenance": {
+    "runner": "spike/scripts/run_static_analysis.py",
+    "rawArtifact": "spike/runs/sootup-fsi-spring-with-deps.json",
+    "commandTemplate": "python3 spike/scripts/run_static_analysis.py --provider sootup --fixture spring",
+    "configuration": {
+      "framework": "spring-boot",
+      "analysisContextId": "spring-boot-production",
+      "algorithms": [
+        "cha",
+        "rta"
+      ],
+      "selectedAlgorithm": "cha",
+      "entryPointPolicy": "all concrete application methods",
+      "classpathMode": "full",
+      "runtimeInput": "DefaultRuntimeAnalysisInputLocation",
+      "applicationClasses": 52,
+      "applicationMethods": 287
+    },
+    "toolchain": {
+      "analyzerRuntimeJavaMajor": 25,
+      "targetJavaRelease": 17,
+      "mavenVersion": "3.9.11",
+      "providerVersion": "3.0.0"
+    },
+    "fingerprints": {
+      "source": "8c7c78724751709b60f4f3bf014927c3d3d409d4e5eed93efd65dca1c1a944a2",
+      "generatedSource": null,
+      "dependencyClasspath": "d1d98502fa6880593719204e92d257cba13a89ebf55430cb440291ee8205da25",
+      "gitRevision": "01a18a1b40e151ffcc1d7bef86bf335f87999750"
+    }
+  },
+  "coverage": {
+    "dependencyClasspathEntries": 127,
+    "applicationScope": "production"
+  },
+  "measurements": {
+    "selectedAlgorithm": "cha",
+    "analyses": [
+      {
+        "algorithm": "cha",
+        "graphMillis": 7908,
+        "methodCount": 6664,
+        "callCount": 8454
+      },
+      {
+        "algorithm": "rta",
+        "graphMillis": 265,
+        "methodCount": 372,
+        "callCount": 443
+      }
+    ]
+  },
+  "observations": [
+    {
+      "caseId": "spring-mvc-entrypoint",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "TransferController#transfer has no incoming Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no incoming application call in SootUp CHA",
+          "target": "com.redhat.lightwell.controller.TransferController#transfer"
+        }
+      ],
+      "limitation": "Spring MVC route registration requires framework metadata; no incoming Java caller is not evidence that the route is absent or dead code."
+    },
+    {
+      "caseId": "transfer-controller-to-service",
+      "classification": "existing_support",
+      "certainty": "definite",
+      "observed": "TransferController#transfer -> TransactionService#transfer",
+      "outcome": "definite_static_path",
+      "evidence": [
+        {
+          "basis": "SootUp CHA application call",
+          "caller": "com.redhat.lightwell.controller.TransferController#transfer",
+          "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+          "sourcePath": "src/main/java/com/redhat/lightwell/controller/TransferController.java",
+          "line": 27
+        }
+      ]
+    },
+    {
+      "caseId": "transaction-service-to-audit",
+      "classification": "existing_support",
+      "certainty": "definite",
+      "observed": "TransactionService#transfer -> AuditService#log",
+      "outcome": "definite_static_path",
+      "evidence": [
+        {
+          "basis": "SootUp CHA application call",
+          "caller": "com.redhat.lightwell.service.TransactionService#transfer",
+          "callee": "com.redhat.lightwell.service.AuditService#log",
+          "sourcePath": "src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "line": 126
+        }
+      ],
+      "limitation": "Multiple TransactionService methods call AuditService#log; this evidence selects the transfer method."
+    },
+    {
+      "caseId": "transaction-service-to-jpa",
+      "classification": "configuration_work",
+      "certainty": "unresolved",
+      "observed": "No incoming graph edge resolved to AccountRepository#findById",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "requested repository method is absent from SootUp graph",
+          "target": "com.redhat.lightwell.repository.AccountRepository#findById"
+        }
+      ],
+      "limitation": "Spring Data supplies the generated repository implementation outside application bytecode."
+    },
+    {
+      "caseId": "spring-bean-callback",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "SecurityConfig#securityFilterChain has no incoming Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no incoming application call in SootUp CHA",
+          "target": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain"
+        }
+      ],
+      "limitation": "ApplicationContext invokes @Bean methods through framework machinery."
+    },
+    {
+      "caseId": "startup-callback",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "DataSeeder#run has no incoming Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no incoming application call in SootUp CHA",
+          "target": "com.redhat.lightwell.config.DataSeeder#run"
+        }
+      ],
+      "limitation": "Spring Boot invokes CommandLineRunner callbacks during startup."
+    }
+  ],
+  "limitations": [
+    "The FSI baseline is external and pinned; generated Spring Data implementations and framework callbacks are outside application source call edges.",
+    "CHA/RTA results are graph evidence only and do not model Spring container ownership."
+  ],
+  "recommendation": {
+    "decision": "Retain as an evidence source with explicit framework/dynamic abstention; do not use this result alone as a production SemanticCallFacts provider.",
+    "adapterBoundary": "Normalize source/bytecode edges as definite or possible only when their evidence is unique; emit unresolved for missing framework or dynamic context."
+  }
+}

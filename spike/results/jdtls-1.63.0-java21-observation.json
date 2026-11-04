@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "0.1.0",
+  "issue": "FLPATH-5000",
+  "adr": "ADR-001",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContextId": "quarkus-production",
+  "provider": {
+    "name": "Eclipse JDT Language Server",
+    "version": "1.63.0",
+    "runtimeJava": 25,
+    "runtimeRequirementObserved": "JavaSE 25"
+  },
+  "fixture": {
+    "javaRelease": 21,
+    "framework": "quarkus",
+    "frameworkName": "Quarkus",
+    "quarkusVersion": "3.40.1",
+    "productionProfileBuild": "passed",
+    "testProfileBuild": "passed",
+    "tests": 1
+  },
+  "authority": {
+    "targetRelease": 21,
+    "targetReleaseBuildVerified": true,
+    "analyzerRuntimeRecordedSeparately": true,
+    "hostPathsOmitted": true
+  },
+  "observations": [
+    {
+      "caseId": "direct-call",
+      "classification": "existing_support",
+      "observed": "ServerUserAuthService#handleUserAuthRequestMessage -> UserAuthPublicKey#doAuth",
+      "outcome": "definite_static_path"
+    },
+    {
+      "caseId": "interface-dispatch",
+      "classification": "existing_support",
+      "observed": "TransferResource#transfer -> TransferService#transfer",
+      "outcome": "possible_static_path",
+      "limitation": "source-level interface edge does not prove concrete CDI implementation selection"
+    },
+    {
+      "caseId": "cdi-injection",
+      "classification": "configuration_work",
+      "observed": "JDT LS sees the source call to the injected interface",
+      "outcome": "possible_static_path",
+      "limitation": "CDI container wiring is not independently represented by call hierarchy"
+    },
+    {
+      "caseId": "framework-entrypoint",
+      "classification": "confirmed_gap",
+      "observed": "TransferResource#transfer had no incoming Java caller for the HTTP route",
+      "outcome": "unknown_without_framework_model",
+      "limitation": "Quarkus REST route registration must be supplied as framework metadata rather than inferred from Java call hierarchy; no incoming Java caller is not evidence that the route is absent or dead code"
+    },
+    {
+      "caseId": "callback-lambda",
+      "classification": "existing_support",
+      "observed": "CallbackDispatcher lambda -> AuthCallback#onAuthenticated",
+      "outcome": "possible_static_path",
+      "limitation": "preserve callback certainty; do not infer runtime scheduling"
+    },
+    {
+      "caseId": "service-loader",
+      "classification": "configuration_work",
+      "observed": "ServiceLoader lambda -> AuditProvider#record",
+      "outcome": "possible_static_path",
+      "limitation": "META-INF/services metadata is not enough to prove the concrete provider without context enrichment"
+    },
+    {
+      "caseId": "reflection",
+      "classification": "confirmed_gap",
+      "observed": "ReflectiveTarget#validate had no incoming call",
+      "outcome": "unknown",
+      "limitation": "Class.forName and Method.invoke must remain unresolved for JDT LS alone"
+    },
+    {
+      "caseId": "dynamic-proxy",
+      "classification": "confirmed_gap",
+      "observed": "Proxy-created AuthCallback target was not represented as a concrete incoming call",
+      "outcome": "unknown"
+    },
+    {
+      "caseId": "generated-source",
+      "classification": "existing_support",
+      "observed": "DefaultTransferService#transfer -> GeneratedTransferMapper#toResponse",
+      "outcome": "definite_static_path",
+      "limitation": "generated source is visible only when the profile includes and fingerprints its source root"
+    },
+    {
+      "caseId": "build-profile",
+      "classification": "configuration_work",
+      "observed": "production and test Maven profile builds both passed",
+      "outcome": "partial",
+      "limitation": "provider import must receive the selected production profile through AnalysisContext"
+    }
+  ],
+  "recommendation": {
+    "decision": "JDT LS is a viable source/compiler-backed baseline, but not a complete Java framework/dynamic call resolver.",
+    "adapterBoundary": "Use JDT LS call hierarchy/references for source facts; add profile-aware enrichment and explicit abstention for CDI, service loading, reflection, and proxies.",
+    "productionGate": "Require Java 21 target-build evidence plus separately recorded analyzer runtime/toolchain evidence before claiming capability."
+  }
+}

@@ -1,0 +1,730 @@
+{
+  "schemaVersion": "0.1.0",
+  "artifact": "SemanticCallFactsSpikeObservation",
+  "issue": "FLPATH-5000",
+  "scope": "spike_only_no_production_adapter",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContext": "spike/contracts/analysis-context.json",
+  "contract": {
+    "source": "spike/contracts/expected-call-facts.json",
+    "providerRelationshipIds": [
+      "resource-to-service",
+      "http-to-resource",
+      "service-to-auth-gateway",
+      "auth-gateway-to-server-auth",
+      "server-auth-to-public-key",
+      "auth-callback",
+      "service-loader-audit",
+      "reflective-validation",
+      "generated-mapping",
+      "http-to-transfer-controller"
+    ],
+    "frameworkRelationshipIds": [
+      "quarkus-http-to-resource-enriched",
+      "quarkus-resource-to-cdi-bean",
+      "quarkus-cdi-proxy-to-service",
+      "quarkus-generated-mapper-binding",
+      "quarkus-unbounded-proxy-abstention",
+      "spring-http-to-transfer-controller-enriched",
+      "spring-controller-to-service-injection",
+      "spring-transaction-proxy-to-service",
+      "spring-data-generated-account-repository",
+      "spring-bean-factory-to-security-config",
+      "spring-boot-to-data-seeder"
+    ]
+  },
+  "relationshipSets": {
+    "provider": {
+      "description": "SootUp normalized provider observations; no framework facts are inserted here.",
+      "results": [
+        {
+          "framework": "quarkus",
+          "contextId": "quarkus-production",
+          "provider": {
+            "name": "SootUp",
+            "version": "3.0.1",
+            "algorithms": [
+              "cha",
+              "rta"
+            ]
+          },
+          "coverage": {
+            "fullDependencyRun": "passed",
+            "fullDependencyManifest": "spike/runs/sootup-java21-quarkus-full-provenance.json",
+            "applicationOnlyRun": "passed",
+            "applicationOnlyManifest": "spike/runs/sootup-java21-quarkus-none-provenance.json",
+            "dependencyClasspathEntries": 118,
+            "classpathScope": "runtime"
+          },
+          "observations": [
+            {
+              "caseId": "direct-call",
+              "classification": "existing_support",
+              "certainty": "definite",
+              "observed": "ServerUserAuthService#handleUserAuthRequestMessage -> UserAuthPublicKey#doAuth",
+              "outcome": "definite_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA incoming application call",
+                  "caller": "com.projectlightpath.fixture.target.ServerUserAuthService#handleUserAuthRequestMessage",
+                  "callee": "com.projectlightpath.fixture.target.UserAuthPublicKey#doAuth",
+                  "sourcePath": "src/main/java/com/projectlightpath/fixture/target/ServerUserAuthService.java",
+                  "line": 16
+                }
+              ],
+              "limitation": "RTA did not retain this edge under the all-application-method entry-point policy; CHA is the selected evidence view.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "interface-dispatch",
+              "classification": "configuration_work",
+              "certainty": "possible",
+              "observed": "TransferResource#transfer -> DefaultTransferService#transfer",
+              "outcome": "possible_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA concrete implementation edge",
+                  "caller": "com.projectlightpath.fixture.api.TransferResource#transfer",
+                  "callee": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+                  "sourcePath": "src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+                  "line": 24
+                }
+              ],
+              "limitation": "The requested TransferService interface vertex is absent from the graph result; CDI bean selection remains external context.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "cdi-injection",
+              "classification": "configuration_work",
+              "certainty": "possible",
+              "observed": "TransferResource constructor accepts TransferService and CHA reaches DefaultTransferService",
+              "outcome": "possible_static_path",
+              "evidence": [
+                {
+                  "basis": "constructor signature plus CHA concrete implementation edge",
+                  "caller": "com.projectlightpath.fixture.api.TransferResource#transfer",
+                  "callee": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+                  "sourcePath": "src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+                  "line": 24
+                }
+              ],
+              "limitation": "SootUp does not model CDI qualifiers, alternatives, producers, or client proxies.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "framework-entrypoint",
+              "classification": "confirmed_gap",
+              "certainty": "unresolved",
+              "observed": "TransferResource#transfer has no incoming framework caller",
+              "outcome": "unknown_without_framework_model",
+              "evidence": [
+                {
+                  "basis": "no incoming application call in SootUp CHA",
+                  "target": "com.projectlightpath.fixture.api.TransferResource#transfer"
+                }
+              ],
+              "limitation": "Quarkus REST route registration must be supplied as framework metadata; no incoming Java caller is not evidence that the route is absent or dead code.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "callback-lambda",
+              "classification": "configuration_work",
+              "certainty": "possible",
+              "observed": "CallbackDispatcher lambda -> RecordingAuthCallback#onAuthenticated",
+              "outcome": "possible_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA concrete callback implementation edge",
+                  "caller": "com.projectlightpath.fixture.auth.CallbackDispatcher#lambda$0",
+                  "callee": "com.projectlightpath.fixture.auth.RecordingAuthCallback#onAuthenticated",
+                  "sourcePath": "src/main/java/com/projectlightpath/fixture/auth/CallbackDispatcher.java",
+                  "line": 11
+                }
+              ],
+              "limitation": "The interface callback target is not a unique runtime implementation without registration/context evidence.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "service-loader",
+              "classification": "configuration_work",
+              "certainty": "possible",
+              "observed": "ServiceLoaderBridge lambda -> DefaultAuditProvider#record",
+              "outcome": "possible_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA concrete implementor edge",
+                  "caller": "com.projectlightpath.fixture.audit.ServiceLoaderBridge#lambda$0",
+                  "callee": "com.projectlightpath.fixture.audit.DefaultAuditProvider#record",
+                  "sourcePath": "src/main/java/com/projectlightpath/fixture/audit/ServiceLoaderBridge.java",
+                  "line": 12
+                }
+              ],
+              "limitation": "The graph does not prove META-INF/services provider selection; preserve possible certainty.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "reflection",
+              "classification": "confirmed_gap",
+              "certainty": "unresolved",
+              "observed": "ReflectiveTarget#validate has no incoming target edge",
+              "outcome": "unknown",
+              "evidence": [
+                {
+                  "basis": "SootUp graph contains reflective API activity but no target edge",
+                  "target": "com.projectlightpath.fixture.reflective.ReflectiveTarget#validate"
+                }
+              ],
+              "limitation": "Class.forName, getDeclaredMethod, and Method.invoke remain open-world behavior.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "dynamic-proxy",
+              "classification": "confirmed_gap",
+              "certainty": "unresolved",
+              "observed": "AuthProxyFactory proxy creation has no concrete AuthCallback#onAuthenticated edge",
+              "outcome": "unknown",
+              "evidence": [
+                {
+                  "basis": "SootUp graph contains Proxy.newProxyInstance but no proxy target edge",
+                  "target": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated"
+                }
+              ],
+              "limitation": "Proxy handler and runtime interface dispatch require explicit modeling.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "generated-source",
+              "classification": "existing_support",
+              "certainty": "definite",
+              "observed": "DefaultTransferService#transfer -> GeneratedTransferMapper#toResponse",
+              "outcome": "definite_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA application call with generated class input",
+                  "caller": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+                  "callee": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+                  "sourcePath": "src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+                  "line": 36
+                }
+              ],
+              "limitation": "The generated source root must remain part of the selected build profile.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "build-profile",
+              "classification": "configuration_work",
+              "certainty": "unresolved",
+              "observed": "Production application classes were analyzed; production and test builds are separate inputs",
+              "outcome": "partial",
+              "evidence": [
+                {
+                  "basis": "SootUp run configuration",
+                  "profile": "production"
+                }
+              ],
+              "limitation": "The probe does not import both Maven profiles into one graph; profile selection must be recorded in AnalysisContext.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            }
+          ],
+          "sourceArtifact": "spike/results/sootup-3.0.1-java21-quarkus-observation.json"
+        },
+        {
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "provider": {
+            "name": "SootUp",
+            "version": "3.0.1",
+            "algorithms": [
+              "cha",
+              "rta"
+            ]
+          },
+          "coverage": {
+            "dependencyClasspathEntries": 104,
+            "applicationScope": "production"
+          },
+          "observations": [
+            {
+              "caseId": "spring-mvc-entrypoint",
+              "classification": "confirmed_gap",
+              "certainty": "unresolved",
+              "observed": "TransferController#transfer has no incoming Java caller",
+              "outcome": "unknown_without_framework_model",
+              "evidence": [
+                {
+                  "basis": "no incoming application call in SootUp CHA",
+                  "target": "com.redhat.lightwell.controller.TransferController#transfer"
+                }
+              ],
+              "limitation": "Spring MVC route registration requires framework metadata; no incoming Java caller is not evidence that the route is absent or dead code.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "transfer-controller-to-service",
+              "classification": "existing_support",
+              "certainty": "definite",
+              "observed": "TransferController#transfer -> TransactionService#transfer",
+              "outcome": "definite_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA application call",
+                  "caller": "com.redhat.lightwell.controller.TransferController#transfer",
+                  "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+                  "sourcePath": "src/main/java/com/redhat/lightwell/controller/TransferController.java",
+                  "line": 27
+                }
+              ],
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "transaction-service-to-audit",
+              "classification": "existing_support",
+              "certainty": "definite",
+              "observed": "TransactionService#transfer -> AuditService#log",
+              "outcome": "definite_static_path",
+              "evidence": [
+                {
+                  "basis": "SootUp CHA application call",
+                  "caller": "com.redhat.lightwell.service.TransactionService#transfer",
+                  "callee": "com.redhat.lightwell.service.AuditService#log",
+                  "sourcePath": "src/main/java/com/redhat/lightwell/service/TransactionService.java",
+                  "line": 126
+                }
+              ],
+              "limitation": "Multiple TransactionService methods call AuditService#log; this evidence selects the transfer method.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "transaction-service-to-jpa",
+              "classification": "configuration_work",
+              "certainty": "unresolved",
+              "observed": "No incoming graph edge resolved to AccountRepository#findById",
+              "outcome": "unknown_without_framework_model",
+              "evidence": [
+                {
+                  "basis": "requested repository method is absent from SootUp graph",
+                  "target": "com.redhat.lightwell.repository.AccountRepository#findById"
+                }
+              ],
+              "limitation": "Spring Data supplies the generated repository implementation outside application bytecode.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "spring-bean-callback",
+              "classification": "confirmed_gap",
+              "certainty": "unresolved",
+              "observed": "SecurityConfig#securityFilterChain has no incoming Java caller",
+              "outcome": "unknown_without_framework_model",
+              "evidence": [
+                {
+                  "basis": "no incoming application call in SootUp CHA",
+                  "target": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain"
+                }
+              ],
+              "limitation": "ApplicationContext invokes @Bean methods through framework machinery.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            },
+            {
+              "caseId": "startup-callback",
+              "classification": "confirmed_gap",
+              "certainty": "unresolved",
+              "observed": "DataSeeder#run has no incoming Java caller",
+              "outcome": "unknown_without_framework_model",
+              "evidence": [
+                {
+                  "basis": "no incoming application call in SootUp CHA",
+                  "target": "com.redhat.lightwell.config.DataSeeder#run"
+                }
+              ],
+              "limitation": "Spring Boot invokes CommandLineRunner callbacks during startup.",
+              "factSet": "provider",
+              "evidenceOrigin": "SootUpNormalizedObservation"
+            }
+          ],
+          "sourceArtifact": "spike/results/sootup-3.0.1-fsi-spring-observation.json"
+        }
+      ]
+    },
+    "framework": {
+      "description": "FrameworkModel-enriched facts; kept separate from provider observations.",
+      "sourceArtifact": "spike/results/framework-enrichment-observation.json",
+      "observations": [
+        {
+          "factId": "quarkus-http-to-resource-enriched",
+          "framework": "quarkus",
+          "contextId": "quarkus-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "external HTTP POST /transfers",
+          "callee": "com.projectlightpath.fixture.api.TransferResource#transfer",
+          "relationshipType": "framework_entrypoint",
+          "certainty": "definite",
+          "modelRule": "quarkus-unique-rest-route",
+          "evidence": [
+            {
+              "kind": "route_annotations",
+              "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+              "symbols": [
+                "@Path(\"/transfers\")",
+                "@POST",
+                "@Consumes",
+                "@Produces"
+              ]
+            }
+          ],
+          "derivedFrom": "http-to-resource",
+          "claim": "registered_route_mapping",
+          "runtimeSelection": "potential_request_match",
+          "providerCallerAbsence": "not_evidence_of_absence",
+          "selectionCriteria": {
+            "httpMethod": "POST",
+            "pathTemplate": "/transfers",
+            "consumes": [
+              "application/json"
+            ],
+            "produces": [
+              "application/json"
+            ],
+            "headers": [],
+            "parameters": [],
+            "activeAnalysisContext": "quarkus-production"
+          },
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "quarkus-resource-to-cdi-bean",
+          "framework": "quarkus",
+          "contextId": "quarkus-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "quarkus:injection:com.projectlightpath.fixture.api.TransferResource#<init>(TransferService)",
+          "callee": "com.projectlightpath.fixture.service.DefaultTransferService#<init>(TransferService dependencies)",
+          "relationshipType": "dependency_injection",
+          "certainty": "possible",
+          "modelRule": "quarkus-unique-cdi-bean",
+          "evidence": [
+            {
+              "kind": "injection_point",
+              "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+              "symbols": [
+                "@Inject TransferResource(TransferService)"
+              ]
+            },
+            {
+              "kind": "bean_candidate",
+              "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+              "symbols": [
+                "@ApplicationScoped",
+                "implements TransferService"
+              ],
+              "candidateCount": 1
+            }
+          ],
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "quarkus-cdi-proxy-to-service",
+          "framework": "quarkus",
+          "contextId": "quarkus-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "quarkus:arc-client-proxy:com.projectlightpath.fixture.service.DefaultTransferService",
+          "callee": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+          "relationshipType": "proxy_dispatch",
+          "certainty": "possible",
+          "modelRule": "quarkus-generated-client-proxy",
+          "evidence": [
+            {
+              "kind": "bean_scope",
+              "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+              "symbols": [
+                "@ApplicationScoped",
+                "transfer(TransferRequest)"
+              ]
+            }
+          ],
+          "limitation": "Arc-generated proxy and interceptor order are not captured by the spike.",
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "quarkus-generated-mapper-binding",
+          "framework": "quarkus",
+          "contextId": "quarkus-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "quarkus:generated-source:com.projectlightpath.fixture.generated.GeneratedTransferMapper",
+          "callee": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+          "relationshipType": "generated_implementation",
+          "certainty": "definite",
+          "modelRule": "quarkus-generated-source-binding",
+          "evidence": [
+            {
+              "kind": "generated_source",
+              "path": "spike/java21-quarkus/generated-src/main/java/com/projectlightpath/fixture/generated/GeneratedTransferMapper.java",
+              "symbols": [
+                "GeneratedTransferMapper#toResponse"
+              ],
+              "sourceRoot": "spike/java21-quarkus/generated-src/main/java"
+            }
+          ],
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "quarkus-unbounded-proxy-abstention",
+          "framework": "quarkus",
+          "contextId": "quarkus-production",
+          "status": "abstained",
+          "evidenceStatus": "verified",
+          "caller": "quarkus:dynamic-proxy:com.projectlightpath.fixture.auth.AuthCallback",
+          "callee": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+          "relationshipType": "proxy_dispatch",
+          "certainty": "unresolved",
+          "modelRule": "quarkus-unbounded-proxy",
+          "evidence": [
+            {
+              "kind": "dynamic_proxy_call",
+              "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/auth/AuthProxyFactory.java",
+              "symbols": [
+                "Proxy.newProxyInstance",
+                "InvocationHandler"
+              ]
+            }
+          ],
+          "limitation": "The proxy handler target is not promoted without explicit registration evidence.",
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "spring-http-to-transfer-controller-enriched",
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "external HTTP POST /api/transfers",
+          "callee": "com.redhat.lightwell.controller.TransferController#transfer",
+          "relationshipType": "framework_entrypoint",
+          "certainty": "definite",
+          "modelRule": "spring-unique-mvc-route",
+          "evidence": [
+            {
+              "kind": "route_annotations",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java",
+              "symbols": [
+                "@RequestMapping(\"/api/transfers\")",
+                "@PostMapping"
+              ]
+            }
+          ],
+          "derivedFrom": "http-to-transfer-controller",
+          "claim": "registered_route_mapping",
+          "runtimeSelection": "potential_request_match",
+          "providerCallerAbsence": "not_evidence_of_absence",
+          "selectionCriteria": {
+            "httpMethod": "POST",
+            "pathTemplate": "/api/transfers",
+            "consumes": [],
+            "produces": [],
+            "headers": [],
+            "parameters": [],
+            "activeAnalysisContext": "spring-boot-production"
+          },
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "spring-controller-to-service-injection",
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "spring:injection:com.redhat.lightwell.controller.TransferController#<init>(TransactionService)",
+          "callee": "com.redhat.lightwell.service.TransactionService#<init>(repository and audit dependencies)",
+          "relationshipType": "dependency_injection",
+          "certainty": "possible",
+          "modelRule": "spring-unique-component-bean",
+          "evidence": [
+            {
+              "kind": "constructor_injection",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java",
+              "symbols": [
+                "TransferController(TransactionService)"
+              ]
+            },
+            {
+              "kind": "component_scan_candidate",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/service/TransactionService.java",
+              "symbols": [
+                "@Service"
+              ],
+              "candidateCount": 1
+            }
+          ],
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "spring-transaction-proxy-to-service",
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "spring:aop-proxy:com.redhat.lightwell.service.TransactionService",
+          "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+          "relationshipType": "proxy_dispatch",
+          "certainty": "possible",
+          "modelRule": "spring-aop-proxy-target",
+          "evidence": [
+            {
+              "kind": "advisor_annotation",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/service/TransactionService.java",
+              "symbols": [
+                "@Transactional",
+                "TransactionService#transfer"
+              ]
+            }
+          ],
+          "limitation": "The selected proxy strategy and interceptor ordering are not captured by the baseline run.",
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "spring-data-generated-account-repository",
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "spring-data-proxy:com.redhat.lightwell.repository.AccountRepository",
+          "callee": "com.redhat.lightwell.repository.AccountRepository#findById",
+          "relationshipType": "generated_implementation",
+          "certainty": "possible",
+          "modelRule": "spring-data-generated-repository",
+          "evidence": [
+            {
+              "kind": "repository_interface",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/repository/AccountRepository.java",
+              "symbols": [
+                "extends JpaRepository<Account, Long>",
+                "CrudRepository#findById"
+              ]
+            }
+          ],
+          "limitation": "Spring Data implementation and proxy identity are generated outside application source.",
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "spring-bean-factory-to-security-config",
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "Spring ApplicationContext",
+          "callee": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain",
+          "relationshipType": "lifecycle_callback",
+          "certainty": "possible",
+          "modelRule": "spring-lifecycle-callback",
+          "evidence": [
+            {
+              "kind": "bean_factory_annotation",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/config/SecurityConfig.java",
+              "symbols": [
+                "@Configuration",
+                "@Bean SecurityFilterChain securityFilterChain"
+              ]
+            }
+          ],
+          "limitation": "Conditional configuration and exact ApplicationContext construction are not captured.",
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        },
+        {
+          "factId": "spring-boot-to-data-seeder",
+          "framework": "spring-boot",
+          "contextId": "spring-boot-production",
+          "status": "emitted",
+          "evidenceStatus": "verified",
+          "caller": "Spring Boot application lifecycle",
+          "callee": "com.redhat.lightwell.config.DataSeeder#run",
+          "relationshipType": "lifecycle_callback",
+          "certainty": "possible",
+          "modelRule": "spring-lifecycle-callback",
+          "evidence": [
+            {
+              "kind": "lifecycle_interface",
+              "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/config/DataSeeder.java",
+              "symbols": [
+                "@Component",
+                "implements CommandLineRunner",
+                "run(String...)"
+              ]
+            }
+          ],
+          "limitation": "Startup ordering and conditional bean activation are not captured.",
+          "factSet": "framework",
+          "evidenceOrigin": "FrameworkEnrichmentObservation"
+        }
+      ]
+    }
+  },
+  "links": [
+    {
+      "frameworkFactId": "quarkus-http-to-resource-enriched",
+      "providerContractRelationshipId": "http-to-resource",
+      "relation": "enriches_without_replacing",
+      "certaintyPreserved": true
+    },
+    {
+      "frameworkFactId": "spring-http-to-transfer-controller-enriched",
+      "providerContractRelationshipId": "http-to-transfer-controller",
+      "relation": "enriches_without_replacing",
+      "certaintyPreserved": true
+    }
+  ],
+  "mergePolicy": {
+    "providerAndFrameworkFactsRemainDistinguishable": true,
+    "frameworkFactsNeverReplaceProviderFacts": true,
+    "providerCallerAbsenceDoesNotDisproveRoute": true,
+    "unresolvedDynamicBehaviorRemainsUnresolved": true,
+    "certaintyStates": [
+      "definite",
+      "possible",
+      "unresolved"
+    ]
+  },
+  "coverage": {
+    "providerResultCount": 2,
+    "providerObservationCount": 16,
+    "frameworkFactCount": 11,
+    "frameworkEmittedFacts": 10,
+    "frameworkAbstainedFacts": 1,
+    "linkedFrameworkFacts": 2,
+    "frameworks": [
+      "quarkus",
+      "spring-boot"
+    ]
+  },
+  "limitations": [
+    "This assembles a provenance-preserving handoff; it does not add synthetic nodes to the SootUp graph.",
+    "Provider observations remain the analyzer's normalized evidence and framework facts remain source-metadata enrichment.",
+    "Arc, Spring ApplicationContext, generated proxy identity, and runtime interceptor ordering are not captured by this spike."
+  ]
+}

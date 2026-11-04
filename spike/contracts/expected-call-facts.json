@@ -1,0 +1,441 @@
+{
+  "schemaVersion": "0.2.0",
+  "artifact": "SemanticCallFacts",
+  "fixture": "java21-quarkus-readiness-fixture",
+  "fixtures": [
+    "java21-quarkus",
+    "fsi-spring-boot"
+  ],
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContext": "spike/contracts/analysis-context.json",
+  "relationshipSets": {
+    "relationships": "provider and language-level facts",
+    "frameworkRelationships": "synthetic framework-enrichment facts; never silently merged into provider evidence"
+  },
+  "relationships": [
+    {
+      "id": "resource-to-service",
+      "caller": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "callee": "com.projectlightpath.fixture.service.TransferService#transfer",
+      "relationshipType": "interface_dispatch",
+      "certainty": "possible",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/api/TransferResource.java"
+    },
+    {
+      "id": "http-to-resource",
+      "caller": "external HTTP POST /transfers",
+      "callee": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "relationshipType": "framework_entrypoint",
+      "certainty": "possible",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/api/TransferResource.java"
+    },
+    {
+      "id": "service-to-auth-gateway",
+      "caller": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+      "callee": "com.projectlightpath.fixture.auth.AuthGateway#authorize",
+      "relationshipType": "invokes",
+      "certainty": "definite",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java"
+    },
+    {
+      "id": "auth-gateway-to-server-auth",
+      "caller": "com.projectlightpath.fixture.auth.AuthGateway#authorize",
+      "callee": "com.projectlightpath.fixture.target.ServerUserAuthService#handleUserAuthRequestMessage",
+      "relationshipType": "invokes",
+      "certainty": "definite",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/auth/AuthGateway.java"
+    },
+    {
+      "id": "server-auth-to-public-key",
+      "caller": "com.projectlightpath.fixture.target.ServerUserAuthService#handleUserAuthRequestMessage",
+      "callee": "com.projectlightpath.fixture.target.UserAuthPublicKey#doAuth",
+      "relationshipType": "invokes",
+      "certainty": "definite",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/target/ServerUserAuthService.java"
+    },
+    {
+      "id": "auth-callback",
+      "caller": "com.projectlightpath.fixture.auth.CallbackDispatcher#dispatch",
+      "callee": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+      "relationshipType": "callback",
+      "certainty": "possible",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/auth/CallbackDispatcher.java"
+    },
+    {
+      "id": "service-loader-audit",
+      "caller": "com.projectlightpath.fixture.audit.ServiceLoaderBridge#audit",
+      "callee": "com.projectlightpath.fixture.audit.AuditProvider#record",
+      "relationshipType": "service_loader",
+      "certainty": "possible",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/audit/ServiceLoaderBridge.java"
+    },
+    {
+      "id": "reflective-validation",
+      "caller": "com.projectlightpath.fixture.reflective.ReflectiveInvoker#validate",
+      "callee": "com.projectlightpath.fixture.reflective.ReflectiveTarget#validate",
+      "relationshipType": "reflection",
+      "certainty": "unresolved",
+      "sourceEvidence": "src/main/java/com/projectlightpath/fixture/reflective/ReflectiveInvoker.java"
+    },
+    {
+      "id": "generated-mapping",
+      "caller": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+      "callee": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+      "relationshipType": "invokes",
+      "certainty": "definite",
+      "certaintyCondition": "generated source root is included in the selected AnalysisContext",
+      "sourceEvidence": "generated-src/main/java/com/projectlightpath/fixture/generated/GeneratedTransferMapper.java"
+    },
+    {
+      "id": "http-to-transfer-controller",
+      "caller": "external HTTP POST /api/transfers",
+      "callee": "com.redhat.lightwell.controller.TransferController#transfer",
+      "relationshipType": "framework_entrypoint",
+      "certainty": "possible",
+      "sourceEvidence": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java"
+    }
+  ],
+  "frameworkRelationships": [
+    {
+      "id": "quarkus-http-to-resource-enriched",
+      "derivedFrom": "http-to-resource",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "caller": "external HTTP POST /transfers",
+      "callee": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "relationshipType": "framework_entrypoint",
+      "certainty": "definite",
+      "claim": "registered_route_mapping",
+      "runtimeSelection": "potential_request_match",
+      "providerCallerAbsence": "not_evidence_of_absence",
+      "selectionCriteria": {
+        "httpMethod": "POST",
+        "pathTemplate": "/transfers",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "headers": [],
+        "parameters": [],
+        "activeAnalysisContext": "quarkus-production"
+      },
+      "sourceEvidence": [
+        {
+          "kind": "annotation",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+          "symbols": [
+            "@Path(\"/transfers\")",
+            "@POST"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "quarkus-unique-rest-route",
+        "metadataInputs": [
+          "quarkus-rest-annotations",
+          "quarkus-production"
+        ],
+        "resolution": "one_effective_route_target"
+      }
+    },
+    {
+      "id": "quarkus-resource-to-cdi-bean",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "caller": "quarkus:injection:com.projectlightpath.fixture.api.TransferResource#<init>(TransferService)",
+      "callee": "com.projectlightpath.fixture.service.DefaultTransferService#<init>(TransferService dependencies)",
+      "relationshipType": "dependency_injection",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "source_and_annotation",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+          "symbols": [
+            "@Inject TransferResource(TransferService)"
+          ]
+        },
+        {
+          "kind": "bean_candidate",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+          "symbols": [
+            "@ApplicationScoped",
+            "implements TransferService"
+          ],
+          "candidateCount": 1
+        }
+      ],
+      "provenance": {
+        "modelRule": "quarkus-unique-cdi-bean",
+        "metadataInputs": [
+          "quarkus-cdi-annotations",
+          "quarkus-production"
+        ],
+        "resolution": "one_eligible_bean"
+      }
+    },
+    {
+      "id": "quarkus-cdi-proxy-to-service",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "caller": "quarkus:arc-client-proxy:com.projectlightpath.fixture.service.DefaultTransferService",
+      "callee": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+      "relationshipType": "proxy_dispatch",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "bean_scope",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+          "symbols": [
+            "@ApplicationScoped"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "quarkus-generated-client-proxy",
+        "metadataInputs": [
+          "quarkus-cdi-annotations"
+        ],
+        "resolution": "bounded_bean_target",
+        "limitation": "Arc-generated proxy and interceptor order are not captured by the spike."
+      }
+    },
+    {
+      "id": "quarkus-generated-mapper-binding",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "caller": "quarkus:generated-source:com.projectlightpath.fixture.generated.GeneratedTransferMapper",
+      "callee": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+      "relationshipType": "generated_implementation",
+      "certainty": "definite",
+      "sourceEvidence": [
+        {
+          "kind": "generated_source",
+          "path": "spike/java21-quarkus/generated-src/main/java/com/projectlightpath/fixture/generated/GeneratedTransferMapper.java",
+          "symbols": [
+            "GeneratedTransferMapper#toResponse"
+          ],
+          "sourceRootRequired": true
+        }
+      ],
+      "provenance": {
+        "modelRule": "quarkus-generated-source-binding",
+        "metadataInputs": [
+          "quarkus-generated-source-root",
+          "quarkus-production"
+        ],
+        "resolution": "unique_generated_symbol"
+      }
+    },
+    {
+      "id": "quarkus-unbounded-proxy-abstention",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "caller": "quarkus:dynamic-proxy:com.projectlightpath.fixture.auth.AuthCallback",
+      "callee": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+      "relationshipType": "proxy_dispatch",
+      "certainty": "unresolved",
+      "sourceEvidence": [
+        {
+          "kind": "dynamic_proxy_call",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/auth/AuthProxyFactory.java",
+          "symbols": [
+            "Proxy.newProxyInstance",
+            "InvocationHandler"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "quarkus-unbounded-proxy",
+        "metadataInputs": [],
+        "resolution": "open_world",
+        "limitation": "The proxy handler target is not promoted without explicit registration evidence."
+      }
+    },
+    {
+      "id": "spring-http-to-transfer-controller-enriched",
+      "derivedFrom": "http-to-transfer-controller",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "caller": "external HTTP POST /api/transfers",
+      "callee": "com.redhat.lightwell.controller.TransferController#transfer",
+      "relationshipType": "framework_entrypoint",
+      "certainty": "definite",
+      "claim": "registered_route_mapping",
+      "runtimeSelection": "potential_request_match",
+      "providerCallerAbsence": "not_evidence_of_absence",
+      "selectionCriteria": {
+        "httpMethod": "POST",
+        "pathTemplate": "/api/transfers",
+        "consumes": [],
+        "produces": [],
+        "headers": [],
+        "parameters": [],
+        "activeAnalysisContext": "spring-boot-production"
+      },
+      "sourceEvidence": [
+        {
+          "kind": "annotation",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java",
+          "symbols": [
+            "@RequestMapping(\"/api/transfers\")",
+            "@PostMapping"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "spring-unique-mvc-route",
+        "metadataInputs": [
+          "spring-web-annotations",
+          "spring-boot-production"
+        ],
+        "resolution": "one_effective_route_target"
+      }
+    },
+    {
+      "id": "spring-controller-to-service-injection",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "caller": "spring:injection:com.redhat.lightwell.controller.TransferController#<init>(TransactionService)",
+      "callee": "com.redhat.lightwell.service.TransactionService#<init>(repository and audit dependencies)",
+      "relationshipType": "dependency_injection",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "constructor_injection",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java",
+          "symbols": [
+            "TransferController(TransactionService)"
+          ]
+        },
+        {
+          "kind": "component_scan_candidate",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "symbols": [
+            "@Service"
+          ],
+          "candidateCount": 1
+        }
+      ],
+      "provenance": {
+        "modelRule": "spring-unique-component-bean",
+        "metadataInputs": [
+          "spring-bean-annotations",
+          "spring-boot-production"
+        ],
+        "resolution": "one_effective_component_candidate"
+      }
+    },
+    {
+      "id": "spring-transaction-proxy-to-service",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "caller": "spring:aop-proxy:com.redhat.lightwell.service.TransactionService",
+      "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+      "relationshipType": "proxy_dispatch",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "advisor_annotation",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "symbols": [
+            "@Transactional",
+            "TransactionService#transfer"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "spring-aop-proxy-target",
+        "metadataInputs": [
+          "spring-aop-advisor-metadata"
+        ],
+        "resolution": "bounded_target",
+        "limitation": "The selected proxy strategy and interceptor ordering are not captured by the baseline run."
+      }
+    },
+    {
+      "id": "spring-data-generated-account-repository",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "caller": "spring-data-proxy:com.redhat.lightwell.repository.AccountRepository",
+      "callee": "com.redhat.lightwell.repository.AccountRepository#findById",
+      "relationshipType": "generated_implementation",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "repository_interface",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/repository/AccountRepository.java",
+          "symbols": [
+            "extends JpaRepository<Account, Long>",
+            "findById"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "spring-data-generated-repository",
+        "metadataInputs": [
+          "spring-data-repository-contract"
+        ],
+        "resolution": "bounded_generated_proxy",
+        "limitation": "Spring Data implementation and proxy identity are generated outside application source."
+      }
+    },
+    {
+      "id": "spring-bean-factory-to-security-config",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "caller": "Spring ApplicationContext",
+      "callee": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain",
+      "relationshipType": "lifecycle_callback",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "bean_factory_annotation",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/config/SecurityConfig.java",
+          "symbols": [
+            "@Configuration",
+            "@Bean SecurityFilterChain securityFilterChain"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "spring-lifecycle-callback",
+        "metadataInputs": [
+          "spring-bean-annotations"
+        ],
+        "resolution": "bounded_bean_factory_callback",
+        "limitation": "Conditional configuration and exact ApplicationContext construction are not captured."
+      }
+    },
+    {
+      "id": "spring-boot-to-data-seeder",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "caller": "Spring Boot application lifecycle",
+      "callee": "com.redhat.lightwell.config.DataSeeder#run",
+      "relationshipType": "lifecycle_callback",
+      "certainty": "possible",
+      "sourceEvidence": [
+        {
+          "kind": "lifecycle_interface",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/config/DataSeeder.java",
+          "symbols": [
+            "@Component",
+            "implements CommandLineRunner",
+            "run(String...)"
+          ]
+        }
+      ],
+      "provenance": {
+        "modelRule": "spring-lifecycle-callback",
+        "metadataInputs": [
+          "spring-bean-annotations",
+          "spring-boot-production"
+        ],
+        "resolution": "bounded_runner_callback",
+        "limitation": "Startup ordering and conditional bean activation are not captured."
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "0.1.0",
+  "advisoryId": "synthetic:FLPATH-5000",
+  "source": "synthetic-fixture",
+  "package": {
+    "ecosystem": "maven",
+    "name": "org.projectlightpath:fixture-target",
+    "affectedRange": "[1.0.0,1.1.0)",
+    "fixedVersion": "1.1.0"
+  },
+  "affectedSymbols": [
+    {
+      "owner": "com.projectlightpath.fixture.target.ServerUserAuthService",
+      "name": "handleUserAuthRequestMessage",
+      "descriptor": "(Ljava/lang/String;)Z",
+      "status": "candidate"
+    },
+    {
+      "owner": "com.projectlightpath.fixture.target.UserAuthPublicKey",
+      "name": "doAuth",
+      "descriptor": "(Ljava/lang/String;Z)Z",
+      "status": "candidate"
+    }
+  ],
+  "provenance": {
+    "recordType": "synthetic",
+    "fixture": "java21-quarkus-readiness-fixture",
+    "sourceRevisionRequired": true,
+    "attestationRequired": true
+  }
+}

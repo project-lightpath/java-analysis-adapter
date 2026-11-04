@@ -1,0 +1,326 @@
+{
+  "schemaVersion": "0.1.0",
+  "artifact": "FrameworkEnrichmentObservation",
+  "issue": "FLPATH-5000",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContext": "spike/contracts/analysis-context.json",
+  "source": "bounded_source_metadata_scan",
+  "observations": [
+    {
+      "factId": "quarkus-http-to-resource-enriched",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "external HTTP POST /transfers",
+      "callee": "com.projectlightpath.fixture.api.TransferResource#transfer",
+      "relationshipType": "framework_entrypoint",
+      "certainty": "definite",
+      "modelRule": "quarkus-unique-rest-route",
+      "evidence": [
+        {
+          "kind": "route_annotations",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+          "symbols": [
+            "@Path(\"/transfers\")",
+            "@POST",
+            "@Consumes",
+            "@Produces"
+          ]
+        }
+      ],
+      "derivedFrom": "http-to-resource",
+      "claim": "registered_route_mapping",
+      "runtimeSelection": "potential_request_match",
+      "providerCallerAbsence": "not_evidence_of_absence",
+      "selectionCriteria": {
+        "httpMethod": "POST",
+        "pathTemplate": "/transfers",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "headers": [],
+        "parameters": [],
+        "activeAnalysisContext": "quarkus-production"
+      }
+    },
+    {
+      "factId": "quarkus-resource-to-cdi-bean",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "quarkus:injection:com.projectlightpath.fixture.api.TransferResource#<init>(TransferService)",
+      "callee": "com.projectlightpath.fixture.service.DefaultTransferService#<init>(TransferService dependencies)",
+      "relationshipType": "dependency_injection",
+      "certainty": "possible",
+      "modelRule": "quarkus-unique-cdi-bean",
+      "evidence": [
+        {
+          "kind": "injection_point",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+          "symbols": [
+            "@Inject TransferResource(TransferService)"
+          ]
+        },
+        {
+          "kind": "bean_candidate",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+          "symbols": [
+            "@ApplicationScoped",
+            "implements TransferService"
+          ],
+          "candidateCount": 1
+        }
+      ]
+    },
+    {
+      "factId": "quarkus-cdi-proxy-to-service",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "quarkus:arc-client-proxy:com.projectlightpath.fixture.service.DefaultTransferService",
+      "callee": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+      "relationshipType": "proxy_dispatch",
+      "certainty": "possible",
+      "modelRule": "quarkus-generated-client-proxy",
+      "evidence": [
+        {
+          "kind": "bean_scope",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+          "symbols": [
+            "@ApplicationScoped",
+            "transfer(TransferRequest)"
+          ]
+        }
+      ],
+      "limitation": "Arc-generated proxy and interceptor order are not captured by the spike."
+    },
+    {
+      "factId": "quarkus-generated-mapper-binding",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "quarkus:generated-source:com.projectlightpath.fixture.generated.GeneratedTransferMapper",
+      "callee": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+      "relationshipType": "generated_implementation",
+      "certainty": "definite",
+      "modelRule": "quarkus-generated-source-binding",
+      "evidence": [
+        {
+          "kind": "generated_source",
+          "path": "spike/java21-quarkus/generated-src/main/java/com/projectlightpath/fixture/generated/GeneratedTransferMapper.java",
+          "symbols": [
+            "GeneratedTransferMapper#toResponse"
+          ],
+          "sourceRoot": "spike/java21-quarkus/generated-src/main/java"
+        }
+      ]
+    },
+    {
+      "factId": "quarkus-unbounded-proxy-abstention",
+      "framework": "quarkus",
+      "contextId": "quarkus-production",
+      "status": "abstained",
+      "evidenceStatus": "verified",
+      "caller": "quarkus:dynamic-proxy:com.projectlightpath.fixture.auth.AuthCallback",
+      "callee": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+      "relationshipType": "proxy_dispatch",
+      "certainty": "unresolved",
+      "modelRule": "quarkus-unbounded-proxy",
+      "evidence": [
+        {
+          "kind": "dynamic_proxy_call",
+          "path": "spike/java21-quarkus/src/main/java/com/projectlightpath/fixture/auth/AuthProxyFactory.java",
+          "symbols": [
+            "Proxy.newProxyInstance",
+            "InvocationHandler"
+          ]
+        }
+      ],
+      "limitation": "The proxy handler target is not promoted without explicit registration evidence."
+    },
+    {
+      "factId": "spring-http-to-transfer-controller-enriched",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "external HTTP POST /api/transfers",
+      "callee": "com.redhat.lightwell.controller.TransferController#transfer",
+      "relationshipType": "framework_entrypoint",
+      "certainty": "definite",
+      "modelRule": "spring-unique-mvc-route",
+      "evidence": [
+        {
+          "kind": "route_annotations",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java",
+          "symbols": [
+            "@RequestMapping(\"/api/transfers\")",
+            "@PostMapping"
+          ]
+        }
+      ],
+      "derivedFrom": "http-to-transfer-controller",
+      "claim": "registered_route_mapping",
+      "runtimeSelection": "potential_request_match",
+      "providerCallerAbsence": "not_evidence_of_absence",
+      "selectionCriteria": {
+        "httpMethod": "POST",
+        "pathTemplate": "/api/transfers",
+        "consumes": [],
+        "produces": [],
+        "headers": [],
+        "parameters": [],
+        "activeAnalysisContext": "spring-boot-production"
+      }
+    },
+    {
+      "factId": "spring-controller-to-service-injection",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "spring:injection:com.redhat.lightwell.controller.TransferController#<init>(TransactionService)",
+      "callee": "com.redhat.lightwell.service.TransactionService#<init>(repository and audit dependencies)",
+      "relationshipType": "dependency_injection",
+      "certainty": "possible",
+      "modelRule": "spring-unique-component-bean",
+      "evidence": [
+        {
+          "kind": "constructor_injection",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java",
+          "symbols": [
+            "TransferController(TransactionService)"
+          ]
+        },
+        {
+          "kind": "component_scan_candidate",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "symbols": [
+            "@Service"
+          ],
+          "candidateCount": 1
+        }
+      ]
+    },
+    {
+      "factId": "spring-transaction-proxy-to-service",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "spring:aop-proxy:com.redhat.lightwell.service.TransactionService",
+      "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+      "relationshipType": "proxy_dispatch",
+      "certainty": "possible",
+      "modelRule": "spring-aop-proxy-target",
+      "evidence": [
+        {
+          "kind": "advisor_annotation",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "symbols": [
+            "@Transactional",
+            "TransactionService#transfer"
+          ]
+        }
+      ],
+      "limitation": "The selected proxy strategy and interceptor ordering are not captured by the baseline run."
+    },
+    {
+      "factId": "spring-data-generated-account-repository",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "spring-data-proxy:com.redhat.lightwell.repository.AccountRepository",
+      "callee": "com.redhat.lightwell.repository.AccountRepository#findById",
+      "relationshipType": "generated_implementation",
+      "certainty": "possible",
+      "modelRule": "spring-data-generated-repository",
+      "evidence": [
+        {
+          "kind": "repository_interface",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/repository/AccountRepository.java",
+          "symbols": [
+            "extends JpaRepository<Account, Long>",
+            "CrudRepository#findById"
+          ]
+        }
+      ],
+      "limitation": "Spring Data implementation and proxy identity are generated outside application source."
+    },
+    {
+      "factId": "spring-bean-factory-to-security-config",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "Spring ApplicationContext",
+      "callee": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain",
+      "relationshipType": "lifecycle_callback",
+      "certainty": "possible",
+      "modelRule": "spring-lifecycle-callback",
+      "evidence": [
+        {
+          "kind": "bean_factory_annotation",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/config/SecurityConfig.java",
+          "symbols": [
+            "@Configuration",
+            "@Bean SecurityFilterChain securityFilterChain"
+          ]
+        }
+      ],
+      "limitation": "Conditional configuration and exact ApplicationContext construction are not captured."
+    },
+    {
+      "factId": "spring-boot-to-data-seeder",
+      "framework": "spring-boot",
+      "contextId": "spring-boot-production",
+      "status": "emitted",
+      "evidenceStatus": "verified",
+      "caller": "Spring Boot application lifecycle",
+      "callee": "com.redhat.lightwell.config.DataSeeder#run",
+      "relationshipType": "lifecycle_callback",
+      "certainty": "possible",
+      "modelRule": "spring-lifecycle-callback",
+      "evidence": [
+        {
+          "kind": "lifecycle_interface",
+          "path": "../spring-boot-example-application/src/main/java/com/redhat/lightwell/config/DataSeeder.java",
+          "symbols": [
+            "@Component",
+            "implements CommandLineRunner",
+            "run(String...)"
+          ]
+        }
+      ],
+      "limitation": "Startup ordering and conditional bean activation are not captured."
+    }
+  ],
+  "coverage": {
+    "expectedFacts": 11,
+    "recordedFacts": 11,
+    "emittedFacts": 10,
+    "abstainedFacts": 1,
+    "frameworks": [
+      "quarkus",
+      "spring-boot"
+    ],
+    "certaintyStates": [
+      "definite",
+      "possible",
+      "unresolved"
+    ]
+  },
+  "limitations": [
+    "This probe consumes source annotations and checked-in metadata; it does not instantiate a Quarkus Arc or Spring ApplicationContext.",
+    "Runtime route selection is represented as potential request matching, not one request-specific handler decision.",
+    "Generated proxy and interceptor identity remains possible unless generated/runtime metadata makes the target unique."
+  ]
+}

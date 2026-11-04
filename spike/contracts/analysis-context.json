@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "0.1.0",
+  "artifact": "AnalysisContext",
+  "issue": "FLPATH-5000",
+  "purpose": "The minimum build, framework, source, dependency, and scope context required before emitting or promoting a framework-enriched call fact.",
+  "scope": "spike_only_no_production_adapter",
+  "requiredFields": [
+    "framework",
+    "fixture",
+    "build",
+    "sourceRoots",
+    "generatedSourceRoots",
+    "dependencyClasspath",
+    "frameworkMetadata",
+    "analysisScope",
+    "provenance"
+  ],
+  "certaintyPolicy": {
+    "states": [
+      "definite",
+      "possible",
+      "unresolved"
+    ],
+    "definite": "Use only when one target remains after applying the selected framework metadata, build profile, and source/dependency context.",
+    "possible": "Use when the context bounds the candidate set but does not select one runtime target.",
+    "unresolved": "Use for missing context, open-world configuration, unconstrained reflection, or unbounded dynamic proxy behavior.",
+    "missingContextBehavior": "abstain_and_emit_unresolved",
+    "promotionGuard": "A missing or partial AnalysisContext cannot be filled by an analyzer default and cannot promote a fact to definite."
+  },
+  "contexts": [
+    {
+      "id": "quarkus-production",
+      "framework": {
+        "id": "quarkus",
+        "name": "Quarkus",
+        "version": "3.40.1"
+      },
+      "fixture": {
+        "id": "java21-quarkus",
+        "javaRelease": 21,
+        "repositoryPath": ".",
+        "pom": "spike/java21-quarkus/pom.xml"
+      },
+      "build": {
+        "tool": "Maven",
+        "selectedProfile": "production",
+        "availableProfiles": [
+          "production",
+          "test"
+        ],
+        "analysisScope": "production",
+        "buildVerified": true,
+        "command": "mvn -B -ntp -Pproduction package -DskipTests -f spike/java21-quarkus/pom.xml"
+      },
+      "sourceRoots": [
+        {
+          "path": "spike/java21-quarkus/src/main/java",
+          "scope": "production",
+          "required": true
+        }
+      ],
+      "generatedSourceRoots": [
+        {
+          "path": "spike/java21-quarkus/generated-src/main/java",
+          "scope": "production",
+          "included": true,
+          "fingerprint": "recorded_per_run",
+          "required": true
+        }
+      ],
+      "dependencyClasspath": {
+        "mode": "full_or_application_only",
+        "required": true,
+        "fingerprint": "recorded_per_run",
+        "limitation": "The SootUp full dependency run is verified with Maven runtime-scope dependencies; Quarkus Arc bean selection remains external framework metadata."
+      },
+      "frameworkMetadata": [
+        {
+          "modelId": "quarkus-rest-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "path": "spike/java21-quarkus/src/main/java"
+        },
+        {
+          "modelId": "quarkus-cdi-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "path": "spike/java21-quarkus/src/main/java"
+        },
+        {
+          "modelId": "quarkus-arc-bean-index",
+          "kind": "framework_build_metadata",
+          "status": "not_captured",
+          "abstention": "unresolved_for_missing_container_selection"
+        },
+        {
+          "modelId": "quarkus-service-descriptors",
+          "kind": "service_loader_descriptor",
+          "status": "observed",
+          "path": "spike/java21-quarkus/src/main/resources/META-INF/services"
+        }
+      ],
+      "analysisScope": {
+        "productionFactsOnly": true,
+        "testFacts": "separate_context",
+        "frameworkEntryPoints": "synthetic_facts"
+      },
+      "provenance": {
+        "sourceFingerprint": "recorded_per_run",
+        "generatedSourceFingerprint": "recorded_per_run",
+        "dependencyFingerprint": "recorded_per_run",
+        "gitRevision": "recorded_per_run",
+        "providerRuntime": "recorded_per_run"
+      }
+    },
+    {
+      "id": "spring-boot-production",
+      "framework": {
+        "id": "spring-boot",
+        "name": "Spring Boot",
+        "version": "2.7.18"
+      },
+      "fixture": {
+        "id": "fsi-spring-boot",
+        "javaRelease": 17,
+        "repositoryPath": "../spring-boot-example-application",
+        "pom": "../spring-boot-example-application/pom.xml",
+        "commit": "01a18a1b40e151ffcc1d7bef86bf335f87999750"
+      },
+      "build": {
+        "tool": "Maven",
+        "selectedProfile": "default",
+        "availableProfiles": [
+          "default"
+        ],
+        "analysisScope": "production",
+        "buildVerified": true,
+        "testsPassed": 121,
+        "command": "mvn -B -ntp test -f ../spring-boot-example-application/pom.xml"
+      },
+      "sourceRoots": [
+        {
+          "path": "../spring-boot-example-application/src/main/java",
+          "scope": "production",
+          "required": true
+        }
+      ],
+      "generatedSourceRoots": [
+        {
+          "path": "../spring-boot-example-application/target/generated-sources",
+          "scope": "production",
+          "included": false,
+          "fingerprint": null,
+          "required": false,
+          "status": "not_produced_by_pinned_baseline_package"
+        }
+      ],
+      "dependencyClasspath": {
+        "mode": "full_for_sootup_buildless_for_codeql",
+        "required": true,
+        "fingerprint": "recorded_per_run",
+        "limitation": "CodeQL used --build-mode=none and does not consume the resolved Maven classpath."
+      },
+      "frameworkMetadata": [
+        {
+          "modelId": "spring-web-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "path": "../spring-boot-example-application/src/main/java"
+        },
+        {
+          "modelId": "spring-bean-annotations",
+          "kind": "source_annotations",
+          "status": "observed",
+          "path": "../spring-boot-example-application/src/main/java"
+        },
+        {
+          "modelId": "spring-bean-definition-registry",
+          "kind": "runtime_or_build_metadata",
+          "status": "not_captured",
+          "abstention": "unresolved_for_conditional_or_profiled_selection"
+        },
+        {
+          "modelId": "spring-data-repository-contract",
+          "kind": "source_interface_metadata",
+          "status": "observed",
+          "path": "../spring-boot-example-application/src/main/java"
+        },
+        {
+          "modelId": "spring-aop-advisor-metadata",
+          "kind": "runtime_or_build_metadata",
+          "status": "not_captured",
+          "abstention": "possible_for_bounded_proxy_targets"
+        }
+      ],
+      "analysisScope": {
+        "productionFactsOnly": true,
+        "testFacts": "separate_context",
+        "frameworkEntryPoints": "synthetic_facts"
+      },
+      "provenance": {
+        "sourceFingerprint": "recorded_per_run",
+        "generatedSourceFingerprint": null,
+        "dependencyFingerprint": "recorded_per_run",
+        "gitRevision": "pinned_baseline_commit",
+        "providerRuntime": "recorded_per_run"
+      }
+    }
+  ]
+}

@@ -1,0 +1,253 @@
+{
+  "schemaVersion": "0.1.0",
+  "issue": "FLPATH-5000",
+  "adr": "ADR-001",
+  "evaluationScope": "JDT LS, SootUp, and CodeQL evidence runs against first-class Quarkus and Spring Boot fixtures; framework and dynamic gaps remain explicit.",
+  "fixtures": [
+    {
+      "id": "java21-quarkus",
+      "manifest": "spike/capability-matrix.json",
+      "framework": "quarkus",
+      "role": "Java 21/Quarkus dynamic-feature fixture"
+    },
+    {
+      "id": "fsi-spring-boot",
+      "manifest": "spike/baselines/fsi-spring-boot.json",
+      "framework": "spring-boot",
+      "role": "Spring Boot framework fixture and entrypoint baseline"
+    }
+  ],
+  "candidateSet": [
+    {
+      "id": "jdtls",
+      "name": "Eclipse JDT Language Server",
+      "version": "1.63.0",
+      "kind": "source/compiler-backed language server",
+      "evidenceLevel": "empirical_fixture",
+      "sources": [
+        "https://github.com/eclipse-jdtls/eclipse.jdt.ls",
+        "spike/results/jdtls-1.63.0-java21-observation.json",
+        "spike/results/jdtls-1.63.0-fsi-spring-observation.json"
+      ],
+      "acceptance": {
+        "AC-01": "pass",
+        "AC-02": "pass",
+        "AC-03": "conditional",
+        "AC-04": "gap",
+        "AC-05": "conditional",
+        "AC-06": "gap",
+        "AC-07": "conditional",
+        "AC-08": "pass",
+        "AC-09": "conditional",
+        "AC-10": "gap"
+      },
+      "strengths": [
+        "Direct call hierarchy and source locations were verified against the Maven fixture.",
+        "Source-level interface, callback/lambda, generated-source, and ServiceLoader call sites were observed.",
+        "Maven project import and Java source navigation are already available through JDT/JDT LS."
+      ],
+      "gaps": [
+        {
+          "id": "cdi-wiring",
+          "status": "configuration_work",
+          "impact": "The source call to an injected interface is visible, but CDI bean selection, qualifiers, alternatives, producers, and Quarkus client proxies are not represented.",
+          "closure": "Add Quarkus/Jandex and build-profile enrichment; map injection points to selected bean identities and normalize generated proxies.",
+          "estimate": "5-8 engineer-days"
+        },
+        {
+          "id": "framework-entrypoints",
+          "status": "confirmed_gap",
+          "impact": "JDT LS does not create callers for HTTP routes, lifecycle callbacks, or container-owned @Bean methods.",
+          "closure": "Add Spring/Quarkus framework models as a separate entrypoint evidence layer; keep external entrypoints distinct from Java source callers.",
+          "estimate": "5-8 engineer-days"
+        },
+        {
+          "id": "service-loader-binding",
+          "status": "configuration_work",
+          "impact": "The ServiceLoader call site is visible, but the concrete provider and classloader/module selection are not proven.",
+          "closure": "Ingest META-INF/services and module-info provider declarations from the selected classpath; emit possible when provider selection is not unique.",
+          "estimate": "1-2 engineer-days"
+        },
+        {
+          "id": "generated-profile-context",
+          "status": "configuration_work",
+          "impact": "Generated calls resolve only when generated roots and the correct Maven profile are imported.",
+          "closure": "Make source roots, effective classpath, profile, and generated-source fingerprints mandatory AnalysisContext inputs.",
+          "estimate": "2-3 engineer-days"
+        },
+        {
+          "id": "reflection-and-proxy",
+          "status": "confirmed_gap",
+          "impact": "Unconstrained Class.forName, Method.invoke, and Proxy targets are not represented as concrete incoming calls.",
+          "closure": "Implement only bounded constant/configuration resolvers; retain unknown for arbitrary dynamic targets.",
+          "estimate": "4-7 engineer-days for constrained cases; no finite estimate for general resolution"
+        },
+        {
+          "id": "semantic-facts-adapter",
+          "status": "not_implemented",
+          "impact": "The probe evidence is not yet a production SemanticCallFacts adapter.",
+          "closure": "Implement the provider boundary and normalize LSP results with certainty, provenance, and abstention fields.",
+          "estimate": "4-6 engineer-days"
+        }
+      ],
+      "closureEstimate": "20-33 engineer-days for a bounded MVP adapter, framework entrypoints, and enrichment; arbitrary dynamic Java remains intentionally unresolved.",
+      "decision": "preferred_empirical_starting_point",
+      "decisionReason": "Lowest initial integration risk and strongest source-level evidence, provided framework enrichment and abstention are explicit."
+    },
+    {
+      "id": "sootup",
+      "name": "SootUp",
+      "version": "3.0.1",
+      "kind": "JVM bytecode/source static-analysis library",
+      "evidenceLevel": "empirical_fixture",
+      "sources": [
+        "https://soot-oss.github.io/SootUp/develop/callgraphs/",
+        "https://github.com/soot-oss/SootUp",
+        "spike/results/sootup-3.0.1-java21-quarkus-observation.json",
+        "spike/results/sootup-3.0.1-fsi-spring-observation.json"
+      ],
+      "acceptance": {
+        "AC-01": "pass",
+        "AC-02": "pass",
+        "AC-03": "conditional",
+        "AC-04": "gap",
+        "AC-05": "conditional",
+        "AC-06": "gap",
+        "AC-07": "conditional",
+        "AC-08": "pass",
+        "AC-09": "conditional",
+        "AC-10": "gap"
+      },
+      "strengths": [
+        "Pinned CHA/RTA runs measured direct application calls, concrete callback implementations, ServiceLoader implementors, generated bytecode, and full Quarkus/Spring runtime classpaths.",
+        "The Quarkus runtime-scope CHA run completed with 118 dependency entries and 68 methods/59 calls; the FSI run used 104 entries and measured 6,224 methods/7,853 calls.",
+        "A library integration can avoid a long-lived language-server process and keeps the unresolved-edge policy under adapter control."
+      ],
+      "gaps": [
+        {
+          "id": "framework-wiring",
+          "status": "configuration_work",
+          "impact": "CHA reaches concrete Quarkus and Spring implementations, but does not prove CDI/Spring bean selection, qualifiers, alternatives, producers, or framework proxy identity.",
+          "closure": "Add the same Jandex/Quarkus enrichment layer and map bytecode proxy nodes back to application beans.",
+          "estimate": "6-10 engineer-days"
+        },
+        {
+          "id": "framework-entrypoints",
+          "status": "confirmed_gap",
+          "impact": "Neither Quarkus REST nor Spring MVC, @Bean, and lifecycle entrypoints had incoming Java callers in the measured graphs.",
+          "closure": "Add Spring/Quarkus route and lifecycle models and seed the call graph with explicit framework entrypoint nodes.",
+          "estimate": "5-8 engineer-days"
+        },
+        {
+          "id": "source-and-provenance-mapping",
+          "status": "configuration_work",
+          "impact": "The probe returns source lines and generated-class edges, but raw signatures and host paths require normalization before they satisfy SemanticCallFacts provenance.",
+          "closure": "Keep the portable normalizer, validate line tables/source roots across profiles, and define stable method-signature normalization in the adapter.",
+          "estimate": "2-4 engineer-days"
+        },
+        {
+          "id": "dynamic-features",
+          "status": "confirmed_gap",
+          "impact": "Reflection, ServiceLoader selection, and dynamic proxies remain open-world unless modeled outside the call graph.",
+          "closure": "Add constrained metadata/configuration models and preserve unknown for unresolved targets.",
+          "estimate": "5-9 engineer-days for bounded cases; no finite estimate for general resolution"
+        },
+        {
+          "id": "semantic-facts-adapter",
+          "status": "not_implemented",
+          "impact": "The normalized spike output preserves evidence and certainty, but the library graph is not itself the required production SemanticCallFacts contract.",
+          "closure": "Implement an adapter with graph scope, certainty mapping, source evidence, and coverage reporting.",
+          "estimate": "4-7 engineer-days"
+        }
+      ],
+      "closureEstimate": "22-38 engineer-days after the measured probe; includes adapter/provenance normalization, framework entrypoints, and enrichment. General dynamic resolution remains intentionally unresolved.",
+      "decision": "preferred_bytecode_foundation",
+      "decisionReason": "Runtime-scope CHA/RTA now passes on both the Java 21 Quarkus fixture and the external Spring Boot baseline; the remaining gaps are framework modeling, provenance adaptation, and intentionally unresolved dynamic behavior."
+    },
+    {
+      "id": "codeql",
+      "name": "CodeQL for Java/Kotlin",
+      "version": "2.27.4 (CLI/bundle); codeql/java-all 9.3.4",
+      "kind": "database-backed static-analysis and query engine",
+      "evidenceLevel": "empirical_fixture_buildless",
+      "sources": [
+        "https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/",
+        "https://codeql.github.com/docs/codeql-language-guides/codeql-library-for-java/",
+        "spike/results/codeql-2.27.4-java21-quarkus-observation.json",
+        "spike/results/codeql-2.27.4-fsi-spring-observation.json"
+      ],
+      "acceptance": {
+        "AC-01": "conditional",
+        "AC-02": "pass",
+        "AC-03": "conditional",
+        "AC-04": "conditional",
+        "AC-05": "conditional",
+        "AC-06": "gap",
+        "AC-07": "conditional",
+        "AC-08": "pass",
+        "AC-09": "conditional",
+        "AC-10": "conditional"
+      },
+      "strengths": [
+        "A pinned Java database and query emitted 64 Quarkus facts and 2,356 FSI facts, with source locations and qualified caller/callee names.",
+        "The same query exposed direct calls, interface/callback source edges, generated-source calls, and explicit reflective/proxy API activity.",
+        "The query model can be extended with annotations and framework models while the normalizer preserves possible and unresolved outcomes."
+      ],
+      "gaps": [
+        {
+          "id": "database-build-lifecycle",
+          "status": "configuration_work",
+          "impact": "Both databases were created and queried, but --build-mode=none did not consume a compiled Maven build on macOS 27; test facts also require explicit scope filtering.",
+          "closure": "Retain the pinned runner and buildless limitation, then add a supported compiled-build path or an equivalent dependency/profile import before production selection.",
+          "estimate": "3-6 engineer-days"
+        },
+        {
+          "id": "query-and-fact-extraction",
+          "status": "configuration_work",
+          "impact": "The reverse-call query and portable normalizer emit measured source facts, but they do not yet provide a production query pack or all SemanticCallFacts relationship types.",
+          "closure": "Extend the query/normalizer for framework facts, polymorphic candidate sets, stable signatures, and explicit coverage records.",
+          "estimate": "3-6 engineer-days"
+        },
+        {
+          "id": "framework-modeling",
+          "status": "configuration_work",
+          "impact": "The measured query sees source annotations and interface calls, but CDI, Quarkus build-time beans, ServiceLoader providers, and framework proxies remain unmodeled.",
+          "closure": "Build a small Quarkus model pack and compare its facts to the Jandex/context-based model.",
+          "estimate": "6-10 engineer-days"
+        },
+        {
+          "id": "framework-entrypoints",
+          "status": "confirmed_gap",
+          "impact": "The measured query reports no incoming Java callers for Quarkus REST, Spring MVC, @Bean, or lifecycle methods; the new declarative framework contracts are not consumed by the provider run.",
+          "closure": "Add Spring/Quarkus QL models or inject framework-entrypoint facts from AnalysisContext before querying reverse callers.",
+          "estimate": "5-9 engineer-days"
+        },
+        {
+          "id": "dynamic-features",
+          "status": "confirmed_gap",
+          "impact": "General reflection and dynamic proxy target resolution remains difficult even with AST and call-graph predicates.",
+          "closure": "Model only constrained configuration/constant cases and preserve unknown for open-world behavior.",
+          "estimate": "5-9 engineer-days for bounded cases; no finite estimate for general resolution"
+        },
+        {
+          "id": "service-integration",
+          "status": "configuration_work",
+          "impact": "The CLI/database/query process adds a process boundary, distribution dependency, and license/operational review for a service adapter.",
+          "closure": "Define an isolated runner, query pack versioning, database cleanup, result transport, and operational limits.",
+          "estimate": "5-8 engineer-days"
+        }
+      ],
+      "closureEstimate": "26-45 engineer-days after the measured buildless database/query run; includes compiled-build or dependency-context support, query/fact normalization, framework entrypoints/models, dynamic abstention, and service integration.",
+      "decision": "credible_query_engine_alternative",
+      "decisionReason": "The query engine produced useful, portable source facts, but buildless extraction and the process/query-pack boundary create the highest integration cost for a small reverse-call service."
+    }
+  ],
+  "selection": {
+    "currentRecommendation": "SootUp is the preferred technical foundation; JDT LS remains the lowest-risk source/compiler fallback, and CodeQL is a measured query-engine alternative with explicit buildless limits.",
+    "notYetProven": "No candidate is production-ready until it passes the mandatory acceptance criteria or has an explicit abstention and closure plan for every conditional/gap result. SootUp now has full runtime-classpath evidence but still needs the project-owned framework enrichment and SemanticCallFacts adapter.",
+    "nextEvidence": [
+      "Implement the framework/context enrichment contract for CDI, Spring/Quarkus entrypoints, ServiceLoader, and generated proxies.",
+      "Compare the normalized facts, provenance completeness, setup cost, and unresolved-edge behavior before selecting the production adapter."
+    ]
+  }
+}

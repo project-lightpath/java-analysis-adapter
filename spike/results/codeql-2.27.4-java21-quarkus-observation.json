@@ -1,0 +1,241 @@
+{
+  "schemaVersion": "0.2.0",
+  "issue": "FLPATH-5000",
+  "adr": "ADR-001",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContextId": "quarkus-production",
+  "provider": {
+    "name": "CodeQL for Java/Kotlin",
+    "version": "2.27.4",
+    "javaPackVersion": "9.3.4"
+  },
+  "fixture": {
+    "id": "java21-quarkus",
+    "framework": "quarkus",
+    "frameworkName": "Quarkus",
+    "javaRelease": 21,
+    "profile": "production",
+    "applicationClasses": null,
+    "applicationMethods": null
+  },
+  "authority": {
+    "targetBuildVerified": true,
+    "analysisScope": "production",
+    "hostPathsOmitted": true
+  },
+  "provenance": {
+    "runner": "spike/scripts/run_static_analysis.py",
+    "rawArtifact": "spike/runs/codeql-java21-quarkus.csv",
+    "commandTemplate": "python3 spike/scripts/run_static_analysis.py --provider codeql --fixture quarkus",
+    "configuration": {
+      "framework": "quarkus",
+      "analysisContextId": "quarkus-production",
+      "buildMode": "none",
+      "sourceScope": "production facts normalized from src/main and generated-src/main",
+      "testFactsRetainedForCoverage": true,
+      "query": "spike/contracts/codeql/reverse-calls.ql"
+    },
+    "toolchain": {
+      "cliVersion": "2.27.4",
+      "javaPackVersion": "9.3.4",
+      "analyzerRuntimeJavaMajor": 25,
+      "targetJavaRelease": 21,
+      "mavenVersion": "3.9.11"
+    },
+    "fingerprints": {
+      "source": "b526d98d4400ab6e1151377240d26734058c6fb76e17b4908bb9c72faffaf716",
+      "generatedSource": "5f8b8bca1b81fe439c1ea1e2fbcfcbad38d943a93ea48677eb0c25847f20d4fa",
+      "gitRevision": "488b928e955fec3c294ee70f21d091b6ae57ae49",
+      "dependencyClasspath": "not-consumed-by-buildless-extractor"
+    }
+  },
+  "coverage": {
+    "buildMode": "none",
+    "rawFacts": 64,
+    "productionFacts": 52,
+    "testFactsFiltered": 12
+  },
+  "measurements": {
+    "query": {
+      "rawFactCount": 64,
+      "productionFactCount": 52,
+      "testFactCount": 12
+    }
+  },
+  "observations": [
+    {
+      "caseId": "direct-call",
+      "classification": "existing_support",
+      "certainty": "definite",
+      "observed": "ServerUserAuthService#handleUserAuthRequestMessage -> UserAuthPublicKey#doAuth",
+      "outcome": "definite_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL Call/Callee source fact",
+          "caller": "com.projectlightpath.fixture.target.ServerUserAuthService#handleUserAuthRequestMessage",
+          "callee": "com.projectlightpath.fixture.target.UserAuthPublicKey#doAuth",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/target/ServerUserAuthService.java",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "caseId": "interface-dispatch",
+      "classification": "configuration_work",
+      "certainty": "possible",
+      "observed": "TransferResource#transfer -> TransferService#transfer",
+      "outcome": "possible_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call to interface target",
+          "caller": "com.projectlightpath.fixture.api.TransferResource#transfer",
+          "callee": "com.projectlightpath.fixture.service.TransferService#transfer",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+          "line": 24
+        }
+      ],
+      "limitation": "The query exposes the source-level interface edge but does not select a CDI implementation."
+    },
+    {
+      "caseId": "cdi-injection",
+      "classification": "configuration_work",
+      "certainty": "possible",
+      "observed": "TransferResource#transfer uses constructor-injected TransferService",
+      "outcome": "possible_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call plus fixture constructor context",
+          "caller": "com.projectlightpath.fixture.api.TransferResource#transfer",
+          "callee": "com.projectlightpath.fixture.service.TransferService#transfer",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/api/TransferResource.java",
+          "line": 24
+        }
+      ],
+      "limitation": "CDI bean selection is not part of the buildless query model."
+    },
+    {
+      "caseId": "framework-entrypoint",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "TransferResource#transfer has no incoming Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no production CodeQL call fact targets the REST method",
+          "target": "com.projectlightpath.fixture.api.TransferResource#transfer"
+        }
+      ],
+      "limitation": "@Path/@POST route registration requires a Quarkus framework model; no incoming Java caller is not evidence that the route is absent or dead code."
+    },
+    {
+      "caseId": "callback-lambda",
+      "classification": "configuration_work",
+      "certainty": "possible",
+      "observed": "anonymous callback -> AuthCallback#onAuthenticated",
+      "outcome": "possible_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call fact",
+          "caller": "<anonymous class>#run",
+          "callee": "com.projectlightpath.fixture.auth.AuthCallback#onAuthenticated",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/auth/CallbackDispatcher.java",
+          "line": 11
+        }
+      ],
+      "limitation": "The callback registration and runtime scheduling are not proved by this query."
+    },
+    {
+      "caseId": "service-loader",
+      "classification": "configuration_work",
+      "certainty": "possible",
+      "observed": "anonymous ServiceLoader consumer -> AuditProvider#record",
+      "outcome": "possible_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call fact",
+          "caller": "<anonymous class>#accept",
+          "callee": "com.projectlightpath.fixture.audit.AuditProvider#record",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/audit/ServiceLoaderBridge.java",
+          "line": 12
+        }
+      ],
+      "limitation": "The query sees the interface call but does not bind META-INF/services to one provider."
+    },
+    {
+      "caseId": "reflection",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "ReflectiveInvoker calls Method#invoke but no edge targets ReflectiveTarget#validate",
+      "outcome": "unknown",
+      "evidence": [
+        {
+          "basis": "CodeQL reflective API fact without target resolution",
+          "caller": "com.projectlightpath.fixture.reflective.ReflectiveInvoker#validate",
+          "callee": "java.lang.reflect.Method#invoke",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/reflective/ReflectiveInvoker.java",
+          "line": 14
+        }
+      ],
+      "limitation": "String-based Class.forName and Method.invoke targets remain unresolved."
+    },
+    {
+      "caseId": "dynamic-proxy",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "AuthProxyFactory calls Proxy#newProxyInstance but no proxy callback target is emitted",
+      "outcome": "unknown",
+      "evidence": [
+        {
+          "basis": "CodeQL dynamic proxy API fact without target resolution",
+          "caller": "com.projectlightpath.fixture.auth.AuthProxyFactory#wrap",
+          "callee": "java.lang.reflect.Proxy#newProxyInstance",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/auth/AuthProxyFactory.java",
+          "line": 12
+        }
+      ],
+      "limitation": "Proxy handler and runtime interface dispatch remain open-world."
+    },
+    {
+      "caseId": "generated-source",
+      "classification": "existing_support",
+      "certainty": "definite",
+      "observed": "DefaultTransferService#transfer -> GeneratedTransferMapper#toResponse",
+      "outcome": "definite_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source fact from generated-src",
+          "caller": "com.projectlightpath.fixture.service.DefaultTransferService#transfer",
+          "callee": "com.projectlightpath.fixture.generated.GeneratedTransferMapper#toResponse",
+          "sourcePath": "src/main/java/com/projectlightpath/fixture/service/DefaultTransferService.java",
+          "line": 36
+        }
+      ],
+      "limitation": "Generated-source inclusion is visible in the production source facts but still depends on profile context."
+    },
+    {
+      "caseId": "build-profile",
+      "classification": "configuration_work",
+      "certainty": "unresolved",
+      "observed": "CodeQL buildless extraction included production and test source facts; normalization retained production facts",
+      "outcome": "partial",
+      "evidence": [
+        {
+          "basis": "CodeQL --build-mode=none",
+          "productionScope": "src/main and generated-src/main",
+          "testFactsFiltered": true
+        }
+      ],
+      "limitation": "The database was not created from a compiled Maven build; profile and dependency fidelity remain limited."
+    }
+  ],
+  "limitations": [
+    "CodeQL database creation used --build-mode=none because compiled-build extraction is unavailable on the macOS 27 host.",
+    "The raw query includes test-source facts; normalization counts them and retains only production paths for candidate observations.",
+    "The reverse-call query emits source-level Call/Callee facts, not framework, CDI, ServiceLoader, reflection, or proxy runtime bindings."
+  ],
+  "recommendation": {
+    "decision": "Retain as an evidence source with explicit framework/dynamic abstention; do not use this result alone as a production SemanticCallFacts provider.",
+    "adapterBoundary": "Normalize source/bytecode edges as definite or possible only when their evidence is unique; emit unresolved for missing framework or dynamic context."
+  },
+  "rawInput": "spike/runs/codeql-java21-quarkus.csv"
+}

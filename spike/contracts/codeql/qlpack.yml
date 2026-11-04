@@ -1,0 +1,5 @@
+name: project-lightpath/flpath-5000
+version: 0.0.1
+library: false
+dependencies:
+  codeql/java-all: 9.3.4

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "0.1.0",
+  "id": "fsi-spring-boot",
+  "framework": "spring-boot",
+  "role": "external_reference_baseline",
+  "repository": "https://github.com/lzspangler/spring-boot-example-application",
+  "commit": "01a18a1b40e151ffcc1d7bef86bf335f87999750",
+  "localPath": "../spring-boot-example-application",
+  "licenseNote": "The baseline is cloned separately and is not vendored into this repository.",
+  "build": {
+    "framework": "Spring Boot",
+    "frameworkVersion": "2.7.18",
+    "javaRelease": 17,
+    "buildTool": "Maven",
+    "productionClasses": 51,
+    "testsPassed": 121,
+    "buildCommand": "mvn -B -ntp test -f pom.xml"
+  },
+  "features": [
+    "Spring component scanning and constructor injection",
+    "@Bean configuration methods",
+    "Spring MVC REST controllers and HTTP entrypoints",
+    "Spring Data JPA repository interfaces and generated proxies",
+    "@Transactional service methods and transaction proxies",
+    "Spring Security filter-chain and authentication configuration",
+    "CommandLineRunner application lifecycle callback",
+    "OpenAPI generator configuration",
+    "XML/YAML parsing and external HTTP client calls"
+  ],
+  "expectedRelationships": [
+    {
+      "id": "http-to-transfer-controller",
+      "caller": "external HTTP POST /api/transfers",
+      "callee": "com.redhat.lightwell.controller.TransferController#transfer",
+      "relationshipType": "spring_mvc_entrypoint",
+      "certainty": "possible",
+      "evidence": "@PostMapping and @RequestMapping annotations"
+    },
+    {
+      "id": "transfer-controller-to-service",
+      "caller": "com.redhat.lightwell.controller.TransferController#transfer",
+      "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+      "relationshipType": "invokes",
+      "certainty": "definite",
+      "evidence": "source call and constructor-injected field"
+    },
+    {
+      "id": "transaction-service-to-audit",
+      "caller": "com.redhat.lightwell.service.TransactionService#transfer",
+      "callee": "com.redhat.lightwell.service.AuditService#log",
+      "relationshipType": "invokes",
+      "certainty": "definite",
+      "evidence": "source call"
+    },
+    {
+      "id": "transaction-service-to-jpa",
+      "caller": "com.redhat.lightwell.service.TransactionService#transfer",
+      "callee": "com.redhat.lightwell.repository.AccountRepository#findById",
+      "relationshipType": "spring_data_repository",
+      "certainty": "possible",
+      "evidence": "repository interface plus Spring Data generated implementation"
+    },
+    {
+      "id": "spring-bean-callback",
+      "caller": "Spring ApplicationContext",
+      "callee": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain",
+      "relationshipType": "spring_bean_factory_callback",
+      "certainty": "possible",
+      "evidence": "@Configuration and @Bean"
+    },
+    {
+      "id": "startup-callback",
+      "caller": "Spring Boot application lifecycle",
+      "callee": "com.redhat.lightwell.config.DataSeeder#run",
+      "relationshipType": "command_line_runner_callback",
+      "certainty": "possible",
+      "evidence": "@Component and CommandLineRunner"
+    }
+  ],
+  "observedEvidence": "spike/results/jdtls-1.63.0-fsi-spring-observation.json",
+  "limitations": [
+    "This is Spring Boot 2.7/Java 17, not the Java 21/Quarkus production target.",
+    "The current upstream POM configures OpenAPI generation but the package run produced no generated Java source root.",
+    "Spring MVC, ApplicationContext, Spring Data, transaction, and security callbacks are runtime/framework edges rather than ordinary Java caller edges."
+  ]
+}

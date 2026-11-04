@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "0.1.0",
+  "issue": "FLPATH-5000",
+  "adr": "ADR-001",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContextId": "spring-boot-production",
+  "baseline": {
+    "id": "fsi-spring-boot",
+    "framework": "spring-boot",
+    "frameworkName": "Spring Boot",
+    "repository": "https://github.com/lzspangler/spring-boot-example-application",
+    "commit": "01a18a1b40e151ffcc1d7bef86bf335f87999750",
+    "springBootVersion": "2.7.18",
+    "javaRelease": 17,
+    "productionClasses": 51,
+    "testsPassed": 121
+  },
+  "provider": {
+    "name": "Eclipse JDT Language Server",
+    "version": "1.63.0",
+    "runtimeJava": 25
+  },
+  "observations": [
+    {
+      "caseId": "spring-source-call",
+      "classification": "existing_support",
+      "observed": "TransferController#transfer -> TransactionService#transfer",
+      "outcome": "definite_static_path",
+      "limitation": "The probe also reports test callers; production/test scope must be filtered by AnalysisContext."
+    },
+    {
+      "caseId": "service-to-audit",
+      "classification": "existing_support",
+      "observed": "TransactionService#transfer -> AuditService#log",
+      "outcome": "definite_static_path",
+      "limitation": "Spring transaction proxy behavior is not represented by the source call hierarchy."
+    },
+    {
+      "caseId": "spring-mvc-entrypoint",
+      "classification": "confirmed_gap",
+      "observed": "TransferController#transfer had no incoming Java call",
+      "outcome": "unknown_without_framework_model",
+      "limitation": "HTTP route registration from @RequestMapping/@PostMapping is outside ordinary Java call hierarchy; no incoming Java caller is not evidence that the route is absent or dead code."
+    },
+    {
+      "caseId": "spring-bean-callback",
+      "classification": "confirmed_gap",
+      "observed": "SecurityConfig#securityFilterChain had no incoming Java call",
+      "outcome": "unknown_without_framework_model",
+      "limitation": "ApplicationContext invokes @Bean methods reflectively/framework-internally."
+    },
+    {
+      "caseId": "startup-callback",
+      "classification": "confirmed_gap",
+      "observed": "DataSeeder#run had no incoming Java call",
+      "outcome": "unknown_without_framework_model",
+      "limitation": "Spring Boot invokes CommandLineRunner callbacks during application startup."
+    },
+    {
+      "caseId": "spring-data-jpa",
+      "classification": "configuration_work",
+      "observed": "Repository calls are source-visible, but generated repository implementations are not application source callers",
+      "outcome": "possible_static_path",
+      "limitation": "The concrete proxy/implementation requires Spring Data metadata or runtime evidence."
+    },
+    {
+      "caseId": "openapi-generated-source",
+      "classification": "unverified",
+      "observed": "OpenAPI generator is configured, but the baseline package produced no generated Java source root",
+      "outcome": "partial",
+      "limitation": "The generator execution/profile must be made explicit before treating generated code as covered."
+    }
+  ],
+  "recommendation": {
+    "decision": "Use the FSI demo as the Spring framework acceptance baseline and retain the Quarkus fixture for Java 21/Quarkus-specific behavior.",
+    "primaryGap": "Framework entrypoint and container callback modeling, not ordinary Java source call resolution.",
+    "adapterRequirement": "A candidate must report framework entrypoints and generated proxies as explicit evidence or abstain with coverage limitations."
+  }
+}

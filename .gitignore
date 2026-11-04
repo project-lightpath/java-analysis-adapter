@@ -1,0 +1,17 @@
+# Java/Maven build output
+/target/
+
+# FLPATH-5000 disposable analysis output
+spike/runs/
+spike/.cache/
+spike/.jdtls-data/
+spike/java21-quarkus/target/
+spike/probes/sootup/target/
+spike/java21-quarkus/.jdtls-data/
+spike/java21-quarkus/.classpath
+spike/java21-quarkus/.project
+spike/java21-quarkus/.settings/
+spike/scripts/__pycache__/
+
+# Local files
+.DS_Store

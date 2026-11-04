@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "0.2.0",
+  "issue": "FLPATH-5000",
+  "adr": "ADR-001",
+  "frameworkModel": "spike/contracts/framework-model.json",
+  "analysisContextId": "spring-boot-production",
+  "provider": {
+    "name": "CodeQL for Java/Kotlin",
+    "version": "2.27.4",
+    "javaPackVersion": "9.3.4"
+  },
+  "fixture": {
+    "id": "fsi-spring-boot",
+    "framework": "spring-boot",
+    "frameworkName": "Spring Boot",
+    "javaRelease": 17,
+    "profile": "production",
+    "applicationClasses": null,
+    "applicationMethods": null
+  },
+  "authority": {
+    "targetBuildVerified": true,
+    "analysisScope": "production",
+    "hostPathsOmitted": true
+  },
+  "provenance": {
+    "runner": "spike/scripts/run_static_analysis.py",
+    "rawArtifact": "spike/runs/codeql-fsi-spring-boot.csv",
+    "commandTemplate": "python3 spike/scripts/run_static_analysis.py --provider codeql --fixture spring",
+    "configuration": {
+      "framework": "spring-boot",
+      "analysisContextId": "spring-boot-production",
+      "buildMode": "none",
+      "sourceScope": "production facts normalized from src/main and generated-src/main",
+      "testFactsRetainedForCoverage": true,
+      "query": "spike/contracts/codeql/reverse-calls.ql"
+    },
+    "toolchain": {
+      "cliVersion": "2.27.4",
+      "javaPackVersion": "9.3.4",
+      "analyzerRuntimeJavaMajor": 25,
+      "targetJavaRelease": 17,
+      "mavenVersion": "3.9.11"
+    },
+    "fingerprints": {
+      "source": "8c7c78724751709b60f4f3bf014927c3d3d409d4e5eed93efd65dca1c1a944a2",
+      "generatedSource": null,
+      "gitRevision": "01a18a1b40e151ffcc1d7bef86bf335f87999750",
+      "dependencyClasspath": "not-consumed-by-buildless-extractor"
+    }
+  },
+  "coverage": {
+    "buildMode": "none",
+    "rawFacts": 2356,
+    "productionFacts": 582,
+    "testFactsFiltered": 1774
+  },
+  "measurements": {
+    "query": {
+      "rawFactCount": 2356,
+      "productionFactCount": 582,
+      "testFactCount": 1774
+    }
+  },
+  "observations": [
+    {
+      "caseId": "spring-mvc-entrypoint",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "TransferController#transfer has no incoming production Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no production CodeQL call fact targets the controller method",
+          "target": "com.redhat.lightwell.controller.TransferController#transfer"
+        }
+      ],
+      "limitation": "@PostMapping and Spring MVC route registration require a framework model; no incoming Java caller is not evidence that the route is absent or dead code."
+    },
+    {
+      "caseId": "transfer-controller-to-service",
+      "classification": "existing_support",
+      "certainty": "definite",
+      "observed": "TransferController#transfer -> TransactionService#transfer",
+      "outcome": "definite_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call fact",
+          "caller": "com.redhat.lightwell.controller.TransferController#transfer",
+          "callee": "com.redhat.lightwell.service.TransactionService#transfer",
+          "sourcePath": "src/main/java/com/redhat/lightwell/controller/TransferController.java",
+          "line": 27
+        }
+      ]
+    },
+    {
+      "caseId": "transaction-service-to-audit",
+      "classification": "existing_support",
+      "certainty": "definite",
+      "observed": "TransactionService#transfer -> AuditService#log",
+      "outcome": "definite_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call fact",
+          "caller": "com.redhat.lightwell.service.TransactionService#transfer",
+          "callee": "com.redhat.lightwell.service.AuditService#log",
+          "sourcePath": "src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "line": 123
+        }
+      ]
+    },
+    {
+      "caseId": "transaction-service-to-jpa",
+      "classification": "configuration_work",
+      "certainty": "possible",
+      "observed": "TransactionService#transfer -> CrudRepository<Account,Long>#findById",
+      "outcome": "possible_static_path",
+      "evidence": [
+        {
+          "basis": "CodeQL source call to Spring Data repository abstraction",
+          "caller": "com.redhat.lightwell.service.TransactionService#transfer",
+          "callee": "org.springframework.data.repository.CrudRepository<Account,Long>#findById",
+          "sourcePath": "src/main/java/com/redhat/lightwell/service/TransactionService.java",
+          "line": 93
+        }
+      ],
+      "limitation": "The generated AccountRepository implementation and proxy identity are not resolved by this query."
+    },
+    {
+      "caseId": "spring-bean-callback",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "SecurityConfig#securityFilterChain has no incoming production Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no production CodeQL call fact targets the @Bean method",
+          "target": "com.redhat.lightwell.config.SecurityConfig#securityFilterChain"
+        }
+      ],
+      "limitation": "ApplicationContext callback modeling is outside this query."
+    },
+    {
+      "caseId": "startup-callback",
+      "classification": "confirmed_gap",
+      "certainty": "unresolved",
+      "observed": "DataSeeder#run has no incoming production Java caller",
+      "outcome": "unknown_without_framework_model",
+      "evidence": [
+        {
+          "basis": "no production CodeQL call fact targets CommandLineRunner.run",
+          "target": "com.redhat.lightwell.config.DataSeeder#run"
+        }
+      ],
+      "limitation": "Spring Boot lifecycle callback modeling is outside this query."
+    }
+  ],
+  "limitations": [
+    "CodeQL database creation used --build-mode=none because compiled-build extraction is unavailable on the macOS 27 host.",
+    "The raw query includes test-source facts; normalization counts them and retains only production paths for candidate observations.",
+    "The reverse-call query emits source-level Call/Callee facts, not framework, CDI, ServiceLoader, reflection, or proxy runtime bindings."
+  ],
+  "recommendation": {
+    "decision": "Retain as an evidence source with explicit framework/dynamic abstention; do not use this result alone as a production SemanticCallFacts provider.",
+    "adapterBoundary": "Normalize source/bytecode edges as definite or possible only when their evidence is unique; emit unresolved for missing framework or dynamic context."
+  },
+  "rawInput": "spike/runs/codeql-fsi-spring.csv"
+}
