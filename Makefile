@@ -1,7 +1,16 @@
-.PHONY: test package adapter-test adapter-package spike-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis
+.PHONY: test package adapter-test adapter-package manual-analysis spike-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis
 
 adapter-test test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp test -f pom.xml
+
+manual-analysis:
+	@test -n "$(CONTEXT)" || (echo 'CONTEXT is required' >&2; exit 2)
+	@test -n "$(OUTPUT)" || (echo 'OUTPUT is required' >&2; exit 2)
+	MAVEN_BIN="$${MAVEN_BIN:-$$(bash spike/scripts/bootstrap-maven.sh)}"; \
+	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-java}}"; \
+	"$${MAVEN_BIN}" -B -ntp package -DskipTests -f pom.xml; \
+	"$${MAVEN_BIN}" -B -ntp -q dependency:build-classpath -Dmdep.outputFile=target/manual-analysis-classpath.txt -DincludeScope=runtime -f pom.xml; \
+	"$${JAVA_BIN}" -cp "target/classes:$$(cat target/manual-analysis-classpath.txt)" com.projectlightpath.analysis.java.ManualAnalysisMain --context="$(CONTEXT)" --output="$(OUTPUT)"
 
 adapter-package package:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp package -DskipTests -f pom.xml

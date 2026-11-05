@@ -21,3 +21,27 @@ not prove route absence; open-world reflection and dynamic proxies remain
 
 The adapter intentionally does not implement the graph engine, vulnerability
 policy, controller, runtime validation, or durable repository-profile wiring.
+
+## Manual VPE integration
+
+The VPE `AnalysisContext` JSON handoff is loaded by
+`AnalysisContextLoader`. The manual command preserves source/build/provenance
+fingerprints and emits normalized facts with separate provider and framework
+sets:
+
+```sh
+spike/scripts/run-manual-integration.sh
+```
+
+The runner uses the pinned `fsi-spring-boot` profile and local immutable Git
+archive, then executes:
+
+```text
+source archive -> Maven package -> AnalysisContext JSON
+    -> JavaAnalysisAdapter -> SemanticCallFacts JSON
+    -> capability/provenance validation
+```
+
+The manual runner records host toolchain limitations; it does not claim the
+outer sandbox guarantees required by a production orchestrator. Tekton can be
+considered only after this local chain is passing.

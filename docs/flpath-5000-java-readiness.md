@@ -95,11 +95,16 @@ and are normalized into portable observations under `spike/results/`.
 
 ### SootUp 3.0.1
 
-- Quarkus application-only CHA: **66 methods / 57 calls / 2.2 seconds**;
-  RTA: **55 methods / 31 calls / 8 ms**.
+- Quarkus application-only CHA: **66 methods / 57 calls / 5.5 seconds**;
+  RTA: **55 methods / 31 calls / 14 ms** on the authoritative rerun.
 - The full Quarkus runtime classpath now passes with **118 Maven runtime-scope
-  entries**: CHA measured **68 methods / 59 calls / 3.6 seconds** and RTA
-  measured **55 methods / 31 calls / 6 ms**.
+  entries**. An authoritative rerun on `helios08` with Fedora 43, JDK 21, and
+  Maven 3.9.11 measured **68 methods / 59 calls / 5.9 seconds** with CHA and
+  **55 methods / 31 calls / 18 ms** with RTA.
+- The authoritative normalized observation records analyzer Java 21, the
+  adapter Git revision `5f61fb6a47e5eba5153364f3f7d20508c9a38ad6`, and a
+  runtime-classpath fingerprint. The Quarkus fixture test and production
+  package both passed on the same host.
 - The earlier 222-entry failure was caused by the runner passing
   `-Dmdep.includeScope=runtime`, which Maven ignored; that classpath included
   Quarkus deployment/test artifacts. The runner now uses Maven's

@@ -171,6 +171,28 @@ def matching_edge(
     return None
 
 
+def matching_edge_method_prefix(
+    edges: list[dict[str, Any]],
+    caller_class: str,
+    caller_method_prefix: str,
+    callee_class: str | tuple[str, ...],
+    callee_method: str,
+    source_contains: str | None = None,
+) -> dict[str, Any] | None:
+    classes = (callee_class,) if isinstance(callee_class, str) else callee_class
+    for edge in edges:
+        if source_contains and source_contains not in edge["sourcePath"]:
+            continue
+        if (
+            edge["callerClass"] == caller_class
+            and edge["callerMethod"].startswith(caller_method_prefix)
+            and edge["calleeClass"] in classes
+            and edge["calleeMethod"] == callee_method
+        ):
+            return edge
+    return None
+
+
 def evidence(edge: dict[str, Any] | None, basis: str) -> list[dict[str, Any]]:
     if edge is None:
         return [{"basis": basis}]
@@ -223,17 +245,17 @@ def quarkus_sootup(raw: dict[str, Any]) -> list[dict[str, Any]]:
         "com.projectlightpath.fixture.service.DefaultTransferService",
         "transfer",
     )
-    callback = matching_edge(
+    callback = matching_edge_method_prefix(
         edges,
         "com.projectlightpath.fixture.auth.CallbackDispatcher",
-        "lambda$0",
+        "lambda$dispatch$",
         "com.projectlightpath.fixture.auth.RecordingAuthCallback",
         "onAuthenticated",
     )
-    loader = matching_edge(
+    loader = matching_edge_method_prefix(
         edges,
         "com.projectlightpath.fixture.audit.ServiceLoaderBridge",
-        "lambda$0",
+        "lambda$audit$",
         "com.projectlightpath.fixture.audit.DefaultAuditProvider",
         "record",
     )

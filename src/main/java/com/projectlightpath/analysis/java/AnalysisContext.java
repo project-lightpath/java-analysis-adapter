@@ -91,27 +91,98 @@ public final class AnalysisContext {
   }
 
   public record Provenance(
+      String sourceRepository,
+      String sourceReference,
+      String sourceRevision,
       String sourceFingerprint,
       String generatedSourceFingerprint,
       String dependencyFingerprint,
+      String buildFingerprint,
+      String toolchainFingerprint,
+      String analyzerFingerprint,
       String gitRevision,
-      String providerRuntime) {
+      String providerRuntime,
+      String profileDigest,
+      String preparedAt,
+      long freshnessMaxAgeSeconds) {
+    /** Compatibility constructor for programmatic callers and existing tests. */
+    public Provenance(
+        String sourceFingerprint,
+        String generatedSourceFingerprint,
+        String dependencyFingerprint,
+        String gitRevision,
+        String providerRuntime) {
+      this(
+          "",
+          "",
+          "",
+          sourceFingerprint,
+          generatedSourceFingerprint,
+          dependencyFingerprint,
+          "",
+          "",
+          "",
+          gitRevision,
+          providerRuntime,
+          "",
+          "",
+          0);
+    }
+
     public Provenance {
       requireValue(sourceFingerprint, "sourceFingerprint");
       requireValue(generatedSourceFingerprint, "generatedSourceFingerprint");
       requireValue(dependencyFingerprint, "dependencyFingerprint");
       requireValue(gitRevision, "gitRevision");
       requireValue(providerRuntime, "providerRuntime");
+      if (freshnessMaxAgeSeconds < 0) {
+        throw new IllegalArgumentException("freshnessMaxAgeSeconds must not be negative");
+      }
     }
 
     public static Provenance forTesting() {
-      return new Provenance("test-source", "test-generated", "test-dependencies", "test-revision", "test-runtime");
+      return new Provenance(
+          "https://example.test/repository.git",
+          "test-revision",
+          "test-revision",
+          "test-source",
+          "test-generated",
+          "test-dependencies",
+          "test-build",
+          "test-toolchain",
+          "test-analyzer",
+          "test-revision",
+          "test-runtime",
+          "test-profile",
+          "2026-01-01T00:00:00Z",
+          0);
     }
 
     private static void requireValue(String value, String name) {
       if (value == null || value.isBlank()) {
         throw new IllegalArgumentException(name + " must not be blank");
       }
+    }
+  }
+
+  /** Source/build metadata carried alongside the resolved provider inputs. */
+  public record Handoff(
+      String schemaVersion,
+      String profileId,
+      String profileVersion,
+      String profileDigest,
+      String buildTool,
+      List<String> buildCommand,
+      String buildArtifact,
+      String buildFingerprint,
+      List<String> limitations) {
+    public Handoff {
+      buildCommand = List.copyOf(buildCommand == null ? List.of() : buildCommand);
+      limitations = List.copyOf(limitations == null ? List.of() : limitations);
+    }
+
+    public static Handoff empty() {
+      return new Handoff("", "", "", "", "", List.of(), "", "", List.of());
     }
   }
 
@@ -130,6 +201,7 @@ public final class AnalysisContext {
   private final boolean dependencyClasspathRequired;
   private final List<FrameworkMetadata> frameworkMetadata;
   private final Provenance provenance;
+  private final Handoff handoff;
 
   private AnalysisContext(Builder builder) {
     id = requireValue(builder.id, "context id");
@@ -152,6 +224,7 @@ public final class AnalysisContext {
     dependencyClasspathRequired = builder.dependencyClasspathRequired;
     frameworkMetadata = List.copyOf(builder.frameworkMetadata);
     provenance = Objects.requireNonNull(builder.provenance, "provenance");
+    handoff = Objects.requireNonNull(builder.handoff, "handoff");
 
     if (sourceRoots.stream().noneMatch(root -> !root.generated() && root.required())) {
       throw new IllegalArgumentException("at least one required production/source root is required");
@@ -235,6 +308,10 @@ public final class AnalysisContext {
     return provenance;
   }
 
+  public Handoff handoff() {
+    return handoff;
+  }
+
   public boolean metadataObserved(String metadataId) {
     return frameworkMetadata.stream()
         .anyMatch(item -> item.id().equals(metadataId) && item.status() == MetadataStatus.OBSERVED);
@@ -284,6 +361,7 @@ public final class AnalysisContext {
     private boolean dependencyClasspathRequired = true;
     private final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
     private Provenance provenance;
+    private Handoff handoff = Handoff.empty();
 
     public Builder id(String value) {
       id = value;
@@ -369,6 +447,11 @@ public final class AnalysisContext {
 
     public Builder provenance(Provenance value) {
       provenance = value;
+      return this;
+    }
+
+    public Builder handoff(Handoff value) {
+      handoff = value;
       return this;
     }
 
