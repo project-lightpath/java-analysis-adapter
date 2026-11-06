@@ -152,6 +152,21 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
 
         List<SourceMetadataScanner.BeanCandidate> qualifiedTypeMatches = qualifierMatches(
             context, scanner, parameter, injection, typeMatches);
+        List<AnalysisContext.BindingCandidateMetadata> metadataOnlyMatches = metadataOnlyCandidates(
+            context,
+            scanner,
+            injection.file(),
+            parameter.type(),
+            mergeQualifiers(injection.qualifiers(), parameter.qualifiers()),
+            candidates);
+        long activeMetadataOnlyCount = metadataOnlyMatches.stream()
+            .filter(row -> row.active() != Boolean.FALSE)
+            .map(AnalysisContext.BindingCandidateMetadata::candidateId)
+            .distinct()
+            .count();
+        long eligibleCandidateCount = qualifiedTypeMatches.size() + activeMetadataOnlyCount;
+        boolean metadataOnlyCandidatesInactive = metadataOnlyMatches.stream()
+            .allMatch(row -> row.active() == Boolean.FALSE);
 
         List<AnalysisContext.ResolvedBindingMetadata> bindingRows = matchingBindings(
             context, scanner, injection, parameter, parameterIndex, candidates);
@@ -203,7 +218,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         List<AnalysisContext.BindingCandidateMetadata> selectedCandidateMetadata =
             matchingCandidateMetadata(context, scanner, matches.get(0));
         boolean exactCandidateSelection = matches.size() == 1
-            && qualifiedTypeMatches.size() == 1
+            && eligibleCandidateCount == 1
             && candidateMetadataActive(context, scanner, matches.get(0)) == Boolean.TRUE
             && selectedCandidateMetadata.size() == 1
             && selectedCandidateMetadata.get(0).active() == Boolean.TRUE
@@ -216,9 +231,10 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           return selectedMatches.contains(candidate) ? active == Boolean.TRUE : active == Boolean.FALSE;
         });
         boolean exactActiveSet = matches.size() == 1
-            && qualifiedTypeMatches.size() > 1
+            && eligibleCandidateCount > 1
             && metadataCandidateCoverage
             && metadataSelectsOnlyMatch
+            && metadataOnlyCandidatesInactive
             && typeMatchCertain(context, scanner, injection.file(), parameter.type(), matches.get(0));
         boolean conditionUnknown = matches.stream().anyMatch(candidate -> hasConditions(context, scanner, candidate))
             && matches.stream().anyMatch(candidate -> candidateMetadataActive(context, scanner, candidate) == null);
@@ -920,6 +936,56 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return context.bindingCandidates().stream()
         .filter(row -> candidateMetadataMatches(scanner, row, candidate))
         .toList();
+  }
+
+  /** Finds type-compatible metadata candidates that are not represented by scanned source. */
+  private List<AnalysisContext.BindingCandidateMetadata> metadataOnlyCandidates(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
+      String requestedType,
+      List<String> requestedQualifiers,
+      List<SourceMetadataScanner.BeanCandidate> scannedCandidates) {
+    return context.bindingCandidates().stream()
+        .filter(row -> scannedCandidates.stream()
+            .noneMatch(candidate -> candidateMetadataMatches(scanner, row, candidate)))
+        .filter(row -> metadataCandidateTypeMatches(scanner, injectionFile, requestedType, row))
+        .filter(row -> metadataCandidateQualifierMatches(requestedQualifiers, row))
+        .toList();
+  }
+
+  /** Matches an external metadata candidate by concrete type or declared contract. */
+  private static boolean metadataCandidateTypeMatches(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
+      String requestedType,
+      AnalysisContext.BindingCandidateMetadata row) {
+    Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
+    if (requested.isEmpty()) {
+      return false;
+    }
+    if (canonicalType(row.candidateType(), injectionFile, scanner)
+        .map(requested.get()::equals)
+        .orElse(false)) {
+      return true;
+    }
+    return row.contracts().stream()
+        .map(contract -> canonicalType(contract, injectionFile, scanner))
+        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+  }
+
+  /** Applies only conservative metadata qualifier filtering for external candidates. */
+  private boolean metadataCandidateQualifierMatches(
+      List<String> requestedQualifiers,
+      AnalysisContext.BindingCandidateMetadata row) {
+    if (framework != AnalysisContext.Framework.QUARKUS) {
+      return true;
+    }
+    if (requestedQualifiers.isEmpty()) {
+      return row.qualifiers().stream().noneMatch(this::explicitQualifier);
+    }
+    return requestedQualifiers.stream().allMatch(requested -> row.qualifiers().stream()
+        .anyMatch(candidate -> bindingQualifierEquals(requested, candidate)));
   }
 
   /** Matches candidate identity, canonical type, declaring type, and producer method. */

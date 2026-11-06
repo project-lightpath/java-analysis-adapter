@@ -1349,6 +1349,62 @@ class JavaAnalysisAdapterTest {
         item.certainty() == SemanticCallFacts.Certainty.UNRESOLVED));
   }
 
+  /** Prevents an active metadata-only competitor from being ignored. */
+  @Test
+  void activeMetadataOnlyCompetitorKeepsSourceBindingPossible() throws IOException {
+    Path sourceRoot = temp.resolve("metadata-only-competitor/src/main/java");
+    write(sourceRoot, "demo/Contract.java", "package demo; public interface Contract { }\n");
+    write(sourceRoot, "demo/SourceService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class SourceService implements Contract { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Contract contract) { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(new AnalysisContext.BindingCandidateMetadata(
+            "external-service",
+            "external.ExternalService",
+            List.of("demo.Contract"),
+            List.of(),
+            "Service",
+            "external.ExternalService",
+            null,
+            null,
+            List.of(),
+            List.of(),
+            true,
+            false,
+            false,
+            null,
+            null)),
+        List.of(),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(1, injections.size());
+    assertEquals("demo.SourceService#<init>", injections.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injections.get(0).certainty());
+  }
+
   /** Keeps ambiguous simple-name metadata possible and makes package/overload IDs unique. */
   @Test
   void ambiguousMetadataDoesNotPromoteBindingsAndFactIdsIncludeFullIdentity() throws IOException {
@@ -1862,6 +1918,119 @@ class JavaAnalysisAdapterTest {
         symbol.equals("@Async") || symbol.endsWith(".Async")));
     assertFalse(proxy.evidence().get(0).symbols().stream().anyMatch(symbol ->
         symbol.equals("@Transactional") || symbol.endsWith(".Transactional")));
+  }
+
+  /** Resolves wildcard imports for injection matching and proxy descriptors. */
+  @Test
+  void wildcardImportsResolveInjectionAndProxyDescriptors() throws IOException {
+    Path sourceRoot = temp.resolve("wildcard-import-resolution/src/main/java");
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { }\n");
+    write(sourceRoot, "api/ServiceImpl.java", """
+        package api;
+        import org.springframework.stereotype.Component;
+        @Component public class ServiceImpl implements Service { }
+        """);
+    write(sourceRoot, "app/Consumer.java", """
+        package app;
+        import api.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    write(sourceRoot, "app/WildcardProxy.java", """
+        package app;
+        import api.*;
+        import org.springframework.transaction.annotation.Transactional;
+        @org.springframework.stereotype.Component public class WildcardProxy {
+          @Transactional public void invoke(Service service) { }
+        }
+        """);
+    write(sourceRoot, "other/Service.java", "package other; public interface Service { }\n");
+    write(sourceRoot, "ambiguous/Consumer.java", """
+        package ambiguous;
+        import api.*;
+        import other.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(new AnalysisContext.BindingCandidateMetadata(
+            "api.ServiceImpl",
+            "api.ServiceImpl",
+            List.of("api.Service"),
+            List.of(),
+            "Service",
+            "api.ServiceImpl",
+            null,
+            null,
+            List.of(),
+            List.of(),
+            true,
+            false,
+            false,
+            null,
+            null)),
+        List.of(),
+        List.of(new AnalysisContext.ProxyTargetMetadata(
+            "wildcard-proxy-target",
+            "app.WildcardProxy",
+            "app.WildcardProxy",
+            "invoke",
+            "(Lapi/Service;)V",
+            "spring-aop-advisor",
+            true,
+            true,
+            "selected target",
+            null,
+            null)));
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(
+            new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"),
+            new AnalysisContext.FrameworkMetadata(
+                "spring-aop-advisor-metadata", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.OBSERVED,
+                "target/aop.json")),
+        metadata);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty());
+    SemanticCallFacts.Fact injection = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("app.Consumer"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("api.ServiceImpl#<init>", injection.callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, injection.certainty());
+
+    SemanticCallFacts.Fact proxy = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("app.WildcardProxy#invoke", proxy.callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, proxy.certainty());
+    assertEquals("(Lapi/Service;)V", proxy.evidence().stream()
+        .flatMap(evidence -> evidence.attributes().entrySet().stream())
+        .filter(entry -> entry.getKey().equals("targetDescriptor"))
+        .map(Map.Entry::getValue)
+        .findFirst()
+        .orElseThrow());
+
+    SemanticCallFacts.Fact ambiguousInjection = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("ambiguous.Consumer"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, ambiguousInjection.certainty());
   }
 
   /** Resolves an explicit contract import before a same-package type with that name. */

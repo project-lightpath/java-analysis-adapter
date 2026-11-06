@@ -49,15 +49,47 @@ archive_verified() {
 
 mkdir -p "$CACHE_ROOT"
 LOCK_DIR="$CACHE_ROOT/apache-maven-$MAVEN_VERSION.lock"
-while ! mkdir "$LOCK_DIR" 2>/dev/null; do
-  sleep 1
-done
+LOCK_WAIT_SECONDS="${MAVEN_LOCK_TIMEOUT_SECONDS:-120}"
+if [[ ! "$LOCK_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "MAVEN_LOCK_TIMEOUT_SECONDS must be a non-negative integer: $LOCK_WAIT_SECONDS" >&2
+  exit 1
+fi
+LOCK_ACQUIRED=false
+PENDING_SIGNAL=""
+PENDING_STATUS=0
+handle_signal() {
+  PENDING_SIGNAL="$1"
+  PENDING_STATUS="$2"
+  if [[ "$LOCK_ACQUIRED" == true ]]; then
+    exit "$PENDING_STATUS"
+  fi
+}
 release_lock() {
-  rmdir "$LOCK_DIR" 2>/dev/null || true
+  if [[ "$LOCK_ACQUIRED" == true ]]; then
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    LOCK_ACQUIRED=false
+  fi
 }
 trap release_lock EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'handle_signal INT 130' INT
+trap 'handle_signal TERM 143' TERM
+
+LOCK_WAITED=0
+while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  if [[ -n "$PENDING_SIGNAL" ]]; then
+    exit "$PENDING_STATUS"
+  fi
+  if (( LOCK_WAITED >= LOCK_WAIT_SECONDS )); then
+    echo "timed out waiting for Maven cache lock: $LOCK_DIR" >&2
+    exit 1
+  fi
+  sleep 1
+  LOCK_WAITED=$((LOCK_WAITED + 1))
+done
+LOCK_ACQUIRED=true
+if [[ -n "$PENDING_SIGNAL" ]]; then
+  exit "$PENDING_STATUS"
+fi
 
 if [[ -x "$INSTALL_ROOT/bin/mvn" ]] && archive_verified "$ARCHIVE"; then
   printf '%s\n' "$INSTALL_ROOT/bin/mvn"

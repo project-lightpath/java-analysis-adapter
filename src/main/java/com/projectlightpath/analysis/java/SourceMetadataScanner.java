@@ -141,6 +141,13 @@ final class SourceMetadataScanner {
     if (samePackage.size() == 1) {
       return Optional.of(samePackage.get(0));
     }
+    List<String> onDemandImported = onDemandImportedTypes(normalized, sourceFile);
+    if (onDemandImported.size() > 1) {
+      return Optional.empty();
+    }
+    if (onDemandImported.size() == 1) {
+      return Optional.of(onDemandImported.get(0));
+    }
     return JAVA_LANG_TYPES.contains(normalized)
         ? Optional.of("java.lang." + normalized)
         : Optional.empty();
@@ -191,6 +198,29 @@ final class SourceMetadataScanner {
       }
     }
     return result.stream().distinct().toList();
+  }
+
+  /** Resolves on-demand imports only against unambiguous scanned source types. */
+  private List<String> onDemandImportedTypes(String type, SourceFile sourceFile) {
+    String simpleType = type;
+    int nestedSeparator = type.indexOf('.');
+    if (nestedSeparator >= 0) {
+      simpleType = type.substring(0, nestedSeparator);
+    }
+    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
+        .matcher(sourceFile.structuralSource());
+    Set<String> packages = new LinkedHashSet<>();
+    while (matcher.find()) {
+      packages.add(matcher.group(1));
+    }
+    String suffix = type.substring(simpleType.length());
+    String requestedSimpleType = simpleType;
+    return files().stream()
+        .filter(file -> packages.contains(file.packageName()))
+        .filter(file -> file.simpleTypeName().equals(requestedSimpleType))
+        .map(file -> file.typeName() + suffix)
+        .distinct()
+        .toList();
   }
 
   /** Scans bounded Quarkus and Spring route annotations. */
