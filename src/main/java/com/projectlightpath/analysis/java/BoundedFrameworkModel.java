@@ -10,7 +10,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Shared bounded source model for the two first-class framework inputs.
@@ -21,6 +24,12 @@ import java.util.Set;
  * captured.
  */
 abstract class BoundedFrameworkModel implements FrameworkModel {
+  private static final Set<String> JAVA_LANG_TYPES = Set.of(
+      "Appendable", "AutoCloseable", "Boolean", "Byte", "Character", "CharSequence",
+      "Class", "Cloneable", "Comparable", "Double", "Enum", "Exception", "Float",
+      "Integer", "Iterable", "Long", "Math", "Number", "Object", "Record", "Runnable",
+      "RuntimeException", "Short", "StrictMath", "String", "Thread", "Throwable", "Void");
+
   private final AnalysisContext.Framework framework;
 
   BoundedFrameworkModel(AnalysisContext.Framework framework) {
@@ -144,7 +153,6 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             .filter(candidate -> candidateMetadataActive(context, candidate) != Boolean.FALSE)
             .toList();
         matches = qualifierMatches(context, parameter, injection, matches);
-        matches = bindingPreference(context, matches);
 
         List<SourceMetadataScanner.BeanCandidate> qualifiedTypeMatches = qualifierMatches(
             context, parameter, injection, typeMatches);
@@ -166,6 +174,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             && bindingRows.stream().allMatch(row -> row.selected() == Boolean.FALSE
                 || row.active() == Boolean.FALSE)) {
           matches = List.of();
+        }
+        if (selectedRows.isEmpty()) {
+          matches = bindingPreference(context, matches);
         }
 
         if (matches.isEmpty()) {
@@ -269,6 +280,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         : candidate.target();
     String callerPrefix = framework == AnalysisContext.Framework.QUARKUS ? "quarkus" : "spring";
     String id = injectionFactId(injection, parameter, candidate);
+    String displayedQualifiers = String.join(",", displayQualifiers(
+        mergeQualifiers(injection.qualifiers(), parameter.qualifiers())));
     List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
     evidence.add(new SemanticCallFacts.Evidence(
         framework == AnalysisContext.Framework.QUARKUS ? "injection_point" : "constructor_injection",
@@ -278,8 +291,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         Map.of(
             "parameter", parameter.type(),
             "parameterIndex", parameterIndex == null ? "" : parameterIndex.toString(),
-            "injectionKind", injection.kind(),
-            "qualifiers", String.join(",", mergeQualifiers(injection.qualifiers(), parameter.qualifiers())))));
+             "injectionKind", injection.kind(),
+             "qualifiers", displayedQualifiers)));
     if (candidate != null) {
       Map<String, String> attributes = new HashMap<>();
       attributes.put("candidateCount", Integer.toString(candidateCount));
@@ -581,10 +594,37 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     }
     return candidates.stream()
         .filter(candidate -> requested.stream().allMatch(requestedQualifier ->
-            candidateQualifiers(context, candidate).stream().anyMatch(candidateQualifier ->
-                qualifierEquals(requestedQualifier, candidateQualifier))
-                || resourceNameMatches(context, requestedQualifier, candidate)))
+            qualifierMatches(context, requestedQualifier, candidate, candidates)))
         .toList();
+  }
+
+  /** Applies framework qualifier rules, including Spring bean-name fallbacks. */
+  private boolean qualifierMatches(
+      AnalysisContext context,
+      String requestedQualifier,
+      SourceMetadataScanner.BeanCandidate candidate,
+      List<SourceMetadataScanner.BeanCandidate> candidates) {
+    if (requestedQualifier.startsWith("ResourceDefault:")) {
+      String name = requestedQualifier.substring("ResourceDefault:".length());
+      boolean namedCandidateExists = candidates.stream()
+          .anyMatch(item -> resourceNameMatches(context, name, item));
+      return !namedCandidateExists || resourceNameMatches(context, name, candidate);
+    }
+    if (requestedQualifier.startsWith("Resource:")) {
+      return resourceNameMatches(
+          context,
+          requestedQualifier.substring("Resource:".length()),
+          candidate);
+    }
+    if (framework == AnalysisContext.Framework.SPRING_BOOT
+        && requestedQualifier.startsWith("Qualifier:")) {
+      String value = requestedQualifier.substring("Qualifier:".length());
+      return candidateQualifiers(context, candidate).stream()
+          .anyMatch(candidateQualifier -> qualifierEquals(requestedQualifier, candidateQualifier))
+          || candidateBeanNames(context, candidate).contains(value);
+    }
+    return candidateQualifiers(context, candidate).stream()
+        .anyMatch(candidateQualifier -> qualifierEquals(requestedQualifier, candidateQualifier));
   }
 
   private static List<String> candidateQualifiers(
@@ -600,21 +640,29 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
 
   private static boolean resourceNameMatches(
       AnalysisContext context,
-      String requestedQualifier,
+      String name,
       SourceMetadataScanner.BeanCandidate candidate) {
-    if (!requestedQualifier.startsWith("Resource:")) {
-      return false;
-    }
-    String name = requestedQualifier.substring("Resource:".length());
+    return candidateBeanNames(context, candidate).contains(name);
+  }
+
+  /** Returns explicit and convention-based names that can identify a bean. */
+  private static Set<String> candidateBeanNames(
+      AnalysisContext context,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    Set<String> names = new LinkedHashSet<>();
     String defaultName = candidate.producer()
         ? candidate.producerMethod()
-        : Character.toLowerCase(candidate.file().simpleTypeName().charAt(0))
-            + candidate.file().simpleTypeName().substring(1);
-    return name.equals(defaultName)
-        || candidateQualifiers(context, candidate).stream().anyMatch(qualifier ->
-            (qualifier.startsWith("BeanName:") || qualifier.startsWith("Named:")
-                || qualifier.startsWith("Qualifier:"))
-                && name.equals(qualifier.substring(qualifier.indexOf(':') + 1)));
+        : decapitalize(candidate.file().simpleTypeName());
+    if (defaultName != null && !defaultName.isBlank()) {
+      names.add(defaultName);
+    }
+    candidateQualifiers(context, candidate).stream()
+        .filter(qualifier -> qualifier.startsWith("BeanName:")
+            || qualifier.startsWith("Named:")
+            || qualifier.startsWith("Qualifier:"))
+        .map(qualifier -> qualifier.substring(qualifier.indexOf(':') + 1))
+        .forEach(names::add);
+    return Set.copyOf(names);
   }
 
   private List<SourceMetadataScanner.BeanCandidate> bindingPreference(
@@ -631,21 +679,45 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       return primary.size() == 1 ? primary : candidates;
     }
     List<SourceMetadataScanner.BeanCandidate> alternatives = candidates.stream()
-        .filter(candidate -> candidate.alternative() || matchingCandidateMetadata(context, candidate).stream()
-            .anyMatch(AnalysisContext.BindingCandidateMetadata::alternative))
+        .filter(candidate -> matchingCandidateMetadata(context, candidate).stream()
+            .anyMatch(row -> row.alternative() && row.active() == Boolean.TRUE
+                && profileMatches(row.profiles(), context.selectedProfile())))
         .toList();
     return alternatives.isEmpty() ? candidates : alternatives;
   }
 
   private boolean explicitQualifier(String qualifier) {
     String normalized = qualifier.toLowerCase(Locale.ROOT);
-    return !normalized.equals("default") && !normalized.equals("any");
+    return !normalized.equals("default")
+        && !normalized.equals("any")
+        && !normalized.startsWith("named:")
+        && !normalized.startsWith("beanname:");
   }
 
   private static boolean qualifierEquals(String left, String right) {
-    return left.equals(right)
-        || left.equalsIgnoreCase(right)
-        || simpleName(left).equalsIgnoreCase(simpleName(right));
+    return left != null && left.equals(right);
+  }
+
+  /** Treats an implicit resource-name marker as its public resource qualifier. */
+  private static boolean bindingQualifierEquals(String left, String right) {
+    if (qualifierEquals(left, right)) {
+      return true;
+    }
+    return ((left.startsWith("ResourceDefault:") && right.startsWith("Resource:"))
+        || (left.startsWith("Resource:") && right.startsWith("ResourceDefault:")))
+        && left.substring(left.indexOf(':') + 1).equals(right.substring(right.indexOf(':') + 1));
+  }
+
+  /** Applies the default bean-name decapitalization used by Spring. */
+  private static String decapitalize(String value) {
+    if (value == null || value.isBlank()) {
+      return value;
+    }
+    if (value.length() > 1 && Character.isUpperCase(value.charAt(0))
+        && Character.isUpperCase(value.charAt(1))) {
+      return value;
+    }
+    return Character.toLowerCase(value.charAt(0)) + value.substring(1);
   }
 
   private static List<String> mergeQualifiers(List<String> first, List<String> second) {
@@ -657,6 +729,15 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       result.addAll(second);
     }
     return List.copyOf(result);
+  }
+
+  /** Hides the internal marker used to distinguish an implicit {@code @Resource} name. */
+  private static List<String> displayQualifiers(List<String> qualifiers) {
+    return qualifiers.stream()
+        .map(qualifier -> qualifier.startsWith("ResourceDefault:")
+            ? "Resource:" + qualifier.substring("ResourceDefault:".length())
+            : qualifier)
+        .toList();
   }
 
   private static boolean profileMatches(List<String> profiles, String selectedProfile) {
@@ -734,11 +815,11 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     if (row.candidateId().equals(candidate.candidateId())) {
       return true;
     }
-    if (!simpleName(row.candidateType()).equalsIgnoreCase(simpleName(candidate.candidateType()))) {
+    if (!metadataTypeMatches(row.candidateType(), candidate.candidateType())) {
       return false;
     }
     if (row.declaringType() != null && !row.declaringType().isBlank()
-        && !simpleName(row.declaringType()).equalsIgnoreCase(candidate.file().simpleTypeName())) {
+        && !metadataTypeMatches(row.declaringType(), candidate.file().typeName())) {
       return false;
     }
     return row.producerMethod() == null
@@ -761,7 +842,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             || mergeQualifiers(injection.qualifiers(), parameter.qualifiers()).isEmpty()
             || mergeQualifiers(injection.qualifiers(), parameter.qualifiers()).stream()
                 .anyMatch(requested -> row.qualifiers().stream()
-                    .anyMatch(candidateQualifier -> qualifierEquals(requested, candidateQualifier))))
+                    .anyMatch(candidateQualifier -> bindingQualifierEquals(requested, candidateQualifier))))
         .filter(row -> candidates.stream().anyMatch(candidate ->
             row.candidateId().equals(candidate.candidateId())
                 || matchingCandidateMetadata(context, candidate).stream()
@@ -770,7 +851,16 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   }
 
   private static boolean injectionOwnerMatches(String rowOwner, String owner) {
-    return rowOwner.equals(owner) || simpleName(rowOwner).equalsIgnoreCase(simpleName(owner));
+    return metadataTypeMatches(rowOwner, owner);
+  }
+
+  /** Matches full metadata names, falling back to simple names only when unqualified. */
+  private static boolean metadataTypeMatches(String metadataType, String sourceType) {
+    if (metadataType == null || sourceType == null) {
+      return false;
+    }
+    return metadataType.equals(sourceType)
+        || (!metadataType.contains(".") && metadataType.equals(simpleName(sourceType)));
   }
 
   private static boolean memberMatches(String rowMember, String member) {
@@ -782,11 +872,12 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       AnalysisContext context,
       SourceMetadataScanner scanner,
       SourceMetadataScanner.ProxyTarget target) {
+    Optional<String> descriptor = methodDescriptor(scanner, target);
     return context.proxyTargetMetadata().stream()
         .filter(row -> proxyTargetTypeMatches(scanner, row.targetType(), target))
         .filter(row -> row.methodName().equals(target.method().name()))
         .filter(row -> row.methodDescriptor() == null || row.methodDescriptor().isBlank()
-            || row.methodDescriptor().equals(methodDescriptor(target.method())))
+            || descriptor.isPresent() && row.methodDescriptor().equals(descriptor.get()))
         .filter(row -> row.candidateId() == null || row.candidateId().isBlank()
             || row.candidateId().equals(target.candidateId())
             || simpleName(row.candidateId()).equalsIgnoreCase(target.file().simpleTypeName())
@@ -813,35 +904,119 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .count() == 1;
   }
 
-  private static String methodDescriptor(SourceMetadataScanner.MethodInfo method) {
-    String parameters = SourceMetadataScanner.parameters(method.parameters()).stream()
-        .map(parameter -> jvmDescriptor(parameter.type()))
-        .collect(java.util.stream.Collectors.joining());
-    return "(" + parameters + ")" + jvmDescriptor(method.returnType());
+  /** Builds a JVM descriptor only when every reference type can be resolved. */
+  private static Optional<String> methodDescriptor(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.ProxyTarget target) {
+    StringBuilder descriptor = new StringBuilder("(");
+    for (SourceMetadataScanner.Parameter parameter :
+        SourceMetadataScanner.parameters(target.method().parameters())) {
+      Optional<String> parameterDescriptor = jvmDescriptor(parameter.type(), target.file(), scanner);
+      if (parameterDescriptor.isEmpty()) {
+        return Optional.empty();
+      }
+      descriptor.append(parameterDescriptor.get());
+    }
+    descriptor.append(')');
+    Optional<String> returnDescriptor = jvmDescriptor(target.method().returnType(), target.file(), scanner);
+    return returnDescriptor.map(value -> descriptor.append(value).toString());
   }
 
-  private static String jvmDescriptor(String type) {
-    String normalized = type == null ? "" : type.trim().replaceAll("<.*>", "");
+  /** Resolves one Java type to a JVM descriptor without guessing unknown references. */
+  private static Optional<String> jvmDescriptor(
+      String type,
+      SourceMetadataScanner.SourceFile sourceFile,
+      SourceMetadataScanner scanner) {
+    String normalized = eraseGenericArguments(type == null ? "" : type).trim();
     if (normalized.endsWith("...")) {
       normalized = normalized.substring(0, normalized.length() - 3) + "[]";
     }
     if (normalized.endsWith("[]")) {
-      return "[" + jvmDescriptor(normalized.substring(0, normalized.length() - 2));
+      return jvmDescriptor(normalized.substring(0, normalized.length() - 2), sourceFile, scanner)
+          .map(value -> "[" + value);
     }
     return switch (normalized) {
-      case "void" -> "V";
-      case "boolean" -> "Z";
-      case "byte" -> "B";
-      case "char" -> "C";
-      case "short" -> "S";
-      case "int" -> "I";
-      case "long" -> "J";
-      case "float" -> "F";
-      case "double" -> "D";
-      case "String" -> "Ljava/lang/String;";
-      case "Object" -> "Ljava/lang/Object;";
-      default -> normalized.isBlank() ? "" : "L" + normalized.replace('.', '/') + ";";
+      case "void" -> Optional.of("V");
+      case "boolean" -> Optional.of("Z");
+      case "byte" -> Optional.of("B");
+      case "char" -> Optional.of("C");
+      case "short" -> Optional.of("S");
+      case "int" -> Optional.of("I");
+      case "long" -> Optional.of("J");
+      case "float" -> Optional.of("F");
+      case "double" -> Optional.of("D");
+      case "" -> Optional.empty();
+      default -> resolveReferenceType(normalized, sourceFile, scanner)
+          .map(value -> "L" + value.replace('.', '/') + ";");
     };
+  }
+
+  /** Resolves source-package, explicit-import, and java.lang reference types. */
+  private static Optional<String> resolveReferenceType(
+      String type,
+      SourceMetadataScanner.SourceFile sourceFile,
+      SourceMetadataScanner scanner) {
+    List<String> importedTypes = importedTypes(type, sourceFile);
+    if (importedTypes.size() > 1) {
+      return Optional.empty();
+    }
+    if (importedTypes.size() == 1) {
+      return Optional.of(importedTypes.get(0));
+    }
+    if (type.contains(".") && Character.isLowerCase(type.charAt(0))) {
+      return Optional.of(type);
+    }
+    List<String> samePackageTypes = scanner.files().stream()
+        .filter(file -> file.packageName().equals(sourceFile.packageName()))
+        .filter(file -> file.simpleTypeName().equals(type))
+        .map(SourceMetadataScanner.SourceFile::typeName)
+        .distinct()
+        .toList();
+    if (samePackageTypes.size() > 1) {
+      return Optional.empty();
+    }
+    if (samePackageTypes.size() == 1) {
+      return Optional.of(samePackageTypes.get(0));
+    }
+    return JAVA_LANG_TYPES.contains(type) ? Optional.of("java.lang." + type) : Optional.empty();
+  }
+
+  /** Returns explicit imports that can qualify a source type spelling. */
+  private static List<String> importedTypes(
+      String type,
+      SourceMetadataScanner.SourceFile sourceFile) {
+    String simpleType = type;
+    int nestedSeparator = type.indexOf('.');
+    if (nestedSeparator >= 0) {
+      simpleType = type.substring(0, nestedSeparator);
+    }
+    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\s*;")
+        .matcher(sourceFile.source());
+    List<String> result = new ArrayList<>();
+    while (matcher.find()) {
+      String imported = matcher.group(1);
+      if (imported.endsWith("." + simpleType)) {
+        result.add(imported + type.substring(simpleType.length()));
+      }
+    }
+    return result.stream().distinct().toList();
+  }
+
+  /** Removes nested generic arguments while retaining the erased outer type. */
+  private static String eraseGenericArguments(String source) {
+    StringBuilder result = new StringBuilder(source.length());
+    int depth = 0;
+    for (int index = 0; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '<') {
+        depth++;
+      } else if (character == '>' && depth > 0) {
+        depth--;
+      } else if (depth == 0) {
+        result.append(character);
+      }
+    }
+    return result.toString();
   }
 
   private static Map<String, String> proxyAttributes(
@@ -966,7 +1141,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   }
 
   private static String simpleName(String value) {
-    String normalized = value.replaceAll("<.*>", "").trim();
+    String normalized = eraseGenericArguments(value == null ? "" : value).trim();
     int dot = normalized.lastIndexOf('.');
     return dot < 0 ? normalized : normalized.substring(dot + 1);
   }

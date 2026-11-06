@@ -817,6 +817,318 @@ class JavaAnalysisAdapterTest {
             && item.callee().equals("demo.BService#run")));
   }
 
+  @Test
+  void resolvedBindingWinsOverPrimaryAndQualifiedMetadataNamesStayScoped() throws IOException {
+    Path sourceRoot = temp.resolve("binding-order/src/main/java");
+    write(sourceRoot, "consumer/Consumer.java", """
+        package consumer;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        import api.Service;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { }\n");
+    write(sourceRoot, "first/ServiceImpl.java", """
+        package first;
+        import api.Service;
+        import org.springframework.context.annotation.Primary;
+        import org.springframework.stereotype.Service;
+        @Service @Primary public class ServiceImpl implements Service { }
+        """);
+    write(sourceRoot, "second/ServiceImpl.java", """
+        package second;
+        import api.Service;
+        import org.springframework.stereotype.Service;
+        @Service public class ServiceImpl implements Service { }
+        """);
+
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "first-row", "first.ServiceImpl", List.of("Service"), List.of(), "Service",
+                true, false, true),
+            new AnalysisContext.BindingCandidateMetadata(
+                "second-row", "second.ServiceImpl", List.of("Service"), List.of(), "Service",
+                true, false, false)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "consumer-service", "consumer.Consumer", "Service", 0, "second-row")),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    assertEquals(1, injections.size());
+    assertEquals("second.ServiceImpl#<init>", injections.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, injections.get(0).certainty());
+    assertEquals("second-row", injections.get(0).evidence().get(1).attributes().get("candidateMetadataId"));
+  }
+
+  @Test
+  void springQualifierUsesBeanNamesAndResourceFallsBackToTypeOnlyWhenNameIsAbsent()
+      throws IOException {
+    Path sourceRoot = temp.resolve("spring-names/src/main/java");
+    write(sourceRoot, "demo/QualifierConsumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Component;
+        @Component public class QualifierConsumer {
+          @Autowired public QualifierConsumer(@Qualifier("fast") PaymentService service) { }
+        }
+        """);
+    write(sourceRoot, "demo/ResourceConsumer.java", """
+        package demo;
+        import jakarta.annotation.Resource;
+        import org.springframework.stereotype.Component;
+        @Component public class ResourceConsumer {
+          @Resource Service service;
+          @Resource(name = "missing") OtherService missing;
+        }
+        """);
+    write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { }\n");
+    write(sourceRoot, "demo/FastPaymentService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("fast") public class FastPaymentService implements PaymentService { }
+        """);
+    write(sourceRoot, "demo/OtherPaymentService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @Named("other.fast") public class OtherPaymentService implements PaymentService { }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/AvailableService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class AvailableService implements Service { }
+        """);
+    write(sourceRoot, "demo/OtherService.java", "package demo; public interface OtherService { }\n");
+    write(sourceRoot, "demo/OtherServiceImpl.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class OtherServiceImpl implements OtherService { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> facts = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    SemanticCallFacts.Fact qualified = facts.stream()
+        .filter(item -> item.caller().contains("QualifierConsumer"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.FastPaymentService#<init>", qualified.callee());
+    assertFalse(facts.stream().anyMatch(item -> item.caller().contains("QualifierConsumer")
+        && item.callee().contains("OtherPaymentService")));
+    SemanticCallFacts.Fact resourceFallback = facts.stream()
+        .filter(item -> item.caller().equals("spring:injection:demo.ResourceConsumer#service(Service)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.AvailableService#<init>", resourceFallback.callee());
+    SemanticCallFacts.Fact namedResource = facts.stream()
+        .filter(item -> item.caller().equals("spring:injection:demo.ResourceConsumer#missing(OtherService)"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, namedResource.certainty());
+    assertTrue(namedResource.callee().contains("OtherService#<unresolved-bean>"));
+  }
+
+  @Test
+  void quarkusAlternativesNeedActiveMetadataAndDependentBeansNeedExplicitProxyTargets()
+      throws IOException {
+    Path sourceRoot = temp.resolve("quarkus-alternatives/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject public Consumer(Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/DefaultService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class DefaultService implements Service {
+          public void run() { }
+        }
+        """);
+    write(sourceRoot, "demo/AlternativeService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped @jakarta.enterprise.inject.Alternative
+        public class AlternativeService implements Service { public void run() { } }
+        """);
+    write(sourceRoot, "demo/DependentService.java", """
+        package demo;
+        @jakarta.enterprise.context.Dependent public class DependentService {
+          public void run() { }
+        }
+        """);
+    List<AnalysisContext.BindingCandidateMetadata> candidates = List.of(
+        new AnalysisContext.BindingCandidateMetadata(
+            "default", "demo.DefaultService", List.of("Service"), List.of(), "ApplicationScoped",
+            true, false, false),
+        new AnalysisContext.BindingCandidateMetadata(
+            "alternative", "demo.AlternativeService", List.of("Service"), List.of(), "ApplicationScoped",
+            null, true, false));
+    List<AnalysisContext.FrameworkMetadata> frameworkMetadata = List.of(
+        new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java"));
+    AnalysisContext.FrameworkBindingMetadata unknownAlternative = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0", candidates, List.of(), List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS, sourceRoot, null, frameworkMetadata, unknownAlternative);
+    SemanticCallFacts unknownFacts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> unknownBindings = unknownFacts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(Set.of("demo.DefaultService#<init>", "demo.AlternativeService#<init>"),
+        unknownBindings.stream().map(SemanticCallFacts.Fact::callee).collect(java.util.stream.Collectors.toSet()));
+    assertFalse(unknownFacts.frameworkFacts().stream()
+        .anyMatch(item -> item.relationshipType().equals("proxy_dispatch")
+            && item.callee().equals("demo.DependentService#run")));
+
+    List<AnalysisContext.BindingCandidateMetadata> enabledCandidates = List.of(
+        candidates.get(0),
+        new AnalysisContext.BindingCandidateMetadata(
+            "alternative", "demo.AlternativeService", List.of("Service"), List.of(), "ApplicationScoped",
+            true, true, false));
+    AnalysisContext.FrameworkBindingMetadata enabled = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0", enabledCandidates, List.of(), List.of(new AnalysisContext.ProxyTargetMetadata(
+            "dependent-proxy", "demo.DependentService", "run", "cdi-client-proxy", true, true)));
+    SemanticCallFacts enabledFacts = new JavaAnalysisAdapter().analyze(
+        context(AnalysisContext.Framework.QUARKUS, sourceRoot, null, frameworkMetadata, enabled),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> enabledBindings = enabledFacts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(1, enabledBindings.size());
+    assertEquals("demo.AlternativeService#<init>", enabledBindings.get(0).callee());
+    SemanticCallFacts.Fact dependentProxy = enabledFacts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.DependentService#run"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, dependentProxy.certainty());
+  }
+
+  @Test
+  void proxyDescriptorsResolveImportsAndNestedGenericProducers() throws IOException {
+    Path sourceRoot = temp.resolve("descriptor-generics/src/main/java");
+    write(sourceRoot, "demo/Clock.java", "package demo; public class Clock { }\n");
+    write(sourceRoot, "demo/ClockService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class ClockService {
+          @Transactional public void tick(Clock clock) { }
+        }
+        """);
+    write(sourceRoot, "demo/Foo.java", "package demo; public class Foo { }\n");
+    write(sourceRoot, "demo/Beans.java", """
+        package demo;
+        import java.util.List;
+        import java.util.Map;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration public class Beans {
+          @Bean public Map<String, List<Foo>> values() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.List;
+        import java.util.Map;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Map<String, List<Foo>> values) { }
+        }
+        """);
+    AnalysisContext.ProxyTargetMetadata selected = new AnalysisContext.ProxyTargetMetadata(
+        "clock-proxy", "demo.ClockService", "demo.ClockService", "tick", "(Ldemo/Clock;)V",
+        "spring-aop-advisor", true, true, "exact target", null, null);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0", List.of(), List.of(), List.of(selected));
+    List<AnalysisContext.FrameworkMetadata> frameworkMetadata = List.of(
+        new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java"));
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(AnalysisContext.Framework.SPRING_BOOT, sourceRoot, null, frameworkMetadata, metadata),
+        AnalysisGraph.empty());
+
+    SemanticCallFacts.Fact producerBinding = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.Beans#values", producerBinding.callee());
+    SemanticCallFacts.Fact proxy = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.ClockService#tick"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, proxy.certainty());
+
+    AnalysisContext.FrameworkBindingMetadata excludedMetadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0", List.of(), List.of(), List.of(new AnalysisContext.ProxyTargetMetadata(
+            "clock-proxy", "demo.ClockService", "demo.ClockService", "tick", "(Ldemo/Clock;)V",
+            "spring-aop-advisor", false, true, "excluded target", null, null)));
+    SemanticCallFacts excludedFacts = new JavaAnalysisAdapter().analyze(
+        context(AnalysisContext.Framework.SPRING_BOOT, sourceRoot, null, frameworkMetadata, excludedMetadata),
+        AnalysisGraph.empty());
+    assertFalse(excludedFacts.frameworkFacts().stream()
+        .anyMatch(item -> item.relationshipType().equals("proxy_dispatch")
+            && item.callee().equals("demo.ClockService#tick")));
+  }
+
+  @Test
+  void cdiNamedBeansIgnoreCommentsAndRemainCompatibleWithUnqualifiedInjection() throws IOException {
+    Path sourceRoot = temp.resolve("cdi-named-comments/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject public Consumer(Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/NamedService.java", """
+        package demo;
+        /** @author documentation should not become a qualifier; @Lazy is also only text. */
+        @jakarta.enterprise.context.ApplicationScoped @jakarta.inject.Named("service")
+        public class NamedService implements Service { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SemanticCallFacts.Fact injection = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty())
+        .frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.NamedService#<init>", injection.callee());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injection.certainty());
+  }
+
   private AnalysisContext context(
       AnalysisContext.Framework framework,
       Path sourceRoot,

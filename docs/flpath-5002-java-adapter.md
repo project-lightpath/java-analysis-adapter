@@ -26,7 +26,9 @@ supports common constructor, field, and method injection; qualifiers,
 alternatives/primary, producer methods, profiles, common conditions, and common
 proxy/advisor annotations. An exact unique active metadata row is required for
 `definite`; source-bounded candidates remain `possible` and unresolved profile,
-condition, or proxy selection remains `unresolved`.
+condition, or proxy selection remains `unresolved` when the relevant metadata is
+missing; an observed but non-unique or unevaluated proxy selection remains
+`possible`.
 
 Framework facts link to provider facts only through an exact `providerFactId` or
 a unique non-abstained provider target identity. Links use

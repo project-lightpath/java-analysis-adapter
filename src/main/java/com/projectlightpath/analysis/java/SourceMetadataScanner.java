@@ -47,12 +47,15 @@ final class SourceMetadataScanner {
       "ConditionalOnMissingClass", "ConditionalOnProperty", "ConditionalOnExpression",
       "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
       "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
+      "Lazy",
       "Path", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "RequestMapping",
       "GetMapping", "PostMapping", "PutMapping", "PatchMapping", "DeleteMapping", "RequestMethod",
       "Consumes", "Override", "SuppressWarnings");
   private static final Set<String> CDI_SCOPES = Set.of(
       "ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped", "Dependent",
       "Singleton");
+  private static final Set<String> CDI_NORMAL_SCOPES = Set.of(
+      "ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped");
   private static final Set<String> SPRING_PROXY_ANNOTATIONS = Set.of(
       "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
       "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
@@ -340,7 +343,13 @@ final class SourceMetadataScanner {
       if (!bean) {
         continue;
       }
+      boolean normalScoped = CDI_NORMAL_SCOPES.stream().anyMatch(name -> hasAnnotation(classBlock, name));
       for (MethodInfo method : methods(file)) {
+        if (framework == AnalysisContext.Framework.QUARKUS
+            && !normalScoped
+            && !hasExactProxyMetadata(file, method)) {
+          continue;
+        }
         boolean selected = framework == AnalysisContext.Framework.QUARKUS
             ? !method.name().equals(file.simpleTypeName())
             : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
@@ -351,6 +360,19 @@ final class SourceMetadataScanner {
       }
     }
     return List.copyOf(result);
+  }
+
+  /** Keeps an exact metadata-backed proxy target even for a pseudo-scoped CDI bean. */
+  private boolean hasExactProxyMetadata(SourceFile file, MethodInfo method) {
+    return context.proxyTargetMetadata().stream()
+        .filter(row -> row.selected() == Boolean.TRUE && row.active() == Boolean.TRUE)
+        .filter(row -> row.methodName().equals(method.name()))
+        .anyMatch(row -> row.targetType().equals(file.typeName())
+            || (!row.targetType().contains(".")
+                && simpleName(row.targetType()).equals(file.simpleTypeName())
+                && files().stream()
+                    .filter(candidate -> candidate.simpleTypeName().equals(file.simpleTypeName()))
+                    .count() == 1));
   }
 
   List<GeneratedMethod> generatedMethods() {
@@ -742,7 +764,7 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> qualifierNames(String block) {
-    String source = block == null ? "" : block;
+    String source = stripComments(block == null ? "" : block);
     List<String> result = new ArrayList<>();
     Matcher matcher = Pattern.compile("@([A-Za-z_][\\w.]*)").matcher(source);
     while (matcher.find()) {
@@ -803,7 +825,7 @@ final class SourceMetadataScanner {
       if (name.startsWith("set") && name.length() > 3) {
         name = Character.toLowerCase(name.charAt(3)) + name.substring(4);
       }
-      result.add("Resource:" + name);
+      result.add("ResourceDefault:" + name);
     }
     return List.copyOf(result);
   }
@@ -817,10 +839,9 @@ final class SourceMetadataScanner {
   }
 
   private static String returnType(String declaration) {
-    String cleaned = maskAnnotationArguments(declaration)
+    String cleaned = stripBalancedGenericArguments(maskAnnotationArguments(declaration)
         .replaceAll("@[A-Za-z_][\\w.]*", " ")
-        .replaceAll("\\b(public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\b", " ")
-        .replaceAll("<[^>]+>", " ")
+        .replaceAll("\\b(public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\b", " "))
         .trim();
     if (cleaned.isBlank()) {
       return "";
@@ -976,27 +997,104 @@ final class SourceMetadataScanner {
 
   private static List<AnnotationOccurrence> annotationOccurrences(String block, String name) {
     List<AnnotationOccurrence> result = new ArrayList<>();
+    String source = stripComments(block == null ? "" : block);
     Matcher matcher = Pattern.compile(
-        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(block);
+        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(source);
     while (matcher.find()) {
       int end = matcher.end();
-      while (end < block.length() && Character.isWhitespace(block.charAt(end))) {
+      while (end < source.length() && Character.isWhitespace(source.charAt(end))) {
         end++;
       }
       String arguments = "";
-      if (end < block.length() && block.charAt(end) == '(') {
-        int closing = matchingDelimiter(block, end, '(', ')');
+      if (end < source.length() && source.charAt(end) == '(') {
+        int closing = matchingDelimiter(source, end, '(', ')');
         if (closing < 0) {
           continue;
         }
-        arguments = block.substring(end + 1, closing);
+        arguments = source.substring(end + 1, closing);
         end = closing + 1;
       }
       result.add(new AnnotationOccurrence(
           arguments,
-          block.substring(matcher.start(), end).replaceAll("\\s+", " ").trim()));
+          source.substring(matcher.start(), end).replaceAll("\\s+", " ").trim()));
     }
     return List.copyOf(result);
+  }
+
+  /** Replaces comments with whitespace without changing source offsets or literals. */
+  private static String stripComments(String source) {
+    StringBuilder result = new StringBuilder(source.length());
+    boolean lineComment = false;
+    boolean blockComment = false;
+    boolean stringLiteral = false;
+    boolean characterLiteral = false;
+    boolean escaped = false;
+    for (int index = 0; index < source.length(); index++) {
+      char current = source.charAt(index);
+      char next = index + 1 < source.length() ? source.charAt(index + 1) : '\0';
+      if (lineComment) {
+        if (current == '\n' || current == '\r') {
+          lineComment = false;
+          result.append(current);
+        } else {
+          result.append(' ');
+        }
+        continue;
+      }
+      if (blockComment) {
+        if (current == '*' && next == '/') {
+          result.append("  ");
+          index++;
+          blockComment = false;
+        } else if (current == '\n' || current == '\r') {
+          result.append(current);
+        } else {
+          result.append(' ');
+        }
+        continue;
+      }
+      if (!stringLiteral && !characterLiteral && current == '/' && next == '/') {
+        result.append("  ");
+        index++;
+        lineComment = true;
+        continue;
+      }
+      if (!stringLiteral && !characterLiteral && current == '/' && next == '*') {
+        result.append("  ");
+        index++;
+        blockComment = true;
+        continue;
+      }
+      result.append(current);
+      if (current == '\\' && (stringLiteral || characterLiteral) && !escaped) {
+        escaped = true;
+      } else {
+        if (current == '"' && !characterLiteral && !escaped) {
+          stringLiteral = !stringLiteral;
+        } else if (current == '\'' && !stringLiteral && !escaped) {
+          characterLiteral = !characterLiteral;
+        }
+        escaped = false;
+      }
+    }
+    return result.toString();
+  }
+
+  /** Removes nested generic arguments from a declaration without leaving trailing brackets. */
+  private static String stripBalancedGenericArguments(String source) {
+    StringBuilder result = new StringBuilder(source.length());
+    int depth = 0;
+    for (int index = 0; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '<') {
+        depth++;
+      } else if (character == '>' && depth > 0) {
+        depth--;
+      } else if (depth == 0) {
+        result.append(character);
+      }
+    }
+    return result.toString();
   }
 
   private static int matchingDelimiter(String source, int opening, char open, char close) {
