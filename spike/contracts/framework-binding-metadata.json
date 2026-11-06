@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "0.1.0",
+  "artifact": "FrameworkBindingMetadata",
+  "issue": "FLPATH-5075",
+  "purpose": "Candidate-level CDI and Spring evidence used to resolve injection bindings and framework proxy dispatch without fabricating runtime targets.",
+  "payload": {
+    "candidates": {
+      "required": ["id", "candidateType", "kind"],
+      "fields": {
+        "id": "Stable framework registration identity.",
+        "candidateType": "Concrete bean type or producer return type.",
+        "contracts": "Implemented or extended injection contracts.",
+        "qualifiers": "Normalized CDI/Spring qualifier identities.",
+        "kind": "Component, producer, repository, or framework-specific bean kind.",
+        "declaringType": "Declaring class for a producer or component.",
+        "producerMethod": "Producer method name when the candidate is produced by a method.",
+        "profiles": "Profiles that activate the candidate.",
+        "conditions": "Conditional registration evidence and evaluated condition identities.",
+        "active": "True or false after the selected profile/condition context is applied; null means unknown.",
+        "alternative": "CDI alternative candidate marker.",
+        "primary": "Spring primary candidate marker.",
+        "providerFactId": "Exact provider SemanticCallFacts identity when available."
+      }
+    },
+    "resolvedBindings": {
+      "required": ["id", "injectionOwner", "injectionType", "candidateId"],
+      "fields": {
+        "injectionMember": "Constructor, field, or method identity; <init> denotes a constructor.",
+        "parameterIndex": "Zero-based parameter index; null denotes field or an unindexed binding.",
+        "qualifiers": "Qualifiers applied by the framework to this injection point.",
+        "selected": "True for the framework-selected candidate, false for an excluded row, null when not evaluated.",
+        "active": "True or false after profile/condition filtering; null means unknown.",
+        "selectionReason": "Framework evidence explaining the selected row.",
+        "providerFactId": "Exact provider SemanticCallFacts identity when available."
+      }
+    },
+    "proxyTargets": {
+      "required": ["id", "targetType", "methodName", "proxyKind"],
+      "fields": {
+        "candidateId": "Bean registration identity when known.",
+        "targetType": "Concrete proxied bean type.",
+        "methodName": "Application method dispatched through the proxy/interceptor.",
+        "methodDescriptor": "Optional bytecode descriptor for overloaded methods.",
+        "proxyKind": "CDI client proxy, Spring advisor, JDK proxy, CGLIB proxy, or equivalent.",
+        "selected": "True for the exact target, false for an excluded target, null when not evaluated.",
+        "active": "True or false after profile/condition filtering; null means unknown.",
+        "selectionReason": "Framework evidence explaining the target.",
+        "providerFactId": "Exact provider SemanticCallFacts identity when available."
+      }
+    }
+  },
+  "certaintyRules": {
+    "definite": "Only an exact unique active binding or proxy row may promote a fact to definite.",
+    "possible": "Use for a bounded source candidate or proxy target when the active framework selection is not captured.",
+    "unresolved": "Use when qualifiers, profiles, conditions, constructor selection, or proxy target identity remain insufficiently constrained.",
+    "linking": "Set derivedFrom and emit enriches_without_replacing only when providerFactId is exact or one unique non-abstained provider target matches exactly."
+  },
+  "supportedCommonSubsets": {
+    "cdi": [
+      "@Inject constructors, fields, and methods",
+      "normal scopes and @Named beans",
+      "qualifiers, @Alternative, and producer methods",
+      "selected active candidate metadata and client-proxy targets"
+    ],
+    "spring": [
+      "single and @Autowired constructors",
+      "field and method injection",
+      "component stereotypes and @Bean producers",
+      "@Qualifier, @Primary, @Profile, common conditional annotations, and advisor targets"
+    ]
+  },
+  "abstentions": [
+    "open-world reflection and dynamic proxy construction",
+    "unsupported condition expressions without evaluated metadata",
+    "generated implementations and lifecycle ordering owned by FLPATH-5077",
+    "callback and ServiceLoader target selection owned by FLPATH-5078"
+  ]
+}

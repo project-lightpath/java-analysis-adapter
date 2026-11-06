@@ -40,14 +40,46 @@ public final class JavaAnalysisAdapter {
     FrameworkModel selectedModel = frameworkModel == null
         ? FrameworkModels.forContext(context.framework())
         : frameworkModel;
-    List<SemanticCallFacts.Fact> frameworkFacts = selectedModel.enrich(context, graph);
     List<SemanticCallFacts.Fact> providerFacts = new ArrayList<>(ProviderFactNormalizer.normalize(context, graph));
+    List<SemanticCallFacts.Fact> frameworkFacts = attachExactProviderIdentities(
+        selectedModel.enrich(context, graph), providerFacts);
     return new SemanticCallFacts(
         context,
         graph,
         providerFacts,
         frameworkFacts,
         links(providerFacts, frameworkFacts));
+  }
+
+  private static List<SemanticCallFacts.Fact> attachExactProviderIdentities(
+      List<SemanticCallFacts.Fact> frameworkFacts,
+      List<SemanticCallFacts.Fact> providerFacts) {
+    List<SemanticCallFacts.Fact> result = new ArrayList<>();
+    for (SemanticCallFacts.Fact frameworkFact : frameworkFacts) {
+      if (frameworkFact.derivedFrom() != null) {
+        boolean providerExists = providerFacts.stream()
+            .anyMatch(provider -> provider.id().equals(frameworkFact.derivedFrom()));
+        result.add(providerExists
+            ? frameworkFact
+            : frameworkFact.withDerivedFrom(null));
+        continue;
+      }
+      if (frameworkFact.relationshipType().equals("framework_entrypoint")) {
+        result.add(frameworkFact);
+        continue;
+      }
+      List<SemanticCallFacts.Fact> exactTargets = providerFacts.stream()
+          .filter(provider -> provider.certainty() != SemanticCallFacts.Certainty.UNRESOLVED)
+          .filter(provider -> provider.callee().equals(frameworkFact.callee()))
+          .filter(provider -> !provider.relationshipType().equals("reflection"))
+          .filter(provider -> !provider.relationshipType().equals("proxy_dispatch")
+              || frameworkFact.relationshipType().equals("proxy_dispatch"))
+          .toList();
+      result.add(exactTargets.size() == 1
+          ? frameworkFact.withDerivedFrom(exactTargets.get(0).id())
+          : frameworkFact);
+    }
+    return List.copyOf(result);
   }
 
   private static List<SemanticCallFacts.Link> links(

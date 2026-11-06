@@ -265,6 +265,29 @@ public final class SemanticCallFacts {
           limitation);
     }
 
+    /** Attach an exact provider fact identity without changing the framework claim. */
+    public Fact withDerivedFrom(String providerFactId) {
+      return new Fact(
+          id,
+          framework,
+          contextId,
+          caller,
+          callee,
+          relationshipType,
+          certainty,
+          status,
+          factSet,
+          evidenceOrigin,
+          modelRule,
+          claim,
+          runtimeSelection,
+          providerCallerAbsence,
+          selectionCriteria,
+          providerFactId,
+          evidence,
+          limitation);
+    }
+
     private static void require(String value, String name) {
       if (value == null || value.isBlank()) {
         throw new IllegalArgumentException(name + " must not be blank");

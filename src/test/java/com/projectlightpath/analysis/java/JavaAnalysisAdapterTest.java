@@ -489,11 +489,349 @@ class JavaAnalysisAdapterTest {
     assertNotNull(route.selectionCriteria());
   }
 
+  @Test
+  void metadataBackedSpringBindingsCoverQualifiersProducersProfilesProxyTargetsAndLinks()
+      throws IOException {
+    Path sourceRoot = temp.resolve("spring-bindings/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          private final PaymentService payment;
+          private final Clock clock;
+          @Autowired public Consumer(@Qualifier("fast") PaymentService payment, Clock clock) {
+            this.payment = payment;
+            this.clock = clock;
+          }
+        }
+        """);
+    write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { void pay(); }\n");
+    write(sourceRoot, "demo/FastPaymentService.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.context.annotation.Primary;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service @Qualifier("fast") @Primary
+        public class FastPaymentService implements PaymentService {
+          @Transactional public void pay() { }
+        }
+        """);
+    write(sourceRoot, "demo/TestPaymentService.java", """
+        package demo;
+        import org.springframework.context.annotation.Profile;
+        import org.springframework.stereotype.Service;
+        @Service @Profile("test") public class TestPaymentService implements PaymentService {
+          public void pay() { }
+        }
+        """);
+    write(sourceRoot, "demo/Clock.java", "package demo; public class Clock {}\n");
+    write(sourceRoot, "demo/Beans.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration public class Beans {
+          @Bean public Clock clock() { return new Clock(); }
+        }
+        """);
+
+    MethodSymbol providerCaller = new MethodSymbol("demo.Consumer", "<init>", "(Ldemo/PaymentService;Ldemo/Clock;)V");
+    MethodSymbol providerCallee = new MethodSymbol("demo.FastPaymentService", "pay", "()V");
+    CallEdge providerEdge = new CallEdge(
+        providerCaller,
+        providerCallee,
+        8,
+        "src/main/java/demo/Consumer.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "interface_dispatch");
+    String providerFactId = "sootup-call-" + Integer.toHexString(
+        (providerEdge.caller().descriptor() + "->" + providerEdge.callee().descriptor()
+            + "@" + providerEdge.line()).hashCode());
+
+    AnalysisContext.FrameworkBindingMetadata bindingMetadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "fast",
+                "demo.FastPaymentService",
+                List.of("PaymentService"),
+                List.of("Qualifier:fast"),
+                "Service",
+                "demo.FastPaymentService",
+                null,
+                null,
+                List.of(),
+                List.of(),
+                true,
+                false,
+                true,
+                "src/main/java/demo/FastPaymentService.java",
+                providerFactId),
+            new AnalysisContext.BindingCandidateMetadata(
+                "test",
+                "demo.TestPaymentService",
+                List.of("PaymentService"),
+                List.of(),
+                "Service",
+                "demo.TestPaymentService",
+                null,
+                null,
+                List.of("test"),
+                List.of(),
+                false,
+                false,
+                false,
+                "src/main/java/demo/TestPaymentService.java",
+                null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.Beans#clock",
+                "demo.Clock",
+                List.of(),
+                List.of(),
+                "producer",
+                "demo.Beans",
+                "clock",
+                "()Ldemo/Clock;",
+                List.of(),
+                List.of(),
+                true,
+                false,
+                false,
+                "src/main/java/demo/Beans.java",
+                null)),
+        List.of(
+            new AnalysisContext.ResolvedBindingMetadata(
+                "consumer-payment",
+                "demo.Consumer",
+                "<init>",
+                "PaymentService",
+                0,
+                List.of("Qualifier:fast"),
+                "fast",
+                true,
+                true,
+                "primary qualified bean",
+                "src/main/java/demo/Consumer.java",
+                providerFactId),
+            new AnalysisContext.ResolvedBindingMetadata(
+                "consumer-clock",
+                "demo.Consumer",
+                "<init>",
+                "Clock",
+                1,
+                List.of(),
+                "demo.Beans#clock",
+                true,
+                true,
+                "unique @Bean producer",
+                "src/main/java/demo/Consumer.java",
+                null)),
+        List.of(new AnalysisContext.ProxyTargetMetadata(
+            "fast-pay-proxy",
+            "fast",
+            "demo.FastPaymentService",
+            "pay",
+            "()V",
+            "spring-aop-advisor",
+            true,
+            true,
+            "transaction advisor",
+            "src/main/java/demo/FastPaymentService.java",
+            providerFactId)));
+
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(
+            new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"),
+            new AnalysisContext.FrameworkMetadata(
+                "spring-aop-advisor-metadata", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.NOT_CAPTURED, null)),
+        bindingMetadata);
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context,
+        new AnalysisGraph(List.of(providerEdge), List.of(), Set.of(), "SootUp", "3.0.1", 4, 1));
+
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("demo.FastPaymentService#<init>")));
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("demo.Beans#clock")));
+    assertTrue(injections.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.DEFINITE));
+
+    SemanticCallFacts.Fact proxy = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.FastPaymentService#pay"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, proxy.certainty());
+    assertEquals(2, facts.links().stream()
+        .filter(link -> link.providerFactId().equals(providerFactId))
+        .count());
+    assertTrue(facts.frameworkFacts().stream().noneMatch(item -> item.callee().contains("TestPaymentService")));
+  }
+
+  @Test
+  void sourceScannerCoversCdiFieldMethodQualifierProducerAndAlternativeCandidates() throws IOException {
+    Path sourceRoot = temp.resolve("cdi-bindings/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject @Blue PaymentService service;
+          private Token token;
+          @Inject void setToken(Token token) { this.token = token; }
+        }
+        """);
+    write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { }\n");
+    write(sourceRoot, "demo/BluePaymentService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped @Blue
+        public class BluePaymentService implements PaymentService { }
+        """);
+    write(sourceRoot, "demo/Token.java", "package demo; public interface Token { }\n");
+    write(sourceRoot, "demo/TokenProducer.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class TokenProducer {
+          @jakarta.enterprise.inject.Produces Token token() { return null; }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED, "src/main/java")));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream().anyMatch(item -> item.caller().contains("#service")));
+    assertTrue(injections.stream().anyMatch(item -> item.caller().contains("#setToken")));
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("demo.TokenProducer#token")));
+    assertTrue(injections.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
+  }
+
+  @Test
+  void bindingAndProxyAmbiguityStaysPossibleAndUnknownConditionsStayUnresolved() throws IOException {
+    Path sourceRoot = temp.resolve("spring-ambiguity/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/ConditionalConsumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class ConditionalConsumer {
+          @Autowired public ConditionalConsumer(ConditionalService service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { void run(); }\n");
+    write(sourceRoot, "demo/ConditionalService.java", "package demo; public interface ConditionalService { }\n");
+    write(sourceRoot, "demo/AService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class AService implements Service {
+          @Transactional public void run() { }
+        }
+        """);
+    write(sourceRoot, "demo/BService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class BService implements Service {
+          @Transactional public void run() { }
+        }
+        """);
+    write(sourceRoot, "demo/ConditionalServiceImpl.java", """
+        package demo;
+        import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+        import org.springframework.stereotype.Service;
+        @Service @ConditionalOnProperty("feature.enabled")
+        public class ConditionalServiceImpl implements ConditionalService { }
+        """);
+
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.AService", "demo.AService", List.of("Service"), List.of(), "Service",
+                "demo.AService", null, null, List.of(), List.of(), true, false, false, null, null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.BService", "demo.BService", List.of("Service"), List.of(), "Service",
+                "demo.BService", null, null, List.of(), List.of(), true, false, false, null, null)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "consumer-service", "demo.Consumer", "<init>", "Service", 0, List.of(),
+            "demo.AService", null, true, "selection not evaluated", null, null)),
+        List.of(
+            new AnalysisContext.ProxyTargetMetadata(
+                "a-proxy", "demo.AService", "demo.AService", "run", null,
+                "spring-aop-advisor", null, true, "target not evaluated", null, null),
+            new AnalysisContext.ProxyTargetMetadata(
+                "b-proxy", "demo.BService", "demo.BService", "run", null,
+                "spring-aop-advisor", false, true, "excluded target", null, null)));
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED, "src/main/java")),
+        metadata);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> serviceBindings = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("demo.Consumer"))
+        .toList();
+    assertEquals(2, serviceBindings.size());
+    assertTrue(serviceBindings.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
+
+    SemanticCallFacts.Fact conditionalBinding = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("demo.ConditionalConsumer"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, conditionalBinding.certainty());
+    assertEquals(SemanticCallFacts.Status.ABSTAINED, conditionalBinding.status());
+
+    SemanticCallFacts.Fact aProxy = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.AService#run"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, aProxy.certainty());
+    assertFalse(facts.frameworkFacts().stream()
+        .anyMatch(item -> item.relationshipType().equals("proxy_dispatch")
+            && item.callee().equals("demo.BService#run")));
+  }
+
   private AnalysisContext context(
       AnalysisContext.Framework framework,
       Path sourceRoot,
       Path generatedRoot,
       List<AnalysisContext.FrameworkMetadata> metadata) {
+    return context(framework, sourceRoot, generatedRoot, metadata,
+        AnalysisContext.FrameworkBindingMetadata.empty());
+  }
+
+  private AnalysisContext context(
+      AnalysisContext.Framework framework,
+      Path sourceRoot,
+      Path generatedRoot,
+      List<AnalysisContext.FrameworkMetadata> metadata,
+      AnalysisContext.FrameworkBindingMetadata bindingMetadata) {
     AnalysisContext.Builder builder = AnalysisContext.builder()
         .id(framework == AnalysisContext.Framework.QUARKUS ? "quarkus-production" : "spring-boot-production")
         .framework(framework)
@@ -506,6 +844,7 @@ class JavaAnalysisAdapterTest {
         .analysisScope(AnalysisContext.Scope.PRODUCTION)
         .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
         .dependencyClasspathRequired(false)
+        .frameworkBindingMetadata(bindingMetadata)
         .provenance(AnalysisContext.Provenance.forTesting());
     if (generatedRoot != null) {
       builder.generatedSourceRoot(

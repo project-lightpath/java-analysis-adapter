@@ -28,6 +28,7 @@ def main() -> None:
     advisory = load("spike/contracts/synthetic-advisory.json")
     facts = load("spike/contracts/expected-call-facts.json")
     framework_model = load("spike/contracts/framework-model.json")
+    binding_metadata = load("spike/contracts/framework-binding-metadata.json")
     analysis_context = load("spike/contracts/analysis-context.json")
     enrichment = load("spike/results/framework-enrichment-observation.json")
     semantic_facts = load("spike/results/semantic-call-facts-spike-observation.json")
@@ -68,6 +69,12 @@ def main() -> None:
     require(required_edge_types.issubset(framework_edge_types), "framework model edge types are incomplete")
     model_frameworks = {framework["id"] for framework in framework_model["frameworks"]}
     require(model_frameworks == {"quarkus", "spring-boot"}, "framework model must cover Quarkus and Spring Boot")
+    require(binding_metadata["artifact"] == "FrameworkBindingMetadata", "binding metadata artifact mismatch")
+    require(binding_metadata["schemaVersion"] == "0.1.0", "binding metadata schema version mismatch")
+    require(set(binding_metadata["payload"]) == {"candidates", "resolvedBindings", "proxyTargets"}, "binding metadata payload is incomplete")
+    require({"definite", "possible", "unresolved"}.issubset(binding_metadata["certaintyRules"]), "binding metadata certainty rules are incomplete")
+    require(binding_metadata["supportedCommonSubsets"]["cdi"], "CDI binding subset is missing")
+    require(binding_metadata["supportedCommonSubsets"]["spring"], "Spring binding subset is missing")
     model_rules = {
         framework["id"]: {rule["id"] for rule in framework["resolutionRules"]}
         for framework in framework_model["frameworks"]
@@ -88,6 +95,7 @@ def main() -> None:
             require(abstention["behavior"] == "unresolved", f"{framework['id']} abstentions must remain unresolved")
 
     require(analysis_context["artifact"] == "AnalysisContext", "analysis context artifact mismatch")
+    require(analysis_context["optionalContracts"]["frameworkBindingMetadata"] == "spike/contracts/framework-binding-metadata.json", "AnalysisContext binding metadata contract is missing")
     require(analysis_context["scope"] == "spike_only_no_production_adapter", "analysis context must remain spike-scoped")
     require(set(analysis_context["certaintyPolicy"]["states"]) == certainty_states, "analysis context certainty states changed")
     context_by_id = {context["id"]: context for context in analysis_context["contexts"]}

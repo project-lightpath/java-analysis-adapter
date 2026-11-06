@@ -34,6 +34,29 @@ final class SourceMetadataScanner {
   private static final Pattern PROXY_INTERFACES = Pattern.compile(
       "new\\s+Class\\s*<[^>]*>\\s*\\[\\s*\\]\\s*\\{([^}]*)\\}");
   private static final Pattern CLASS_LITERAL = Pattern.compile("([A-Za-z_][\\w.]*)\\.class");
+  private static final Pattern INJECT_FIELD = Pattern.compile(
+      "(?ms)((?:(?:@[A-Za-z_][\\w.]*(?:\\s*\\([^;{}]*\\))?\\s*)+)"
+          + "(?:(?:public|protected|private|static|final|transient|volatile)\\s+)*"
+          + ")([\\w.$<>?,\\[\\] ]+)\\s+(\\w+)\\s*(?:=[^;]*)?;");
+  private static final Set<String> NON_QUALIFIER_ANNOTATIONS = Set.of(
+      "Inject", "Autowired", "Resource", "Value", "Bean", "Produces", "Observes",
+      "Service", "Component", "Repository", "Controller", "RestController", "Configuration",
+      "ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped", "Dependent",
+      "Singleton", "Alternative", "Priority", "Primary", "Profile", "Conditional",
+      "ConditionalOnBean", "ConditionalOnMissingBean", "ConditionalOnClass",
+      "ConditionalOnMissingClass", "ConditionalOnProperty", "ConditionalOnExpression",
+      "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
+      "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
+      "Path", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "RequestMapping",
+      "GetMapping", "PostMapping", "PutMapping", "PatchMapping", "DeleteMapping", "RequestMethod",
+      "Consumes", "Override", "SuppressWarnings");
+  private static final Set<String> CDI_SCOPES = Set.of(
+      "ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped", "Dependent",
+      "Singleton");
+  private static final Set<String> SPRING_PROXY_ANNOTATIONS = Set.of(
+      "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
+      "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
+      "TransactionalEventListener");
   private static final List<String> SUPPORTED_HTTP_METHODS =
       List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
@@ -176,24 +199,80 @@ final class SourceMetadataScanner {
     List<InjectionPoint> result = new ArrayList<>();
     for (SourceFile file : files()) {
       boolean component = framework == AnalysisContext.Framework.QUARKUS
-          ? hasAnnotation(file.classAnnotationBlock(), "ApplicationScoped")
+          ? cdiBean(file.classAnnotationBlock())
           : springComponent(file.classAnnotationBlock());
       Pattern constructor = Pattern.compile(
-          "(?s)(@Inject\\s*)?(?:public|protected|private)?\\s*"
+          "(?s)((?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)*))"
+              + "(?:public|protected|private)?\\s*"
               + Pattern.quote(file.simpleTypeName())
               + "\\s*\\(([^)]*)\\)\\s*\\{");
-      Matcher matcher = constructor.matcher(file.source());
+      String maskedSource = maskAnnotationArguments(file.source());
+      Matcher matcher = constructor.matcher(maskedSource);
+      List<ConstructorInfo> constructors = new ArrayList<>();
       while (matcher.find()) {
-        boolean inject = matcher.group(1) != null;
-        if (framework == AnalysisContext.Framework.QUARKUS && !inject) {
+        constructors.add(new ConstructorInfo(
+            file.source().substring(matcher.start(1), matcher.end(1)),
+            file.source().substring(matcher.start(2), matcher.end(2)),
+            matcher.start()));
+      }
+      boolean springExplicitConstructor = constructors.stream()
+          .anyMatch(item -> hasInjectionAnnotation(item.annotations()));
+      for (ConstructorInfo constructorInfo : constructors) {
+        boolean annotated = hasInjectionAnnotation(constructorInfo.annotations());
+        boolean selected = framework == AnalysisContext.Framework.QUARKUS
+            ? annotated
+            : component && (annotated || (!springExplicitConstructor && constructors.size() == 1));
+        if (!selected) {
           continue;
         }
-        if (framework == AnalysisContext.Framework.SPRING_BOOT && !component) {
-          continue;
+        List<Parameter> parsedParameters = parameters(constructorInfo.parameters());
+        if (!parsedParameters.isEmpty()) {
+          result.add(new InjectionPoint(
+              file,
+              parsedParameters,
+              file.lineAt(constructorInfo.start()),
+              "<init>",
+              "constructor",
+              qualifierNames(constructorInfo.annotations())));
         }
-        List<Parameter> parameters = parameters(matcher.group(2));
-        if (!parameters.isEmpty()) {
-          result.add(new InjectionPoint(file, parameters, file.lineAt(matcher.start())));
+      }
+
+      if (component) {
+        Matcher fieldMatcher = INJECT_FIELD.matcher(file.source());
+        while (fieldMatcher.find()) {
+          String annotations = fieldMatcher.group(1);
+          if (!hasInjectionAnnotation(annotations)) {
+            continue;
+          }
+          List<String> fieldQualifiers = injectionQualifiers(
+              annotations, fieldMatcher.group(3));
+          Parameter parameter = new Parameter(
+              fieldMatcher.group(2), fieldMatcher.group(3), fieldQualifiers);
+          result.add(new InjectionPoint(
+              file,
+              List.of(parameter),
+              file.lineAt(fieldMatcher.start()),
+              fieldMatcher.group(3),
+              "field",
+              fieldQualifiers));
+        }
+        for (MethodInfo method : methods(file)) {
+          if (method.name().equals(file.simpleTypeName())
+              || !hasInjectionAnnotation(method.annotationBlock())) {
+            continue;
+          }
+          List<Parameter> parsedParameters = parameters(method.parameters());
+          if (!parsedParameters.isEmpty()) {
+            List<String> methodQualifiers = injectionQualifiers(
+                method.annotationBlock(), method.name());
+            result.add(new InjectionPoint(
+                file,
+                parsedParameters,
+                method.line(),
+                method.name(),
+                "method",
+                methodQualifiers));
+          }
         }
       }
     }
@@ -205,21 +284,48 @@ final class SourceMetadataScanner {
     for (SourceFile file : files()) {
       String block = file.classAnnotationBlock();
       boolean bean = framework == AnalysisContext.Framework.QUARKUS
-          ? hasAnnotation(block, "ApplicationScoped")
+          ? cdiBean(block)
           : springComponent(block) || file.source().matches("(?s).*\\binterface\\s+\\w+\\s+extends\\s+[^;]*\\b(?:JpaRepository|Repository)\\b.*");
-      if (!bean) {
-        continue;
+      if (bean) {
+        Set<String> contracts = contracts(file);
+        result.add(new BeanCandidate(
+            file,
+            contracts,
+            beanKind(block, framework),
+            file.typeName(),
+            file.typeName(),
+            qualifierNames(block),
+            profileValues(block),
+            conditionAnnotations(block),
+            hasAnnotation(block, "Alternative"),
+            hasAnnotation(block, "Primary"),
+            null,
+            null));
       }
-      Set<String> contracts = new LinkedHashSet<>();
-      Matcher implementsMatcher = Pattern.compile("\\bimplements\\s+([^\\{]+)").matcher(file.source());
-      if (implementsMatcher.find()) {
-        contracts.addAll(typeNames(implementsMatcher.group(1)));
+
+      for (MethodInfo method : methods(file)) {
+        boolean producer = framework == AnalysisContext.Framework.QUARKUS
+            ? method.hasAnnotation("Produces")
+            : method.hasAnnotation("Bean");
+        if (!producer || method.returnType().isBlank()) {
+          continue;
+        }
+        String candidateId = file.typeName() + "#" + method.name();
+        String producerType = qualify(method.returnType(), file.packageName());
+        result.add(new BeanCandidate(
+            file,
+            Set.of(),
+            "producer",
+            candidateId,
+            producerType,
+            mergeValues(qualifierNames(block), qualifierNames(method.annotationBlock())),
+            mergeValues(profileValues(block), profileValues(method.annotationBlock())),
+            mergeValues(conditionAnnotations(block), conditionAnnotations(method.annotationBlock())),
+            hasAnnotation(block, "Alternative") || hasAnnotation(method.annotationBlock(), "Alternative"),
+            hasAnnotation(block, "Primary") || hasAnnotation(method.annotationBlock(), "Primary"),
+            method.name(),
+            method.returnType()));
       }
-      Matcher extendsMatcher = Pattern.compile("\\bextends\\s+([^\\{]+)").matcher(file.source());
-      if (extendsMatcher.find()) {
-        contracts.addAll(typeNames(extendsMatcher.group(1)));
-      }
-      result.add(new BeanCandidate(file, contracts, beanKind(block, framework)));
     }
     return List.copyOf(result);
   }
@@ -229,7 +335,7 @@ final class SourceMetadataScanner {
     for (SourceFile file : files()) {
       String classBlock = file.classAnnotationBlock();
       boolean bean = framework == AnalysisContext.Framework.QUARKUS
-          ? hasAnnotation(classBlock, "ApplicationScoped")
+          ? cdiBean(classBlock)
           : springComponent(classBlock);
       if (!bean) {
         continue;
@@ -237,9 +343,10 @@ final class SourceMetadataScanner {
       for (MethodInfo method : methods(file)) {
         boolean selected = framework == AnalysisContext.Framework.QUARKUS
             ? !method.name().equals(file.simpleTypeName())
-            : hasAnnotation(method.annotationBlock(), "Transactional") || hasAnnotation(classBlock, "Transactional");
+            : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
+                || SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(classBlock, name));
         if (selected) {
-          result.add(new ProxyTarget(file, method));
+          result.add(new ProxyTarget(file, method, file.typeName(), framework.id()));
         }
       }
     }
@@ -357,11 +464,12 @@ final class SourceMetadataScanner {
       int lineOffset = annotationOffset < 0 ? matcher.start(1) : start + annotationOffset;
       result.add(new MethodInfo(
           matcher.group(1),
-          matcher.group(2),
+          file.source().substring(matcher.start(2), matcher.end(2)),
           annotationBlock,
           start,
           matcher.end(),
-          file.lineAt(lineOffset)));
+          file.lineAt(lineOffset),
+          returnType(annotationBlock)));
     }
     return List.copyOf(result);
   }
@@ -381,6 +489,8 @@ final class SourceMetadataScanner {
       if (closing < 0) {
         continue;
       }
+      masked[opening] = ' ';
+      masked[closing] = ' ';
       for (int index = opening + 1; index < closing; index++) {
         if (source.charAt(index) != '\n' && source.charAt(index) != '\r') {
           masked[index] = ' ';
@@ -394,7 +504,7 @@ final class SourceMetadataScanner {
     return methods(file).stream()
         .filter(method -> method.start() <= index && method.end() >= index)
         .findFirst()
-        .orElseGet(() -> new MethodInfo("<unknown>", "", "", index, index, file.lineAt(index)));
+        .orElseGet(() -> new MethodInfo("<unknown>", "", "", index, index, file.lineAt(index), ""));
   }
 
   private static List<String> routeAnnotations(String block, AnalysisContext.Framework framework) {
@@ -585,14 +695,146 @@ final class SourceMetadataScanner {
         || hasAnnotation(block, "Component")
         || hasAnnotation(block, "Repository")
         || hasAnnotation(block, "Configuration")
-        || hasAnnotation(block, "RestController");
+        || hasAnnotation(block, "Controller")
+        || hasAnnotation(block, "RestController")
+        || hasAnnotation(block, "Named");
+  }
+
+  private static boolean cdiBean(String block) {
+    return CDI_SCOPES.stream().anyMatch(name -> hasAnnotation(block, name))
+        || hasAnnotation(block, "Stereotype")
+        || hasAnnotation(block, "Named");
+  }
+
+  private static boolean hasInjectionAnnotation(String block) {
+    return hasAnnotation(block, "Inject")
+        || hasAnnotation(block, "Autowired")
+        || hasAnnotation(block, "Resource");
+  }
+
+  private static Set<String> contracts(SourceFile file) {
+    Set<String> contracts = new LinkedHashSet<>();
+    Matcher implementsMatcher = Pattern.compile("\\bimplements\\s+([^\\{]+)").matcher(file.source());
+    if (implementsMatcher.find()) {
+      contracts.addAll(typeNames(implementsMatcher.group(1)));
+    }
+    Matcher extendsMatcher = Pattern.compile("\\bextends\\s+([^\\{]+)").matcher(file.source());
+    if (extendsMatcher.find()) {
+      contracts.addAll(typeNames(extendsMatcher.group(1)));
+    }
+    return Set.copyOf(contracts);
+  }
+
+  private static List<String> profileValues(String block) {
+    return values(block, "Profile", null);
+  }
+
+  private static List<String> conditionAnnotations(String block) {
+    List<String> result = new ArrayList<>();
+    for (String name : List.of(
+        "Conditional", "ConditionalOnBean", "ConditionalOnMissingBean", "ConditionalOnClass",
+        "ConditionalOnMissingClass", "ConditionalOnProperty", "ConditionalOnExpression")) {
+      for (AnnotationOccurrence occurrence : annotationOccurrences(block, name)) {
+        result.add(occurrence.source());
+      }
+    }
+    return List.copyOf(result);
+  }
+
+  private static List<String> qualifierNames(String block) {
+    String source = block == null ? "" : block;
+    List<String> result = new ArrayList<>();
+    Matcher matcher = Pattern.compile("@([A-Za-z_][\\w.]*)").matcher(source);
+    while (matcher.find()) {
+      String name = simpleName(matcher.group(1));
+      int end = matcher.end();
+      while (end < source.length() && Character.isWhitespace(source.charAt(end))) {
+        end++;
+      }
+      String arguments = "";
+      if (end < source.length() && source.charAt(end) == '(') {
+        int closing = matchingDelimiter(source, end, '(', ')');
+        if (closing >= 0) {
+          arguments = source.substring(end + 1, closing).trim();
+        }
+      }
+      if (name.equals("Resource")) {
+        String value = attributeValue(arguments, "name");
+        if (value == null) {
+          value = attributeValue(arguments, "value");
+        }
+        value = quotedValue(value);
+        if (!value.isBlank()) {
+          result.add("Resource:" + value);
+        }
+        continue;
+      }
+      if (Set.of(
+          "Service", "Component", "Repository", "Controller", "RestController", "Configuration",
+          "Bean").contains(name)) {
+        String value = attributeValue(arguments, "value");
+        if (value == null) {
+          value = attributeValue(arguments, "name");
+        }
+        value = quotedValue(value);
+        if (!value.isBlank()) {
+          result.add("BeanName:" + value);
+        }
+        continue;
+      }
+      if (NON_QUALIFIER_ANNOTATIONS.contains(name)) {
+        continue;
+      }
+      if (name.equals("Qualifier") || name.equals("Named")) {
+        String value = quotedValue(arguments.replaceAll("^value\\s*=\\s*", "").trim());
+        result.add(name + ":" + value);
+      } else {
+        result.add(name);
+      }
+    }
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  private static List<String> injectionQualifiers(String annotations, String defaultName) {
+    List<String> result = new ArrayList<>(qualifierNames(annotations));
+    if (hasAnnotation(annotations, "Resource")
+        && result.stream().noneMatch(value -> value.startsWith("Resource:"))) {
+      String name = defaultName;
+      if (name.startsWith("set") && name.length() > 3) {
+        name = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+      }
+      result.add("Resource:" + name);
+    }
+    return List.copyOf(result);
+  }
+
+  private static String quotedValue(String expression) {
+    if (expression == null || expression.isBlank()) {
+      return "";
+    }
+    Matcher quoted = QUOTED.matcher(expression.trim());
+    return quoted.find() ? quoted.group(1) : expression.trim();
+  }
+
+  private static String returnType(String declaration) {
+    String cleaned = maskAnnotationArguments(declaration)
+        .replaceAll("@[A-Za-z_][\\w.]*", " ")
+        .replaceAll("\\b(public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\b", " ")
+        .replaceAll("<[^>]+>", " ")
+        .trim();
+    if (cleaned.isBlank()) {
+      return "";
+    }
+    String[] parts = cleaned.split("\\s+");
+    return parts[parts.length - 1].trim();
   }
 
   private static String beanKind(String block, AnalysisContext.Framework framework) {
     if (framework == AnalysisContext.Framework.QUARKUS) {
       return "ApplicationScoped";
     }
-    for (String annotation : List.of("Service", "Component", "Repository", "Configuration", "RestController")) {
+    for (String annotation : List.of(
+        "Service", "Component", "Repository", "Configuration", "Controller", "RestController", "Named")) {
       if (hasAnnotation(block, annotation)) {
         return annotation;
       }
@@ -600,10 +842,11 @@ final class SourceMetadataScanner {
     return "repository_interface";
   }
 
-  private static List<Parameter> parameters(String source) {
+  static List<Parameter> parameters(String source) {
     List<Parameter> result = new ArrayList<>();
     for (String raw : splitArguments(source)) {
-      String cleaned = raw.replaceAll("@\\w+(?:\\([^)]*\\))?", "").trim();
+      List<String> qualifiers = qualifierNames(raw);
+      String cleaned = raw.replaceAll("@[A-Za-z_][\\w.]*(?:\\s*\\([^)]*\\))?", " ").trim();
       cleaned = cleaned.replaceAll("\\b(final|volatile|transient)\\b", "").trim();
       if (cleaned.isBlank()) {
         continue;
@@ -617,7 +860,7 @@ final class SourceMetadataScanner {
       if (type.endsWith("...")) {
         type = type.substring(0, type.length() - 3) + "[]";
       }
-      result.add(new Parameter(type, name));
+      result.add(new Parameter(type, name, qualifiers));
     }
     return List.copyOf(result);
   }
@@ -871,7 +1114,18 @@ final class SourceMetadataScanner {
     }
   }
 
-  record MethodInfo(String name, String parameters, String annotationBlock, int start, int end, int line) {
+  record MethodInfo(
+      String name,
+      String parameters,
+      String annotationBlock,
+      int start,
+      int end,
+      int line,
+      String returnType) {
+    MethodInfo(String name, String parameters, String annotationBlock, int start, int end, int line) {
+      this(name, parameters, annotationBlock, start, end, line, "");
+    }
+
     boolean hasAnnotation(String name) {
       return SourceMetadataScanner.hasAnnotation(annotationBlock, name);
     }
@@ -888,13 +1142,87 @@ final class SourceMetadataScanner {
       List<String> parameters,
       List<String> symbols) {}
 
-  record Parameter(String type, String name) {}
+  record Parameter(String type, String name, List<String> qualifiers) {
+    Parameter(String type, String name) {
+      this(type, name, List.of());
+    }
 
-  record InjectionPoint(SourceFile file, List<Parameter> parameters, int line) {}
+    Parameter {
+      qualifiers = List.copyOf(qualifiers == null ? List.of() : qualifiers);
+    }
+  }
 
-  record BeanCandidate(SourceFile file, Set<String> contracts, String kind) {}
+  record InjectionPoint(
+      SourceFile file,
+      List<Parameter> parameters,
+      int line,
+      String member,
+      String kind,
+      List<String> qualifiers) {
+    InjectionPoint(SourceFile file, List<Parameter> parameters, int line) {
+      this(file, parameters, line, "<init>", "constructor", List.of());
+    }
 
-  record ProxyTarget(SourceFile file, MethodInfo method) {}
+    InjectionPoint {
+      parameters = List.copyOf(parameters == null ? List.of() : parameters);
+      qualifiers = List.copyOf(qualifiers == null ? List.of() : qualifiers);
+    }
+  }
+
+  record BeanCandidate(
+      SourceFile file,
+      Set<String> contracts,
+      String kind,
+      String candidateId,
+      String candidateType,
+      List<String> qualifiers,
+      List<String> profiles,
+      List<String> conditions,
+      boolean alternative,
+      boolean primary,
+      String producerMethod,
+      String producerSignature) {
+    BeanCandidate(SourceFile file, Set<String> contracts, String kind) {
+      this(
+          file,
+          contracts,
+          kind,
+          file.typeName(),
+          file.typeName(),
+          List.of(),
+          List.of(),
+          List.of(),
+          false,
+          false,
+          null,
+          null);
+    }
+
+    BeanCandidate {
+      contracts = Set.copyOf(contracts == null ? Set.of() : contracts);
+      qualifiers = List.copyOf(qualifiers == null ? List.of() : qualifiers);
+      profiles = List.copyOf(profiles == null ? List.of() : profiles);
+      conditions = List.copyOf(conditions == null ? List.of() : conditions);
+    }
+
+    boolean producer() {
+      return producerMethod != null && !producerMethod.isBlank();
+    }
+
+    String target() {
+      return producer()
+          ? file.typeName() + "#" + producerMethod
+          : file.typeName() + "#<init>";
+    }
+  }
+
+  record ProxyTarget(SourceFile file, MethodInfo method, String candidateId, String proxyKind) {
+    ProxyTarget(SourceFile file, MethodInfo method) {
+      this(file, method, file.typeName(), "source");
+    }
+  }
+
+  private record ConstructorInfo(String annotations, String parameters, int start) {}
 
   record GeneratedMethod(SourceFile file, MethodInfo method) {}
 

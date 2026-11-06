@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -85,8 +86,90 @@ public final class AnalysisContextLoader {
           parseMetadataStatus(metadata.status()),
           metadata.path());
     }
+    builder.frameworkBindingMetadata(bindingMetadata(document));
     builder.handoff(handoff(document));
     return builder.build();
+  }
+
+  private static AnalysisContext.FrameworkBindingMetadata bindingMetadata(ContextDocument document) {
+    FrameworkBindingMetadataDocument envelope = document.frameworkBindingMetadata();
+    List<BindingCandidateDocument> candidates = envelope == null
+        ? nonNull(document.bindingCandidates())
+        : nonNull(envelope.candidates());
+    List<ResolvedBindingDocument> bindings = envelope == null
+        ? nonNull(document.resolvedBindings())
+        : nonNull(envelope.resolvedBindings());
+    List<ProxyTargetDocument> proxyTargets = envelope == null
+        ? nonNull(document.proxyTargets())
+        : nonNull(envelope.proxyTargets());
+    if (envelope == null && candidates.isEmpty() && bindings.isEmpty() && proxyTargets.isEmpty()) {
+      return AnalysisContext.FrameworkBindingMetadata.empty();
+    }
+    String schemaVersion = envelope == null || envelope.schemaVersion() == null
+        ? "0.1.0"
+        : required(envelope.schemaVersion(), "framework binding metadata schemaVersion");
+    if (!"0.1.0".equals(schemaVersion)) {
+      throw new IllegalArgumentException(
+          "unsupported framework binding metadata schemaVersion: " + schemaVersion);
+    }
+    return new AnalysisContext.FrameworkBindingMetadata(
+        schemaVersion,
+        candidates.stream().map(AnalysisContextLoader::bindingCandidate).toList(),
+        bindings.stream().map(AnalysisContextLoader::resolvedBinding).toList(),
+        proxyTargets.stream().map(AnalysisContextLoader::proxyTarget).toList());
+  }
+
+  private static AnalysisContext.BindingCandidateMetadata bindingCandidate(
+      BindingCandidateDocument document) {
+    return new AnalysisContext.BindingCandidateMetadata(
+        required(document.id(), "binding candidate id"),
+        required(document.type(), "binding candidate type"),
+        nonNull(document.contracts()),
+        nonNull(document.qualifiers()),
+        required(document.kind(), "binding candidate kind"),
+        document.declaringType(),
+        document.producerMethod(),
+        document.producerSignature(),
+        nonNull(document.profiles()),
+        nonNull(document.conditions()),
+        document.active(),
+        document.alternative(),
+        document.primary(),
+        document.path(),
+        document.providerFactId());
+  }
+
+  private static AnalysisContext.ResolvedBindingMetadata resolvedBinding(
+      ResolvedBindingDocument document) {
+    return new AnalysisContext.ResolvedBindingMetadata(
+        required(document.id(), "resolved binding id"),
+        required(document.injectionOwner(), "resolved binding injectionOwner"),
+        nullToEmpty(document.injectionMember()),
+        required(document.injectionType(), "resolved binding injectionType"),
+        document.parameterIndex(),
+        nonNull(document.qualifiers()),
+        required(document.candidateId(), "resolved binding candidateId"),
+        document.selected(),
+        document.active(),
+        document.selectionReason(),
+        document.path(),
+        document.providerFactId());
+  }
+
+  private static AnalysisContext.ProxyTargetMetadata proxyTarget(
+      ProxyTargetDocument document) {
+    return new AnalysisContext.ProxyTargetMetadata(
+        required(document.id(), "proxy target id"),
+        document.candidateId(),
+        required(document.targetType(), "proxy target type"),
+        required(document.methodName(), "proxy target methodName"),
+        document.methodDescriptor(),
+        required(document.proxyKind(), "proxy target proxyKind"),
+        document.selected(),
+        document.active(),
+        document.selectionReason(),
+        document.path(),
+        document.providerFactId());
   }
 
   private static void addRoot(
@@ -237,6 +320,11 @@ public final class AnalysisContextLoader {
       Boolean dependencyClasspathRequired,
       String applicationClasses,
       List<FrameworkMetadataDocument> frameworkMetadata,
+      @JsonAlias({"bindingMetadata", "frameworkBindings"})
+      FrameworkBindingMetadataDocument frameworkBindingMetadata,
+      List<BindingCandidateDocument> bindingCandidates,
+      List<ResolvedBindingDocument> resolvedBindings,
+      List<ProxyTargetDocument> proxyTargets,
       BuildDocument build,
       ProvenanceDocument provenance,
       List<String> limitations) {}
@@ -255,6 +343,62 @@ public final class AnalysisContextLoader {
       String fingerprint) {}
 
   private record FrameworkMetadataDocument(String id, String kind, String status, String path) {}
+
+  private record FrameworkBindingMetadataDocument(
+      String schemaVersion,
+      @JsonAlias("beanCandidates")
+      List<BindingCandidateDocument> candidates,
+      @JsonAlias("bindings")
+      List<ResolvedBindingDocument> resolvedBindings,
+      @JsonAlias("targets")
+      List<ProxyTargetDocument> proxyTargets) {}
+
+  private record BindingCandidateDocument(
+      @JsonAlias("candidateId")
+      String id,
+      @JsonAlias({"candidateType", "beanType"}) String type,
+      List<String> contracts,
+      List<String> qualifiers,
+      String kind,
+      String declaringType,
+      String producerMethod,
+      String producerSignature,
+      List<String> profiles,
+      List<String> conditions,
+      Boolean active,
+      boolean alternative,
+      boolean primary,
+      @JsonAlias({"sourcePath", "declaredPath"}) String path,
+      String providerFactId) {}
+
+  private record ResolvedBindingDocument(
+      @JsonAlias("bindingId")
+      String id,
+      String injectionOwner,
+      String injectionMember,
+      String injectionType,
+      Integer parameterIndex,
+      List<String> qualifiers,
+      String candidateId,
+      Boolean selected,
+      Boolean active,
+      String selectionReason,
+      @JsonAlias({"sourcePath", "declaredPath"}) String path,
+      String providerFactId) {}
+
+  private record ProxyTargetDocument(
+      @JsonAlias("proxyTargetId")
+      String id,
+      String candidateId,
+      String targetType,
+      String methodName,
+      String methodDescriptor,
+      String proxyKind,
+      Boolean selected,
+      Boolean active,
+      String selectionReason,
+      @JsonAlias({"sourcePath", "declaredPath"}) String path,
+      String providerFactId) {}
 
   private record BuildDocument(String tool, List<String> command, String artifact, String fingerprint) {}
 
