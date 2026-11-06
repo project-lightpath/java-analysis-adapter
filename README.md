@@ -23,6 +23,9 @@ make test
 make package
 ```
 
+The `Adapter tests` CI lane runs `make adapter-test` and `make spike-validate`
+on pull requests and pushes to `main`.
+
 See [`docs/flpath-5002-java-adapter.md`](docs/flpath-5002-java-adapter.md) for
 the implementation boundary.
 
