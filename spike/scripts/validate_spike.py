@@ -11,16 +11,19 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def load(relative: str) -> dict:
+    """Load one repository-relative JSON contract or observation."""
     with (ROOT / relative).open(encoding="utf-8") as stream:
         return json.load(stream)
 
 
 def require(condition: bool, message: str) -> None:
+    """Abort validation with a stable diagnostic when a contract fails."""
     if not condition:
         raise SystemExit(f"contract validation failed: {message}")
 
 
 def main() -> None:
+    """Validate all checked-in contracts, capability cases, and observations."""
     matrix = load("spike/capability-matrix.json")
     acceptance = load("spike/acceptance-criteria.json")
     candidates = load("spike/candidate-matrix.json")
@@ -282,6 +285,7 @@ def main() -> None:
         require(all(item["evidence"] for item in result["observations"]), f"{result['provider']['name']} observations need evidence")
 
         def contains_host_path(value: object) -> bool:
+            """Recursively reject machine-specific paths in normalized results."""
             if isinstance(value, str):
                 return value.startswith("/") or "/Users/" in value or "/private/var/" in value
             if isinstance(value, list):

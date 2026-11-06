@@ -58,6 +58,7 @@ public final class AnalysisContext {
       boolean generated,
       boolean included,
       boolean required) {
+    /** Validates and normalizes one source root declaration. */
     public SourceRoot {
       if (declaredPath == null || declaredPath.isBlank()) {
         throw new IllegalArgumentException("source root path must not be blank");
@@ -67,6 +68,7 @@ public final class AnalysisContext {
       path = path.toAbsolutePath().normalize();
     }
 
+    /** Creates an included application source root. */
     public static SourceRoot source(String declaredPath, Path path, Scope scope, boolean required) {
       return new SourceRoot(declaredPath, path, scope, false, true, required);
     }
@@ -79,6 +81,7 @@ public final class AnalysisContext {
 
   public record FrameworkMetadata(
       String id, String kind, MetadataStatus status, String declaredPath) {
+    /** Validates one framework metadata declaration. */
     public FrameworkMetadata {
       if (id == null || id.isBlank()) {
         throw new IllegalArgumentException("framework metadata id must not be blank");
@@ -96,6 +99,7 @@ public final class AnalysisContext {
       List<BindingCandidateMetadata> candidates,
       List<ResolvedBindingMetadata> resolvedBindings,
       List<ProxyTargetMetadata> proxyTargets) {
+    /** Validates and freezes the versioned binding metadata payload. */
     public FrameworkBindingMetadata {
       schemaVersion = schemaVersion == null || schemaVersion.isBlank() ? "0.1.0" : schemaVersion;
       if (!"0.1.0".equals(schemaVersion)) {
@@ -107,6 +111,7 @@ public final class AnalysisContext {
       proxyTargets = List.copyOf(proxyTargets == null ? List.of() : proxyTargets);
     }
 
+    /** Creates an empty version-compatible binding metadata payload. */
     public static FrameworkBindingMetadata empty() {
       return new FrameworkBindingMetadata("0.1.0", List.of(), List.of(), List.of());
     }
@@ -129,6 +134,7 @@ public final class AnalysisContext {
       boolean primary,
       String sourcePath,
       String providerFactId) {
+    /** Validates and freezes one binding candidate row. */
     public BindingCandidateMetadata {
       requireValue(candidateId, "binding candidate id");
       requireValue(candidateType, "binding candidate type");
@@ -182,6 +188,7 @@ public final class AnalysisContext {
       String selectionReason,
       String sourcePath,
       String providerFactId) {
+    /** Validates and freezes one resolved binding row. */
     public ResolvedBindingMetadata {
       requireValue(bindingId, "resolved binding id");
       requireValue(injectionOwner, "resolved binding injection owner");
@@ -229,6 +236,7 @@ public final class AnalysisContext {
       String selectionReason,
       String sourcePath,
       String providerFactId) {
+    /** Validates one framework proxy target row. */
     public ProxyTargetMetadata {
       requireValue(proxyTargetId, "proxy target id");
       requireValue(targetType, "proxy target type");
@@ -298,6 +306,7 @@ public final class AnalysisContext {
           0);
     }
 
+    /** Validates provenance fingerprints and freshness policy. */
     public Provenance {
       requireValue(sourceFingerprint, "sourceFingerprint");
       requireValue(generatedSourceFingerprint, "generatedSourceFingerprint");
@@ -309,6 +318,7 @@ public final class AnalysisContext {
       }
     }
 
+    /** Creates deterministic provenance for unit tests. */
     public static Provenance forTesting() {
       return new Provenance(
           "https://example.test/repository.git",
@@ -345,11 +355,13 @@ public final class AnalysisContext {
       String buildArtifact,
       String buildFingerprint,
       List<String> limitations) {
+    /** Freezes build handoff lists for downstream consumers. */
     public Handoff {
       buildCommand = List.copyOf(buildCommand == null ? List.of() : buildCommand);
       limitations = List.copyOf(limitations == null ? List.of() : limitations);
     }
 
+    /** Creates an empty build handoff for programmatic contexts. */
     public static Handoff empty() {
       return new Handoff("", "", "", "", "", List.of(), "", "", List.of());
     }
@@ -373,6 +385,7 @@ public final class AnalysisContext {
   private final Provenance provenance;
   private final Handoff handoff;
 
+  /** Validates and freezes one analysis context from its builder. */
   private AnalysisContext(Builder builder) {
     id = requireValue(builder.id, "context id");
     framework = Objects.requireNonNull(builder.framework, "framework");
@@ -451,6 +464,7 @@ public final class AnalysisContext {
     return generatedSourceRoots;
   }
 
+  /** Returns source roots explicitly included in this analysis. */
   public List<SourceRoot> includedSourceRoots() {
     List<SourceRoot> result = new ArrayList<>();
     result.addAll(sourceRoots.stream()
@@ -500,11 +514,13 @@ public final class AnalysisContext {
     return handoff;
   }
 
+  /** Reports whether a framework metadata artifact was observed. */
   public boolean metadataObserved(String metadataId) {
     return frameworkMetadata.stream()
         .anyMatch(item -> item.id().equals(metadataId) && item.status() == MetadataStatus.OBSERVED);
   }
 
+  /** Looks up one framework metadata declaration by ID. */
   public Optional<FrameworkMetadata> metadata(String metadataId) {
     return frameworkMetadata.stream().filter(item -> item.id().equals(metadataId)).findFirst();
   }
@@ -529,6 +545,7 @@ public final class AnalysisContext {
     return value;
   }
 
+  /** Normalizes a required context path and rejects missing values. */
   private static Path normalize(Path path, String name) {
     return Objects.requireNonNull(path, name).toAbsolutePath().normalize();
   }
@@ -597,17 +614,20 @@ public final class AnalysisContext {
       return this;
     }
 
+    /** Adds an included application source root. */
     public Builder sourceRoot(String declaredPath, Path path, Scope scope, boolean required) {
       sourceRoots.add(SourceRoot.source(declaredPath, path, scope, required));
       return this;
     }
 
+    /** Adds an included or excluded generated source root. */
     public Builder generatedSourceRoot(
         String declaredPath, Path path, Scope scope, boolean included, boolean required) {
       generatedSourceRoots.add(SourceRoot.generated(declaredPath, path, scope, included, required));
       return this;
     }
 
+    /** Replaces the dependency classpath inputs. */
     public Builder dependencyClasspath(List<Path> paths) {
       dependencyClasspath.clear();
       dependencyClasspath.addAll(paths);
@@ -624,6 +644,7 @@ public final class AnalysisContext {
       return this;
     }
 
+    /** Adds one framework metadata declaration. */
     public Builder frameworkMetadata(FrameworkMetadata metadata) {
       frameworkMetadata.add(metadata);
       return this;
@@ -634,6 +655,7 @@ public final class AnalysisContext {
       return frameworkMetadata(new FrameworkMetadata(id, kind, status, declaredPath));
     }
 
+    /** Sets candidate-level CDI/Spring binding evidence. */
     public Builder frameworkBindingMetadata(FrameworkBindingMetadata value) {
       frameworkBindingMetadata = Objects.requireNonNull(value, "framework binding metadata");
       return this;
@@ -649,6 +671,7 @@ public final class AnalysisContext {
       return this;
     }
 
+    /** Validates and creates the immutable analysis context. */
     public AnalysisContext build() {
       return new AnalysisContext(this);
     }

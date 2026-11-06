@@ -27,6 +27,7 @@ public final class JavaAnalysisAdapter {
     this.frameworkModel = frameworkModel;
   }
 
+  /** Builds the provider graph before applying framework enrichment. */
   public SemanticCallFacts analyze(AnalysisContext context) {
     Objects.requireNonNull(context, "analysis context");
     AnalysisGraph graph = baseGraphProvider.analyze(context);
@@ -51,6 +52,7 @@ public final class JavaAnalysisAdapter {
         links(providerFacts, frameworkFacts));
   }
 
+  /** Attaches provider identities only for unique eligible framework targets. */
   private static List<SemanticCallFacts.Fact> attachExactProviderIdentities(
       List<SemanticCallFacts.Fact> frameworkFacts,
       List<SemanticCallFacts.Fact> providerFacts) {
@@ -82,6 +84,7 @@ public final class JavaAnalysisAdapter {
     return List.copyOf(result);
   }
 
+  /** Creates non-replacing enrichment links for exact provider matches. */
   private static List<SemanticCallFacts.Link> links(
       List<SemanticCallFacts.Fact> providerFacts,
       List<SemanticCallFacts.Fact> frameworkFacts) {

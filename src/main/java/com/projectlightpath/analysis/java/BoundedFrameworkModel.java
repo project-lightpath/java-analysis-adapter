@@ -12,8 +12,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Shared bounded source model for the two first-class framework inputs.
@@ -24,14 +22,9 @@ import java.util.regex.Pattern;
  * captured.
  */
 abstract class BoundedFrameworkModel implements FrameworkModel {
-  private static final Set<String> JAVA_LANG_TYPES = Set.of(
-      "Appendable", "AutoCloseable", "Boolean", "Byte", "Character", "CharSequence",
-      "Class", "Cloneable", "Comparable", "Double", "Enum", "Exception", "Float",
-      "Integer", "Iterable", "Long", "Math", "Number", "Object", "Record", "Runnable",
-      "RuntimeException", "Short", "StrictMath", "String", "Thread", "Throwable", "Void");
-
   private final AnalysisContext.Framework framework;
 
+  /** Creates a bounded model for one supported framework. */
   BoundedFrameworkModel(AnalysisContext.Framework framework) {
     this.framework = Objects.requireNonNull(framework, "framework");
   }
@@ -42,6 +35,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   }
 
   @Override
+  /** Enriches the provider graph with framework-owned facts without replacing it. */
   public final List<SemanticCallFacts.Fact> enrich(AnalysisContext context, AnalysisGraph graph) {
     if (context.framework() != framework) {
       throw new IllegalArgumentException(
@@ -61,6 +55,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return List.copyOf(facts);
   }
 
+  /** Resolves bounded REST route candidates and their registration certainty. */
   private List<SemanticCallFacts.Fact> routeFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SourceMetadataScanner.Route> routes = scanner.routes(framework);
@@ -132,6 +127,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Resolves constructor, field, and method injection candidates. */
   private List<SemanticCallFacts.Fact> injectionFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SourceMetadataScanner.BeanCandidate> candidates = scanner.beanCandidates(framework);
@@ -262,6 +258,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Builds one framework injection fact and its candidate evidence. */
   private SemanticCallFacts.Fact injectionFact(
       AnalysisContext context,
       SourceMetadataScanner.InjectionPoint injection,
@@ -351,6 +348,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         providerFactId);
   }
 
+  /** Resolves source and metadata-backed framework proxy targets. */
   private List<SemanticCallFacts.Fact> proxyFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
@@ -362,6 +360,13 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           ? "quarkus-cdi-annotations"
           : "spring-bean-annotations";
       List<AnalysisContext.ProxyTargetMetadata> metadataRows = matchingProxyMetadata(context, scanner, target);
+      boolean exactMetadataTarget = metadataRows.stream()
+          .anyMatch(row -> row.active() == Boolean.TRUE && row.selected() == Boolean.TRUE);
+      if (framework == AnalysisContext.Framework.QUARKUS
+          && !target.normalScoped()
+          && !exactMetadataTarget) {
+        continue;
+      }
       List<AnalysisContext.ProxyTargetMetadata> activeRows = metadataRows.stream()
           .filter(row -> row.active() != Boolean.FALSE)
           .filter(row -> row.selected() != Boolean.FALSE)
@@ -422,6 +427,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Emits Quarkus generated-source relationships when metadata supports them. */
   private List<SemanticCallFacts.Fact> generatedFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     if (framework != AnalysisContext.Framework.QUARKUS) {
@@ -455,6 +461,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Preserves open-world dynamic proxy construction as unresolved evidence. */
   private List<SemanticCallFacts.Fact> dynamicProxyFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
@@ -485,6 +492,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Emits bounded Spring Data repository implementation candidates. */
   private List<SemanticCallFacts.Fact> springRepositoryFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
@@ -519,6 +527,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Emits bounded Spring lifecycle callback candidates. */
   private List<SemanticCallFacts.Fact> springLifecycleFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
@@ -576,6 +585,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return facts;
   }
 
+  /** Filters candidates by requested framework qualifier semantics. */
   private List<SourceMetadataScanner.BeanCandidate> qualifierMatches(
       AnalysisContext context,
       SourceMetadataScanner.Parameter parameter,
@@ -627,6 +637,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .anyMatch(candidateQualifier -> qualifierEquals(requestedQualifier, candidateQualifier));
   }
 
+  /** Combines source and metadata qualifiers for one candidate. */
   private static List<String> candidateQualifiers(
       AnalysisContext context,
       SourceMetadataScanner.BeanCandidate candidate) {
@@ -638,6 +649,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return List.copyOf(result);
   }
 
+  /** Matches a Spring resource name against candidate bean names. */
   private static boolean resourceNameMatches(
       AnalysisContext context,
       String name,
@@ -665,6 +677,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return Set.copyOf(names);
   }
 
+  /** Applies primary or enabled-alternative preference when binding metadata did not select. */
   private List<SourceMetadataScanner.BeanCandidate> bindingPreference(
       AnalysisContext context,
       List<SourceMetadataScanner.BeanCandidate> candidates) {
@@ -686,6 +699,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return alternatives.isEmpty() ? candidates : alternatives;
   }
 
+  /** Identifies qualifiers that exclude an unqualified CDI injection point. */
   private boolean explicitQualifier(String qualifier) {
     String normalized = qualifier.toLowerCase(Locale.ROOT);
     return !normalized.equals("default")
@@ -694,6 +708,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && !normalized.startsWith("beanname:");
   }
 
+  /** Compares normalized qualifier kind and value without suffix matching. */
   private static boolean qualifierEquals(String left, String right) {
     return left != null && left.equals(right);
   }
@@ -720,6 +735,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return Character.toLowerCase(value.charAt(0)) + value.substring(1);
   }
 
+  /** Merges qualifier lists while preserving their first-seen order. */
   private static List<String> mergeQualifiers(List<String> first, List<String> second) {
     LinkedHashSet<String> result = new LinkedHashSet<>();
     if (first != null) {
@@ -740,6 +756,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .toList();
   }
 
+  /** Evaluates bounded positive and negated profile expressions. */
   private static boolean profileMatches(List<String> profiles, String selectedProfile) {
     if (profiles == null || profiles.isEmpty()) {
       return true;
@@ -765,6 +782,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return !positiveProfile || positiveMatch;
   }
 
+  /** Reports whether source or metadata leaves condition selection to runtime. */
   private boolean hasConditions(
       AnalysisContext context,
       SourceMetadataScanner.BeanCandidate candidate) {
@@ -773,6 +791,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             .anyMatch(row -> !row.conditions().isEmpty());
   }
 
+  /** Combines active, inactive, and unknown candidate metadata states. */
   private Boolean candidateMetadataActive(
       AnalysisContext context, SourceMetadataScanner.BeanCandidate candidate) {
     List<AnalysisContext.BindingCandidateMetadata> rows = matchingCandidateMetadata(context, candidate);
@@ -802,6 +821,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return null;
   }
 
+  /** Finds metadata rows belonging to one source candidate. */
   private List<AnalysisContext.BindingCandidateMetadata> matchingCandidateMetadata(
       AnalysisContext context, SourceMetadataScanner.BeanCandidate candidate) {
     return context.bindingCandidates().stream()
@@ -809,6 +829,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .toList();
   }
 
+  /** Matches candidate identity, canonical type, declaring type, and producer method. */
   private static boolean candidateMetadataMatches(
       AnalysisContext.BindingCandidateMetadata row,
       SourceMetadataScanner.BeanCandidate candidate) {
@@ -827,6 +848,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         || row.producerMethod().equals(candidate.producerMethod());
   }
 
+  /** Finds resolved binding rows for one source injection parameter. */
   private List<AnalysisContext.ResolvedBindingMetadata> matchingBindings(
       AnalysisContext context,
       SourceMetadataScanner.InjectionPoint injection,
@@ -850,6 +872,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .toList();
   }
 
+  /** Matches qualified owners exactly and permits simple names only in metadata. */
   private static boolean injectionOwnerMatches(String rowOwner, String owner) {
     return metadataTypeMatches(rowOwner, owner);
   }
@@ -859,15 +882,20 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     if (metadataType == null || sourceType == null) {
       return false;
     }
-    return metadataType.equals(sourceType)
-        || (!metadataType.contains(".") && metadataType.equals(simpleName(sourceType)));
+    String normalizedMetadata = eraseGenericArguments(metadataType).trim();
+    String normalizedSource = eraseGenericArguments(sourceType).trim();
+    return normalizedMetadata.equals(normalizedSource)
+        || (!normalizedMetadata.contains(".")
+            && normalizedMetadata.equals(simpleName(normalizedSource)));
   }
 
+  /** Matches constructor aliases and optional member metadata. */
   private static boolean memberMatches(String rowMember, String member) {
     return rowMember == null || rowMember.isBlank() || rowMember.equals(member)
         || (rowMember.equals("constructor") && member.equals("<init>"));
   }
 
+  /** Finds proxy rows using target, overload descriptor, and candidate identity. */
   private List<AnalysisContext.ProxyTargetMetadata> matchingProxyMetadata(
       AnalysisContext context,
       SourceMetadataScanner scanner,
@@ -888,6 +916,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .toList();
   }
 
+  /** Matches qualified proxy types or unique unqualified source types. */
   private static boolean proxyTargetTypeMatches(
       SourceMetadataScanner scanner,
       String metadataType,
@@ -946,60 +975,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       case "float" -> Optional.of("F");
       case "double" -> Optional.of("D");
       case "" -> Optional.empty();
-      default -> resolveReferenceType(normalized, sourceFile, scanner)
+      default -> scanner.resolveReferenceType(normalized, sourceFile)
           .map(value -> "L" + value.replace('.', '/') + ";");
     };
-  }
-
-  /** Resolves source-package, explicit-import, and java.lang reference types. */
-  private static Optional<String> resolveReferenceType(
-      String type,
-      SourceMetadataScanner.SourceFile sourceFile,
-      SourceMetadataScanner scanner) {
-    List<String> importedTypes = importedTypes(type, sourceFile);
-    if (importedTypes.size() > 1) {
-      return Optional.empty();
-    }
-    if (importedTypes.size() == 1) {
-      return Optional.of(importedTypes.get(0));
-    }
-    if (type.contains(".") && Character.isLowerCase(type.charAt(0))) {
-      return Optional.of(type);
-    }
-    List<String> samePackageTypes = scanner.files().stream()
-        .filter(file -> file.packageName().equals(sourceFile.packageName()))
-        .filter(file -> file.simpleTypeName().equals(type))
-        .map(SourceMetadataScanner.SourceFile::typeName)
-        .distinct()
-        .toList();
-    if (samePackageTypes.size() > 1) {
-      return Optional.empty();
-    }
-    if (samePackageTypes.size() == 1) {
-      return Optional.of(samePackageTypes.get(0));
-    }
-    return JAVA_LANG_TYPES.contains(type) ? Optional.of("java.lang." + type) : Optional.empty();
-  }
-
-  /** Returns explicit imports that can qualify a source type spelling. */
-  private static List<String> importedTypes(
-      String type,
-      SourceMetadataScanner.SourceFile sourceFile) {
-    String simpleType = type;
-    int nestedSeparator = type.indexOf('.');
-    if (nestedSeparator >= 0) {
-      simpleType = type.substring(0, nestedSeparator);
-    }
-    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\s*;")
-        .matcher(sourceFile.source());
-    List<String> result = new ArrayList<>();
-    while (matcher.find()) {
-      String imported = matcher.group(1);
-      if (imported.endsWith("." + simpleType)) {
-        result.add(imported + type.substring(simpleType.length()));
-      }
-    }
-    return result.stream().distinct().toList();
   }
 
   /** Removes nested generic arguments while retaining the erased outer type. */
@@ -1039,6 +1017,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return attributes;
   }
 
+  /** Tests erased injection type, source contracts, and metadata contracts. */
   private boolean matches(
       AnalysisContext context,
       String requestedType,
@@ -1053,6 +1032,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             .anyMatch(requested::equals);
   }
 
+  /** Builds a stable route fact identity from its full source signature and conditions. */
   private String routeFactId(SourceMetadataScanner.Route route) {
     String identity = String.join("\u0000",
         framework.id(),
@@ -1071,6 +1051,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return framework.id() + "-route-" + readable + "-" + digest(identity).substring(0, 16);
   }
 
+  /** Produces the stable digest suffix used by generated fact identities. */
   private static String digest(String value) {
     try {
       byte[] bytes = MessageDigest.getInstance("SHA-256")

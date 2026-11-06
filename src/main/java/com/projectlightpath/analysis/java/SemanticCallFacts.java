@@ -92,7 +92,8 @@ public final class SemanticCallFacts {
       return new Evidence(kind, path, symbols, null, Map.of());
     }
 
-    public static Evidence sootup(String path, int line, String caller, String callee, String basis) {
+  /** Creates provider evidence emitted from a SootUp call edge. */
+  public static Evidence sootup(String path, int line, String caller, String callee, String basis) {
       Map<String, String> attributes = new LinkedHashMap<>();
       attributes.put("basis", basis);
       attributes.put("caller", caller);
@@ -453,6 +454,7 @@ public final class SemanticCallFacts {
     return result;
   }
 
+  /** Validates fact-set ownership and freezes facts for the result. */
   private static List<Fact> immutableFacts(List<Fact> facts, FactSet expectedSet) {
     List<Fact> result = List.copyOf(facts == null ? List.of() : facts);
     if (result.stream().anyMatch(fact -> fact.factSet() != expectedSet)) {
@@ -461,6 +463,7 @@ public final class SemanticCallFacts {
     return result;
   }
 
+  /** Validates that every link references facts in the corresponding sets. */
   private void validateLinks() {
     Map<String, Fact> providers = new LinkedHashMap<>();
     providerFacts.forEach(fact -> providers.put(fact.id(), fact));

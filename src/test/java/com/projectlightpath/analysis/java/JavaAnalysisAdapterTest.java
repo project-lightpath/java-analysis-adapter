@@ -18,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 class JavaAnalysisAdapterTest {
   @TempDir Path temp;
 
+  /** Keeps provider routes separate from unresolved dynamic proxy evidence. */
   @Test
   void quarkusFactsKeepRoutesAndUnresolvedDynamicProxySeparate() throws IOException {
     Path sourceRoot = temp.resolve("quarkus/src/main/java");
@@ -166,6 +167,7 @@ class JavaAnalysisAdapterTest {
     assertEquals("(Ljava/lang/String;)Z", facts.providerFacts().get(0).evidence().get(0).attributes().get("callerSignature"));
   }
 
+  /** Covers Spring MVC, injection, proxy, repository, and lifecycle facts. */
   @Test
   void springFactsCoverMvcInjectionProxyRepositoryAndLifecycle() throws IOException {
     Path sourceRoot = temp.resolve("spring/src/main/java");
@@ -241,6 +243,7 @@ class JavaAnalysisAdapterTest {
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-boot-to-data-seeder")));
   }
 
+  /** Enumerates Quarkus route paths and rejects method-only roots. */
   @Test
   void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {
     Path sourceRoot = temp.resolve("quarkus-routes/src/main/java");
@@ -318,6 +321,7 @@ class JavaAnalysisAdapterTest {
         .anyMatch(item -> item.callee().startsWith("routes.UnregisteredMethodResource#")));
   }
 
+  /** Enumerates Spring mappings, conditions, and collision-safe route IDs. */
   @Test
   void springRoutesEnumeratePathsMethodsConditionsAndAvoidIdCollisions() throws IOException {
     Path sourceRoot = temp.resolve("spring-routes/src/main/java");
@@ -467,6 +471,7 @@ class JavaAnalysisAdapterTest {
         .anyMatch(item -> item.callee().equals("first.RestrictedMethodController#get")));
   }
 
+  /** Keeps source-only routes unresolved when registration metadata is absent. */
   @Test
   void missingRouteMetadataCannotPromoteSourceAnnotationToDefinite() throws IOException {
     Path sourceRoot = temp.resolve("missing/src/main/java");
@@ -489,6 +494,7 @@ class JavaAnalysisAdapterTest {
     assertNotNull(route.selectionCriteria());
   }
 
+  /** Verifies metadata-backed Spring bindings, producers, profiles, proxies, and links. */
   @Test
   void metadataBackedSpringBindingsCoverQualifiersProducersProfilesProxyTargetsAndLinks()
       throws IOException {
@@ -675,6 +681,7 @@ class JavaAnalysisAdapterTest {
     assertTrue(facts.frameworkFacts().stream().noneMatch(item -> item.callee().contains("TestPaymentService")));
   }
 
+  /** Covers CDI field, method, qualifier, producer, and alternative scanning. */
   @Test
   void sourceScannerCoversCdiFieldMethodQualifierProducerAndAlternativeCandidates() throws IOException {
     Path sourceRoot = temp.resolve("cdi-bindings/src/main/java");
@@ -718,6 +725,7 @@ class JavaAnalysisAdapterTest {
     assertTrue(injections.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
   }
 
+  /** Preserves possible ambiguity and unresolved conditional selection. */
   @Test
   void bindingAndProxyAmbiguityStaysPossibleAndUnknownConditionsStayUnresolved() throws IOException {
     Path sourceRoot = temp.resolve("spring-ambiguity/src/main/java");
@@ -817,6 +825,7 @@ class JavaAnalysisAdapterTest {
             && item.callee().equals("demo.BService#run")));
   }
 
+  /** Ensures resolved metadata selection is applied before primary preference. */
   @Test
   void resolvedBindingWinsOverPrimaryAndQualifiedMetadataNamesStayScoped() throws IOException {
     Path sourceRoot = temp.resolve("binding-order/src/main/java");
@@ -876,6 +885,7 @@ class JavaAnalysisAdapterTest {
     assertEquals("second-row", injections.get(0).evidence().get(1).attributes().get("candidateMetadataId"));
   }
 
+  /** Covers Spring bean-name qualifier fallback and resource-name fallback. */
   @Test
   void springQualifierUsesBeanNamesAndResourceFallsBackToTypeOnlyWhenNameIsAbsent()
       throws IOException {
@@ -951,6 +961,7 @@ class JavaAnalysisAdapterTest {
     assertTrue(namedResource.callee().contains("OtherService#<unresolved-bean>"));
   }
 
+  /** Requires active alternative metadata and normal-scope proxy eligibility. */
   @Test
   void quarkusAlternativesNeedActiveMetadataAndDependentBeansNeedExplicitProxyTargets()
       throws IOException {
@@ -978,6 +989,7 @@ class JavaAnalysisAdapterTest {
         package demo;
         @jakarta.enterprise.context.Dependent public class DependentService {
           public void run() { }
+          public void run(String value) { }
         }
         """);
     List<AnalysisContext.BindingCandidateMetadata> candidates = List.of(
@@ -1012,7 +1024,8 @@ class JavaAnalysisAdapterTest {
             true, true, false));
     AnalysisContext.FrameworkBindingMetadata enabled = new AnalysisContext.FrameworkBindingMetadata(
         "0.1.0", enabledCandidates, List.of(), List.of(new AnalysisContext.ProxyTargetMetadata(
-            "dependent-proxy", "demo.DependentService", "run", "cdi-client-proxy", true, true)));
+            "dependent-proxy", null, "demo.DependentService", "run", "()V", "cdi-client-proxy",
+            true, true, "exact target", null, null)));
     SemanticCallFacts enabledFacts = new JavaAnalysisAdapter().analyze(
         context(AnalysisContext.Framework.QUARKUS, sourceRoot, null, frameworkMetadata, enabled),
         AnalysisGraph.empty());
@@ -1021,13 +1034,15 @@ class JavaAnalysisAdapterTest {
         .toList();
     assertEquals(1, enabledBindings.size());
     assertEquals("demo.AlternativeService#<init>", enabledBindings.get(0).callee());
-    SemanticCallFacts.Fact dependentProxy = enabledFacts.frameworkFacts().stream()
+    List<SemanticCallFacts.Fact> dependentProxies = enabledFacts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .filter(item -> item.callee().equals("demo.DependentService#run"))
-        .findFirst().orElseThrow();
-    assertEquals(SemanticCallFacts.Certainty.DEFINITE, dependentProxy.certainty());
+        .toList();
+    assertEquals(1, dependentProxies.size());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, dependentProxies.get(0).certainty());
   }
 
+  /** Resolves proxy descriptors and erased generic producer types. */
   @Test
   void proxyDescriptorsResolveImportsAndNestedGenericProducers() throws IOException {
     Path sourceRoot = temp.resolve("descriptor-generics/src/main/java");
@@ -1049,6 +1064,7 @@ class JavaAnalysisAdapterTest {
         import org.springframework.context.annotation.Configuration;
         @Configuration public class Beans {
           @Bean public Map<String, List<Foo>> values() { return null; }
+          @Bean public Map<Integer, String> other() { return null; }
         }
         """);
     write(sourceRoot, "demo/Consumer.java", """
@@ -1065,7 +1081,25 @@ class JavaAnalysisAdapterTest {
         "clock-proxy", "demo.ClockService", "demo.ClockService", "tick", "(Ldemo/Clock;)V",
         "spring-aop-advisor", true, true, "exact target", null, null);
     AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
-        "0.1.0", List.of(), List.of(), List.of(selected));
+        "0.1.0",
+        List.of(new AnalysisContext.BindingCandidateMetadata(
+            "map-producer",
+            "java.util.Map",
+            List.of(),
+            List.of(),
+            "producer",
+            "demo.Beans",
+            "values",
+            "()Ljava/util/Map;",
+            List.of(),
+            List.of(),
+            true,
+            false,
+            false,
+            "src/main/java/demo/Beans.java",
+            null)),
+        List.of(),
+        List.of(selected));
     List<AnalysisContext.FrameworkMetadata> frameworkMetadata = List.of(
         new AnalysisContext.FrameworkMetadata(
             "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
@@ -1074,10 +1108,17 @@ class JavaAnalysisAdapterTest {
         context(AnalysisContext.Framework.SPRING_BOOT, sourceRoot, null, frameworkMetadata, metadata),
         AnalysisGraph.empty());
 
-    SemanticCallFacts.Fact producerBinding = facts.frameworkFacts().stream()
+    List<SemanticCallFacts.Fact> producerBindings = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, producerBindings.size());
+    assertEquals(Set.of("demo.Beans#values", "demo.Beans#other"),
+        producerBindings.stream().map(SemanticCallFacts.Fact::callee)
+            .collect(java.util.stream.Collectors.toSet()));
+    SemanticCallFacts.Fact producerBinding = producerBindings.stream()
+        .filter(item -> item.callee().equals("demo.Beans#values"))
         .findFirst().orElseThrow();
-    assertEquals("demo.Beans#values", producerBinding.callee());
+    assertEquals("map-producer", producerBinding.evidence().get(1).attributes().get("candidateMetadataId"));
     SemanticCallFacts.Fact proxy = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .filter(item -> item.callee().equals("demo.ClockService#tick"))
@@ -1096,6 +1137,7 @@ class JavaAnalysisAdapterTest {
             && item.callee().equals("demo.ClockService#tick")));
   }
 
+  /** Keeps CDI named beans eligible for unqualified injection after comment stripping. */
   @Test
   void cdiNamedBeansIgnoreCommentsAndRemainCompatibleWithUnqualifiedInjection() throws IOException {
     Path sourceRoot = temp.resolve("cdi-named-comments/src/main/java");
@@ -1129,6 +1171,7 @@ class JavaAnalysisAdapterTest {
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injection.certainty());
   }
 
+  /** Builds the minimal production context used by adapter fixtures. */
   private AnalysisContext context(
       AnalysisContext.Framework framework,
       Path sourceRoot,
@@ -1138,6 +1181,7 @@ class JavaAnalysisAdapterTest {
         AnalysisContext.FrameworkBindingMetadata.empty());
   }
 
+  /** Builds a production context with optional binding metadata. */
   private AnalysisContext context(
       AnalysisContext.Framework framework,
       Path sourceRoot,
@@ -1166,10 +1210,12 @@ class JavaAnalysisAdapterTest {
     return builder.build();
   }
 
+  /** Finds a framework fact by stable ID. */
   private static SemanticCallFacts.Fact fact(List<SemanticCallFacts.Fact> facts, String id) {
     return facts.stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
   }
 
+  /** Finds a route fact by callee identity. */
   private static SemanticCallFacts.Fact route(SemanticCallFacts facts, String callee) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("framework_entrypoint"))
@@ -1178,6 +1224,7 @@ class JavaAnalysisAdapterTest {
         .orElseThrow();
   }
 
+  /** Writes one temporary Java fixture source file. */
   private static void write(Path root, String relative, String source) throws IOException {
     Path path = root.resolve(relative);
     Files.createDirectories(path.getParent());

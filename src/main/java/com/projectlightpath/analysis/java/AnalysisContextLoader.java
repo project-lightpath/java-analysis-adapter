@@ -26,6 +26,7 @@ public final class AnalysisContextLoader {
     return fromDocument(MAPPER.readValue(filename.toFile(), ContextDocument.class));
   }
 
+  /** Converts the validated JSON handoff document into an immutable context. */
   private static AnalysisContext fromDocument(ContextDocument document) {
     require(document, "analysis context");
     if (!SUPPORTED_SCHEMA_VERSION.equals(document.schemaVersion())) {
@@ -91,6 +92,7 @@ public final class AnalysisContextLoader {
     return builder.build();
   }
 
+  /** Converts candidate, resolved-binding, and proxy metadata rows. */
   private static AnalysisContext.FrameworkBindingMetadata bindingMetadata(ContextDocument document) {
     FrameworkBindingMetadataDocument envelope = document.frameworkBindingMetadata();
     List<BindingCandidateDocument> candidates = envelope == null
@@ -119,6 +121,7 @@ public final class AnalysisContextLoader {
         proxyTargets.stream().map(AnalysisContextLoader::proxyTarget).toList());
   }
 
+  /** Converts one candidate metadata document. */
   private static AnalysisContext.BindingCandidateMetadata bindingCandidate(
       BindingCandidateDocument document) {
     return new AnalysisContext.BindingCandidateMetadata(
@@ -139,6 +142,7 @@ public final class AnalysisContextLoader {
         document.providerFactId());
   }
 
+  /** Converts one resolved binding metadata document. */
   private static AnalysisContext.ResolvedBindingMetadata resolvedBinding(
       ResolvedBindingDocument document) {
     return new AnalysisContext.ResolvedBindingMetadata(
@@ -156,6 +160,7 @@ public final class AnalysisContextLoader {
         document.providerFactId());
   }
 
+  /** Converts one proxy target metadata document. */
   private static AnalysisContext.ProxyTargetMetadata proxyTarget(
       ProxyTargetDocument document) {
     return new AnalysisContext.ProxyTargetMetadata(
@@ -172,6 +177,7 @@ public final class AnalysisContextLoader {
         document.providerFactId());
   }
 
+  /** Adds one serialized source root to the context builder. */
   private static void addRoot(
       AnalysisContext.Builder builder,
       ResolvedRootDocument root,
@@ -198,6 +204,7 @@ public final class AnalysisContextLoader {
     }
   }
 
+  /** Converts serialized provenance while preserving freshness fields. */
   private static AnalysisContext.Provenance provenance(ProvenanceDocument value) {
     require(value, "provenance");
     return new AnalysisContext.Provenance(
@@ -217,6 +224,7 @@ public final class AnalysisContextLoader {
         value.freshness() == null ? 0 : value.freshness().maxAgeSeconds());
   }
 
+  /** Converts the serialized build handoff. */
   private static AnalysisContext.Handoff handoff(ContextDocument document) {
     ProfileDocument profile = document.profile();
     BuildDocument build = document.build();
@@ -232,6 +240,7 @@ public final class AnalysisContextLoader {
         nonNull(document.limitations()));
   }
 
+  /** Parses a serialized production or test scope. */
   private static AnalysisContext.Scope parseScope(String value) {
     String normalized = required(value, "analysis scope").toUpperCase(Locale.ROOT);
     return switch (normalized) {
@@ -241,6 +250,7 @@ public final class AnalysisContextLoader {
     };
   }
 
+  /** Parses an observed or not-captured metadata status. */
   private static AnalysisContext.MetadataStatus parseMetadataStatus(String value) {
     String normalized = required(value, "framework metadata status").toUpperCase(Locale.ROOT);
     return switch (normalized) {
@@ -250,6 +260,7 @@ public final class AnalysisContextLoader {
     };
   }
 
+  /** Validates a required existing directory path. */
   private static Path requiredDirectory(String value, String label) {
     Path path = existingPath(value, label);
     if (!Files.isDirectory(path)) {
@@ -258,6 +269,7 @@ public final class AnalysisContextLoader {
     return path;
   }
 
+  /** Validates a required existing filesystem path. */
   private static Path existingPath(String value, String label) {
     Path path = normalizedPath(value, label);
     if (!Files.exists(path)) {
@@ -266,6 +278,7 @@ public final class AnalysisContextLoader {
     return path;
   }
 
+  /** Normalizes a serialized path without requiring it to exist. */
   private static Path normalizedPath(String value, String label) {
     String required = required(value, label);
     Path path = Path.of(required);
@@ -275,6 +288,7 @@ public final class AnalysisContextLoader {
     return path.normalize();
   }
 
+  /** Requires a nonblank serialized scalar. */
   private static String required(String value, String label) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException(label + " must not be blank");
@@ -282,6 +296,7 @@ public final class AnalysisContextLoader {
     return value;
   }
 
+  /** Chooses the first nonblank compatibility field. */
   private static String firstNonBlank(String first, String second) {
     return first != null && !first.isBlank() ? first : second;
   }
@@ -290,10 +305,12 @@ public final class AnalysisContextLoader {
     return value == null ? "" : value;
   }
 
+  /** Converts absent JSON arrays to immutable empty lists. */
   private static <T> List<T> nonNull(List<T> values) {
     return values == null ? List.of() : values;
   }
 
+  /** Rejects absent required JSON objects. */
   private static void require(Object value, String label) {
     if (value == null) {
       throw new IllegalArgumentException(label + " must not be null");

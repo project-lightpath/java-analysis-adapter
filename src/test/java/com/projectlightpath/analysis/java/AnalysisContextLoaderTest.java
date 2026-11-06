@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 class AnalysisContextLoaderTest {
   @TempDir Path temp;
 
+  /** Loads the VPE handoff and preserves build and provenance metadata. */
   @Test
   void loadsVpeContextAndPreservesBuildAndProvenanceHandoff() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
