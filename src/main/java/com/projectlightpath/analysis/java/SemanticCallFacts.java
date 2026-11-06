@@ -312,7 +312,38 @@ public final class SemanticCallFacts {
       String providerVersion,
       int graphMethodCount,
       int graphCallCount,
-      AnalysisContext.Provenance provenance) {}
+      AnalysisContext.Provenance provenance,
+      AnalysisContext.Handoff handoff) {
+    /** Compatibility constructor for callers that predate the JSON handoff metadata. */
+    public RunMetadata(
+        String contextId,
+        String framework,
+        String frameworkVersion,
+        String fixtureId,
+        String selectedProfile,
+        String analysisScope,
+        int javaRelease,
+        String providerName,
+        String providerVersion,
+        int graphMethodCount,
+        int graphCallCount,
+        AnalysisContext.Provenance provenance) {
+      this(
+          contextId,
+          framework,
+          frameworkVersion,
+          fixtureId,
+          selectedProfile,
+          analysisScope,
+          javaRelease,
+          providerName,
+          providerVersion,
+          graphMethodCount,
+          graphCallCount,
+          provenance,
+          AnalysisContext.Handoff.empty());
+    }
+  }
 
   private final String contextId;
   private final AnalysisContext.Framework framework;
@@ -354,7 +385,8 @@ public final class SemanticCallFacts {
         graph.providerVersion(),
         graph.methodCount(),
         graph.callCount(),
-        context.provenance());
+        context.provenance(),
+        context.handoff());
     validateLinks();
   }
 

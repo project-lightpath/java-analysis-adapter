@@ -45,7 +45,7 @@
       "applicationMethods": 42
     },
     "toolchain": {
-      "analyzerRuntimeJavaMajor": 25,
+      "analyzerRuntimeJavaMajor": 21,
       "targetJavaRelease": 21,
       "mavenVersion": "3.9.11",
       "providerVersion": "3.0.1"
@@ -53,8 +53,8 @@
     "fingerprints": {
       "source": "b526d98d4400ab6e1151377240d26734058c6fb76e17b4908bb9c72faffaf716",
       "generatedSource": "5f8b8bca1b81fe439c1ea1e2fbcfcbad38d943a93ea48677eb0c25847f20d4fa",
-      "dependencyClasspath": "a49e9f7618ab187681aea3f59f037a4dee85a66898a378ce3c53039d67b71c36",
-      "gitRevision": "488b928e955fec3c294ee70f21d091b6ae57ae49"
+      "dependencyClasspath": "1ac7c013e0aba7cbf1cecdb93ff697e9c8ba23310fb9d26dcb3f4b1104b89d73",
+      "gitRevision": "5f61fb6a47e5eba5153364f3f7d20508c9a38ad6"
     }
   },
   "coverage": {
@@ -70,13 +70,13 @@
     "analyses": [
       {
         "algorithm": "cha",
-        "graphMillis": 3642,
+        "graphMillis": 5948,
         "methodCount": 68,
         "callCount": 59
       },
       {
         "algorithm": "rta",
-        "graphMillis": 6,
+        "graphMillis": 18,
         "methodCount": 55,
         "callCount": 31
       }
@@ -157,7 +157,7 @@
       "evidence": [
         {
           "basis": "SootUp CHA concrete callback implementation edge",
-          "caller": "com.projectlightpath.fixture.auth.CallbackDispatcher#lambda$0",
+          "caller": "com.projectlightpath.fixture.auth.CallbackDispatcher#lambda$dispatch$0",
           "callee": "com.projectlightpath.fixture.auth.RecordingAuthCallback#onAuthenticated",
           "sourcePath": "src/main/java/com/projectlightpath/fixture/auth/CallbackDispatcher.java",
           "line": 11
@@ -174,7 +174,7 @@
       "evidence": [
         {
           "basis": "SootUp CHA concrete implementor edge",
-          "caller": "com.projectlightpath.fixture.audit.ServiceLoaderBridge#lambda$0",
+          "caller": "com.projectlightpath.fixture.audit.ServiceLoaderBridge#lambda$audit$0",
           "callee": "com.projectlightpath.fixture.audit.DefaultAuditProvider#record",
           "sourcePath": "src/main/java/com/projectlightpath/fixture/audit/ServiceLoaderBridge.java",
           "line": 12

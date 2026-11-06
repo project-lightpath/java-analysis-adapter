@@ -13,6 +13,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <sootup.version>3.0.1</sootup.version>
+    <jackson.version>2.17.2</jackson.version>
     <junit.version>5.11.0</junit.version>
   </properties>
 
@@ -31,6 +32,11 @@
       <groupId>org.soot-oss</groupId>
       <artifactId>sootup.java.core</artifactId>
       <version>${sootup.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

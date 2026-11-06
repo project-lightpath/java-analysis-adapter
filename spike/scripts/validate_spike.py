@@ -255,6 +255,9 @@ def main() -> None:
     require(any(item["caseId"] == "reflection" and item["classification"] == "confirmed_gap" for item in observation["observations"]), "reflection gap must be recorded")
     require(any(item["caseId"] == "direct-call" and item["classification"] == "existing_support" for item in observation["observations"]), "direct-call support must be recorded")
     require(any(item["caseId"] == "framework-entrypoint" and item["classification"] == "confirmed_gap" for item in observation["observations"]), "framework entrypoint gap must be recorded")
+    for case_id in ("callback-lambda", "service-loader"):
+        case = next(item for item in sootup_quarkus["observations"] if item["caseId"] == case_id)
+        require(any("caller" in evidence for evidence in case["evidence"]), f"{case_id} must retain a concrete normalized edge")
 
     analyzer_results = [sootup_quarkus, sootup_fsi, codeql_quarkus, codeql_fsi]
     require((ROOT / "spike/scripts/run_static_analysis.py").is_file(), "static-analysis runner is missing")
