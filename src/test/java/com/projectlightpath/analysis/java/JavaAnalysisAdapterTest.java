@@ -1567,6 +1567,193 @@ class JavaAnalysisAdapterTest {
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injections.get(0).certainty());
   }
 
+  /** Keeps selected resource bindings from being hidden by inactive default-name candidates. */
+  @Test
+  void selectedBindingIgnoresInactiveDefaultResourceNameCandidate() throws IOException {
+    Path sourceRoot = temp.resolve("active-resource-binding/src/main/java");
+    write(sourceRoot, "demo/Contract.java", "package demo; public interface Contract { }\n");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.annotation.Resource;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Resource Contract service;
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Service implements Contract { }
+        """);
+    write(sourceRoot, "demo/PreferredService.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class PreferredService implements Contract { }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "inactive-service", "demo.Service", List.of("demo.Contract"), List.of(), "Component",
+                "demo.Service", null, null, List.of(), List.of(), false, false, false, null, null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "preferred-service", "demo.PreferredService", List.of("demo.Contract"), List.of(), "Component",
+                "demo.PreferredService", null, null, List.of(), List.of(), true, false, false, null, null)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "consumer-service", "demo.Consumer", "service", "Contract", null, List.of(),
+            "preferred-service", true, true, "active selected binding", null, null)),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(1, injections.size());
+    assertEquals("demo.PreferredService#<init>", injections.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, injections.get(0).certainty());
+  }
+
+  /** Scans field and method injection on an unscoped Quarkus REST resource. */
+  @Test
+  void quarkusPathResourcesIncludeFieldAndMethodInjectionPoints() throws IOException {
+    Path sourceRoot = temp.resolve("quarkus-resource-injection/src/main/java");
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/ServiceImpl.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class ServiceImpl implements Service { }
+        """);
+    write(sourceRoot, "demo/Resource.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/resource") public class Resource {
+          @Inject Service service;
+          @Inject void setService(Service service) { this.service = service; }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("demo.Resource"))
+        .toList();
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream().anyMatch(item -> item.caller().contains("#service")));
+    assertTrue(injections.stream().anyMatch(item -> item.caller().contains("#setService")));
+    assertTrue(injections.stream().allMatch(item -> item.callee().equals("demo.ServiceImpl#<init>")));
+  }
+
+  /** Uses proxy descriptors to link only the matching overloaded provider target. */
+  @Test
+  void quarkusProxyFilteringAndProviderLinksUseFullMethodDescriptors() throws IOException {
+    Path sourceRoot = temp.resolve("quarkus-proxy-descriptors/src/main/java");
+    write(sourceRoot, "demo/ProxyService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class ProxyService {
+          public void run() { }
+          public void run(String value) { }
+          public String visible() {
+            return
+                helper();
+          }
+          private void hidden() { }
+          static void staticWork() { }
+          private String helper() { return ""; }
+        }
+        """);
+    CallEdge providerEdge = new CallEdge(
+        new MethodSymbol("demo.Caller", "invoke", "()V"),
+        new MethodSymbol("demo.ProxyService", "run", "(Ljava/lang/String;)V"),
+        12,
+        "src/main/java/demo/Caller.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "interface_dispatch");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context,
+        new AnalysisGraph(List.of(providerEdge), List.of(), Set.of(), "SootUp", "3.0.1", 1, 0));
+    List<SemanticCallFacts.Fact> proxies = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .toList();
+    assertEquals(3, proxies.size());
+    assertFalse(proxies.stream().anyMatch(item -> item.callee().equals("demo.ProxyService#hidden")));
+    assertFalse(proxies.stream().anyMatch(item -> item.callee().equals("demo.ProxyService#staticWork")));
+    assertFalse(proxies.stream().anyMatch(item -> item.callee().equals("demo.ProxyService#helper")));
+
+    List<SemanticCallFacts.Link> links = facts.links().stream()
+        .filter(link -> link.providerFactId().equals(facts.providerFacts().get(0).id()))
+        .toList();
+    assertEquals(1, links.size());
+    SemanticCallFacts.Fact linkedProxy = facts.frameworkFacts().stream()
+        .filter(item -> item.id().equals(links.get(0).frameworkFactId()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("(Ljava/lang/String;)V", linkedProxy.evidence().stream()
+        .map(item -> item.attributes().get("targetDescriptor"))
+        .filter(value -> value != null)
+        .findFirst()
+        .orElseThrow());
+  }
+
+  /** Resolves an explicit contract import before a same-package type with that name. */
+  @Test
+  void explicitContractImportWinsOverSamePackageType() throws IOException {
+    Path sourceRoot = temp.resolve("explicit-contract-import/src/main/java");
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "other/Service.java", "package other; public interface Service { }\n");
+    write(sourceRoot, "demo/ImportedService.java", """
+        package demo;
+        import other.Service;
+        @org.springframework.stereotype.Component public class ImportedService implements Service { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import other.Service;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(1, injections.size());
+    assertEquals("demo.ImportedService#<init>", injections.get(0).callee());
+  }
+
   /** Builds the minimal production context used by adapter fixtures. */
   private AnalysisContext context(
       AnalysisContext.Framework framework,

@@ -152,15 +152,6 @@ final class SourceMetadataScanner {
     if (normalized.isBlank()) {
       return Optional.empty();
     }
-    List<String> samePackage = files().stream()
-        .filter(file -> file.packageName().equals(sourceFile.packageName()))
-        .filter(file -> file.simpleTypeName().equals(normalized))
-        .map(SourceFile::typeName)
-        .distinct()
-        .toList();
-    if (samePackage.size() == 1) {
-      return Optional.of(samePackage.get(0));
-    }
     List<String> importedSourceTypes = importedTypes(normalized, sourceFile).stream()
         .filter(imported -> files().stream().anyMatch(file -> file.typeName().equals(imported)))
         .distinct()
@@ -170,6 +161,15 @@ final class SourceMetadataScanner {
     }
     if (importedSourceTypes.size() > 1) {
       return Optional.empty();
+    }
+    List<String> samePackage = files().stream()
+        .filter(file -> file.packageName().equals(sourceFile.packageName()))
+        .filter(file -> file.simpleTypeName().equals(normalized))
+        .map(SourceFile::typeName)
+        .distinct()
+        .toList();
+    if (samePackage.size() == 1) {
+      return Optional.of(samePackage.get(0));
     }
     return resolveReferenceType(normalized, sourceFile);
   }
@@ -341,7 +341,8 @@ final class SourceMetadataScanner {
         }
       }
 
-      if (component) {
+      if (component || (framework == AnalysisContext.Framework.QUARKUS
+          && hasAnnotation(file.classAnnotationBlock(), "Path"))) {
         Matcher fieldMatcher = INJECT_FIELD.matcher(file.structuralSource());
         while (fieldMatcher.find()) {
           String annotations = fieldMatcher.group(1);
@@ -456,8 +457,7 @@ final class SourceMetadataScanner {
             ? !method.name().equals(file.simpleTypeName())
             : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
                 || SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(classBlock, name));
-        if (selected && (framework != AnalysisContext.Framework.SPRING_BOOT
-            || springProxyMethod(file, method))) {
+        if (selected && springProxyMethod(file, method)) {
           result.add(new ProxyTarget(
               file,
               method,

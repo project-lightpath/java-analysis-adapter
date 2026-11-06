@@ -160,15 +160,17 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             .filter(row -> row.selected() == Boolean.TRUE)
             .toList();
         if (!selectedRows.isEmpty()) {
-          matches = candidates.stream()
+          List<SourceMetadataScanner.BeanCandidate> activeCandidates = candidates.stream()
               .filter(candidate -> profileMatches(candidate.profiles(), context.selectedProfile()))
               .filter(candidate -> candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
+              .toList();
+          matches = activeCandidates.stream()
               .filter(candidate -> selectedRows.stream().anyMatch(row ->
                   row.candidateId().equals(candidate.candidateId())
                       || matchingCandidateMetadata(context, scanner, candidate).stream()
                           .anyMatch(metadata -> row.candidateId().equals(metadata.candidateId()))))
               .filter(candidate -> qualifierMatches(
-                  context, scanner, parameter, injection, candidates).contains(candidate))
+                  context, scanner, parameter, injection, activeCandidates).contains(candidate))
               .toList();
         } else if (!bindingRows.isEmpty()
             && bindingRows.stream().allMatch(row -> row.selected() == Boolean.FALSE
@@ -309,6 +311,10 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       attributes.put("qualifiers", String.join(",", candidate.qualifiers()));
       attributes.put("profiles", String.join(",", candidate.profiles()));
       attributes.put("conditions", String.join(",", candidate.conditions()));
+      if (candidate.producer()) {
+        producerDescriptor(scanner, candidate)
+            .ifPresent(descriptor -> attributes.put("targetDescriptor", descriptor));
+      }
       if (candidateMetadata != null) {
         attributes.put("candidateMetadataId", candidateMetadata.candidateId());
         attributes.put("candidateMetadataActive", String.valueOf(candidateMetadata.active()));
@@ -429,7 +435,11 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
                   ? List.of("@ApplicationScoped", target.method().name())
                   : List.of("@Transactional", owner + "#" + target.method().name()),
                target.method().line(),
-               proxyAttributes(metadataId, target, metadata))),
+               proxyAttributes(
+                   metadataId,
+                   target,
+                   metadata,
+                   methodDescriptor(scanner, target).orElse(null)))),
            exact
                ? null
                : framework == AnalysisContext.Framework.QUARKUS
@@ -1102,12 +1112,16 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   private static Map<String, String> proxyAttributes(
       String metadataId,
       SourceMetadataScanner.ProxyTarget target,
-      AnalysisContext.ProxyTargetMetadata metadata) {
+      AnalysisContext.ProxyTargetMetadata metadata,
+      String targetDescriptor) {
     Map<String, String> attributes = new HashMap<>();
     attributes.put("metadata", metadataId);
     attributes.put("targetType", target.file().typeName());
     attributes.put("method", target.method().name());
     attributes.put("proxyKind", target.proxyKind());
+    if (targetDescriptor != null && !targetDescriptor.isBlank()) {
+      attributes.put("targetDescriptor", targetDescriptor);
+    }
     if (metadata != null) {
       attributes.put("proxyTargetMetadataId", metadata.proxyTargetId());
       attributes.put("proxyTargetSelected", String.valueOf(metadata.selected()));

@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Production integration boundary: SootUp base graph plus project-owned
@@ -73,6 +74,7 @@ public final class JavaAnalysisAdapter {
       List<SemanticCallFacts.Fact> exactTargets = providerFacts.stream()
           .filter(provider -> provider.certainty() != SemanticCallFacts.Certainty.UNRESOLVED)
           .filter(provider -> provider.callee().equals(frameworkFact.callee()))
+          .filter(provider -> targetDescriptorsMatch(frameworkFact, provider))
           .filter(provider -> !provider.relationshipType().equals("reflection"))
           .filter(provider -> !provider.relationshipType().equals("proxy_dispatch")
               || frameworkFact.relationshipType().equals("proxy_dispatch"))
@@ -82,6 +84,27 @@ public final class JavaAnalysisAdapter {
           : frameworkFact);
     }
     return List.copyOf(result);
+  }
+
+  /** Requires matching full target descriptors before creating an implicit provider link. */
+  private static boolean targetDescriptorsMatch(
+      SemanticCallFacts.Fact frameworkFact,
+      SemanticCallFacts.Fact providerFact) {
+    Optional<String> frameworkDescriptor = evidenceAttribute(frameworkFact, "targetDescriptor");
+    Optional<String> providerDescriptor = evidenceAttribute(providerFact, "calleeSignature");
+    return frameworkDescriptor.isPresent()
+        && providerDescriptor.isPresent()
+        && frameworkDescriptor.get().equals(providerDescriptor.get());
+  }
+
+  /** Finds a nonblank identity attribute in framework or provider evidence. */
+  private static Optional<String> evidenceAttribute(
+      SemanticCallFacts.Fact fact,
+      String attribute) {
+    return fact.evidence().stream()
+        .map(evidence -> evidence.attributes().get(attribute))
+        .filter(value -> value != null && !value.isBlank())
+        .findFirst();
   }
 
   /** Creates non-replacing enrichment links for exact provider matches. */
