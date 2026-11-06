@@ -37,7 +37,7 @@ archive_digest() {
 }
 
 archive_layout_valid() {
-  tar -tzf "$1" | grep -F -x -q "apache-maven-$MAVEN_VERSION/bin/mvn"
+  tar -tzf "$1" | grep -F -x "apache-maven-$MAVEN_VERSION/bin/mvn" >/dev/null
 }
 
 archive_verified() {
