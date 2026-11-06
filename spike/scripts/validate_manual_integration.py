@@ -80,7 +80,8 @@ def validate(context: dict[str, Any], facts: dict[str, Any], expected_revision: 
     require(all(fact.get("factSet") == "framework" for fact in framework_facts), "framework fact set was mixed")
     require(all(fact.get("contextId") == context_id for fact in all_facts), "fact context provenance is inconsistent")
     certainty_states = {fact.get("certainty") for fact in all_facts}
-    require({"definite", "possible", "unresolved"}.issubset(certainty_states), "certainty states were not preserved")
+    require({"definite", "possible"}.issubset(certainty_states), "definite/possible certainty states were not preserved")
+    require(certainty_states <= {"definite", "possible", "unresolved"}, "unknown certainty state was emitted")
     for fact in all_facts:
         if fact.get("certainty") == "unresolved":
             require(fact.get("status") == "abstained", f"unresolved fact was emitted: {fact.get('id')}")
@@ -101,12 +102,37 @@ def validate(context: dict[str, Any], facts: dict[str, Any], expected_revision: 
     def has_provider(predicate) -> list[dict[str, Any]]:
         return matching(provider_facts, predicate)
 
+    spring_route_criteria = {
+        "httpMethod": "POST",
+        "pathTemplate": "/api/transfers",
+        "consumes": [],
+        "produces": [],
+        "headers": [],
+        "parameters": [],
+        "activeAnalysisContext": context_id,
+    }
+    spring_route = has_framework(
+        "framework_entrypoint",
+        lambda fact: fact.get("caller") == "external HTTP POST /api/transfers"
+        and fact.get("callee") == "com.redhat.lightwell.controller.TransferController#transfer"
+        and fact.get("selectionCriteria") == spring_route_criteria,
+    )
+    require(spring_route, "exact Spring MVC POST /api/transfers route evidence is missing")
+    require(
+        all(fact.get("providerCallerAbsence") == "not_evidence_of_absence" for fact in spring_route),
+        "route provider-caller absence semantics were not preserved",
+    )
+    require(
+        not has_provider(lambda fact: fact.get("relationshipType") == "framework_entrypoint"),
+        "synthetic provider framework-entrypoint facts were emitted",
+    )
+
     evidence = [
         {
             "caseId": "spring-mvc-entrypoint",
             "status": "observed",
-            "factIds": [fact["id"] for fact in has_framework("framework_entrypoint")],
-            "basis": "Spring MVC route annotations produced framework-owned entrypoint facts.",
+            "factIds": [fact["id"] for fact in spring_route],
+            "basis": "Spring MVC route annotations produced the exact framework-owned POST /api/transfers entrypoint fact.",
         },
         {
             "caseId": "transfer-controller-to-service",
