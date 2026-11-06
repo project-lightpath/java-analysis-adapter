@@ -3,6 +3,7 @@ package com.projectlightpath.analysis.java;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -115,8 +116,8 @@ class JavaAnalysisAdapterTest {
 
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, graph);
 
-    SemanticCallFacts.Fact route = fact(facts.frameworkFacts(), "quarkus-http-to-resource-enriched");
-    assertEquals(SemanticCallFacts.Certainty.DEFINITE, route.certainty());
+    SemanticCallFacts.Fact route = route(facts, "demo.TransferResource#transfer");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, route.certainty());
     assertEquals("registered_route_mapping", route.claim());
     assertEquals("POST", route.selectionCriteria().httpMethod());
     assertEquals("/transfers", route.selectionCriteria().pathTemplate());
@@ -125,6 +126,9 @@ class JavaAnalysisAdapterTest {
     assertEquals(List.of(), route.selectionCriteria().headers());
     assertEquals(List.of(), route.selectionCriteria().parameters());
     assertEquals("quarkus-production", route.selectionCriteria().activeAnalysisContext());
+    assertEquals("false", route.evidence().get(0).attributes().get("registeredRouteMapping"));
+    assertTrue(route.evidence().get(0).symbols().contains("@Path(\"/transfers\")"));
+    assertTrue(route.evidence().get(0).symbols().contains("@POST"));
 
     SemanticCallFacts.Fact injection = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
@@ -152,11 +156,10 @@ class JavaAnalysisAdapterTest {
         && item.certainty() != SemanticCallFacts.Certainty.UNRESOLVED));
     assertTrue(facts.mergePolicy().providerCallerAbsenceDoesNotDisproveRoute());
     assertTrue(facts.mergePolicy().frameworkFactsNeverReplaceProviderFacts());
-    assertEquals(1, facts.links().stream()
-        .filter(link -> link.frameworkFactId().equals("quarkus-http-to-resource-enriched"))
+    assertEquals(0, facts.links().stream()
+        .filter(link -> link.frameworkFactId().equals(route.id()))
         .count());
-    assertTrue(facts.providerFacts().stream().anyMatch(item -> item.relationshipType().equals("framework_entrypoint")
-        && item.certainty() == SemanticCallFacts.Certainty.UNRESOLVED));
+    assertFalse(facts.providerFacts().stream().anyMatch(item -> item.relationshipType().equals("framework_entrypoint")));
     assertEquals("SootUp", facts.runMetadata().providerName());
     assertEquals("3.0.1", facts.runMetadata().providerVersion());
     assertEquals("quarkus-production", facts.runMetadata().contextId());
@@ -222,11 +225,12 @@ class JavaAnalysisAdapterTest {
 
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
 
-    SemanticCallFacts.Fact route = fact(facts.frameworkFacts(), "spring-http-to-transfer-controller-enriched");
-    assertEquals(SemanticCallFacts.Certainty.DEFINITE, route.certainty());
+    SemanticCallFacts.Fact route = route(facts, "demo.TransferController#transfer");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, route.certainty());
     assertEquals("POST", route.selectionCriteria().httpMethod());
     assertEquals("/api/transfers", route.selectionCriteria().pathTemplate());
     assertEquals("registered_route_mapping", route.claim());
+    assertEquals("false", route.evidence().get(0).attributes().get("registeredRouteMapping"));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-controller-to-service-injection")
         && item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-transaction-proxy-to-service")
@@ -235,6 +239,196 @@ class JavaAnalysisAdapterTest {
         || item.relationshipType().equals("dependency_injection")));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-bean-factory-to-security-config")));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-boot-to-data-seeder")));
+  }
+
+  @Test
+  void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {
+    Path sourceRoot = temp.resolve("quarkus-routes/src/main/java");
+    write(sourceRoot, "routes/MultiResource.java", """
+        package routes;
+        import jakarta.ws.rs.Consumes;
+        import jakarta.ws.rs.GET;
+        import jakarta.ws.rs.POST;
+        import jakarta.ws.rs.Path;
+        import jakarta.ws.rs.Produces;
+        import jakarta.ws.rs.core.MediaType;
+        @Path("/api/")
+        @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
+        @Produces(MediaType.APPLICATION_JSON)
+        public class MultiResource {
+          @Path({"/one/", "/two"})
+          @GET public String read() { return "ok"; }
+          @Path("/submit")
+          @POST @Consumes("text/plain") @Produces("application/xml")
+          public String submit(String request) { return request; }
+        }
+        """);
+    write(sourceRoot, "routes/MethodOnlyResource.java", """
+        package routes;
+        import jakarta.ws.rs.GET;
+        import jakarta.ws.rs.Path;
+        @Path("/root") public class MethodOnlyResource {
+          @Path("/only") @GET public String only() { return "ok"; }
+        }
+        """);
+    write(sourceRoot, "routes/UnregisteredMethodResource.java", """
+        package routes;
+        import jakarta.ws.rs.GET;
+        import jakarta.ws.rs.Path;
+        public class UnregisteredMethodResource {
+          @Path("/not-a-root") @GET public String only() { return "not registered"; }
+        }
+        """);
+
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-rest-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED, "src/main/java")));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> routes = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("framework_entrypoint"))
+        .toList();
+
+    assertEquals(4, routes.size());
+    SemanticCallFacts.Fact readOne = routes.stream()
+        .filter(item -> item.callee().equals("routes.MultiResource#read"))
+        .filter(item -> item.selectionCriteria().pathTemplate().equals("/api/one"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("GET", readOne.selectionCriteria().httpMethod());
+    assertEquals(List.of("application/json", "application/xml"), readOne.selectionCriteria().consumes());
+    assertEquals(List.of("application/json"), readOne.selectionCriteria().produces());
+    assertTrue(readOne.evidence().get(0).symbols().contains("@Path({\"/one/\", \"/two\"})"));
+
+    SemanticCallFacts.Fact submit = routes.stream()
+        .filter(item -> item.callee().equals("routes.MultiResource#submit"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("/api/submit", submit.selectionCriteria().pathTemplate());
+    assertEquals(List.of("text/plain"), submit.selectionCriteria().consumes());
+    assertEquals(List.of("application/xml"), submit.selectionCriteria().produces());
+
+    SemanticCallFacts.Fact methodOnly = route(facts, "routes.MethodOnlyResource#only");
+    assertEquals("/root/only", methodOnly.selectionCriteria().pathTemplate());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, methodOnly.certainty());
+    assertFalse(facts.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().startsWith("routes.UnregisteredMethodResource#")));
+  }
+
+  @Test
+  void springRoutesEnumeratePathsMethodsConditionsAndAvoidIdCollisions() throws IOException {
+    Path sourceRoot = temp.resolve("spring-routes/src/main/java");
+    write(sourceRoot, "first/CollisionController.java", """
+        package first;
+        import org.springframework.web.bind.annotation.RequestMapping;
+        import org.springframework.web.bind.annotation.RequestMethod;
+        import org.springframework.web.bind.annotation.RestController;
+        import org.springframework.http.MediaType;
+        @RestController
+        @RequestMapping(path = {"/api", "/v2"}, headers = "X-Api=1", consumes = MediaType.APPLICATION_JSON_VALUE)
+        public class CollisionController {
+          @RequestMapping(path = {"/items/", "/records"}, method = {RequestMethod.GET, RequestMethod.POST},
+              consumes = "text/plain", produces = MediaType.APPLICATION_XML_VALUE,
+              headers = "X-Mode=fast", params = "version=1")
+          public String handle(String request) { return request; }
+        }
+        """);
+    write(sourceRoot, "second/CollisionController.java", """
+        package second;
+        import org.springframework.web.bind.annotation.GetMapping;
+        import org.springframework.web.bind.annotation.RequestMapping;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController @RequestMapping("/api")
+        public class CollisionController {
+          @GetMapping("/items") public String handle() { return "ok"; }
+        }
+        """);
+    write(sourceRoot, "first/RootController.java", """
+        package first;
+        import org.springframework.web.bind.annotation.GetMapping;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController public class RootController {
+          @GetMapping("/root") public String root() { return "ok"; }
+          @GetMapping("/{id:(a|b)}") public String regex(String id) { return id; }
+        }
+        """);
+    write(sourceRoot, "first/AmbiguousController.java", """
+        package first;
+        import org.springframework.web.bind.annotation.GetMapping;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController public class AmbiguousController {
+          @GetMapping("/same") public String first() { return "one"; }
+          @GetMapping("/same") public String second() { return "two"; }
+        }
+        """);
+    write(sourceRoot, "first/ConstantController.java", """
+        package first;
+        import org.springframework.web.bind.annotation.GetMapping;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController public class ConstantController {
+          static final String PATH = "/constant";
+          @GetMapping(PATH) public String constant() { return PATH; }
+          @GetMapping("/" + PATH) public String concatenated() { return PATH; }
+        }
+        """);
+
+    List<AnalysisContext.FrameworkMetadata> metadata = List.of(
+        new AnalysisContext.FrameworkMetadata(
+            "spring-web-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"),
+        new AnalysisContext.FrameworkMetadata(
+            "spring-mvc-handler-mappings", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.NOT_CAPTURED, null));
+    SemanticCallFacts sourceOnly = new JavaAnalysisAdapter().analyze(
+        context(AnalysisContext.Framework.SPRING_BOOT, sourceRoot, null, metadata),
+        AnalysisGraph.empty());
+
+    SemanticCallFacts.Fact detailed = sourceOnly.frameworkFacts().stream()
+        .filter(item -> item.callee().equals("first.CollisionController#handle"))
+        .filter(item -> item.selectionCriteria().pathTemplate().equals("/api/items"))
+        .filter(item -> item.selectionCriteria().httpMethod().equals("GET"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, detailed.certainty());
+    assertEquals(List.of("X-Api=1", "X-Mode=fast"), detailed.selectionCriteria().headers());
+    assertEquals(List.of("version=1"), detailed.selectionCriteria().parameters());
+    assertEquals(List.of("text/plain"), detailed.selectionCriteria().consumes());
+    assertEquals(List.of("application/xml"), detailed.selectionCriteria().produces());
+
+    List<SemanticCallFacts.Fact> collisionRoutes = sourceOnly.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("framework_entrypoint"))
+        .filter(item -> item.callee().endsWith("CollisionController#handle"))
+        .toList();
+    assertEquals(9, collisionRoutes.size());
+    assertNotEquals(
+        collisionRoutes.stream().filter(item -> item.callee().startsWith("first.")).findFirst().orElseThrow().id(),
+        collisionRoutes.stream().filter(item -> item.callee().startsWith("second.")).findFirst().orElseThrow().id());
+
+    SemanticCallFacts.Fact ambiguous = sourceOnly.frameworkFacts().stream()
+        .filter(item -> item.callee().startsWith("first.AmbiguousController#"))
+        .filter(item -> item.selectionCriteria().pathTemplate().equals("/same"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, ambiguous.certainty());
+    assertTrue(ambiguous.limitation().contains("Multiple bounded handlers"));
+
+    List<AnalysisContext.FrameworkMetadata> registeredMetadata = new java.util.ArrayList<>(metadata);
+    registeredMetadata.set(1, new AnalysisContext.FrameworkMetadata(
+        "spring-mvc-handler-mappings", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.OBSERVED, "target/handler-mappings.json"));
+    SemanticCallFacts registered = new JavaAnalysisAdapter().analyze(
+        context(AnalysisContext.Framework.SPRING_BOOT, sourceRoot, null, registeredMetadata),
+        AnalysisGraph.empty());
+    SemanticCallFacts.Fact registeredRoute = route(registered, "first.RootController#root");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, registeredRoute.certainty());
+    assertEquals("true", registeredRoute.evidence().get(0).attributes().get("registrationMetadataObserved"));
+    assertEquals("false", registeredRoute.evidence().get(0).attributes().get("registeredRouteMapping"));
+    assertEquals("/{id:(a|b)}", route(registered, "first.RootController#regex")
+        .selectionCriteria().pathTemplate());
+    assertFalse(registered.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("first.ConstantController#constant")));
+    assertFalse(registered.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("first.ConstantController#concatenated")));
   }
 
   @Test
@@ -287,6 +481,14 @@ class JavaAnalysisAdapterTest {
 
   private static SemanticCallFacts.Fact fact(List<SemanticCallFacts.Fact> facts, String id) {
     return facts.stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
+  }
+
+  private static SemanticCallFacts.Fact route(SemanticCallFacts facts, String callee) {
+    return facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("framework_entrypoint"))
+        .filter(item -> item.callee().equals(callee))
+        .findFirst()
+        .orElseThrow();
   }
 
   private static void write(Path root, String relative, String source) throws IOException {

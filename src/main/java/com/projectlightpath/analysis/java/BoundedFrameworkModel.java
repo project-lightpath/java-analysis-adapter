@@ -1,12 +1,15 @@
 package com.projectlightpath.analysis.java;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Predicate;
 
 /**
  * Shared bounded source model for the two first-class framework inputs.
@@ -53,25 +56,34 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     List<SourceMetadataScanner.Route> routes = scanner.routes(framework);
     Map<String, Integer> mappingCounts = new HashMap<>();
     for (SourceMetadataScanner.Route route : routes) {
-      mappingCounts.merge(route.httpMethod() + " " + route.path(), 1, Integer::sum);
+      mappingCounts.merge(route.httpMethod() + "\u0000" + route.path(), 1, Integer::sum);
     }
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     for (SourceMetadataScanner.Route route : routes) {
       String metadataId = framework == AnalysisContext.Framework.QUARKUS
           ? "quarkus-rest-annotations"
           : "spring-web-annotations";
+      String registrationMetadataId = framework == AnalysisContext.Framework.QUARKUS
+          ? "quarkus-rest-registration"
+          : "spring-mvc-handler-mappings";
       boolean metadataAvailable = context.metadataObserved(metadataId);
-      int mappingCount = mappingCounts.get(route.httpMethod() + " " + route.path());
+      boolean registrationMetadataAvailable = context.metadataObserved(registrationMetadataId);
+      int mappingCount = mappingCounts.get(route.httpMethod() + "\u0000" + route.path());
+      // AnalysisContext currently records registration metadata availability, not
+      // candidate-level handler rows. Presence alone must not promote a route.
       SemanticCallFacts.Certainty certainty = !metadataAvailable
           ? SemanticCallFacts.Certainty.UNRESOLVED
-          : mappingCount == 1
-              ? SemanticCallFacts.Certainty.DEFINITE
-              : SemanticCallFacts.Certainty.POSSIBLE;
+          : SemanticCallFacts.Certainty.POSSIBLE;
       String callee = route.file().typeName() + "#" + route.method().name();
       String id = routeFactId(route);
       String rule = framework == AnalysisContext.Framework.QUARKUS
           ? "quarkus-unique-rest-route"
           : "spring-unique-mvc-route";
+      String limitation = !metadataAvailable
+          ? "Route annotations were found, but the selected source/framework metadata is incomplete."
+          : mappingCount != 1
+              ? "Multiple bounded handlers share this HTTP method and path; runtime selection remains possible."
+              : "Route annotations identify a bounded candidate, but route-level registration metadata is not matched to this candidate.";
       SemanticCallFacts.RouteSelectionCriteria selection = new SemanticCallFacts.RouteSelectionCriteria(
           route.httpMethod(),
           route.path(),
@@ -93,18 +105,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               route.file().displayPath(),
               route.symbols(),
               route.method().line(),
-              Map.of("registeredRouteMapping", "true"))),
-          certainty == SemanticCallFacts.Certainty.UNRESOLVED
-              ? "Route annotations were found, but the selected source/framework metadata is incomplete."
-              : mappingCount == 1
-                  ? null
-                  : "Multiple bounded handlers share this HTTP method and path; runtime selection remains possible.");
+              Map.of(
+                  "annotationMetadata", metadataId,
+                  "registrationMetadata", registrationMetadataId,
+                  "registrationMetadataObserved", Boolean.toString(registrationMetadataAvailable),
+                  "registeredRouteMapping", Boolean.toString(certainty == SemanticCallFacts.Certainty.DEFINITE),
+                  "routeCandidate", "true"))),
+          limitation);
       facts.add(fact.withFrameworkDetails(
           "registered_route_mapping",
           "potential_request_match",
           "not_evidence_of_absence",
           selection,
-          derivedRouteRelationship(route)));
+          null));
     }
     return facts;
   }
@@ -405,24 +418,35 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   }
 
   private String routeFactId(SourceMetadataScanner.Route route) {
-    String simple = route.file().simpleTypeName();
-    if (framework == AnalysisContext.Framework.QUARKUS && simple.equals("TransferResource") && route.method().name().equals("transfer")) {
-      return "quarkus-http-to-resource-enriched";
-    }
-    if (framework == AnalysisContext.Framework.SPRING_BOOT && simple.equals("TransferController") && route.method().name().equals("transfer")) {
-      return "spring-http-to-transfer-controller-enriched";
-    }
-    return framework.id() + "-route-" + slug(simple + "-" + route.method().name() + "-" + route.httpMethod());
+    String identity = String.join("\u0000",
+        framework.id(),
+        route.file().displayPath(),
+        route.file().typeName(),
+        route.method().name(),
+        route.method().parameters().replaceAll("\\s+", " ").trim(),
+        route.httpMethod(),
+        route.path(),
+        String.join(",", route.consumes()),
+        String.join(",", route.produces()),
+        String.join(",", route.headers()),
+        String.join(",", route.parameters()));
+    String readable = slug(route.file().typeName() + "-" + route.method().name()
+        + "-" + route.httpMethod() + "-" + route.path());
+    return framework.id() + "-route-" + readable + "-" + digest(identity).substring(0, 16);
   }
 
-  private String derivedRouteRelationship(SourceMetadataScanner.Route route) {
-    if (route.file().simpleTypeName().equals("TransferResource")) {
-      return "http-to-resource";
+  private static String digest(String value) {
+    try {
+      byte[] bytes = MessageDigest.getInstance("SHA-256")
+          .digest(value.getBytes(StandardCharsets.UTF_8));
+      StringBuilder result = new StringBuilder(bytes.length * 2);
+      for (byte item : bytes) {
+        result.append(String.format(Locale.ROOT, "%02x", item));
+      }
+      return result.toString();
+    } catch (NoSuchAlgorithmException error) {
+      throw new IllegalStateException("SHA-256 is unavailable", error);
     }
-    if (route.file().simpleTypeName().equals("TransferController")) {
-      return "http-to-transfer-controller";
-    }
-    return null;
   }
 
   private String injectionFactId(
@@ -486,6 +510,6 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   }
 
   private static String slug(String value) {
-    return value.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+    return value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
   }
 }

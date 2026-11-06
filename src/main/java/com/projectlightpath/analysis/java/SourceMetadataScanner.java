@@ -5,11 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -30,7 +28,6 @@ final class SourceMetadataScanner {
   private static final Pattern TYPE = Pattern.compile("\\b(?:class|interface|record|enum)\\s+(\\w+)");
   private static final Pattern METHOD = Pattern.compile(
       "(?m)(?:^|[;{}\\n])\\s*(?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)|(?:(?:public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\s+))*(?:<[^>{}]+>\\s+)?[\\w.?$<>\\[\\], ]+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*(?:throws [^{;]+)?(?:\\{|;)");
-  private static final Pattern ANNOTATION = Pattern.compile("@([A-Za-z_][\\w.]*)\\s*(?:\\(([^)]*)\\))?");
   private static final Pattern QUOTED = Pattern.compile("\\\"([^\\\"]*)\\\"");
   private static final Pattern CLASS_FOR_NAME = Pattern.compile("Class\\.forName\\s*\\(\\s*\\\"([^\\\"]+)\\\"");
   private static final Pattern DECLARED_METHOD = Pattern.compile("getDeclaredMethod\\s*\\(\\s*\\\"([^\\\"]+)\\\"");
@@ -71,56 +68,99 @@ final class SourceMetadataScanner {
 
   List<Route> routes(AnalysisContext.Framework framework) {
     List<Route> result = new ArrayList<>();
+    Set<String> seen = new LinkedHashSet<>();
     for (SourceFile file : files()) {
       String classBlock = file.classAnnotationBlock();
-      String classPath = framework == AnalysisContext.Framework.QUARKUS
-          ? firstValue(classBlock, "Path", null)
-          : mappingPath(classBlock, "RequestMapping");
-      boolean controller = framework == AnalysisContext.Framework.QUARKUS
-          ? classPath != null
-          : hasAnnotation(classBlock, "RestController") && classPath != null;
-      if (!controller) {
+      boolean quarkusClassPath = hasAnnotation(classBlock, "Path");
+      boolean springController = hasAnnotation(classBlock, "RestController");
+      if (framework == AnalysisContext.Framework.SPRING_BOOT && !springController) {
         continue;
       }
+      List<String> classPaths = framework == AnalysisContext.Framework.QUARKUS
+          ? pathValues(classBlock, "Path")
+          : mappingPaths(classBlock, "RequestMapping");
+      if (framework == AnalysisContext.Framework.QUARKUS && quarkusClassPath && classPaths.isEmpty()) {
+        continue;
+      }
+      if (framework == AnalysisContext.Framework.SPRING_BOOT
+          && hasAnnotation(classBlock, "RequestMapping")
+          && classPaths.isEmpty()) {
+        continue;
+      }
+      if (classPaths.isEmpty()) {
+        classPaths = List.of("");
+      }
       for (MethodInfo method : methods(file)) {
-        String annotationName = routeAnnotation(method.annotationBlock(), framework);
-        if (annotationName == null) {
-          continue;
+        for (String annotationName : routeAnnotations(method.annotationBlock(), framework)) {
+          List<String> httpMethods = httpMethods(method.annotationBlock(), annotationName);
+          if (httpMethods.isEmpty()) {
+            continue;
+          }
+          boolean methodPathAnnotation = framework == AnalysisContext.Framework.QUARKUS
+              && hasAnnotation(method.annotationBlock(), "Path");
+          List<String> methodPaths = framework == AnalysisContext.Framework.QUARKUS
+              ? pathValues(method.annotationBlock(), "Path")
+              : mappingPaths(method.annotationBlock(), annotationName);
+          if (framework == AnalysisContext.Framework.QUARKUS && methodPathAnnotation && methodPaths.isEmpty()) {
+            continue;
+          }
+          if (framework == AnalysisContext.Framework.SPRING_BOOT
+              && methodPaths.isEmpty()
+              && hasExplicitMappingPath(method.annotationBlock(), annotationName)) {
+            continue;
+          }
+          if (methodPaths.isEmpty()) {
+            methodPaths = List.of("");
+          }
+          if (framework == AnalysisContext.Framework.QUARKUS && !quarkusClassPath) {
+            continue;
+          }
+          List<String> consumes = overrideValues(
+              framework == AnalysisContext.Framework.QUARKUS
+                  ? mediaValues(classBlock, "Consumes", null)
+                  : mediaValues(classBlock, "RequestMapping", "consumes"),
+              framework == AnalysisContext.Framework.QUARKUS
+                  ? mediaValues(method.annotationBlock(), "Consumes", null)
+                  : mediaValues(method.annotationBlock(), annotationName, "consumes"));
+          List<String> produces = overrideValues(
+              framework == AnalysisContext.Framework.QUARKUS
+                  ? mediaValues(classBlock, "Produces", null)
+                  : mediaValues(classBlock, "RequestMapping", "produces"),
+              framework == AnalysisContext.Framework.QUARKUS
+                  ? mediaValues(method.annotationBlock(), "Produces", null)
+                  : mediaValues(method.annotationBlock(), annotationName, "produces"));
+          List<String> headers = framework == AnalysisContext.Framework.SPRING_BOOT
+              ? mergeValues(
+                  values(classBlock, "RequestMapping", "headers"),
+                  values(method.annotationBlock(), annotationName, "headers"))
+              : List.of();
+          List<String> parameters = framework == AnalysisContext.Framework.SPRING_BOOT
+              ? mergeValues(
+                  values(classBlock, "RequestMapping", "params"),
+                  values(method.annotationBlock(), annotationName, "params"))
+              : List.of();
+          for (String httpMethod : httpMethods) {
+            for (String classPath : classPaths) {
+              for (String methodPath : methodPaths) {
+                String path = joinPath(classPath, methodPath);
+                String key = routeKey(file, method, httpMethod, path, consumes, produces, headers, parameters);
+                if (!seen.add(key)) {
+                  continue;
+                }
+                result.add(new Route(
+                    file,
+                    method,
+                    httpMethod,
+                    path,
+                    consumes,
+                    produces,
+                    headers,
+                    parameters,
+                    routeSymbols(classBlock, method.annotationBlock(), framework, annotationName)));
+              }
+            }
+          }
         }
-        String httpMethod = httpMethod(method.annotationBlock(), annotationName);
-        if (httpMethod == null) {
-          continue;
-        }
-        String methodPath = framework == AnalysisContext.Framework.QUARKUS
-            ? firstValue(method.annotationBlock(), annotationName, null)
-            : mappingPath(method.annotationBlock(), annotationName);
-        String path = joinPath(classPath, methodPath);
-        List<String> consumes = mergeValues(
-            framework == AnalysisContext.Framework.QUARKUS
-                ? values(classBlock, "Consumes", null)
-                : values(classBlock, "RequestMapping", "consumes"),
-            framework == AnalysisContext.Framework.QUARKUS
-                ? values(method.annotationBlock(), "Consumes", null)
-                : values(method.annotationBlock(), annotationName, "consumes"));
-        List<String> produces = mergeValues(
-            framework == AnalysisContext.Framework.QUARKUS
-                ? values(classBlock, "Produces", null)
-                : values(classBlock, "RequestMapping", "produces"),
-            framework == AnalysisContext.Framework.QUARKUS
-                ? values(method.annotationBlock(), "Produces", null)
-                : values(method.annotationBlock(), annotationName, "produces"));
-        List<String> headers = values(method.annotationBlock(), annotationName, "headers");
-        List<String> parameters = values(method.annotationBlock(), annotationName, "params");
-        result.add(new Route(
-            file,
-            method,
-            httpMethod,
-            path,
-            consumes,
-            produces,
-            headers,
-            parameters,
-            routeSymbols(classBlock, method.annotationBlock(), framework, annotationName)));
       }
     }
     return List.copyOf(result);
@@ -293,6 +333,7 @@ final class SourceMetadataScanner {
           packageName,
           typeName,
           simpleName,
+          typeMatcher.start(),
           root.generated());
     } catch (IOException error) {
       throw new IllegalStateException("cannot read Java source " + path, error);
@@ -301,20 +342,46 @@ final class SourceMetadataScanner {
 
   static List<MethodInfo> methods(SourceFile file) {
     List<MethodInfo> result = new ArrayList<>();
-    Matcher matcher = METHOD.matcher(file.source());
+    String maskedSource = maskAnnotationArguments(file.source());
+    Matcher matcher = METHOD.matcher(maskedSource);
     while (matcher.find()) {
       int start = matcher.start();
-      int blockStart = Math.max(file.source().lastIndexOf('}', start - 1), file.source().lastIndexOf(';', start - 1));
-      String annotationBlock = file.source().substring(Math.max(0, blockStart + 1), matcher.end());
+      String annotationBlock = file.source().substring(start, matcher.start(1));
+      int annotationOffset = annotationBlock.indexOf('@');
+      int lineOffset = annotationOffset < 0 ? matcher.start(1) : start + annotationOffset;
       result.add(new MethodInfo(
           matcher.group(1),
           matcher.group(2),
           annotationBlock,
           start,
           matcher.end(),
-          file.lineAt(start)));
+          file.lineAt(lineOffset)));
     }
     return List.copyOf(result);
+  }
+
+  private static String maskAnnotationArguments(String source) {
+    char[] masked = source.toCharArray();
+    Matcher matcher = Pattern.compile("@[A-Za-z_][\\w.]*").matcher(source);
+    while (matcher.find()) {
+      int opening = matcher.end();
+      while (opening < source.length() && Character.isWhitespace(source.charAt(opening))) {
+        opening++;
+      }
+      if (opening >= source.length() || source.charAt(opening) != '(') {
+        continue;
+      }
+      int closing = matchingDelimiter(source, opening, '(', ')');
+      if (closing < 0) {
+        continue;
+      }
+      for (int index = opening + 1; index < closing; index++) {
+        if (source.charAt(index) != '\n' && source.charAt(index) != '\r') {
+          masked[index] = ' ';
+        }
+      }
+    }
+    return new String(masked);
   }
 
   private static MethodInfo methodContaining(SourceFile file, int index) {
@@ -324,60 +391,173 @@ final class SourceMetadataScanner {
         .orElseGet(() -> new MethodInfo("<unknown>", "", "", index, index, file.lineAt(index)));
   }
 
-  private static String routeAnnotation(String block, AnalysisContext.Framework framework) {
-    if (framework == AnalysisContext.Framework.QUARKUS) {
-      for (String name : List.of("POST", "GET", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")) {
-        if (hasAnnotation(block, name)) {
-          return name;
-        }
-      }
-      return null;
-    }
-    for (String name : List.of("PostMapping", "GetMapping", "PutMapping", "PatchMapping", "DeleteMapping", "RequestMapping")) {
+  private static List<String> routeAnnotations(String block, AnalysisContext.Framework framework) {
+    List<String> candidates = framework == AnalysisContext.Framework.QUARKUS
+        ? List.of("POST", "GET", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
+        : List.of("PostMapping", "GetMapping", "PutMapping", "PatchMapping", "DeleteMapping", "RequestMapping");
+    List<String> result = new ArrayList<>();
+    for (String name : candidates) {
       if (hasAnnotation(block, name)) {
-        return name;
+        result.add(name);
       }
     }
-    return null;
+    return List.copyOf(result);
   }
 
-  private static String httpMethod(String block, String annotationName) {
-    return switch (annotationName) {
-      case "POST", "PostMapping" -> "POST";
-      case "GET", "GetMapping" -> "GET";
-      case "PUT", "PutMapping" -> "PUT";
-      case "PATCH", "PatchMapping" -> "PATCH";
-      case "DELETE", "DeleteMapping" -> "DELETE";
-      case "HEAD" -> "HEAD";
-      case "OPTIONS" -> "OPTIONS";
+  private static List<String> httpMethods(String block, String annotationName) {
+    List<String> result = new ArrayList<>();
+    switch (annotationName) {
+      case "POST", "PostMapping" -> result.add("POST");
+      case "GET", "GetMapping" -> result.add("GET");
+      case "PUT", "PutMapping" -> result.add("PUT");
+      case "PATCH", "PatchMapping" -> result.add("PATCH");
+      case "DELETE", "DeleteMapping" -> result.add("DELETE");
+      case "HEAD" -> result.add("HEAD");
+      case "OPTIONS" -> result.add("OPTIONS");
       case "RequestMapping" -> {
-        String args = annotationArgs(block, annotationName);
-        Matcher matcher = Pattern.compile("RequestMethod\\.(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)").matcher(args);
-        yield matcher.find() ? matcher.group(1) : null;
+        for (String args : annotationArguments(block, annotationName)) {
+          String selected = attributeValue(args, "method");
+          if (selected == null) {
+            continue;
+          }
+          Matcher matcher = Pattern.compile("RequestMethod\\.(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)")
+              .matcher(selected);
+          while (matcher.find()) {
+            result.add(matcher.group(1));
+          }
+        }
       }
-      default -> null;
-    };
+      default -> {
+        // The bounded route subset intentionally ignores custom HTTP annotations.
+      }
+    }
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  private static List<String> pathValues(String block, String annotation) {
+    List<String> result = new ArrayList<>();
+    for (String args : annotationArguments(block, annotation)) {
+      String selected = selectedValue(args, "value");
+      Optional<List<String>> literals = literalPathValues(selected);
+      if (literals.isEmpty()) {
+        return List.of();
+      }
+      result.addAll(literals.get());
+    }
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  private static List<String> mappingPaths(String block, String annotation) {
+    if (!hasAnnotation(block, annotation)) {
+      return List.of();
+    }
+    LinkedHashSet<String> result = new LinkedHashSet<>();
+    for (String args : annotationArguments(block, annotation)) {
+      for (String attribute : List.of("value", "path")) {
+        String selected = attributeValue(args, attribute);
+        if (selected == null) {
+          continue;
+        }
+        Optional<List<String>> literals = literalPathValues(selected);
+        if (literals.isEmpty()) {
+          return List.of();
+        }
+        result.addAll(literals.get());
+      }
+    }
+    if (!result.isEmpty()) {
+      return List.copyOf(result);
+    }
+    return hasExplicitMappingPath(block, annotation) ? List.of() : List.of("");
+  }
+
+  private static boolean hasExplicitMappingPath(String block, String annotation) {
+    return annotationArguments(block, annotation).stream()
+        .anyMatch(args -> attributeValue(args, "value") != null || attributeValue(args, "path") != null);
+  }
+
+  private static Optional<List<String>> literalPathValues(String expression) {
+    String selected = expression == null ? "" : expression.trim();
+    if (selected.startsWith("{") && selected.endsWith("}")
+        && matchingDelimiter(selected, 0, '{', '}') == selected.length() - 1) {
+      String body = selected.substring(1, selected.length() - 1).trim();
+      if (body.isEmpty()) {
+        return Optional.of(List.of());
+      }
+      List<String> result = new ArrayList<>();
+      for (String item : splitArguments(body)) {
+        Optional<String> literal = literalString(item.trim());
+        if (literal.isEmpty()) {
+          return Optional.empty();
+        }
+        result.add(literal.get());
+      }
+      return Optional.of(List.copyOf(result));
+    }
+    Optional<String> literal = literalString(selected);
+    return literal.map(List::of);
+  }
+
+  private static Optional<String> literalString(String expression) {
+    if (expression.length() < 2 || expression.charAt(0) != '"'
+        || expression.charAt(expression.length() - 1) != '"') {
+      return Optional.empty();
+    }
+    boolean escaped = false;
+    for (int index = 1; index < expression.length() - 1; index++) {
+      char character = expression.charAt(index);
+      if (character == '"' && !escaped) {
+        return Optional.empty();
+      }
+      if (character == '\\' && !escaped) {
+        escaped = true;
+      } else {
+        escaped = false;
+      }
+    }
+    return Optional.of(expression.substring(1, expression.length() - 1));
+  }
+
+  private static String routeKey(
+      SourceFile file,
+      MethodInfo method,
+      String httpMethod,
+      String path,
+      List<String> consumes,
+      List<String> produces,
+      List<String> headers,
+      List<String> parameters) {
+    return String.join("|",
+        file.displayPath(),
+        file.typeName(),
+        method.name(),
+        method.parameters(),
+        httpMethod,
+        path,
+        String.join(",", consumes),
+        String.join(",", produces),
+        String.join(",", headers),
+        String.join(",", parameters));
   }
 
   private static List<String> routeSymbols(
       String classBlock, String methodBlock, AnalysisContext.Framework framework, String annotationName) {
     List<String> symbols = new ArrayList<>();
     if (framework == AnalysisContext.Framework.QUARKUS) {
-      addSymbol(symbols, classBlock, "Path");
-      addSymbol(symbols, classBlock, "Consumes");
-      addSymbol(symbols, classBlock, "Produces");
+      addSymbols(symbols, classBlock, "Path", "Consumes", "Produces");
+      addSymbols(symbols, methodBlock, "Path", "Consumes", "Produces");
     } else {
-      addSymbol(symbols, classBlock, "RequestMapping");
-      addSymbol(symbols, classBlock, "RestController");
+      addSymbols(symbols, classBlock, "RequestMapping", "RestController");
     }
-    addSymbol(symbols, methodBlock, annotationName);
+    addSymbols(symbols, methodBlock, annotationName);
     return List.copyOf(symbols);
   }
 
-  private static void addSymbol(List<String> symbols, String block, String name) {
-    Matcher matcher = Pattern.compile("@" + Pattern.quote(name) + "\\s*(?:\\([^)]*\\))?").matcher(block);
-    if (matcher.find()) {
-      symbols.add(matcher.group());
+  private static void addSymbols(List<String> symbols, String block, String... names) {
+    for (String name : names) {
+      for (AnnotationOccurrence occurrence : annotationOccurrences(block, name)) {
+        symbols.add(occurrence.source());
+      }
     }
   }
 
@@ -438,8 +618,18 @@ final class SourceMetadataScanner {
     List<String> result = new ArrayList<>();
     int depth = 0;
     int start = 0;
+    boolean quoted = false;
+    boolean escaped = false;
     for (int index = 0; index < source.length(); index++) {
       char character = source.charAt(index);
+      if (character == '"' && !escaped) {
+        quoted = !quoted;
+      }
+      if (quoted) {
+        escaped = character == '\\' && !escaped;
+        continue;
+      }
+      escaped = false;
       if (character == '<' || character == '{' || character == '(') {
         depth++;
       } else if (character == '>' || character == '}' || character == ')') {
@@ -454,48 +644,39 @@ final class SourceMetadataScanner {
   }
 
   private static boolean hasAnnotation(String block, String name) {
-    return Pattern.compile("@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(block).find();
-  }
-
-  private static String annotationArgs(String block, String name) {
-    Matcher matcher = Pattern.compile(
-        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\s*(?:\\(([^)]*)\\))?").matcher(block);
-    String value = null;
-    while (matcher.find()) {
-      value = matcher.group(1) == null ? "" : matcher.group(1);
-    }
-    return value;
-  }
-
-  private static String firstValue(String block, String annotation, String attribute) {
-    List<String> values = values(block, annotation, attribute);
-    return values.isEmpty() ? null : values.get(0);
-  }
-
-  private static String mappingPath(String block, String annotation) {
-    String value = firstValue(block, annotation, "value");
-    return value == null ? firstValue(block, annotation, "path") : value;
+    return !annotationOccurrences(block, name).isEmpty();
   }
 
   private static List<String> values(String block, String annotation, String attribute) {
-    String args = annotationArgs(block, annotation);
-    if (args == null || args.isBlank()) {
-      return List.of();
+    LinkedHashSet<String> result = new LinkedHashSet<>();
+    for (String args : annotationArguments(block, annotation)) {
+      String selected = selectedValue(args, attribute);
+      if (selected.isBlank()) {
+        continue;
+      }
+      Matcher quoted = QUOTED.matcher(selected);
+      boolean foundQuoted = false;
+      while (quoted.find()) {
+        foundQuoted = true;
+        result.add(quoted.group(1).trim());
+      }
+      if (foundQuoted) {
+        continue;
+      }
+      for (String raw : splitArguments(selected.replace("{", "").replace("}", ""))) {
+        String normalized = raw.trim();
+        if (!normalized.isBlank()) {
+          result.add(normalized);
+        }
+      }
     }
-    String selected = attribute == null ? args : attributeValue(args, attribute);
-    if (selected == null) {
-      return List.of();
-    }
-    List<String> result = new ArrayList<>();
-    Matcher quoted = QUOTED.matcher(selected);
-    while (quoted.find()) {
-      result.add(quoted.group(1));
-    }
-    if (!result.isEmpty()) {
-      return List.copyOf(result);
-    }
-    for (String raw : selected.replaceAll("[{}]", "").split(",")) {
-      String normalized = mediaType(raw.trim());
+    return List.copyOf(result);
+  }
+
+  private static List<String> mediaValues(String block, String annotation, String attribute) {
+    LinkedHashSet<String> result = new LinkedHashSet<>();
+    for (String value : values(block, annotation, attribute)) {
+      String normalized = mediaType(value);
       if (!normalized.isBlank()) {
         result.add(normalized);
       }
@@ -507,31 +688,107 @@ final class SourceMetadataScanner {
     List<String> parts = splitArguments(args);
     for (String part : parts) {
       int equals = part.indexOf('=');
-      if (equals >= 0 && part.substring(0, equals).trim().equals(attribute)) {
+      if (equals >= 0 && part.substring(0, equals).trim().matches("[A-Za-z_][\\w]*")
+          && part.substring(0, equals).trim().equals(attribute)) {
         return part.substring(equals + 1).trim();
       }
     }
-    return attribute.equals("value") && !args.contains("=") ? args.trim() : null;
+    return attribute.equals("value") && !args.isBlank() && parts.stream().noneMatch(
+        part -> part.indexOf('=') >= 0 && part.substring(0, part.indexOf('=')).trim().matches("[A-Za-z_][\\w]*"))
+        ? args.trim()
+        : null;
+  }
+
+  private static String selectedValue(String args, String attribute) {
+    if (attribute == null) {
+      String explicit = attributeValue(args, "value");
+      return explicit == null ? args.trim() : explicit;
+    }
+    String selected = attributeValue(args, attribute);
+    return selected == null ? "" : selected;
+  }
+
+  private static List<String> annotationArguments(String block, String name) {
+    return annotationOccurrences(block, name).stream().map(AnnotationOccurrence::arguments).toList();
+  }
+
+  private static List<AnnotationOccurrence> annotationOccurrences(String block, String name) {
+    List<AnnotationOccurrence> result = new ArrayList<>();
+    Matcher matcher = Pattern.compile(
+        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(block);
+    while (matcher.find()) {
+      int end = matcher.end();
+      while (end < block.length() && Character.isWhitespace(block.charAt(end))) {
+        end++;
+      }
+      String arguments = "";
+      if (end < block.length() && block.charAt(end) == '(') {
+        int closing = matchingDelimiter(block, end, '(', ')');
+        if (closing < 0) {
+          continue;
+        }
+        arguments = block.substring(end + 1, closing);
+        end = closing + 1;
+      }
+      result.add(new AnnotationOccurrence(
+          arguments,
+          block.substring(matcher.start(), end).replaceAll("\\s+", " ").trim()));
+    }
+    return List.copyOf(result);
+  }
+
+  private static int matchingDelimiter(String source, int opening, char open, char close) {
+    int depth = 0;
+    boolean quoted = false;
+    boolean escaped = false;
+    for (int index = opening; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '"' && !escaped) {
+        quoted = !quoted;
+      }
+      if (quoted) {
+        escaped = character == '\\' && !escaped;
+        continue;
+      }
+      escaped = false;
+      if (character == open) {
+        depth++;
+      } else if (character == close && --depth == 0) {
+        return index;
+      }
+    }
+    return -1;
   }
 
   private static String mediaType(String value) {
     String normalized = value.trim();
-    if (normalized.equals("MediaType.APPLICATION_JSON") || normalized.equals("MediaType.APPLICATION_JSON_VALUE")) {
-      return "application/json";
+    String constant = normalized.substring(normalized.lastIndexOf('.') + 1);
+    if (constant.endsWith("_VALUE")) {
+      constant = constant.substring(0, constant.length() - "_VALUE".length());
     }
-    if (normalized.equals("MediaType.APPLICATION_XML") || normalized.equals("MediaType.APPLICATION_XML_VALUE")) {
-      return "application/xml";
-    }
+    normalized = switch (constant) {
+      case "APPLICATION_JSON" -> "application/json";
+      case "APPLICATION_XML" -> "application/xml";
+      case "APPLICATION_FORM_URLENCODED" -> "application/x-www-form-urlencoded";
+      case "MULTIPART_FORM_DATA" -> "multipart/form-data";
+      case "TEXT_PLAIN" -> "text/plain";
+      case "ALL" -> "*/*";
+      default -> normalized;
+    };
     if (normalized.endsWith("_VALUE")) {
       normalized = normalized.substring(0, normalized.length() - "_VALUE".length());
     }
-    return normalized;
+    return normalized.toLowerCase(Locale.ROOT);
   }
 
   private static List<String> mergeValues(List<String> first, List<String> second) {
     LinkedHashSet<String> result = new LinkedHashSet<>(first);
     result.addAll(second);
     return List.copyOf(result);
+  }
+
+  private static List<String> overrideValues(List<String> inherited, List<String> declared) {
+    return declared.isEmpty() ? inherited : declared;
   }
 
   private static String joinPath(String prefix, String suffix) {
@@ -575,10 +832,10 @@ final class SourceMetadataScanner {
       String packageName,
       String typeName,
       String simpleTypeName,
+      int typeDeclarationStart,
       boolean generated) {
     String classAnnotationBlock() {
-      int type = source.indexOf(simpleTypeName);
-      return type < 0 ? source : source.substring(0, type);
+      return source.substring(0, Math.min(typeDeclarationStart, source.length()));
     }
 
     int lineAt(int offset) {
@@ -621,4 +878,6 @@ final class SourceMetadataScanner {
   record ProxyTarget(SourceFile file, MethodInfo method) {}
 
   record GeneratedMethod(SourceFile file, MethodInfo method) {}
+
+  private record AnnotationOccurrence(String arguments, String source) {}
 }
