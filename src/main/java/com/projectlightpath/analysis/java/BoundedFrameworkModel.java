@@ -446,7 +446,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       }
       List<AnalysisContext.ProxyTargetMetadata> metadataRows = matchingProxyMetadata(context, scanner, target);
       boolean exactMetadataTarget = metadataRows.stream()
-          .anyMatch(row -> row.active() == Boolean.TRUE && row.selected() == Boolean.TRUE);
+          .anyMatch(row -> row.active() == Boolean.TRUE
+              && row.selected() == Boolean.TRUE
+              && !descriptorlessProxyRowAmbiguous(scanner, target, row));
       if (framework == AnalysisContext.Framework.QUARKUS
           && !target.normalScoped()
           && !exactMetadataTarget) {
@@ -462,7 +464,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       }
       boolean exact = activeRows.size() == 1
           && activeRows.get(0).selected() == Boolean.TRUE
-          && activeRows.get(0).active() == Boolean.TRUE;
+          && activeRows.get(0).active() == Boolean.TRUE
+          && !descriptorlessProxyRowAmbiguous(scanner, target, activeRows.get(0));
       boolean profileUnknown = beanOwner != null
           && profileSelectionUnknown(context, scanner, beanOwner);
       SemanticCallFacts.Certainty certainty = profileUnknown || !context.metadataObserved(sourceMetadata)
@@ -513,15 +516,18 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           exact ? "framework_proxy_selected_target" : "potential_framework_proxy_target",
           "not_evidence_of_absence",
           null,
-          unambiguousProxyProviderFactId(activeRows)));
+          unambiguousProxyProviderFactId(activeRows, scanner, target)));
     }
     return facts;
   }
 
   /** Returns a proxy provider identity only when all active matching rows agree. */
   private static String unambiguousProxyProviderFactId(
-      List<AnalysisContext.ProxyTargetMetadata> activeRows) {
+      List<AnalysisContext.ProxyTargetMetadata> activeRows,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.ProxyTarget target) {
     if (activeRows.isEmpty()
+        || activeRows.stream().anyMatch(row -> descriptorlessProxyRowAmbiguous(scanner, target, row))
         || activeRows.stream().anyMatch(row -> row.providerFactId() == null
             || row.providerFactId().isBlank())) {
       return null;
@@ -530,6 +536,15 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .map(AnalysisContext.ProxyTargetMetadata::providerFactId)
         .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     return providerIds.size() == 1 ? providerIds.iterator().next() : null;
+  }
+
+  /** Rejects descriptor-less proxy metadata when the source method is overloaded. */
+  private static boolean descriptorlessProxyRowAmbiguous(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.ProxyTarget target,
+      AnalysisContext.ProxyTargetMetadata row) {
+    return (row.methodDescriptor() == null || row.methodDescriptor().isBlank())
+        && scanner.proxyMethodOverloaded(target);
   }
 
   /** Emits Quarkus generated-source relationships when metadata supports them. */

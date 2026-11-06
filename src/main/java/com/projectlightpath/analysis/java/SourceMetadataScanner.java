@@ -380,7 +380,7 @@ final class SourceMetadataScanner {
             continue;
           }
           List<String> fieldQualifiers = injectionQualifiers(
-              annotations, fieldMatcher.group(3));
+              annotations, fieldMatcher.group(3), framework == AnalysisContext.Framework.QUARKUS);
           Parameter parameter = new Parameter(
               fieldMatcher.group(2), fieldMatcher.group(3), fieldQualifiers);
           result.add(new InjectionPoint(
@@ -399,7 +399,7 @@ final class SourceMetadataScanner {
           List<Parameter> parsedParameters = parameters(method.parameters());
           if (!parsedParameters.isEmpty()) {
             List<String> methodQualifiers = injectionQualifiers(
-                method.annotationBlock(), method.name());
+                method.annotationBlock(), method.name(), framework == AnalysisContext.Framework.QUARKUS);
             result.add(new InjectionPoint(
                 file,
                 parsedParameters,
@@ -626,6 +626,13 @@ final class SourceMetadataScanner {
           returnType(annotationBlock)));
     }
     return List.copyOf(result);
+  }
+
+  /** Reports whether a proxy target method name has multiple declared overloads. */
+  boolean proxyMethodOverloaded(ProxyTarget target) {
+    return methods(target.file()).stream()
+        .filter(method -> method.name().equals(target.method().name()))
+        .count() > 1;
   }
 
   /** Masks annotation arguments so method declaration scanning remains bounded. */
@@ -1024,8 +1031,18 @@ final class SourceMetadataScanner {
   }
 
   /** Adds explicit or implicit resource-name qualifiers for injection points. */
-  private static List<String> injectionQualifiers(String annotations, String defaultName) {
+  private static List<String> injectionQualifiers(
+      String annotations,
+      String defaultName,
+      boolean cdi) {
     List<String> result = new ArrayList<>(qualifierNames(annotations));
+    if (cdi && hasAnnotation(annotations, "Named")) {
+      for (int index = 0; index < result.size(); index++) {
+        if (result.get(index).equals("Named:") && !defaultName.isBlank()) {
+          result.set(index, "Named:" + defaultName);
+        }
+      }
+    }
     if (hasAnnotation(annotations, "Resource")
         && result.stream().noneMatch(value -> value.startsWith("Resource:"))) {
       String name = defaultName;

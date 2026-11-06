@@ -725,6 +725,42 @@ class JavaAnalysisAdapterTest {
     assertTrue(injections.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
   }
 
+  /** Resolves a bare CDI {@code @Named} field against its default field name. */
+  @Test
+  void bareNamedFieldUsesFieldNameForCdiQualifierMatching() throws IOException {
+    Path sourceRoot = temp.resolve("cdi-bare-named/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        import jakarta.inject.Named;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject @Named PaymentService payment;
+        }
+        """);
+    write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { }\n");
+    write(sourceRoot, "demo/NamedPaymentService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @jakarta.enterprise.context.ApplicationScoped @Named("payment")
+        public class NamedPaymentService implements PaymentService { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SemanticCallFacts.Fact injection = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.NamedPaymentService#<init>", injection.callee());
+    assertNotEquals(SemanticCallFacts.Certainty.UNRESOLVED, injection.certainty());
+  }
+
   /** Preserves possible ambiguity and unresolved conditional selection. */
   @Test
   void bindingAndProxyAmbiguityStaysPossibleAndUnknownConditionsStayUnresolved() throws IOException {
@@ -1817,6 +1853,59 @@ class JavaAnalysisAdapterTest {
         .filter(value -> value != null)
         .findFirst()
         .orElseThrow());
+  }
+
+  /** Keeps descriptor-less overloaded proxy metadata possible and unlinked. */
+  @Test
+  void descriptorlessOverloadedProxyMetadataDoesNotEstablishAnExactLink() throws IOException {
+    Path sourceRoot = temp.resolve("descriptorless-overloaded-proxy/src/main/java");
+    write(sourceRoot, "demo/OverloadedProxy.java", """
+        package demo;
+        import org.springframework.transaction.annotation.Transactional;
+        @org.springframework.stereotype.Component public class OverloadedProxy {
+          @Transactional public void run() { }
+          @Transactional public void run(String value) { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(),
+        List.of(),
+        List.of(new AnalysisContext.ProxyTargetMetadata(
+            "overloaded-run",
+            "demo.OverloadedProxy",
+            "demo.OverloadedProxy",
+            "run",
+            null,
+            "spring-aop-advisor",
+            true,
+            true,
+            "selected by method name only",
+            null,
+            "ambiguous-provider")));
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(
+            new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"),
+            new AnalysisContext.FrameworkMetadata(
+                "spring-aop-advisor-metadata", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.OBSERVED,
+                "target/aop.json")),
+        metadata);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> proxies = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .toList();
+    assertEquals(2, proxies.size());
+    assertTrue(proxies.stream().allMatch(item ->
+        item.certainty() == SemanticCallFacts.Certainty.POSSIBLE
+            && item.derivedFrom() == null));
+    assertTrue(facts.links().isEmpty());
   }
 
   /** Avoids choosing a provider identity from conflicting proxy metadata rows. */

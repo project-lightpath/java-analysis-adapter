@@ -57,6 +57,7 @@ fi
 LOCK_ACQUIRED=false
 PENDING_SIGNAL=""
 PENDING_STATUS=0
+EXTRACTING=false
 handle_signal() {
   PENDING_SIGNAL="$1"
   PENDING_STATUS="$2"
@@ -70,7 +71,13 @@ release_lock() {
     LOCK_ACQUIRED=false
   fi
 }
-trap release_lock EXIT
+cleanup() {
+  if [[ "$EXTRACTING" == true ]]; then
+    rm -rf "$INSTALL_ROOT" || true
+  fi
+  release_lock
+}
+trap cleanup EXIT
 trap 'handle_signal INT 130' INT
 trap 'handle_signal TERM 143' TERM
 
@@ -80,7 +87,7 @@ while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     exit "$PENDING_STATUS"
   fi
   if (( LOCK_WAITED >= LOCK_WAIT_SECONDS )); then
-    echo "timed out waiting for Maven cache lock: $LOCK_DIR" >&2
+    echo "timed out waiting for Maven cache lock: $LOCK_DIR; remove it and retry only after confirming no bootstrap process is using it" >&2
     exit 1
   fi
   sleep 1
@@ -128,7 +135,9 @@ if ! archive_verified "$ARCHIVE"; then
   exit 1
 fi
 rm -rf "$INSTALL_ROOT"
+EXTRACTING=true
 tar -xzf "$ARCHIVE" -C "$CACHE_ROOT"
+EXTRACTING=false
 if [[ ! -x "$INSTALL_ROOT/bin/mvn" ]]; then
   rm -rf "$INSTALL_ROOT"
   echo "authenticated Maven $MAVEN_VERSION archive has no executable bin/mvn" >&2
