@@ -143,7 +143,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         SourceMetadataScanner.Parameter parameter = injection.parameters().get(parameterIndex);
         List<SourceMetadataScanner.BeanCandidate> typeMatches = candidates.stream()
             .filter(candidate -> matches(context, scanner, injection.file(), parameter.type(), candidate))
-            .filter(candidate -> profileMatches(candidate.profiles(), context.selectedProfile()))
+            .filter(candidate -> profileMatches(candidate.profiles()) != Boolean.FALSE)
             .toList();
         List<SourceMetadataScanner.BeanCandidate> matches = typeMatches.stream()
             .filter(candidate -> candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
@@ -161,7 +161,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             .toList();
         if (!selectedRows.isEmpty()) {
           List<SourceMetadataScanner.BeanCandidate> activeCandidates = candidates.stream()
-              .filter(candidate -> profileMatches(candidate.profiles(), context.selectedProfile()))
+              .filter(candidate -> profileMatches(candidate.profiles()) != Boolean.FALSE)
               .filter(candidate -> candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
               .toList();
           matches = activeCandidates.stream()
@@ -192,6 +192,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               typeMatches.size(),
               null,
               null,
+              List.of(),
               null,
               scanner,
               "No active bounded bean candidate matches the injection type, qualifiers, profile, or binding metadata."));
@@ -221,11 +222,13 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             && typeMatchCertain(context, scanner, injection.file(), parameter.type(), matches.get(0));
         boolean conditionUnknown = matches.stream().anyMatch(candidate -> hasConditions(context, scanner, candidate))
             && matches.stream().anyMatch(candidate -> candidateMetadataActive(context, scanner, candidate) == null);
+        boolean profileUnknown = matches.stream()
+            .anyMatch(candidate -> profileSelectionUnknown(context, scanner, candidate));
         SemanticCallFacts.Certainty certainty;
-        if (exactBindingSelection || exactCandidateSelection || exactActiveSet) {
-          certainty = SemanticCallFacts.Certainty.DEFINITE;
-        } else if (conditionUnknown || !context.metadataObserved(sourceMetadata)) {
+        if (conditionUnknown || profileUnknown || !context.metadataObserved(sourceMetadata)) {
           certainty = SemanticCallFacts.Certainty.UNRESOLVED;
+        } else if (exactBindingSelection || exactCandidateSelection || exactActiveSet) {
+          certainty = SemanticCallFacts.Certainty.DEFINITE;
         } else {
           certainty = SemanticCallFacts.Certainty.POSSIBLE;
         }
@@ -242,7 +245,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
                   .orElse(null));
           String limitation = certainty == SemanticCallFacts.Certainty.DEFINITE
               ? null
-              : conditionUnknown
+              : conditionUnknown || profileUnknown
                   ? "A profile or conditional bean registration is not resolved in the selected context."
                   : certainty == SemanticCallFacts.Certainty.UNRESOLVED
                       ? "The selected framework source or binding metadata is incomplete."
@@ -259,6 +262,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               typeMatches.size(),
               candidateMetadata,
               binding,
+              bindingRows,
               parameterIndex,
               scanner,
               limitation));
@@ -279,6 +283,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       int candidateCount,
       AnalysisContext.BindingCandidateMetadata candidateMetadata,
       AnalysisContext.ResolvedBindingMetadata binding,
+      List<AnalysisContext.ResolvedBindingMetadata> bindingRows,
       Integer parameterIndex,
       SourceMetadataScanner scanner,
       String limitation) {
@@ -329,17 +334,18 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           attributes.put("selectionReason", binding.selectionReason());
         }
       }
+      List<String> candidateSymbols = new ArrayList<>(scanner.sourceAnnotations(candidate, framework));
+      candidateSymbols.add("candidate=" + candidate.candidateType());
       evidence.add(new SemanticCallFacts.Evidence(
           "bean_candidate",
           candidate.file().displayPath(),
-          List.of("@" + candidate.kind(), "candidate=" + candidate.candidateType()),
+          candidateSymbols,
           null,
           attributes));
     }
-    String providerFactId = binding == null ? null : binding.providerFactId();
-    if (providerFactId == null && candidateMetadata != null) {
-      providerFactId = candidateMetadata.providerFactId();
-    }
+    String providerFactId = candidate == null
+        ? null
+        : unambiguousInjectionProviderFactId(context, scanner, candidate, bindingRows);
     SemanticCallFacts.Fact fact = SemanticCallFacts.Fact.framework(
         id,
         context,
@@ -363,6 +369,43 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         providerFactId);
   }
 
+  /** Returns a provider identity only when all active matching metadata agrees. */
+  private String unambiguousInjectionProviderFactId(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.BeanCandidate candidate,
+      List<AnalysisContext.ResolvedBindingMetadata> bindingRows) {
+    List<AnalysisContext.BindingCandidateMetadata> metadataRows = matchingCandidateMetadata(
+        context, scanner, candidate).stream()
+        .filter(row -> row.active() != Boolean.FALSE)
+        .toList();
+    Set<String> providerIds = new LinkedHashSet<>();
+    int identitySources = 0;
+    for (AnalysisContext.ResolvedBindingMetadata row : bindingRows.stream()
+        .filter(row -> row.active() != Boolean.FALSE)
+        .filter(row -> row.selected() != Boolean.FALSE)
+        .filter(row -> row.candidateId().equals(candidate.candidateId())
+            || metadataRows.stream().anyMatch(metadata ->
+                row.candidateId().equals(metadata.candidateId())))
+        .toList()) {
+      identitySources++;
+      if (row.providerFactId() == null || row.providerFactId().isBlank()) {
+        return null;
+      }
+      providerIds.add(row.providerFactId());
+    }
+    for (AnalysisContext.BindingCandidateMetadata row : metadataRows) {
+      identitySources++;
+      if (row.providerFactId() == null || row.providerFactId().isBlank()) {
+        return null;
+      }
+      providerIds.add(row.providerFactId());
+    }
+    return identitySources > 0 && providerIds.size() == 1
+        ? providerIds.iterator().next()
+        : null;
+  }
+
   /** Resolves source and metadata-backed framework proxy targets. */
   private List<SemanticCallFacts.Fact> proxyFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
@@ -381,7 +424,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           .findFirst()
           .orElse(null);
       if (beanOwner != null
-          && (!profileMatches(beanOwner.profiles(), context.selectedProfile())
+          && (profileMatches(beanOwner.profiles()) == Boolean.FALSE
               || candidateMetadataActive(context, scanner, beanOwner) == Boolean.FALSE)) {
         continue;
       }
@@ -404,10 +447,12 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       boolean exact = activeRows.size() == 1
           && activeRows.get(0).selected() == Boolean.TRUE
           && activeRows.get(0).active() == Boolean.TRUE;
-      SemanticCallFacts.Certainty certainty = exact
-          ? SemanticCallFacts.Certainty.DEFINITE
-          : !context.metadataObserved(sourceMetadata)
-              ? SemanticCallFacts.Certainty.UNRESOLVED
+      boolean profileUnknown = beanOwner != null
+          && profileSelectionUnknown(context, scanner, beanOwner);
+      SemanticCallFacts.Certainty certainty = profileUnknown || !context.metadataObserved(sourceMetadata)
+          ? SemanticCallFacts.Certainty.UNRESOLVED
+          : exact
+              ? SemanticCallFacts.Certainty.DEFINITE
               : SemanticCallFacts.Certainty.POSSIBLE;
       AnalysisContext.ProxyTargetMetadata metadata = activeRows.stream().findFirst().orElse(null);
       String owner = target.file().typeName();
@@ -420,6 +465,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               ? "quarkus-generated-client-proxy"
               : "spring-aop-proxy-target";
       String id = proxyFactId(scanner, target);
+      List<String> proxySymbols = new ArrayList<>(scanner.sourceAnnotations(target, framework));
+      proxySymbols.add(target.method().name());
       facts.add(SemanticCallFacts.Fact.framework(
           id,
           context,
@@ -431,15 +478,13 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           List.of(new SemanticCallFacts.Evidence(
               framework == AnalysisContext.Framework.QUARKUS ? "bean_scope" : "advisor_annotation",
               target.file().displayPath(),
-              framework == AnalysisContext.Framework.QUARKUS
-                  ? List.of("@ApplicationScoped", target.method().name())
-                  : List.of("@Transactional", owner + "#" + target.method().name()),
-               target.method().line(),
-               proxyAttributes(
-                   metadataId,
-                   target,
-                   metadata,
-                   methodDescriptor(scanner, target).orElse(null)))),
+              proxySymbols,
+              target.method().line(),
+              proxyAttributes(
+                  metadataId,
+                  target,
+                  metadata,
+                  methodDescriptor(scanner, target).orElse(null)))),
            exact
                ? null
                : framework == AnalysisContext.Framework.QUARKUS
@@ -452,9 +497,23 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           exact ? "framework_proxy_selected_target" : "potential_framework_proxy_target",
           "not_evidence_of_absence",
           null,
-          metadata == null ? null : metadata.providerFactId()));
+          unambiguousProxyProviderFactId(activeRows)));
     }
     return facts;
+  }
+
+  /** Returns a proxy provider identity only when all active matching rows agree. */
+  private static String unambiguousProxyProviderFactId(
+      List<AnalysisContext.ProxyTargetMetadata> activeRows) {
+    if (activeRows.isEmpty()
+        || activeRows.stream().anyMatch(row -> row.providerFactId() == null
+            || row.providerFactId().isBlank())) {
+      return null;
+    }
+    Set<String> providerIds = activeRows.stream()
+        .map(AnalysisContext.ProxyTargetMetadata::providerFactId)
+        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    return providerIds.size() == 1 ? providerIds.iterator().next() : null;
   }
 
   /** Emits Quarkus generated-source relationships when metadata supports them. */
@@ -730,8 +789,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     }
     List<SourceMetadataScanner.BeanCandidate> alternatives = candidates.stream()
         .filter(candidate -> matchingCandidateMetadata(context, scanner, candidate).stream()
-            .anyMatch(row -> row.alternative() && row.active() == Boolean.TRUE
-                && profileMatches(row.profiles(), context.selectedProfile())))
+            .anyMatch(row -> row.alternative() && row.active() == Boolean.TRUE))
         .toList();
     return alternatives.isEmpty() ? candidates : alternatives;
   }
@@ -793,30 +851,25 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .toList();
   }
 
-  /** Evaluates bounded positive and negated profile expressions. */
-  private static boolean profileMatches(List<String> profiles, String selectedProfile) {
+  /** Returns known source-profile state without treating a Maven profile as a Spring profile. */
+  private static Boolean profileMatches(List<String> profiles) {
     if (profiles == null || profiles.isEmpty()) {
-      return true;
+      return Boolean.TRUE;
     }
-    boolean positiveProfile = false;
-    boolean positiveMatch = false;
-    for (String raw : profiles) {
-      String profile = raw == null ? "" : raw.trim().replaceAll("^\"|\"$", "");
-      if (profile.isBlank()) {
-        continue;
-      }
-      if (profile.startsWith("!")) {
-        if (profile.substring(1).equalsIgnoreCase(selectedProfile)) {
-          return false;
-        }
-      } else {
-        positiveProfile = true;
-        if (profile.equalsIgnoreCase(selectedProfile) || profile.equalsIgnoreCase("default")) {
-          positiveMatch = true;
-        }
-      }
+    return null;
+  }
+
+  /** Reports source-profile uncertainty when evaluated candidate metadata is absent. */
+  private boolean profileSelectionUnknown(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    List<AnalysisContext.BindingCandidateMetadata> rows = matchingCandidateMetadata(
+        context, scanner, candidate);
+    if (!candidate.profiles().isEmpty()) {
+      return rows.isEmpty() || rows.stream().anyMatch(row -> row.active() == null);
     }
-    return !positiveProfile || positiveMatch;
+    return rows.stream().anyMatch(row -> !row.profiles().isEmpty() && row.active() == null);
   }
 
   /** Reports whether source or metadata leaves condition selection to runtime. */
@@ -842,9 +895,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     boolean knownInactive = false;
     boolean unknown = false;
     for (AnalysisContext.BindingCandidateMetadata row : rows) {
-      if (!profileMatches(row.profiles(), context.selectedProfile())) {
-        knownInactive = true;
-      } else if (row.active() == Boolean.FALSE) {
+      if (row.active() == Boolean.FALSE) {
         knownInactive = true;
       } else if (row.active() == Boolean.TRUE) {
         knownActive = true;

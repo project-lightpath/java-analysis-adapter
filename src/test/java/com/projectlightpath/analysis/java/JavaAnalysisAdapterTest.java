@@ -1244,7 +1244,7 @@ class JavaAnalysisAdapterTest {
     assertTrue(unknown.callee().equals("MissingType#<unresolved-bean>"));
   }
 
-  /** Skips proxy facts for profile-excluded and definitively inactive owners. */
+  /** Uses evaluated profile metadata and skips definitively inactive owners. */
   @Test
   void proxyFactsRespectOwnerProfilesAndInactiveCandidateMetadata() throws IOException {
     Path sourceRoot = temp.resolve("proxy-owner-eligibility/src/main/java");
@@ -1301,7 +1301,52 @@ class JavaAnalysisAdapterTest {
         .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .toList();
-    assertTrue(proxies.isEmpty());
+    assertEquals(1, proxies.size());
+    assertEquals("demo.ProfiledService#run", proxies.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, proxies.get(0).certainty());
+  }
+
+  /** Keeps unsupported Spring default and expression profiles unresolved. */
+  @Test
+  void unknownSpringProfileSelectionDoesNotUseMavenProfileAsRuntimeEvidence() throws IOException {
+    Path sourceRoot = temp.resolve("unknown-spring-profiles/src/main/java");
+    write(sourceRoot, "demo/DefaultProfileService.java", """
+        package demo;
+        import org.springframework.context.annotation.Profile;
+        import org.springframework.stereotype.Service;
+        @Service @Profile("default") public class DefaultProfileService { }
+        """);
+    write(sourceRoot, "demo/ExpressionProfileService.java", """
+        package demo;
+        import org.springframework.context.annotation.Profile;
+        import org.springframework.stereotype.Service;
+        @Service @Profile("prod | test") public class ExpressionProfileService { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(
+              DefaultProfileService defaultProfileService,
+              ExpressionProfileService expressionProfileService) { }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream().allMatch(item ->
+        item.certainty() == SemanticCallFacts.Certainty.UNRESOLVED));
   }
 
   /** Keeps ambiguous simple-name metadata possible and makes package/overload IDs unique. */
@@ -1716,6 +1761,107 @@ class JavaAnalysisAdapterTest {
         .filter(value -> value != null)
         .findFirst()
         .orElseThrow());
+  }
+
+  /** Avoids choosing a provider identity from conflicting proxy metadata rows. */
+  @Test
+  void conflictingProxyProviderRowsDoNotCreateAnAmbiguousLink() throws IOException {
+    Path sourceRoot = temp.resolve("conflicting-proxy-providers/src/main/java");
+    write(sourceRoot, "demo/ProxyService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class ProxyService {
+          public void run() { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(),
+        List.of(),
+        List.of(
+            new AnalysisContext.ProxyTargetMetadata(
+                "proxy-a", "demo.ProxyService", "demo.ProxyService", "run", "()V",
+                "cdi-client-proxy", true, true, "first provider", null, "provider-a"),
+            new AnalysisContext.ProxyTargetMetadata(
+                "proxy-b", "demo.ProxyService", "demo.ProxyService", "run", "()V",
+                "cdi-client-proxy", true, true, "second provider", null, "provider-b")));
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    SemanticCallFacts.Fact proxy = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, proxy.certainty());
+    assertEquals(null, proxy.derivedFrom());
+  }
+
+  /** Emits actual source scope and advisor annotations instead of framework defaults. */
+  @Test
+  void frameworkEvidenceUsesActualSourceAnnotations() throws IOException {
+    Path sourceRoot = temp.resolve("source-annotation-evidence/src/main/java");
+    write(sourceRoot, "demo/DependentService.java", """
+        package demo;
+        @jakarta.enterprise.context.Dependent public class DependentService { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject DependentService service;
+        }
+        """);
+    write(sourceRoot, "demo/AsyncService.java", """
+        package demo;
+        @org.springframework.scheduling.annotation.Async
+        @org.springframework.stereotype.Service public class AsyncService {
+          public void run() { }
+        }
+        """);
+
+    AnalysisContext quarkusContext = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    SemanticCallFacts.Fact injection = new JavaAnalysisAdapter()
+        .analyze(quarkusContext, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst()
+        .orElseThrow();
+    SemanticCallFacts.Evidence beanEvidence = injection.evidence().stream()
+        .filter(item -> item.kind().equals("bean_candidate"))
+        .findFirst()
+        .orElseThrow();
+    assertTrue(beanEvidence.symbols().stream().anyMatch(symbol ->
+        symbol.equals("@Dependent") || symbol.endsWith(".Dependent")));
+    assertFalse(beanEvidence.symbols().stream().anyMatch(symbol ->
+        symbol.equals("@ApplicationScoped") || symbol.endsWith(".ApplicationScoped")));
+
+    AnalysisContext springContext = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    SemanticCallFacts.Fact proxy = new JavaAnalysisAdapter()
+        .analyze(springContext, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .findFirst()
+        .orElseThrow();
+    assertTrue(proxy.evidence().get(0).symbols().stream().anyMatch(symbol ->
+        symbol.equals("@Async") || symbol.endsWith(".Async")));
+    assertFalse(proxy.evidence().get(0).symbols().stream().anyMatch(symbol ->
+        symbol.equals("@Transactional") || symbol.endsWith(".Transactional")));
   }
 
   /** Resolves an explicit contract import before a same-package type with that name. */

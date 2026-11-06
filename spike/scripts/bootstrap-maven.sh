@@ -48,6 +48,17 @@ archive_verified() {
 }
 
 mkdir -p "$CACHE_ROOT"
+LOCK_DIR="$CACHE_ROOT/apache-maven-$MAVEN_VERSION.lock"
+while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  sleep 1
+done
+release_lock() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap release_lock EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 if [[ -x "$INSTALL_ROOT/bin/mvn" ]] && archive_verified "$ARCHIVE"; then
   printf '%s\n' "$INSTALL_ROOT/bin/mvn"
   exit 0

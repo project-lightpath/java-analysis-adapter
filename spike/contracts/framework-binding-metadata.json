@@ -14,18 +14,24 @@
         "kind": "Component, producer, repository, or framework-specific bean kind.",
         "declaringType": "Declaring class for a producer or component.",
         "producerMethod": "Producer method name when the candidate is produced by a method.",
+        "producerSignature": "JVM method descriptor used to distinguish overloaded producer methods.",
         "profiles": "Profiles that activate the candidate.",
         "conditions": "Conditional registration evidence and evaluated condition identities.",
         "active": "True or false after the selected profile/condition context is applied; null means unknown.",
         "alternative": "CDI alternative candidate marker.",
         "primary": "Spring primary candidate marker.",
+        "path": "Source path associated with the candidate.",
         "providerFactId": "Exact provider SemanticCallFacts identity when available."
       }
     },
     "resolvedBindings": {
       "required": ["id", "injectionOwner", "injectionType", "candidateId"],
       "fields": {
+        "id": "Stable resolved binding identity.",
+        "injectionOwner": "Type that declares the injection point.",
         "injectionMember": "Constructor, field, or method identity; <init> denotes a constructor.",
+        "injectionType": "Type requested by the injection point.",
+        "candidateId": "Identity of the bound candidate.",
         "parameterIndex": "Zero-based parameter index; null denotes field or an unindexed binding.",
         "qualifiers": "Qualifiers applied by the framework to this injection point.",
         "selected": "True for the framework-selected candidate, false for an excluded row, null when not evaluated.",

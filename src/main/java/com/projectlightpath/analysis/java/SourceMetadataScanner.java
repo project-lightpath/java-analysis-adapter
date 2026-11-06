@@ -1054,7 +1054,13 @@ final class SourceMetadataScanner {
   /** Classifies a source bean using the bounded framework stereotype subset. */
   private static String beanKind(String block, AnalysisContext.Framework framework) {
     if (framework == AnalysisContext.Framework.QUARKUS) {
-      return "ApplicationScoped";
+      for (String annotation : List.of(
+          "ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped",
+          "Dependent", "Singleton", "Named", "Stereotype")) {
+        if (hasAnnotation(block, annotation)) {
+          return annotation;
+        }
+      }
     }
     for (String annotation : List.of(
         "Service", "Component", "Repository", "Configuration", "Controller", "RestController", "Named")) {
@@ -1063,6 +1069,51 @@ final class SourceMetadataScanner {
       }
     }
     return "repository_interface";
+  }
+
+  /** Returns source annotation spellings that establish one candidate's registration. */
+  List<String> sourceAnnotations(BeanCandidate candidate, AnalysisContext.Framework framework) {
+    if (candidate.producer()) {
+      String block = methods(candidate.file()).stream()
+          .filter(method -> method.name().equals(candidate.producerMethod()))
+          .map(MethodInfo::annotationBlock)
+          .findFirst()
+          .orElse("");
+      return annotationSources(block, framework == AnalysisContext.Framework.QUARKUS
+          ? List.of("Produces")
+          : List.of("Bean"));
+    }
+    List<String> names = framework == AnalysisContext.Framework.QUARKUS
+        ? List.of("ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped",
+            "Dependent", "Singleton", "Named", "Stereotype")
+        : List.of("Service", "Component", "Repository", "Configuration", "Controller",
+            "RestController", "Named");
+    return annotationSources(candidate.file().classAnnotationBlock(), names);
+  }
+
+  /** Returns source advisor or scope annotations that establish one proxy target. */
+  List<String> sourceAnnotations(ProxyTarget target, AnalysisContext.Framework framework) {
+    List<String> names = framework == AnalysisContext.Framework.QUARKUS
+        ? List.of("ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped",
+            "Dependent", "Singleton", "Named", "Stereotype")
+        : List.of("Transactional", "Async", "Cacheable", "CachePut", "CacheEvict",
+            "PreAuthorize", "PostAuthorize", "Secured", "RolesAllowed", "Retryable",
+            "CircuitBreaker", "Validated", "TransactionalEventListener");
+    List<String> result = new ArrayList<>(annotationSources(
+        target.file().classAnnotationBlock(), names));
+    result.addAll(annotationSources(target.method().annotationBlock(), names));
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  /** Extracts exact source spellings for a bounded set of annotation names. */
+  private static List<String> annotationSources(String block, List<String> names) {
+    List<String> result = new ArrayList<>();
+    for (String name : names) {
+      result.addAll(annotationOccurrences(block, name).stream()
+          .map(AnnotationOccurrence::source)
+          .toList());
+    }
+    return List.copyOf(new LinkedHashSet<>(result));
   }
 
   /** Parses method or constructor parameters and their qualifier annotations. */
