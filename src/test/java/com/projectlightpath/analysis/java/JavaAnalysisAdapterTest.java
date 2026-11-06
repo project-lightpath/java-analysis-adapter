@@ -1082,22 +1082,39 @@ class JavaAnalysisAdapterTest {
         "spring-aop-advisor", true, true, "exact target", null, null);
     AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
         "0.1.0",
-        List.of(new AnalysisContext.BindingCandidateMetadata(
-            "map-producer",
-            "java.util.Map",
-            List.of(),
-            List.of(),
-            "producer",
-            "demo.Beans",
-            "values",
-            "()Ljava/util/Map;",
-            List.of(),
-            List.of(),
-            true,
-            false,
-            false,
-            "src/main/java/demo/Beans.java",
-            null)),
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "map-producer",
+                "java.util.Map",
+                List.of(),
+                List.of(),
+                "producer",
+                "demo.Beans",
+                "values",
+                "()Ljava/util/Map;",
+                List.of(),
+                List.of(),
+                true,
+                false,
+                false,
+                "src/main/java/demo/Beans.java",
+                null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "other-producer",
+                "java.util.Map",
+                List.of(),
+                List.of(),
+                "producer",
+                "demo.Beans",
+                "other",
+                "()Ljava/util/Map;",
+                List.of(),
+                List.of(),
+                true,
+                false,
+                false,
+                "src/main/java/demo/Beans.java",
+                null)),
         List.of(),
         List.of(selected));
     List<AnalysisContext.FrameworkMetadata> frameworkMetadata = List.of(
@@ -1111,8 +1128,8 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> producerBindings = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
         .toList();
-    assertEquals(2, producerBindings.size());
-    assertEquals(Set.of("demo.Beans#values", "demo.Beans#other"),
+    assertEquals(1, producerBindings.size());
+    assertEquals(Set.of("demo.Beans#values"),
         producerBindings.stream().map(SemanticCallFacts.Fact::callee)
             .collect(java.util.stream.Collectors.toSet()));
     SemanticCallFacts.Fact producerBinding = producerBindings.stream()
@@ -1169,6 +1186,190 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals("demo.NamedService#<init>", injection.callee());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injection.certainty());
+  }
+
+  /** Distinguishes CDI producers from JAX-RS producers and ignores commented declarations. */
+  @Test
+  void quarkusProducerScanningIgnoresJaxRsAnnotationsCommentsAndUnknownTypes() throws IOException {
+    Path sourceRoot = temp.resolve("producer-annotations/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        /* class Ghost { @Inject MissingType ghost; } */
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject public Consumer(Token token) { }
+          // @Inject Token commented;
+          @Inject MissingType missing;
+        }
+        """);
+    write(sourceRoot, "demo/Token.java", "package demo; public class Token { }\n");
+    write(sourceRoot, "demo/TokenProducer.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class TokenProducer {
+          @jakarta.enterprise.inject.Produces Token token() { return null; }
+          @jakarta.enterprise.inject.Produces Token token(String name) { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/MultiResource.java", """
+        package demo;
+        import jakarta.ws.rs.Produces;
+        public class MultiResource {
+          @Produces("text/plain") Token token() { return null; }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    assertEquals(3, injections.size());
+    List<SemanticCallFacts.Fact> tokenBindings = injections.stream()
+        .filter(item -> item.callee().equals("demo.TokenProducer#token"))
+        .toList();
+    assertEquals(2, tokenBindings.size());
+    assertEquals(2, tokenBindings.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertFalse(injections.stream().anyMatch(item -> item.callee().equals("demo.MultiResource#token")));
+    SemanticCallFacts.Fact unknown = injections.stream()
+        .filter(item -> item.caller().contains("#missing"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, unknown.certainty());
+    assertTrue(unknown.callee().equals("MissingType#<unresolved-bean>"));
+  }
+
+  /** Skips proxy facts for profile-excluded and definitively inactive owners. */
+  @Test
+  void proxyFactsRespectOwnerProfilesAndInactiveCandidateMetadata() throws IOException {
+    Path sourceRoot = temp.resolve("proxy-owner-eligibility/src/main/java");
+    write(sourceRoot, "demo/ProfiledService.java", """
+        package demo;
+        import org.springframework.context.annotation.Profile;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service @Profile("test") public class ProfiledService {
+          @Transactional public void run() { }
+        }
+        """);
+    write(sourceRoot, "demo/InactiveService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class InactiveService {
+          @Transactional public void run() { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "profiled", "demo.ProfiledService", List.of(), List.of(), "Service",
+                "demo.ProfiledService", null, null, List.of("test"), List.of(), true, false, false,
+                null, null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "inactive", "demo.InactiveService", List.of(), List.of(), "Service",
+                "demo.InactiveService", null, null, List.of(), List.of(), false, false, false,
+                null, null)),
+        List.of(),
+        List.of(
+            new AnalysisContext.ProxyTargetMetadata(
+                "profiled-proxy", "profiled", "demo.ProfiledService", "run", "()V",
+                "spring-aop-advisor", true, true, "selected", null, null),
+            new AnalysisContext.ProxyTargetMetadata(
+                "inactive-proxy", "inactive", "demo.InactiveService", "run", "()V",
+                "spring-aop-advisor", true, true, "selected", null, null)));
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(
+            new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"),
+            new AnalysisContext.FrameworkMetadata(
+                "spring-aop-advisor-metadata", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.OBSERVED,
+                "target/aop.json")),
+        metadata);
+
+    List<SemanticCallFacts.Fact> proxies = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .toList();
+    assertTrue(proxies.isEmpty());
+  }
+
+  /** Keeps ambiguous simple-name metadata possible and makes package/overload IDs unique. */
+  @Test
+  void ambiguousMetadataDoesNotPromoteBindingsAndFactIdsIncludeFullIdentity() throws IOException {
+    Path sourceRoot = temp.resolve("ambiguous-identities/src/main/java");
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { void run(); }\n");
+    write(sourceRoot, "one/Consumer.java", """
+        package one;
+        import api.Service;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    write(sourceRoot, "two/Consumer.java", "package two; public class Consumer { }\n");
+    write(sourceRoot, "one/ServiceImpl.java", """
+        package one;
+        import api.Service;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class ServiceImpl implements Service {
+          @Transactional public void run() { }
+        }
+        """);
+    write(sourceRoot, "two/ServiceImpl.java", """
+        package two;
+        import api.Service;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class ServiceImpl implements Service {
+          @Transactional public void run() { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(new AnalysisContext.BindingCandidateMetadata(
+            "ambiguous-row", "ServiceImpl", List.of("Service"), List.of(), "Service",
+            null, null, null, List.of(), List.of(), true, false, false, null, null)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "ambiguous-binding", "Consumer", "Service", 0, "ambiguous-row")),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(
+            new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"),
+            new AnalysisContext.FrameworkMetadata(
+                "spring-aop-advisor-metadata", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.OBSERVED,
+                "target/aop.json")),
+        metadata);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
+    assertEquals(2, injections.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    List<SemanticCallFacts.Fact> proxies = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .toList();
+    assertEquals(2, proxies.size());
+    assertEquals(2, proxies.stream().map(SemanticCallFacts.Fact::id).distinct().count());
   }
 
   /** Builds the minimal production context used by adapter fixtures. */

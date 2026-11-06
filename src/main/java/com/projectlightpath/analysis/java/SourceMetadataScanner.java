@@ -61,6 +61,8 @@ final class SourceMetadataScanner {
       "Class", "Cloneable", "Comparable", "Double", "Enum", "Exception", "Float",
       "Integer", "Iterable", "Long", "Math", "Number", "Object", "Record", "Runnable",
       "RuntimeException", "Short", "StrictMath", "String", "Thread", "Throwable", "Void");
+  private static final Set<String> CDI_PRODUCER_ANNOTATIONS = Set.of(
+      "jakarta.enterprise.inject.Produces", "javax.enterprise.inject.Produces");
   private static final Set<String> SPRING_PROXY_ANNOTATIONS = Set.of(
       "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
       "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
@@ -139,7 +141,7 @@ final class SourceMetadataScanner {
       simpleType = type.substring(0, nestedSeparator);
     }
     Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\s*;")
-        .matcher(sourceFile.source());
+        .matcher(sourceFile.structuralSource());
     List<String> result = new ArrayList<>();
     while (matcher.find()) {
       String imported = matcher.group(1);
@@ -267,7 +269,7 @@ final class SourceMetadataScanner {
               + "(?:public|protected|private)?\\s*"
               + Pattern.quote(file.simpleTypeName())
               + "\\s*\\(([^)]*)\\)\\s*\\{");
-      String maskedSource = maskAnnotationArguments(file.source());
+      String maskedSource = maskAnnotationArguments(file.structuralSource());
       Matcher matcher = constructor.matcher(maskedSource);
       List<ConstructorInfo> constructors = new ArrayList<>();
       while (matcher.find()) {
@@ -299,7 +301,7 @@ final class SourceMetadataScanner {
       }
 
       if (component) {
-        Matcher fieldMatcher = INJECT_FIELD.matcher(file.source());
+        Matcher fieldMatcher = INJECT_FIELD.matcher(file.structuralSource());
         while (fieldMatcher.find()) {
           String annotations = fieldMatcher.group(1);
           if (!hasInjectionAnnotation(annotations)) {
@@ -367,14 +369,14 @@ final class SourceMetadataScanner {
 
       for (MethodInfo method : methods(file)) {
         boolean producer = framework == AnalysisContext.Framework.QUARKUS
-            ? method.hasAnnotation("Produces")
+            ? cdiProducerAnnotation(file, method.annotationBlock())
             : method.hasAnnotation("Bean");
         if (!producer || method.returnType().isBlank()) {
           continue;
         }
-        String candidateId = file.typeName() + "#" + method.name();
-        String producerType = resolveReferenceType(method.returnType(), file)
-            .orElseGet(() -> qualify(method.returnType(), file.packageName()));
+        String candidateId = file.typeName() + "#" + method.name() + "("
+            + method.parameters().replaceAll("\\s+", " ").trim() + ")";
+        String producerType = resolveReferenceType(method.returnType(), file).orElse("");
         result.add(new BeanCandidate(
             file,
             Set.of(),
@@ -505,9 +507,10 @@ final class SourceMetadataScanner {
   private SourceFile read(Path path, AnalysisContext.SourceRoot root) {
     try {
       String source = Files.readString(path);
-      Matcher packageMatcher = PACKAGE.matcher(source);
+      String structuralSource = stripComments(source);
+      Matcher packageMatcher = PACKAGE.matcher(structuralSource);
       String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
-      Matcher typeMatcher = TYPE.matcher(source);
+      Matcher typeMatcher = TYPE.matcher(structuralSource);
       if (!typeMatcher.find()) {
         throw new IllegalStateException("Java source has no top-level type: " + path);
       }
@@ -517,6 +520,7 @@ final class SourceMetadataScanner {
           path,
           context.displayPath(path),
           source,
+          structuralSource,
           packageName,
           typeName,
           simpleName,
@@ -530,7 +534,7 @@ final class SourceMetadataScanner {
   /** Extracts bounded method declarations and their annotation blocks. */
   static List<MethodInfo> methods(SourceFile file) {
     List<MethodInfo> result = new ArrayList<>();
-    String maskedSource = maskAnnotationArguments(file.source());
+    String maskedSource = maskAnnotationArguments(file.structuralSource());
     Matcher matcher = METHOD.matcher(maskedSource);
     while (matcher.find()) {
       int start = matcher.start();
@@ -800,11 +804,11 @@ final class SourceMetadataScanner {
   /** Extracts implemented and extended contract type names. */
   private static Set<String> contracts(SourceFile file) {
     Set<String> contracts = new LinkedHashSet<>();
-    Matcher implementsMatcher = Pattern.compile("\\bimplements\\s+([^\\{]+)").matcher(file.source());
+    Matcher implementsMatcher = Pattern.compile("\\bimplements\\s+([^\\{]+)").matcher(file.structuralSource());
     if (implementsMatcher.find()) {
       contracts.addAll(typeNames(implementsMatcher.group(1)));
     }
-    Matcher extendsMatcher = Pattern.compile("\\bextends\\s+([^\\{]+)").matcher(file.source());
+    Matcher extendsMatcher = Pattern.compile("\\bextends\\s+([^\\{]+)").matcher(file.structuralSource());
     if (extendsMatcher.find()) {
       contracts.addAll(typeNames(extendsMatcher.group(1)));
     }
@@ -907,17 +911,39 @@ final class SourceMetadataScanner {
     return quoted.find() ? quoted.group(1) : expression.trim();
   }
 
-  /** Extracts the erased outer return type from a method declaration. */
+  /** Extracts the outer return type, retaining generic arguments for producer matching. */
   private static String returnType(String declaration) {
-    String cleaned = stripBalancedGenericArguments(maskAnnotationArguments(declaration)
+    String cleaned = maskAnnotationArguments(stripComments(declaration))
         .replaceAll("@[A-Za-z_][\\w.]*", " ")
-        .replaceAll("\\b(public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\b", " "))
+        .replaceAll("\\b(public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\b", " ")
         .trim();
+    cleaned = compactGenericWhitespace(cleaned);
     if (cleaned.isBlank()) {
       return "";
     }
     String[] parts = cleaned.split("\\s+");
     return parts[parts.length - 1].trim();
+  }
+
+  /** Removes whitespace inside nested generic arguments without changing declarations. */
+  private static String compactGenericWhitespace(String source) {
+    StringBuilder result = new StringBuilder(source.length());
+    int depth = 0;
+    for (int index = 0; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '<') {
+        depth++;
+        result.append(character);
+      } else if (character == '>' && depth > 0) {
+        depth--;
+        result.append(character);
+      } else if (Character.isWhitespace(character) && depth > 0) {
+        continue;
+      } else {
+        result.append(character);
+      }
+    }
+    return result.toString();
   }
 
   /** Classifies a source bean using the bounded framework stereotype subset. */
@@ -1001,6 +1027,34 @@ final class SourceMetadataScanner {
 
   private static boolean hasAnnotation(String block, String name) {
     return !annotationOccurrences(block, name).isEmpty();
+  }
+
+  /** Recognizes only the CDI producer annotation, not JAX-RS response producers. */
+  private static boolean cdiProducerAnnotation(SourceFile file, String block) {
+    return annotationOccurrences(block, "Produces").stream()
+        .map(AnnotationOccurrence::source)
+        .map(SourceMetadataScanner::annotationType)
+        .anyMatch(annotation -> CDI_PRODUCER_ANNOTATIONS.contains(annotation)
+            || annotation.equals("Produces") && importsCdiProducer(file));
+  }
+
+  /** Checks whether a simple {@code @Produces} resolves to a CDI import. */
+  private static boolean importsCdiProducer(SourceFile file) {
+    Matcher matcher = Pattern.compile(
+        "(?m)^\\s*import\\s+(jakarta\\.enterprise\\.inject\\.Produces|javax\\.enterprise\\.inject\\.Produces|"
+            + "jakarta\\.enterprise\\.inject\\.\\*|javax\\.enterprise\\.inject\\.\\*)\\s*;")
+        .matcher(file.structuralSource());
+    return matcher.find();
+  }
+
+  /** Extracts the annotation type name from its source spelling. */
+  private static String annotationType(String source) {
+    String normalized = source == null ? "" : source.trim();
+    if (normalized.startsWith("@")) {
+      normalized = normalized.substring(1);
+    }
+    int opening = normalized.indexOf('(');
+    return opening < 0 ? normalized : normalized.substring(0, opening).trim();
   }
 
   private static List<String> values(String block, String annotation, String attribute) {
@@ -1268,13 +1322,14 @@ final class SourceMetadataScanner {
       Path path,
       String displayPath,
       String source,
+      String structuralSource,
       String packageName,
       String typeName,
       String simpleTypeName,
       int typeDeclarationStart,
       boolean generated) {
     String classAnnotationBlock() {
-      return source.substring(0, Math.min(typeDeclarationStart, source.length()));
+      return structuralSource.substring(0, Math.min(typeDeclarationStart, structuralSource.length()));
     }
 
     int lineAt(int offset) {

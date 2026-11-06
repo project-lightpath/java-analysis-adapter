@@ -142,29 +142,33 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       for (int parameterIndex = 0; parameterIndex < injection.parameters().size(); parameterIndex++) {
         SourceMetadataScanner.Parameter parameter = injection.parameters().get(parameterIndex);
         List<SourceMetadataScanner.BeanCandidate> typeMatches = candidates.stream()
-            .filter(candidate -> matches(context, parameter.type(), candidate))
+            .filter(candidate -> matches(context, scanner, injection.file(), parameter.type(), candidate))
             .filter(candidate -> profileMatches(candidate.profiles(), context.selectedProfile()))
             .toList();
         List<SourceMetadataScanner.BeanCandidate> matches = typeMatches.stream()
-            .filter(candidate -> candidateMetadataActive(context, candidate) != Boolean.FALSE)
+            .filter(candidate -> candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
             .toList();
-        matches = qualifierMatches(context, parameter, injection, matches);
+        matches = qualifierMatches(context, scanner, parameter, injection, matches);
 
         List<SourceMetadataScanner.BeanCandidate> qualifiedTypeMatches = qualifierMatches(
-            context, parameter, injection, typeMatches);
+            context, scanner, parameter, injection, typeMatches);
 
         List<AnalysisContext.ResolvedBindingMetadata> bindingRows = matchingBindings(
-            context, injection, parameter, parameterIndex, typeMatches);
+            context, scanner, injection, parameter, parameterIndex, candidates);
         List<AnalysisContext.ResolvedBindingMetadata> selectedRows = bindingRows.stream()
             .filter(row -> row.active() == Boolean.TRUE)
             .filter(row -> row.selected() == Boolean.TRUE)
             .toList();
         if (!selectedRows.isEmpty()) {
-          matches = matches.stream()
+          matches = candidates.stream()
+              .filter(candidate -> profileMatches(candidate.profiles(), context.selectedProfile()))
+              .filter(candidate -> candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
               .filter(candidate -> selectedRows.stream().anyMatch(row ->
                   row.candidateId().equals(candidate.candidateId())
-                      || matchingCandidateMetadata(context, candidate).stream()
+                      || matchingCandidateMetadata(context, scanner, candidate).stream()
                           .anyMatch(metadata -> row.candidateId().equals(metadata.candidateId()))))
+              .filter(candidate -> qualifierMatches(
+                  context, scanner, parameter, injection, candidates).contains(candidate))
               .toList();
         } else if (!bindingRows.isEmpty()
             && bindingRows.stream().allMatch(row -> row.selected() == Boolean.FALSE
@@ -172,7 +176,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           matches = List.of();
         }
         if (selectedRows.isEmpty()) {
-          matches = bindingPreference(context, matches);
+          matches = bindingPreference(context, scanner, matches);
         }
 
         if (matches.isEmpty()) {
@@ -187,31 +191,34 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               null,
               null,
               null,
+              scanner,
               "No active bounded bean candidate matches the injection type, qualifiers, profile, or binding metadata."));
           continue;
         }
 
         boolean exactBindingSelection = selectedRows.size() == 1 && matches.size() == 1;
         List<AnalysisContext.BindingCandidateMetadata> selectedCandidateMetadata =
-            matchingCandidateMetadata(context, matches.get(0));
+            matchingCandidateMetadata(context, scanner, matches.get(0));
         boolean exactCandidateSelection = matches.size() == 1
             && qualifiedTypeMatches.size() == 1
-            && candidateMetadataActive(context, matches.get(0)) == Boolean.TRUE
+            && candidateMetadataActive(context, scanner, matches.get(0)) == Boolean.TRUE
             && selectedCandidateMetadata.size() == 1
-            && selectedCandidateMetadata.get(0).active() == Boolean.TRUE;
+            && selectedCandidateMetadata.get(0).active() == Boolean.TRUE
+            && typeMatchCertain(context, scanner, injection.file(), parameter.type(), matches.get(0));
         boolean metadataCandidateCoverage = qualifiedTypeMatches.stream()
-            .allMatch(candidate -> matchingCandidateMetadata(context, candidate).size() == 1);
+            .allMatch(candidate -> matchingCandidateMetadata(context, scanner, candidate).size() == 1);
         List<SourceMetadataScanner.BeanCandidate> selectedMatches = List.copyOf(matches);
         boolean metadataSelectsOnlyMatch = qualifiedTypeMatches.stream().allMatch(candidate -> {
-          Boolean active = candidateMetadataActive(context, candidate);
+          Boolean active = candidateMetadataActive(context, scanner, candidate);
           return selectedMatches.contains(candidate) ? active == Boolean.TRUE : active == Boolean.FALSE;
         });
         boolean exactActiveSet = matches.size() == 1
             && qualifiedTypeMatches.size() > 1
             && metadataCandidateCoverage
-            && metadataSelectsOnlyMatch;
-        boolean conditionUnknown = matches.stream().anyMatch(candidate -> hasConditions(context, candidate))
-            && matches.stream().anyMatch(candidate -> candidateMetadataActive(context, candidate) == null);
+            && metadataSelectsOnlyMatch
+            && typeMatchCertain(context, scanner, injection.file(), parameter.type(), matches.get(0));
+        boolean conditionUnknown = matches.stream().anyMatch(candidate -> hasConditions(context, scanner, candidate))
+            && matches.stream().anyMatch(candidate -> candidateMetadataActive(context, scanner, candidate) == null);
         SemanticCallFacts.Certainty certainty;
         if (exactBindingSelection || exactCandidateSelection || exactActiveSet) {
           certainty = SemanticCallFacts.Certainty.DEFINITE;
@@ -222,7 +229,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         }
         for (SourceMetadataScanner.BeanCandidate candidate : matches) {
           AnalysisContext.BindingCandidateMetadata candidateMetadata = matchingCandidateMetadata(
-              context, candidate).stream().findFirst().orElse(null);
+              context, scanner, candidate).stream().findFirst().orElse(null);
           AnalysisContext.ResolvedBindingMetadata binding = bindingRows.stream()
               .filter(row -> row.candidateId().equals(candidate.candidateId()))
               .findFirst()
@@ -251,6 +258,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               candidateMetadata,
               binding,
               parameterIndex,
+              scanner,
               limitation));
         }
       }
@@ -270,13 +278,14 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       AnalysisContext.BindingCandidateMetadata candidateMetadata,
       AnalysisContext.ResolvedBindingMetadata binding,
       Integer parameterIndex,
+      SourceMetadataScanner scanner,
       String limitation) {
     String owner = injection.file().typeName();
     String target = candidate == null
         ? parameter.type() + "#<unresolved-bean>"
         : candidate.target();
     String callerPrefix = framework == AnalysisContext.Framework.QUARKUS ? "quarkus" : "spring";
-    String id = injectionFactId(injection, parameter, candidate);
+    String id = injectionFactId(scanner, injection, parameter, candidate);
     String displayedQualifiers = String.join(",", displayQualifiers(
         mergeQualifiers(injection.qualifiers(), parameter.qualifiers())));
     List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
@@ -287,7 +296,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         injection.line(),
         Map.of(
             "parameter", parameter.type(),
-            "parameterIndex", parameterIndex == null ? "" : parameterIndex.toString(),
+             "parameterIndex", parameterIndex == null ? "" : parameterIndex.toString(),
              "injectionKind", injection.kind(),
              "qualifiers", displayedQualifiers)));
     if (candidate != null) {
@@ -355,10 +364,21 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     String metadataId = framework == AnalysisContext.Framework.QUARKUS
         ? "quarkus-cdi-annotations"
         : "spring-aop-advisor-metadata";
+    List<SourceMetadataScanner.BeanCandidate> owners = scanner.beanCandidates(framework);
     for (SourceMetadataScanner.ProxyTarget target : scanner.proxyTargets(framework)) {
       String sourceMetadata = framework == AnalysisContext.Framework.QUARKUS
           ? "quarkus-cdi-annotations"
           : "spring-bean-annotations";
+      SourceMetadataScanner.BeanCandidate beanOwner = owners.stream()
+          .filter(candidate -> !candidate.producer())
+          .filter(candidate -> candidate.file().typeName().equals(target.file().typeName()))
+          .findFirst()
+          .orElse(null);
+      if (beanOwner != null
+          && (!profileMatches(beanOwner.profiles(), context.selectedProfile())
+              || candidateMetadataActive(context, scanner, beanOwner) == Boolean.FALSE)) {
+        continue;
+      }
       List<AnalysisContext.ProxyTargetMetadata> metadataRows = matchingProxyMetadata(context, scanner, target);
       boolean exactMetadataTarget = metadataRows.stream()
           .anyMatch(row -> row.active() == Boolean.TRUE && row.selected() == Boolean.TRUE);
@@ -393,7 +413,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           : framework == AnalysisContext.Framework.QUARKUS
               ? "quarkus-generated-client-proxy"
               : "spring-aop-proxy-target";
-      String id = proxyFactId(target);
+      String id = proxyFactId(scanner, target);
       facts.add(SemanticCallFacts.Fact.framework(
           id,
           context,
@@ -588,6 +608,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   /** Filters candidates by requested framework qualifier semantics. */
   private List<SourceMetadataScanner.BeanCandidate> qualifierMatches(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       SourceMetadataScanner.Parameter parameter,
       SourceMetadataScanner.InjectionPoint injection,
       List<SourceMetadataScanner.BeanCandidate> candidates) {
@@ -598,52 +619,55 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         return candidates;
       }
       return candidates.stream()
-          .filter(candidate -> candidateQualifiers(context, candidate).stream()
+          .filter(candidate -> candidateQualifiers(context, scanner, candidate).stream()
               .noneMatch(this::explicitQualifier))
           .toList();
     }
     return candidates.stream()
         .filter(candidate -> requested.stream().allMatch(requestedQualifier ->
-            qualifierMatches(context, requestedQualifier, candidate, candidates)))
+            qualifierMatches(context, scanner, requestedQualifier, candidate, candidates)))
         .toList();
   }
 
   /** Applies framework qualifier rules, including Spring bean-name fallbacks. */
   private boolean qualifierMatches(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       String requestedQualifier,
       SourceMetadataScanner.BeanCandidate candidate,
       List<SourceMetadataScanner.BeanCandidate> candidates) {
     if (requestedQualifier.startsWith("ResourceDefault:")) {
       String name = requestedQualifier.substring("ResourceDefault:".length());
       boolean namedCandidateExists = candidates.stream()
-          .anyMatch(item -> resourceNameMatches(context, name, item));
-      return !namedCandidateExists || resourceNameMatches(context, name, candidate);
+          .anyMatch(item -> resourceNameMatches(context, scanner, name, item));
+      return !namedCandidateExists || resourceNameMatches(context, scanner, name, candidate);
     }
     if (requestedQualifier.startsWith("Resource:")) {
       return resourceNameMatches(
           context,
+          scanner,
           requestedQualifier.substring("Resource:".length()),
           candidate);
     }
     if (framework == AnalysisContext.Framework.SPRING_BOOT
         && requestedQualifier.startsWith("Qualifier:")) {
       String value = requestedQualifier.substring("Qualifier:".length());
-      return candidateQualifiers(context, candidate).stream()
+      return candidateQualifiers(context, scanner, candidate).stream()
           .anyMatch(candidateQualifier -> qualifierEquals(requestedQualifier, candidateQualifier))
-          || candidateBeanNames(context, candidate).contains(value);
+          || candidateBeanNames(context, scanner, candidate).contains(value);
     }
-    return candidateQualifiers(context, candidate).stream()
+    return candidateQualifiers(context, scanner, candidate).stream()
         .anyMatch(candidateQualifier -> qualifierEquals(requestedQualifier, candidateQualifier));
   }
 
   /** Combines source and metadata qualifiers for one candidate. */
   private static List<String> candidateQualifiers(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       SourceMetadataScanner.BeanCandidate candidate) {
     LinkedHashSet<String> result = new LinkedHashSet<>(candidate.qualifiers());
     context.bindingCandidates().stream()
-        .filter(row -> candidateMetadataMatches(row, candidate))
+        .filter(row -> candidateMetadataMatches(scanner, row, candidate))
         .flatMap(row -> row.qualifiers().stream())
         .forEach(result::add);
     return List.copyOf(result);
@@ -652,14 +676,16 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   /** Matches a Spring resource name against candidate bean names. */
   private static boolean resourceNameMatches(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       String name,
       SourceMetadataScanner.BeanCandidate candidate) {
-    return candidateBeanNames(context, candidate).contains(name);
+    return candidateBeanNames(context, scanner, candidate).contains(name);
   }
 
   /** Returns explicit and convention-based names that can identify a bean. */
   private static Set<String> candidateBeanNames(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       SourceMetadataScanner.BeanCandidate candidate) {
     Set<String> names = new LinkedHashSet<>();
     String defaultName = candidate.producer()
@@ -668,7 +694,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     if (defaultName != null && !defaultName.isBlank()) {
       names.add(defaultName);
     }
-    candidateQualifiers(context, candidate).stream()
+    candidateQualifiers(context, scanner, candidate).stream()
         .filter(qualifier -> qualifier.startsWith("BeanName:")
             || qualifier.startsWith("Named:")
             || qualifier.startsWith("Qualifier:"))
@@ -680,19 +706,20 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   /** Applies primary or enabled-alternative preference when binding metadata did not select. */
   private List<SourceMetadataScanner.BeanCandidate> bindingPreference(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       List<SourceMetadataScanner.BeanCandidate> candidates) {
     if (candidates.size() < 2) {
       return candidates;
     }
     if (framework == AnalysisContext.Framework.SPRING_BOOT) {
       List<SourceMetadataScanner.BeanCandidate> primary = candidates.stream()
-          .filter(candidate -> candidate.primary() || matchingCandidateMetadata(context, candidate).stream()
+          .filter(candidate -> candidate.primary() || matchingCandidateMetadata(context, scanner, candidate).stream()
               .anyMatch(AnalysisContext.BindingCandidateMetadata::primary))
           .toList();
       return primary.size() == 1 ? primary : candidates;
     }
     List<SourceMetadataScanner.BeanCandidate> alternatives = candidates.stream()
-        .filter(candidate -> matchingCandidateMetadata(context, candidate).stream()
+        .filter(candidate -> matchingCandidateMetadata(context, scanner, candidate).stream()
             .anyMatch(row -> row.alternative() && row.active() == Boolean.TRUE
                 && profileMatches(row.profiles(), context.selectedProfile())))
         .toList();
@@ -785,16 +812,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   /** Reports whether source or metadata leaves condition selection to runtime. */
   private boolean hasConditions(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       SourceMetadataScanner.BeanCandidate candidate) {
     return !candidate.conditions().isEmpty()
-        || matchingCandidateMetadata(context, candidate).stream()
+        || matchingCandidateMetadata(context, scanner, candidate).stream()
             .anyMatch(row -> !row.conditions().isEmpty());
   }
 
   /** Combines active, inactive, and unknown candidate metadata states. */
   private Boolean candidateMetadataActive(
-      AnalysisContext context, SourceMetadataScanner.BeanCandidate candidate) {
-    List<AnalysisContext.BindingCandidateMetadata> rows = matchingCandidateMetadata(context, candidate);
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    List<AnalysisContext.BindingCandidateMetadata> rows = matchingCandidateMetadata(context, scanner, candidate);
     if (rows.isEmpty()) {
       return null;
     }
@@ -823,24 +853,27 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
 
   /** Finds metadata rows belonging to one source candidate. */
   private List<AnalysisContext.BindingCandidateMetadata> matchingCandidateMetadata(
-      AnalysisContext context, SourceMetadataScanner.BeanCandidate candidate) {
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.BeanCandidate candidate) {
     return context.bindingCandidates().stream()
-        .filter(row -> candidateMetadataMatches(row, candidate))
+        .filter(row -> candidateMetadataMatches(scanner, row, candidate))
         .toList();
   }
 
   /** Matches candidate identity, canonical type, declaring type, and producer method. */
   private static boolean candidateMetadataMatches(
+      SourceMetadataScanner scanner,
       AnalysisContext.BindingCandidateMetadata row,
       SourceMetadataScanner.BeanCandidate candidate) {
     if (row.candidateId().equals(candidate.candidateId())) {
       return true;
     }
-    if (!metadataTypeMatches(row.candidateType(), candidate.candidateType())) {
+    if (!metadataTypeMatches(scanner, row.candidateType(), candidate.candidateType())) {
       return false;
     }
     if (row.declaringType() != null && !row.declaringType().isBlank()
-        && !metadataTypeMatches(row.declaringType(), candidate.file().typeName())) {
+        && !metadataTypeMatches(scanner, row.declaringType(), candidate.file().typeName())) {
       return false;
     }
     return row.producerMethod() == null
@@ -851,14 +884,15 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   /** Finds resolved binding rows for one source injection parameter. */
   private List<AnalysisContext.ResolvedBindingMetadata> matchingBindings(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
       SourceMetadataScanner.InjectionPoint injection,
       SourceMetadataScanner.Parameter parameter,
       int parameterIndex,
       List<SourceMetadataScanner.BeanCandidate> candidates) {
     return context.resolvedBindings().stream()
-        .filter(row -> injectionOwnerMatches(row.injectionOwner(), injection.file().typeName()))
+        .filter(row -> injectionOwnerMatches(scanner, row.injectionOwner(), injection.file().typeName()))
         .filter(row -> memberMatches(row.injectionMember(), injection.member()))
-        .filter(row -> simpleName(row.injectionType()).equalsIgnoreCase(simpleName(parameter.type())))
+        .filter(row -> injectionTypesMatch(scanner, injection.file(), row.injectionType(), parameter.type()))
         .filter(row -> row.parameterIndex() == null || row.parameterIndex() == parameterIndex)
         .filter(row -> row.qualifiers().isEmpty()
             || mergeQualifiers(injection.qualifiers(), parameter.qualifiers()).isEmpty()
@@ -867,18 +901,24 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
                     .anyMatch(candidateQualifier -> bindingQualifierEquals(requested, candidateQualifier))))
         .filter(row -> candidates.stream().anyMatch(candidate ->
             row.candidateId().equals(candidate.candidateId())
-                || matchingCandidateMetadata(context, candidate).stream()
+                || matchingCandidateMetadata(context, scanner, candidate).stream()
                     .anyMatch(metadata -> row.candidateId().equals(metadata.candidateId()))))
         .toList();
   }
 
   /** Matches qualified owners exactly and permits simple names only in metadata. */
-  private static boolean injectionOwnerMatches(String rowOwner, String owner) {
-    return metadataTypeMatches(rowOwner, owner);
+  private static boolean injectionOwnerMatches(
+      SourceMetadataScanner scanner,
+      String rowOwner,
+      String owner) {
+    return metadataTypeMatches(scanner, rowOwner, owner);
   }
 
   /** Matches full metadata names, falling back to simple names only when unqualified. */
-  private static boolean metadataTypeMatches(String metadataType, String sourceType) {
+  private static boolean metadataTypeMatches(
+      SourceMetadataScanner scanner,
+      String metadataType,
+      String sourceType) {
     if (metadataType == null || sourceType == null) {
       return false;
     }
@@ -886,7 +926,10 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     String normalizedSource = eraseGenericArguments(sourceType).trim();
     return normalizedMetadata.equals(normalizedSource)
         || (!normalizedMetadata.contains(".")
-            && normalizedMetadata.equals(simpleName(normalizedSource)));
+            && normalizedMetadata.equals(simpleName(normalizedSource))
+            && scanner.files().stream()
+                .filter(file -> file.simpleTypeName().equalsIgnoreCase(normalizedMetadata))
+                .count() <= 1);
   }
 
   /** Matches constructor aliases and optional member metadata. */
@@ -909,6 +952,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .filter(row -> row.candidateId() == null || row.candidateId().isBlank()
             || row.candidateId().equals(target.candidateId())
             || simpleName(row.candidateId()).equalsIgnoreCase(target.file().simpleTypeName())
+                && scanner.files().stream()
+                    .filter(file -> file.simpleTypeName().equalsIgnoreCase(target.file().simpleTypeName()))
+                    .count() == 1
             || context.bindingCandidates().stream().anyMatch(candidate ->
                 candidate.candidateId().equals(row.candidateId())
                     && simpleName(candidate.candidateType())
@@ -1017,19 +1063,223 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return attributes;
   }
 
-  /** Tests erased injection type, source contracts, and metadata contracts. */
+  /** Tests qualified injection types, producer generic arguments, and contracts. */
   private boolean matches(
       AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
+      String requestedType,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    Boolean directCompatibility = directTypeCompatibility(
+        scanner, injectionFile, requestedType, candidate);
+    if (directCompatibility == Boolean.TRUE) {
+      return true;
+    }
+    if (directCompatibility == null) {
+      return contractMatches(context, scanner, requestedType, candidate);
+    }
+    return directTypesHaveDifferentRawTypes(scanner, injectionFile, requestedType, candidate)
+        && contractMatches(context, scanner, requestedType, candidate);
+  }
+
+  /** Returns whether source and metadata establish a type match strongly enough for definiteness. */
+  private boolean typeMatchCertain(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
+      String requestedType,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    Boolean directCompatibility = directTypeCompatibility(
+        scanner, injectionFile, requestedType, candidate);
+    if (directCompatibility == Boolean.TRUE) {
+      return true;
+    }
+    if (candidate.producer() && candidate.candidateType().isBlank()) {
+      return false;
+    }
+    return directCompatibility == Boolean.FALSE
+        && directTypesHaveDifferentRawTypes(scanner, injectionFile, requestedType, candidate)
+        && contractMatches(context, scanner, requestedType, candidate);
+  }
+
+  /** Compares erased raw types before checking known generic arguments. */
+  private static Boolean directTypeCompatibility(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
+      String requestedType,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    if (candidate.producer() && candidate.candidateType().isBlank()) {
+      return null;
+    }
+    String candidateType = candidate.producer()
+        ? candidate.producerSignature()
+        : candidate.candidateType();
+    if (candidateType == null || candidateType.isBlank()) {
+      return null;
+    }
+    Optional<String> requestedRaw = canonicalType(
+        eraseGenericArguments(requestedType), injectionFile, scanner);
+    Optional<String> candidateRaw = canonicalType(
+        eraseGenericArguments(candidateType), candidate.file(), scanner);
+    if (requestedRaw.isEmpty() || candidateRaw.isEmpty()) {
+      return null;
+    }
+    if (!requestedRaw.get().equals(candidateRaw.get())) {
+      return Boolean.FALSE;
+    }
+    if (!hasGenericArguments(requestedType)) {
+      return Boolean.TRUE;
+    }
+    if (!candidate.producer() || !hasGenericArguments(candidate.producerSignature())) {
+      return null;
+    }
+    Optional<String> requestedCanonical = canonicalType(requestedType, injectionFile, scanner);
+    Optional<String> candidateCanonical = canonicalType(
+        candidate.producerSignature(), candidate.file(), scanner);
+    if (requestedCanonical.isEmpty() || candidateCanonical.isEmpty()) {
+      return null;
+    }
+    return requestedCanonical.get().equals(candidateCanonical.get());
+  }
+
+  /** Checks whether candidate and requested types have different resolved raw types. */
+  private static boolean directTypesHaveDifferentRawTypes(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
+      String requestedType,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    if (candidate.producer() && candidate.candidateType().isBlank()) {
+      return false;
+    }
+    String candidateType = candidate.producer()
+        ? candidate.producerSignature()
+        : candidate.candidateType();
+    if (candidateType == null || candidateType.isBlank()) {
+      return false;
+    }
+    Optional<String> requestedRaw = canonicalType(
+        eraseGenericArguments(requestedType), injectionFile, scanner);
+    Optional<String> candidateRaw = canonicalType(
+        eraseGenericArguments(candidateType), candidate.file(), scanner);
+    return requestedRaw.isPresent() && candidateRaw.isPresent()
+        && !requestedRaw.get().equals(candidateRaw.get());
+  }
+
+  /** Matches source and metadata contracts without using an ambiguous package suffix. */
+  private boolean contractMatches(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
       String requestedType,
       SourceMetadataScanner.BeanCandidate candidate) {
     String requested = simpleName(requestedType);
-    return simpleName(candidate.candidateType()).equals(requested)
-        || candidate.file().simpleTypeName().equals(requested)
-        || candidate.contracts().stream().map(BoundedFrameworkModel::simpleName).anyMatch(requested::equals)
-        || matchingCandidateMetadata(context, candidate).stream()
+    return candidate.contracts().stream()
+        .map(BoundedFrameworkModel::simpleName)
+        .anyMatch(requested::equals)
+        || matchingCandidateMetadata(context, scanner, candidate).stream()
             .flatMap(row -> row.contracts().stream())
             .map(BoundedFrameworkModel::simpleName)
             .anyMatch(requested::equals);
+  }
+
+  /** Resolves a complete type expression, retaining canonical generic arguments. */
+  private static Optional<String> canonicalType(
+      String source,
+      SourceMetadataScanner.SourceFile sourceFile,
+      SourceMetadataScanner scanner) {
+    String normalized = source == null ? "" : source.trim().replaceAll("\\s+", "");
+    if (normalized.isBlank() || normalized.startsWith("?")) {
+      return Optional.empty();
+    }
+    if (normalized.endsWith("[]")) {
+      return canonicalType(normalized.substring(0, normalized.length() - 2), sourceFile, scanner)
+          .map(value -> value + "[]");
+    }
+    int opening = normalized.indexOf('<');
+    if (opening < 0) {
+      return primitiveType(normalized).or(() -> scanner.resolveReferenceType(normalized, sourceFile));
+    }
+    int closing = matchingGenericDelimiter(normalized, opening);
+    if (closing != normalized.length() - 1) {
+      return Optional.empty();
+    }
+    Optional<String> raw = canonicalType(normalized.substring(0, opening), sourceFile, scanner);
+    if (raw.isEmpty()) {
+      return Optional.empty();
+    }
+    List<String> arguments = splitGenericArguments(
+        normalized.substring(opening + 1, closing));
+    List<String> canonicalArguments = new ArrayList<>();
+    for (String argument : arguments) {
+      Optional<String> canonicalArgument = canonicalType(argument, sourceFile, scanner);
+      if (canonicalArgument.isEmpty()) {
+        return Optional.empty();
+      }
+      canonicalArguments.add(canonicalArgument.get());
+    }
+    return Optional.of(raw.get() + "<" + String.join(",", canonicalArguments) + ">");
+  }
+
+  /** Reports whether a type expression declares generic arguments. */
+  private static boolean hasGenericArguments(String source) {
+    return source != null && source.indexOf('<') >= 0;
+  }
+
+  /** Returns JVM-independent primitive type spellings for generic comparison. */
+  private static Optional<String> primitiveType(String value) {
+    return switch (value) {
+      case "boolean", "byte", "char", "short", "int", "long", "float", "double", "void" ->
+          Optional.of(value);
+      default -> Optional.empty();
+    };
+  }
+
+  /** Splits nested generic arguments at top-level commas. */
+  private static List<String> splitGenericArguments(String source) {
+    List<String> result = new ArrayList<>();
+    int depth = 0;
+    int start = 0;
+    for (int index = 0; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '<') {
+        depth++;
+      } else if (character == '>') {
+        depth--;
+      } else if (character == ',' && depth == 0) {
+        result.add(source.substring(start, index));
+        start = index + 1;
+      }
+    }
+    result.add(source.substring(start));
+    return result;
+  }
+
+  /** Finds the closing angle bracket for a generic expression. */
+  private static int matchingGenericDelimiter(String source, int opening) {
+    int depth = 0;
+    for (int index = opening; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '<') {
+        depth++;
+      } else if (character == '>' && --depth == 0) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  /** Matches resolved-binding injection types while tolerating unqualified metadata values. */
+  private static boolean injectionTypesMatch(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile sourceFile,
+      String metadataType,
+      String sourceType) {
+    Optional<String> metadata = canonicalType(
+        eraseGenericArguments(metadataType), sourceFile, scanner);
+    Optional<String> source = canonicalType(
+        eraseGenericArguments(sourceType), sourceFile, scanner);
+    return metadata.isPresent() && source.isPresent()
+        ? metadata.get().equals(source.get())
+        : metadataTypeMatches(scanner, metadataType, sourceType);
   }
 
   /** Builds a stable route fact identity from its full source signature and conditions. */
@@ -1066,34 +1316,96 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     }
   }
 
+  /** Builds a stable injection identity while retaining legacy fixture IDs when unique. */
   private String injectionFactId(
+      SourceMetadataScanner scanner,
       SourceMetadataScanner.InjectionPoint injection,
       SourceMetadataScanner.Parameter parameter,
       SourceMetadataScanner.BeanCandidate candidate) {
     String owner = injection.file().simpleTypeName();
     String candidateName = candidate == null ? "unresolved" : candidate.file().simpleTypeName();
-    if (framework == AnalysisContext.Framework.QUARKUS && owner.equals("TransferResource") && candidateName.equals("DefaultTransferService")) {
+    if (framework == AnalysisContext.Framework.QUARKUS
+        && owner.equals("TransferResource")
+        && candidate != null
+        && !candidate.producer()
+        && candidateName.equals("DefaultTransferService")
+        && uniqueSimpleType(scanner, owner)
+        && uniqueSimpleType(scanner, candidateName)) {
       return "quarkus-resource-to-cdi-bean";
     }
-    if (framework == AnalysisContext.Framework.SPRING_BOOT && owner.equals("TransferController") && candidateName.equals("TransactionService")) {
+    if (framework == AnalysisContext.Framework.SPRING_BOOT
+        && owner.equals("TransferController")
+        && candidate != null
+        && !candidate.producer()
+        && candidateName.equals("TransactionService")
+        && uniqueSimpleType(scanner, owner)
+        && uniqueSimpleType(scanner, candidateName)) {
       return "spring-controller-to-service-injection";
     }
+    String identity = String.join("\u0000",
+        framework.id(),
+        injection.file().typeName(),
+        injection.file().displayPath(),
+        injection.member(),
+        injection.kind(),
+        parameter.name(),
+        parameter.type(),
+        candidate == null ? "unresolved" : candidate.candidateId(),
+        candidate == null ? "" : candidate.candidateType(),
+        candidate == null ? "" : candidate.producerSignature());
     return framework.id() + "-injection-"
-        + slug(owner + "-" + injection.member() + "-" + parameter.type() + "-" + candidateName);
+        + slug(injection.file().typeName() + "-" + injection.member() + "-" + parameter.type()
+            + "-" + candidateName)
+        + "-" + digest(identity).substring(0, 16);
   }
 
-  private String proxyFactId(SourceMetadataScanner.ProxyTarget target) {
+  /** Builds a stable proxy identity that includes the full target overload signature. */
+  private String proxyFactId(SourceMetadataScanner scanner, SourceMetadataScanner.ProxyTarget target) {
     if (framework == AnalysisContext.Framework.QUARKUS
         && target.file().simpleTypeName().equals("DefaultTransferService")
-        && target.method().name().equals("transfer")) {
+        && target.method().name().equals("transfer")
+        && uniqueSimpleType(scanner, target.file().simpleTypeName())
+        && uniqueMethodName(target.file(), target.method().name())) {
       return "quarkus-cdi-proxy-to-service";
     }
     if (framework == AnalysisContext.Framework.SPRING_BOOT
         && target.file().simpleTypeName().equals("TransactionService")
-        && target.method().name().equals("transfer")) {
+        && target.method().name().equals("transfer")
+        && uniqueSimpleType(scanner, target.file().simpleTypeName())
+        && uniqueMethodName(target.file(), target.method().name())) {
       return "spring-transaction-proxy-to-service";
     }
-    return framework.id() + "-proxy-" + slug(target.file().simpleTypeName() + "-" + target.method().name());
+    String identity = String.join("\u0000",
+        framework.id(),
+        target.file().typeName(),
+        target.file().displayPath(),
+        target.candidateId(),
+        target.method().name(),
+        target.method().parameters(),
+        target.method().returnType(),
+        target.proxyKind());
+    return framework.id() + "-proxy-"
+        + slug(target.file().typeName() + "-" + target.method().name()
+            + "-" + target.method().parameters())
+        + "-" + digest(identity).substring(0, 16);
+  }
+
+  /** Ensures legacy fixture IDs cannot collide with another package's simple type. */
+  /** Checks whether a simple type name identifies one source declaration in this scan. */
+  private static boolean uniqueSimpleType(SourceMetadataScanner scanner, String simpleType) {
+    return scanner.files().stream()
+        .filter(file -> file.simpleTypeName().equals(simpleType))
+        .count() == 1;
+  }
+
+  /** Ensures a legacy proxy ID identifies one overload rather than a method family. */
+  /** Checks whether a method name has one overload in its declaring source type. */
+  private static boolean uniqueMethodName(
+      SourceMetadataScanner.SourceFile file,
+      String methodName) {
+    return SourceMetadataScanner.methods(file).stream()
+        .filter(method -> method.name().equals(methodName))
+        .count() == 1;
   }
 
   private String generatedFactId(SourceMetadataScanner.GeneratedMethod generated) {
