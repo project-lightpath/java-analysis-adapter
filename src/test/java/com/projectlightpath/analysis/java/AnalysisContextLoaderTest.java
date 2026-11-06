@@ -49,7 +49,6 @@ class AnalysisContextLoaderTest {
           }],
           "generatedSourceRoots": [],
           "dependencyClasspath": ["%s"],
-          "dependencyClasspathRequired": true,
           "applicationClasses": "%s",
           "frameworkMetadata": [{
             "id": "spring-web-annotations",
@@ -93,6 +92,7 @@ class AnalysisContextLoaderTest {
     assertEquals("fsi-spring-boot-production", context.id());
     assertEquals(AnalysisContext.Framework.SPRING_BOOT, context.framework());
     assertEquals(Path.of(classes.toString()).toAbsolutePath().normalize(), context.applicationClasses());
+    assertTrue(context.dependencyClasspathRequired());
     assertEquals("0123456789012345678901234567890123456789", context.provenance().gitRevision());
     assertEquals("dependency-fingerprint", context.provenance().dependencyFingerprint());
     assertEquals("maven", context.handoff().buildTool());

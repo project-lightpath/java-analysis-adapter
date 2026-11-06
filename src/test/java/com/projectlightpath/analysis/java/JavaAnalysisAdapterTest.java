@@ -374,6 +374,27 @@ class JavaAnalysisAdapterTest {
           @GetMapping("/" + PATH) public String concatenated() { return PATH; }
         }
         """);
+    write(sourceRoot, "first/MethodlessController.java", """
+        package first;
+        import org.springframework.web.bind.annotation.RequestMapping;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController @RequestMapping("/api")
+        public class MethodlessController {
+          @RequestMapping("/wildcard") public String wildcard() { return "ok"; }
+        }
+        """);
+    write(sourceRoot, "first/RestrictedMethodController.java", """
+        package first;
+        import org.springframework.web.bind.annotation.GetMapping;
+        import org.springframework.web.bind.annotation.RequestMapping;
+        import org.springframework.web.bind.annotation.RequestMethod;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController @RequestMapping(path = "/restricted", method = RequestMethod.POST)
+        public class RestrictedMethodController {
+          @RequestMapping("/wildcard") public String wildcard() { return "ok"; }
+          @GetMapping("/get") public String get() { return "wrong"; }
+        }
+        """);
 
     List<AnalysisContext.FrameworkMetadata> metadata = List.of(
         new AnalysisContext.FrameworkMetadata(
@@ -429,6 +450,21 @@ class JavaAnalysisAdapterTest {
         .anyMatch(item -> item.callee().equals("first.ConstantController#constant")));
     assertFalse(registered.frameworkFacts().stream()
         .anyMatch(item -> item.callee().equals("first.ConstantController#concatenated")));
+
+    List<SemanticCallFacts.Fact> methodless = sourceOnly.frameworkFacts().stream()
+        .filter(item -> item.callee().equals("first.MethodlessController#wildcard"))
+        .toList();
+    assertEquals(Set.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"),
+        methodless.stream().map(item -> item.selectionCriteria().httpMethod()).collect(java.util.stream.Collectors.toSet()));
+    assertEquals("/api/wildcard", methodless.get(0).selectionCriteria().pathTemplate());
+
+    List<SemanticCallFacts.Fact> restricted = sourceOnly.frameworkFacts().stream()
+        .filter(item -> item.callee().equals("first.RestrictedMethodController#wildcard"))
+        .toList();
+    assertEquals(List.of("POST"), restricted.stream()
+        .map(item -> item.selectionCriteria().httpMethod()).toList());
+    assertFalse(sourceOnly.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("first.RestrictedMethodController#get")));
   }
 
   @Test

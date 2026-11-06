@@ -34,6 +34,8 @@ final class SourceMetadataScanner {
   private static final Pattern PROXY_INTERFACES = Pattern.compile(
       "new\\s+Class\\s*<[^>]*>\\s*\\[\\s*\\]\\s*\\{([^}]*)\\}");
   private static final Pattern CLASS_LITERAL = Pattern.compile("([A-Za-z_][\\w.]*)\\.class");
+  private static final List<String> SUPPORTED_HTTP_METHODS =
+      List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
   private final AnalysisContext context;
   private List<SourceFile> files;
@@ -90,9 +92,13 @@ final class SourceMetadataScanner {
       if (classPaths.isEmpty()) {
         classPaths = List.of("");
       }
+      List<String> classHttpMethods = framework == AnalysisContext.Framework.SPRING_BOOT
+          ? httpMethods(classBlock, "RequestMapping")
+          : SUPPORTED_HTTP_METHODS;
       for (MethodInfo method : methods(file)) {
         for (String annotationName : routeAnnotations(method.annotationBlock(), framework)) {
-          List<String> httpMethods = httpMethods(method.annotationBlock(), annotationName);
+          List<String> httpMethods = intersectHttpMethods(
+              httpMethods(method.annotationBlock(), annotationName), classHttpMethods);
           if (httpMethods.isEmpty()) {
             continue;
           }
@@ -415,9 +421,11 @@ final class SourceMetadataScanner {
       case "HEAD" -> result.add("HEAD");
       case "OPTIONS" -> result.add("OPTIONS");
       case "RequestMapping" -> {
+        boolean wildcard = annotationArguments(block, annotationName).isEmpty();
         for (String args : annotationArguments(block, annotationName)) {
           String selected = attributeValue(args, "method");
           if (selected == null) {
+            wildcard = true;
             continue;
           }
           Matcher matcher = Pattern.compile("RequestMethod\\.(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)")
@@ -426,12 +434,23 @@ final class SourceMetadataScanner {
             result.add(matcher.group(1));
           }
         }
+        if (wildcard) {
+          result.addAll(SUPPORTED_HTTP_METHODS);
+        }
       }
       default -> {
         // The bounded route subset intentionally ignores custom HTTP annotations.
       }
     }
     return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  private static List<String> intersectHttpMethods(
+      List<String> methodMethods, List<String> classMethods) {
+    Set<String> classMethodSet = new LinkedHashSet<>(classMethods);
+    return methodMethods.stream()
+        .filter(classMethodSet::contains)
+        .toList();
   }
 
   private static List<String> pathValues(String block, String annotation) {

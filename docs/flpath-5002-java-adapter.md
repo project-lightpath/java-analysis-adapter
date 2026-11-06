@@ -25,7 +25,9 @@ Spring header/parameter/media conditions. Quarkus routes require a class-level
 path is ignored. Source annotations alone produce a `possible` route candidate;
 observed route registration metadata is recorded but must be matched to the
 candidate before it can support `definite` certainty. Unsupported path
-expressions are ignored rather than treated as literal paths.
+expressions are ignored rather than treated as literal paths. Method-less Spring
+`@RequestMapping` expands to the supported HTTP methods, intersected with any
+class-level method restriction.
 Route evidence retains the source path and all route annotations, and route IDs
 include the fully qualified owner, signature, conditions, and a stable digest so
 same-named controllers do not collide.

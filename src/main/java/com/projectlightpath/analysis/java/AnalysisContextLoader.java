@@ -50,6 +50,8 @@ public final class AnalysisContextLoader {
 
     Path repositoryRoot = requiredDirectory(document.repositoryRoot(), "repository root");
     Path applicationClasses = requiredDirectory(document.applicationClasses(), "application classes");
+    boolean dependencyClasspathRequired = document.dependencyClasspathRequired() == null
+        || document.dependencyClasspathRequired();
     AnalysisContext.Builder builder = AnalysisContext.builder()
         .id(id)
         .framework(framework)
@@ -60,7 +62,7 @@ public final class AnalysisContextLoader {
         .applicationClasses(applicationClasses)
         .selectedProfile(required(document.selectedProfile(), "selected profile"))
         .analysisScope(parseScope(document.analysisScope()))
-        .dependencyClasspathRequired(document.dependencyClasspathRequired())
+        .dependencyClasspathRequired(dependencyClasspathRequired)
         .provenance(provenance(document.provenance()));
 
     for (ResolvedRootDocument root : nonNull(document.sourceRoots())) {
@@ -72,7 +74,7 @@ public final class AnalysisContextLoader {
     List<Path> dependencyClasspath = nonNull(document.dependencyClasspath()).stream()
         .map(value -> existingPath(value, "dependency classpath entry"))
         .toList();
-    if (document.dependencyClasspathRequired() && dependencyClasspath.isEmpty()) {
+    if (dependencyClasspathRequired && dependencyClasspath.isEmpty()) {
       throw new IllegalArgumentException("required dependency classpath is empty");
     }
     builder.dependencyClasspath(dependencyClasspath);
@@ -232,7 +234,7 @@ public final class AnalysisContextLoader {
       List<ResolvedRootDocument> sourceRoots,
       List<ResolvedRootDocument> generatedSourceRoots,
       List<String> dependencyClasspath,
-      boolean dependencyClasspathRequired,
+      Boolean dependencyClasspathRequired,
       String applicationClasses,
       List<FrameworkMetadataDocument> frameworkMetadata,
       BuildDocument build,

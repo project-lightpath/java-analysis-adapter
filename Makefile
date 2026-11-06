@@ -6,10 +6,10 @@ adapter-test test:
 manual-analysis:
 	@test -n "$(CONTEXT)" || (echo 'CONTEXT is required' >&2; exit 2)
 	@test -n "$(OUTPUT)" || (echo 'OUTPUT is required' >&2; exit 2)
-	MAVEN_BIN="$${MAVEN_BIN:-$$(bash spike/scripts/bootstrap-maven.sh)}"; \
-	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-java}}"; \
-	"$${MAVEN_BIN}" -B -ntp package -DskipTests -f pom.xml; \
-	"$${MAVEN_BIN}" -B -ntp -q dependency:build-classpath -Dmdep.outputFile=target/manual-analysis-classpath.txt -DincludeScope=runtime -f pom.xml; \
+	MAVEN_BIN="$${MAVEN_BIN:-$$(bash spike/scripts/bootstrap-maven.sh)}" && \
+	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-java}}" && \
+	"$${MAVEN_BIN}" -B -ntp package -DskipTests -f pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp -q dependency:build-classpath -Dmdep.outputFile=target/manual-analysis-classpath.txt -DincludeScope=runtime -f pom.xml && \
 	"$${JAVA_BIN}" -cp "target/classes:$$(cat target/manual-analysis-classpath.txt)" com.projectlightpath.analysis.java.ManualAnalysisMain --context="$(CONTEXT)" --output="$(OUTPUT)"
 
 adapter-package package:
