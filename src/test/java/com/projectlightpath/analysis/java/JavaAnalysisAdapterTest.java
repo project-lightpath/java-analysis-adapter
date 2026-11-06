@@ -1413,7 +1413,10 @@ class JavaAnalysisAdapterTest {
             new AnalysisContext.BindingCandidateMetadata(
                 "token-arg-row", "demo.Token", List.of(), List.of(), "producer",
                 "demo.Producer", "token", "(Ljava/lang/String;)Ldemo/Token;", List.of(), List.of(), true,
-                false, false, null, null)),
+                false, false, null, null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "token-class-row", "demo.Token", List.of(), List.of(), "Component",
+                null, null, null, List.of(), List.of(), false, false, false, null, null)),
         List.of(new AnalysisContext.ResolvedBindingMetadata(
             "consumer-token", "demo.Consumer", "token", "Token", null, List.of(),
             "token-arg-row", true, true, "selected overload", null, null)),
@@ -1487,9 +1490,11 @@ class JavaAnalysisAdapterTest {
         import org.springframework.scheduling.annotation.Async;
         import org.springframework.stereotype.Service;
         @Async @Service public class ProxyService {
-          public void visible() { }
+          ProxyService() { }
+          public String visible() { return helper(); }
           private void hidden() { }
           static void staticWork() { }
+          private String helper() { return ""; }
         }
         """);
     AnalysisContext context = context(
@@ -1510,6 +1515,56 @@ class JavaAnalysisAdapterTest {
         .toList();
     assertEquals(1, proxies.size());
     assertEquals("demo.ProxyService#visible", proxies.get(0).callee());
+  }
+
+  /** Keeps same-named contracts package-aware instead of promoting the wrong implementation. */
+  @Test
+  void sameNamedContractsDoNotPromoteAnImplementationFromAnotherPackage() throws IOException {
+    Path sourceRoot = temp.resolve("same-named-contracts/src/main/java");
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { }\n");
+    write(sourceRoot, "other/Service.java", "package other; public interface Service { }\n");
+    write(sourceRoot, "demo/ApiService.java", """
+        package demo;
+        import api.Service;
+        @org.springframework.stereotype.Service public class ApiService implements Service { }
+        """);
+    write(sourceRoot, "demo/OtherService.java", """
+        package demo;
+        import other.Service;
+        @org.springframework.stereotype.Service public class OtherService implements Service { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import api.Service;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(new AnalysisContext.BindingCandidateMetadata(
+            "other-row", "demo.OtherService", List.of("Service"), List.of(), "Service",
+            "demo.OtherService", null, null, List.of(), List.of(), true, false, false, null, null)),
+        List.of(),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(1, injections.size());
+    assertEquals("demo.ApiService#<init>", injections.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injections.get(0).certainty());
   }
 
   /** Builds the minimal production context used by adapter fixtures. */

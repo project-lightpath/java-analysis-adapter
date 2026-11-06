@@ -146,6 +146,34 @@ final class SourceMetadataScanner {
         : Optional.empty();
   }
 
+  /** Resolves a contract while ignoring annotation imports that share its simple name. */
+  Optional<String> resolveContractType(String type, SourceFile sourceFile) {
+    String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    if (normalized.isBlank()) {
+      return Optional.empty();
+    }
+    List<String> samePackage = files().stream()
+        .filter(file -> file.packageName().equals(sourceFile.packageName()))
+        .filter(file -> file.simpleTypeName().equals(normalized))
+        .map(SourceFile::typeName)
+        .distinct()
+        .toList();
+    if (samePackage.size() == 1) {
+      return Optional.of(samePackage.get(0));
+    }
+    List<String> importedSourceTypes = importedTypes(normalized, sourceFile).stream()
+        .filter(imported -> files().stream().anyMatch(file -> file.typeName().equals(imported)))
+        .distinct()
+        .toList();
+    if (importedSourceTypes.size() == 1) {
+      return Optional.of(importedSourceTypes.get(0));
+    }
+    if (importedSourceTypes.size() > 1) {
+      return Optional.empty();
+    }
+    return resolveReferenceType(normalized, sourceFile);
+  }
+
   /** Resolves explicit imports that can qualify a source type spelling. */
   private static List<String> importedTypes(String type, SourceFile sourceFile) {
     String simpleType = type;
@@ -429,8 +457,7 @@ final class SourceMetadataScanner {
             : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
                 || SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(classBlock, name));
         if (selected && (framework != AnalysisContext.Framework.SPRING_BOOT
-            || (!hasModifier(method.annotationBlock(), "private")
-                && !hasModifier(method.annotationBlock(), "static")))) {
+            || springProxyMethod(file, method))) {
           result.add(new ProxyTarget(
               file,
               method,
@@ -819,8 +846,8 @@ final class SourceMetadataScanner {
         || hasAnnotation(block, "Resource");
   }
 
-  /** Extracts implemented interfaces and the direct superclass from one type header. */
-  private static Set<String> contracts(SourceFile file) {
+  /** Extracts resolved implemented interfaces and the direct superclass from one type header. */
+  private Set<String> contracts(SourceFile file) {
     Set<String> contracts = new LinkedHashSet<>();
     String header = typeHeader(file);
     String normalized = stripBalancedGenericArguments(header);
@@ -830,7 +857,7 @@ final class SourceMetadataScanner {
       int end = keywordIndexAfter(normalized, "permits", implementsIndex + "implements".length());
       String implemented = normalized.substring(
           implementsIndex + "implements".length(), end >= 0 ? end : normalized.length());
-      contracts.addAll(typeNames(implemented));
+      addResolvedContracts(contracts, implemented, file);
     }
     if (extendsIndex >= 0) {
       int end = implementsIndex >= 0 ? implementsIndex : keywordIndexAfter(
@@ -839,12 +866,19 @@ final class SourceMetadataScanner {
           extendsIndex + "extends".length(), end >= 0 ? end : normalized.length());
       List<String> extendedTypes = typeNames(extended);
       if (normalized.matches("(?s).*\\binterface\\s+\\w+.*")) {
-        contracts.addAll(extendedTypes);
+        addResolvedContracts(contracts, String.join(",", extendedTypes), file);
       } else if (!extendedTypes.isEmpty()) {
-        contracts.add(extendedTypes.get(0));
+        resolveContractType(extendedTypes.get(0), file).ifPresent(contracts::add);
       }
     }
     return Set.copyOf(contracts);
+  }
+
+  /** Resolves each comma-separated contract against the declaring source file. */
+  private void addResolvedContracts(Set<String> contracts, String source, SourceFile file) {
+    for (String type : typeNames(source)) {
+      resolveContractType(type, file).ifPresent(contracts::add);
+    }
   }
 
   /** Returns the declaration header before its top-level body. */
@@ -1060,7 +1094,7 @@ final class SourceMetadataScanner {
     for (String raw : splitArguments(source)) {
       String type = stripBalancedGenericArguments(raw.trim()).trim();
       if (!type.isBlank()) {
-        result.add(simpleName(type));
+        result.add(type);
       }
     }
     return result;
@@ -1104,6 +1138,17 @@ final class SourceMetadataScanner {
   private static boolean hasModifier(String block, String modifier) {
     String structural = maskAnnotationArguments(stripComments(block == null ? "" : block));
     return Pattern.compile("\\b" + Pattern.quote(modifier) + "\\b").matcher(structural).find();
+  }
+
+  /** Keeps only real, interceptable Spring method declarations from the bounded method scan. */
+  private static boolean springProxyMethod(SourceFile file, MethodInfo method) {
+    if (method.name().equals(file.simpleTypeName())
+        || hasModifier(method.annotationBlock(), "private")
+        || hasModifier(method.annotationBlock(), "static")) {
+      return false;
+    }
+    String prefix = maskAnnotationArguments(stripComments(method.annotationBlock())).trim();
+    return !prefix.matches("(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do)\\b.*");
   }
 
   /** Recognizes only the CDI producer annotation, not JAX-RS response producers. */

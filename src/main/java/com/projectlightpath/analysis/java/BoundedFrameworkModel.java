@@ -869,6 +869,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     if (row.candidateId().equals(candidate.candidateId())) {
       return true;
     }
+    if (candidate.producer() != producerMetadataRow(row)) {
+      return false;
+    }
     if (!metadataTypeMatches(scanner, row.candidateType(), candidate.candidateType())) {
       return false;
     }
@@ -886,6 +889,13 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       return candidate.producer() && producerSignatureMatches(scanner, row, candidate);
     }
     return !candidate.producer() || producerOverloadCount(candidate) == 1;
+  }
+
+  /** Distinguishes producer metadata from ordinary component/class registration rows. */
+  private static boolean producerMetadataRow(AnalysisContext.BindingCandidateMetadata row) {
+    return row.producerMethod() != null && !row.producerMethod().isBlank()
+        || row.producerSignature() != null && !row.producerSignature().isBlank()
+        || row.kind() != null && row.kind().toLowerCase(Locale.ROOT).contains("producer");
   }
 
   /** Matches a producer metadata descriptor without conflating overloaded methods. */
@@ -1122,10 +1132,10 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       return true;
     }
     if (directCompatibility == null) {
-      return contractMatches(context, scanner, requestedType, candidate);
+      return contractMatches(context, scanner, injectionFile, requestedType, candidate);
     }
     return directTypesHaveDifferentRawTypes(scanner, injectionFile, requestedType, candidate)
-        && contractMatches(context, scanner, requestedType, candidate);
+        && contractMatches(context, scanner, injectionFile, requestedType, candidate);
   }
 
   /** Returns whether source and metadata establish a type match strongly enough for definiteness. */
@@ -1145,7 +1155,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     }
     return directCompatibility == Boolean.FALSE
         && directTypesHaveDifferentRawTypes(scanner, injectionFile, requestedType, candidate)
-        && contractMatches(context, scanner, requestedType, candidate);
+        && contractMatches(context, scanner, injectionFile, requestedType, candidate);
   }
 
   /** Compares erased raw types before checking known generic arguments. */
@@ -1215,16 +1225,22 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   private boolean contractMatches(
       AnalysisContext context,
       SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile injectionFile,
       String requestedType,
       SourceMetadataScanner.BeanCandidate candidate) {
-    String requested = simpleName(requestedType);
-    return candidate.contracts().stream()
-        .map(BoundedFrameworkModel::simpleName)
-        .anyMatch(requested::equals)
-        || matchingCandidateMetadata(context, scanner, candidate).stream()
-            .flatMap(row -> row.contracts().stream())
-            .map(BoundedFrameworkModel::simpleName)
-            .anyMatch(requested::equals);
+    Optional<String> requested = canonicalType(
+        eraseGenericArguments(requestedType), injectionFile, scanner);
+    if (requested.isEmpty()) {
+      return false;
+    }
+    boolean sourceContract = candidate.contracts().stream()
+        .map(contract -> canonicalType(contract, candidate.file(), scanner))
+        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+    boolean metadataContract = matchingCandidateMetadata(context, scanner, candidate).stream()
+        .flatMap(row -> row.contracts().stream())
+        .map(contract -> scanner.resolveContractType(contract, candidate.file()))
+        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+    return sourceContract || metadataContract;
   }
 
   /** Resolves a complete type expression, retaining canonical generic arguments. */
