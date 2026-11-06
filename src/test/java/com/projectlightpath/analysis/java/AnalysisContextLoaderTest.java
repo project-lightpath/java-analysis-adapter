@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 class AnalysisContextLoaderTest {
   @TempDir Path temp;
 
+  /** Loads the VPE handoff and preserves build and provenance metadata. */
   @Test
   void loadsVpeContextAndPreservesBuildAndProvenanceHandoff() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
@@ -56,6 +57,39 @@ class AnalysisContextLoaderTest {
             "status": "observed",
             "path": "src/main/java"
           }],
+          "frameworkBindingMetadata": {
+            "schemaVersion": "0.1.0",
+            "candidates": [{
+              "id": "demo-service",
+              "candidateType": "demo.ServiceImpl",
+              "contracts": ["Service"],
+              "qualifiers": ["Qualifier:fast"],
+              "kind": "Service",
+              "active": true,
+              "primary": true
+            }],
+            "resolvedBindings": [{
+              "id": "application-service",
+              "injectionOwner": "demo.Application",
+              "injectionMember": "<init>",
+              "injectionType": "Service",
+              "parameterIndex": 0,
+              "qualifiers": ["Qualifier:fast"],
+              "candidateId": "demo-service",
+              "selected": true,
+              "active": true,
+              "selectionReason": "unique active candidate"
+            }],
+            "proxyTargets": [{
+              "id": "service-proxy",
+              "candidateId": "demo-service",
+              "targetType": "demo.ServiceImpl",
+              "methodName": "call",
+              "proxyKind": "spring-aop-advisor",
+              "selected": true,
+              "active": true
+            }]
+          },
           "build": {
             "tool": "maven",
             "command": ["mvn", "package"],
@@ -99,5 +133,11 @@ class AnalysisContextLoaderTest {
     assertEquals(List.of("mvn", "package"), context.handoff().buildCommand());
     assertEquals(List.of("manual run"), context.handoff().limitations());
     assertTrue(context.metadataObserved("spring-web-annotations"));
+    assertEquals(1, context.bindingCandidates().size());
+    assertEquals("demo-service", context.bindingCandidates().get(0).candidateId());
+    assertEquals(1, context.resolvedBindings().size());
+    assertEquals("demo-service", context.resolvedBindings().get(0).candidateId());
+    assertEquals(1, context.proxyTargetMetadata().size());
+    assertEquals("call", context.proxyTargetMetadata().get(0).methodName());
   }
 }

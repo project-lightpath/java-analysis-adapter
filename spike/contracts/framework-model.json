@@ -141,7 +141,8 @@
             "qualifiers",
             "alternatives",
             "producer methods",
-            "generated client proxy targets"
+            "generated client proxy targets",
+            "versioned candidate/binding/proxy metadata"
           ],
           "supports": [
             "dependency_injection",
@@ -194,6 +195,13 @@
           "when": "The bean type is known but the generated proxy/interceptor implementation is not captured.",
           "certainty": "possible",
           "fallback": "unresolved when the proxy target type is not bounded."
+        },
+        {
+          "id": "quarkus-metadata-proxy-target",
+          "edgeType": "proxy_dispatch",
+          "when": "One exact active Arc client-proxy or interceptor metadata row identifies the bean method.",
+          "certainty": "definite",
+          "fallback": "possible when source scope bounds the target but exact proxy metadata is not captured."
         },
         {
           "id": "quarkus-generated-source-binding",
@@ -260,7 +268,8 @@
             "component scan",
             "profiles",
             "conditions",
-            "primary and qualifier selection"
+            "primary and qualifier selection",
+            "versioned candidate/binding/proxy metadata"
           ],
           "supports": [
             "dependency_injection",
@@ -321,6 +330,13 @@
           "when": "An advisor identifies a bounded target method but generated proxy/interceptor order is not captured.",
           "certainty": "possible",
           "fallback": "unresolved when advisor or target metadata is missing."
+        },
+        {
+          "id": "spring-metadata-proxy-target",
+          "edgeType": "proxy_dispatch",
+          "when": "One exact active Spring advisor/proxy metadata row identifies the bean method.",
+          "certainty": "definite",
+          "fallback": "possible when source advice bounds the target but exact proxy metadata is not captured."
         },
         {
           "id": "spring-data-generated-repository",

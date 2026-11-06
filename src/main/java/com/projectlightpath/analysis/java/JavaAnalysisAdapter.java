@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Production integration boundary: SootUp base graph plus project-owned
@@ -27,6 +28,7 @@ public final class JavaAnalysisAdapter {
     this.frameworkModel = frameworkModel;
   }
 
+  /** Builds the provider graph before applying framework enrichment. */
   public SemanticCallFacts analyze(AnalysisContext context) {
     Objects.requireNonNull(context, "analysis context");
     AnalysisGraph graph = baseGraphProvider.analyze(context);
@@ -40,8 +42,9 @@ public final class JavaAnalysisAdapter {
     FrameworkModel selectedModel = frameworkModel == null
         ? FrameworkModels.forContext(context.framework())
         : frameworkModel;
-    List<SemanticCallFacts.Fact> frameworkFacts = selectedModel.enrich(context, graph);
     List<SemanticCallFacts.Fact> providerFacts = new ArrayList<>(ProviderFactNormalizer.normalize(context, graph));
+    List<SemanticCallFacts.Fact> frameworkFacts = attachExactProviderIdentities(
+        selectedModel.enrich(context, graph), providerFacts);
     return new SemanticCallFacts(
         context,
         graph,
@@ -50,6 +53,61 @@ public final class JavaAnalysisAdapter {
         links(providerFacts, frameworkFacts));
   }
 
+  /** Attaches provider identities only for unique eligible framework targets. */
+  private static List<SemanticCallFacts.Fact> attachExactProviderIdentities(
+      List<SemanticCallFacts.Fact> frameworkFacts,
+      List<SemanticCallFacts.Fact> providerFacts) {
+    List<SemanticCallFacts.Fact> result = new ArrayList<>();
+    for (SemanticCallFacts.Fact frameworkFact : frameworkFacts) {
+      if (frameworkFact.derivedFrom() != null) {
+        boolean providerExists = providerFacts.stream()
+            .anyMatch(provider -> provider.id().equals(frameworkFact.derivedFrom()));
+        result.add(providerExists
+            ? frameworkFact
+            : frameworkFact.withDerivedFrom(null));
+        continue;
+      }
+      if (frameworkFact.relationshipType().equals("framework_entrypoint")) {
+        result.add(frameworkFact);
+        continue;
+      }
+      List<SemanticCallFacts.Fact> exactTargets = providerFacts.stream()
+          .filter(provider -> provider.certainty() != SemanticCallFacts.Certainty.UNRESOLVED)
+          .filter(provider -> provider.callee().equals(frameworkFact.callee()))
+          .filter(provider -> targetDescriptorsMatch(frameworkFact, provider))
+          .filter(provider -> !provider.relationshipType().equals("reflection"))
+          .filter(provider -> !provider.relationshipType().equals("proxy_dispatch")
+              || frameworkFact.relationshipType().equals("proxy_dispatch"))
+          .toList();
+      result.add(exactTargets.size() == 1
+          ? frameworkFact.withDerivedFrom(exactTargets.get(0).id())
+          : frameworkFact);
+    }
+    return List.copyOf(result);
+  }
+
+  /** Requires matching full target descriptors before creating an implicit provider link. */
+  private static boolean targetDescriptorsMatch(
+      SemanticCallFacts.Fact frameworkFact,
+      SemanticCallFacts.Fact providerFact) {
+    Optional<String> frameworkDescriptor = evidenceAttribute(frameworkFact, "targetDescriptor");
+    Optional<String> providerDescriptor = evidenceAttribute(providerFact, "calleeSignature");
+    return frameworkDescriptor.isPresent()
+        && providerDescriptor.isPresent()
+        && frameworkDescriptor.get().equals(providerDescriptor.get());
+  }
+
+  /** Finds a nonblank identity attribute in framework or provider evidence. */
+  private static Optional<String> evidenceAttribute(
+      SemanticCallFacts.Fact fact,
+      String attribute) {
+    return fact.evidence().stream()
+        .map(evidence -> evidence.attributes().get(attribute))
+        .filter(value -> value != null && !value.isBlank())
+        .findFirst();
+  }
+
+  /** Creates non-replacing enrichment links for exact provider matches. */
   private static List<SemanticCallFacts.Link> links(
       List<SemanticCallFacts.Fact> providerFacts,
       List<SemanticCallFacts.Fact> frameworkFacts) {

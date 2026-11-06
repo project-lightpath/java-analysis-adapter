@@ -2,7 +2,7 @@
   "schemaVersion": "0.1.0",
   "artifact": "AnalysisContext",
   "issue": "FLPATH-5000",
-  "purpose": "The minimum build, framework, source, dependency, and scope context required before emitting or promoting a framework-enriched call fact.",
+  "purpose": "The minimum build, framework, source, dependency, scope, and candidate-level binding context required before emitting or promoting a framework-enriched call fact.",
   "scope": "spike_only_no_production_adapter",
   "requiredFields": [
     "framework",
@@ -15,6 +15,9 @@
     "analysisScope",
     "provenance"
   ],
+  "optionalContracts": {
+    "frameworkBindingMetadata": "spike/contracts/framework-binding-metadata.json"
+  },
   "certaintyPolicy": {
     "states": [
       "definite",
@@ -100,6 +103,14 @@
           "path": "spike/java21-quarkus/src/main/resources/META-INF/services"
         }
       ],
+      "frameworkBindingMetadata": {
+        "schemaVersion": "0.1.0",
+        "status": "not_captured",
+        "candidates": [],
+        "resolvedBindings": [],
+        "proxyTargets": [],
+        "abstention": "source-bounded possible facts only; exact active selection remains unresolved"
+      },
       "analysisScope": {
         "productionFactsOnly": true,
         "testFacts": "separate_context",
@@ -193,6 +204,14 @@
           "abstention": "possible_for_bounded_proxy_targets"
         }
       ],
+      "frameworkBindingMetadata": {
+        "schemaVersion": "0.1.0",
+        "status": "not_captured",
+        "candidates": [],
+        "resolvedBindings": [],
+        "proxyTargets": [],
+        "abstention": "source-bounded possible facts only; exact active selection remains unresolved"
+      },
       "analysisScope": {
         "productionFactsOnly": true,
         "testFacts": "separate_context",

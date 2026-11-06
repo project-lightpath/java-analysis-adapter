@@ -19,6 +19,22 @@ and Spring lifecycle callbacks. Provider and framework facts preserve
 not prove route absence; open-world reflection and dynamic proxies remain
 `unresolved`/`abstained`.
 
+`AnalysisContext` can carry the versioned `frameworkBindingMetadata` payload
+defined in `spike/contracts/framework-binding-metadata.json`. It records CDI and
+Spring candidates, resolved injection rows, and proxy targets. The scanner
+supports common constructor, field, and method injection; qualifiers,
+alternatives/primary, producer methods, profiles, common conditions, and common
+proxy/advisor annotations. An exact unique active metadata row is required for
+`definite`; source-bounded candidates remain `possible` and unresolved profile,
+condition, or proxy selection remains `unresolved` when the relevant metadata is
+missing; an observed but non-unique or unevaluated proxy selection remains
+`possible`.
+
+Framework facts link to provider facts only through an exact `providerFactId` or
+a unique non-abstained provider target identity. Links use
+`enriches_without_replacing`, preserving separate provider and framework fact
+sets.
+
 Route scanning expands literal class/method path arrays, HTTP method arrays, and
 Spring header/parameter/media conditions. Quarkus routes require a class-level
 `@Path`; method-level `@Path` narrows that root and an unregistered method-only

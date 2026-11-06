@@ -58,6 +58,7 @@ public final class AnalysisContext {
       boolean generated,
       boolean included,
       boolean required) {
+    /** Validates and normalizes one source root declaration. */
     public SourceRoot {
       if (declaredPath == null || declaredPath.isBlank()) {
         throw new IllegalArgumentException("source root path must not be blank");
@@ -67,6 +68,7 @@ public final class AnalysisContext {
       path = path.toAbsolutePath().normalize();
     }
 
+    /** Creates an included application source root. */
     public static SourceRoot source(String declaredPath, Path path, Scope scope, boolean required) {
       return new SourceRoot(declaredPath, path, scope, false, true, required);
     }
@@ -79,6 +81,7 @@ public final class AnalysisContext {
 
   public record FrameworkMetadata(
       String id, String kind, MetadataStatus status, String declaredPath) {
+    /** Validates one framework metadata declaration. */
     public FrameworkMetadata {
       if (id == null || id.isBlank()) {
         throw new IllegalArgumentException("framework metadata id must not be blank");
@@ -87,6 +90,180 @@ public final class AnalysisContext {
         throw new IllegalArgumentException("framework metadata kind must not be blank");
       }
       Objects.requireNonNull(status, "framework metadata status");
+    }
+  }
+
+  /** Versioned, candidate-level framework evidence used for binding resolution. */
+  public record FrameworkBindingMetadata(
+      String schemaVersion,
+      List<BindingCandidateMetadata> candidates,
+      List<ResolvedBindingMetadata> resolvedBindings,
+      List<ProxyTargetMetadata> proxyTargets) {
+    /** Validates and freezes the versioned binding metadata payload. */
+    public FrameworkBindingMetadata {
+      schemaVersion = schemaVersion == null || schemaVersion.isBlank() ? "0.1.0" : schemaVersion;
+      if (!"0.1.0".equals(schemaVersion)) {
+        throw new IllegalArgumentException(
+            "unsupported framework binding metadata schemaVersion: " + schemaVersion);
+      }
+      candidates = List.copyOf(candidates == null ? List.of() : candidates);
+      resolvedBindings = List.copyOf(resolvedBindings == null ? List.of() : resolvedBindings);
+      proxyTargets = List.copyOf(proxyTargets == null ? List.of() : proxyTargets);
+    }
+
+    /** Creates an empty version-compatible binding metadata payload. */
+    public static FrameworkBindingMetadata empty() {
+      return new FrameworkBindingMetadata("0.1.0", List.of(), List.of(), List.of());
+    }
+  }
+
+  /** One active or inactive CDI/Spring bean registration candidate. */
+  public record BindingCandidateMetadata(
+      String candidateId,
+      String candidateType,
+      List<String> contracts,
+      List<String> qualifiers,
+      String kind,
+      String declaringType,
+      String producerMethod,
+      String producerSignature,
+      List<String> profiles,
+      List<String> conditions,
+      Boolean active,
+      boolean alternative,
+      boolean primary,
+      String sourcePath,
+      String providerFactId) {
+    /** Validates and freezes one binding candidate row. */
+    public BindingCandidateMetadata {
+      requireValue(candidateId, "binding candidate id");
+      requireValue(candidateType, "binding candidate type");
+      requireValue(kind, "binding candidate kind");
+      contracts = List.copyOf(contracts == null ? List.of() : contracts);
+      qualifiers = List.copyOf(qualifiers == null ? List.of() : qualifiers);
+      profiles = List.copyOf(profiles == null ? List.of() : profiles);
+      conditions = List.copyOf(conditions == null ? List.of() : conditions);
+    }
+
+    /** Convenience constructor for the common class/component candidate shape. */
+    public BindingCandidateMetadata(
+        String candidateId,
+        String candidateType,
+        List<String> contracts,
+        List<String> qualifiers,
+        String kind,
+        Boolean active,
+        boolean alternative,
+        boolean primary) {
+      this(
+          candidateId,
+          candidateType,
+          contracts,
+          qualifiers,
+          kind,
+          null,
+          null,
+          null,
+          List.of(),
+          List.of(),
+          active,
+          alternative,
+          primary,
+          null,
+          null);
+    }
+  }
+
+  /** Framework's resolved view of one injection point and candidate. */
+  public record ResolvedBindingMetadata(
+      String bindingId,
+      String injectionOwner,
+      String injectionMember,
+      String injectionType,
+      Integer parameterIndex,
+      List<String> qualifiers,
+      String candidateId,
+      Boolean selected,
+      Boolean active,
+      String selectionReason,
+      String sourcePath,
+      String providerFactId) {
+    /** Validates and freezes one resolved binding row. */
+    public ResolvedBindingMetadata {
+      requireValue(bindingId, "resolved binding id");
+      requireValue(injectionOwner, "resolved binding injection owner");
+      requireValue(injectionType, "resolved binding injection type");
+      requireValue(candidateId, "resolved binding candidate id");
+      if (parameterIndex != null && parameterIndex < 0) {
+        throw new IllegalArgumentException("resolved binding parameterIndex must not be negative");
+      }
+      qualifiers = List.copyOf(qualifiers == null ? List.of() : qualifiers);
+    }
+
+    /** Convenience constructor for a selected constructor parameter binding. */
+    public ResolvedBindingMetadata(
+        String bindingId,
+        String injectionOwner,
+        String injectionType,
+        int parameterIndex,
+        String candidateId) {
+      this(
+          bindingId,
+          injectionOwner,
+          "<init>",
+          injectionType,
+          parameterIndex,
+          List.of(),
+          candidateId,
+          true,
+          true,
+          "exact framework selection",
+          null,
+          null);
+    }
+  }
+
+  /** Framework-generated proxy/interceptor target evidence for one bean method. */
+  public record ProxyTargetMetadata(
+      String proxyTargetId,
+      String candidateId,
+      String targetType,
+      String methodName,
+      String methodDescriptor,
+      String proxyKind,
+      Boolean selected,
+      Boolean active,
+      String selectionReason,
+      String sourcePath,
+      String providerFactId) {
+    /** Validates one framework proxy target row. */
+    public ProxyTargetMetadata {
+      requireValue(proxyTargetId, "proxy target id");
+      requireValue(targetType, "proxy target type");
+      requireValue(methodName, "proxy target method");
+      requireValue(proxyKind, "proxy target kind");
+    }
+
+    /** Convenience constructor for an exact target row without a bytecode descriptor. */
+    public ProxyTargetMetadata(
+        String proxyTargetId,
+        String targetType,
+        String methodName,
+        String proxyKind,
+        Boolean selected,
+        Boolean active) {
+      this(
+          proxyTargetId,
+          null,
+          targetType,
+          methodName,
+          null,
+          proxyKind,
+          selected,
+          active,
+          "exact framework proxy target",
+          null,
+          null);
     }
   }
 
@@ -129,6 +306,7 @@ public final class AnalysisContext {
           0);
     }
 
+    /** Validates provenance fingerprints and freshness policy. */
     public Provenance {
       requireValue(sourceFingerprint, "sourceFingerprint");
       requireValue(generatedSourceFingerprint, "generatedSourceFingerprint");
@@ -140,6 +318,7 @@ public final class AnalysisContext {
       }
     }
 
+    /** Creates deterministic provenance for unit tests. */
     public static Provenance forTesting() {
       return new Provenance(
           "https://example.test/repository.git",
@@ -176,11 +355,13 @@ public final class AnalysisContext {
       String buildArtifact,
       String buildFingerprint,
       List<String> limitations) {
+    /** Freezes build handoff lists for downstream consumers. */
     public Handoff {
       buildCommand = List.copyOf(buildCommand == null ? List.of() : buildCommand);
       limitations = List.copyOf(limitations == null ? List.of() : limitations);
     }
 
+    /** Creates an empty build handoff for programmatic contexts. */
     public static Handoff empty() {
       return new Handoff("", "", "", "", "", List.of(), "", "", List.of());
     }
@@ -200,9 +381,11 @@ public final class AnalysisContext {
   private final List<Path> dependencyClasspath;
   private final boolean dependencyClasspathRequired;
   private final List<FrameworkMetadata> frameworkMetadata;
+  private final FrameworkBindingMetadata frameworkBindingMetadata;
   private final Provenance provenance;
   private final Handoff handoff;
 
+  /** Validates and freezes one analysis context from its builder. */
   private AnalysisContext(Builder builder) {
     id = requireValue(builder.id, "context id");
     framework = Objects.requireNonNull(builder.framework, "framework");
@@ -223,6 +406,8 @@ public final class AnalysisContext {
         .toList();
     dependencyClasspathRequired = builder.dependencyClasspathRequired;
     frameworkMetadata = List.copyOf(builder.frameworkMetadata);
+    frameworkBindingMetadata = Objects.requireNonNull(
+        builder.frameworkBindingMetadata, "framework binding metadata");
     provenance = Objects.requireNonNull(builder.provenance, "provenance");
     handoff = Objects.requireNonNull(builder.handoff, "handoff");
 
@@ -279,6 +464,7 @@ public final class AnalysisContext {
     return generatedSourceRoots;
   }
 
+  /** Returns source roots explicitly included in this analysis. */
   public List<SourceRoot> includedSourceRoots() {
     List<SourceRoot> result = new ArrayList<>();
     result.addAll(sourceRoots.stream()
@@ -304,6 +490,22 @@ public final class AnalysisContext {
     return frameworkMetadata;
   }
 
+  public FrameworkBindingMetadata frameworkBindingMetadata() {
+    return frameworkBindingMetadata;
+  }
+
+  public List<BindingCandidateMetadata> bindingCandidates() {
+    return frameworkBindingMetadata.candidates();
+  }
+
+  public List<ResolvedBindingMetadata> resolvedBindings() {
+    return frameworkBindingMetadata.resolvedBindings();
+  }
+
+  public List<ProxyTargetMetadata> proxyTargetMetadata() {
+    return frameworkBindingMetadata.proxyTargets();
+  }
+
   public Provenance provenance() {
     return provenance;
   }
@@ -312,11 +514,13 @@ public final class AnalysisContext {
     return handoff;
   }
 
+  /** Reports whether a framework metadata artifact was observed. */
   public boolean metadataObserved(String metadataId) {
     return frameworkMetadata.stream()
         .anyMatch(item -> item.id().equals(metadataId) && item.status() == MetadataStatus.OBSERVED);
   }
 
+  /** Looks up one framework metadata declaration by ID. */
   public Optional<FrameworkMetadata> metadata(String metadataId) {
     return frameworkMetadata.stream().filter(item -> item.id().equals(metadataId)).findFirst();
   }
@@ -341,6 +545,7 @@ public final class AnalysisContext {
     return value;
   }
 
+  /** Normalizes a required context path and rejects missing values. */
   private static Path normalize(Path path, String name) {
     return Objects.requireNonNull(path, name).toAbsolutePath().normalize();
   }
@@ -360,6 +565,7 @@ public final class AnalysisContext {
     private final List<Path> dependencyClasspath = new ArrayList<>();
     private boolean dependencyClasspathRequired = true;
     private final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
+    private FrameworkBindingMetadata frameworkBindingMetadata = FrameworkBindingMetadata.empty();
     private Provenance provenance;
     private Handoff handoff = Handoff.empty();
 
@@ -408,17 +614,20 @@ public final class AnalysisContext {
       return this;
     }
 
+    /** Adds an included application source root. */
     public Builder sourceRoot(String declaredPath, Path path, Scope scope, boolean required) {
       sourceRoots.add(SourceRoot.source(declaredPath, path, scope, required));
       return this;
     }
 
+    /** Adds an included or excluded generated source root. */
     public Builder generatedSourceRoot(
         String declaredPath, Path path, Scope scope, boolean included, boolean required) {
       generatedSourceRoots.add(SourceRoot.generated(declaredPath, path, scope, included, required));
       return this;
     }
 
+    /** Replaces the dependency classpath inputs. */
     public Builder dependencyClasspath(List<Path> paths) {
       dependencyClasspath.clear();
       dependencyClasspath.addAll(paths);
@@ -435,6 +644,7 @@ public final class AnalysisContext {
       return this;
     }
 
+    /** Adds one framework metadata declaration. */
     public Builder frameworkMetadata(FrameworkMetadata metadata) {
       frameworkMetadata.add(metadata);
       return this;
@@ -443,6 +653,12 @@ public final class AnalysisContext {
     public Builder frameworkMetadata(
         String id, String kind, MetadataStatus status, String declaredPath) {
       return frameworkMetadata(new FrameworkMetadata(id, kind, status, declaredPath));
+    }
+
+    /** Sets candidate-level CDI/Spring binding evidence. */
+    public Builder frameworkBindingMetadata(FrameworkBindingMetadata value) {
+      frameworkBindingMetadata = Objects.requireNonNull(value, "framework binding metadata");
+      return this;
     }
 
     public Builder provenance(Provenance value) {
@@ -455,6 +671,7 @@ public final class AnalysisContext {
       return this;
     }
 
+    /** Validates and creates the immutable analysis context. */
     public AnalysisContext build() {
       return new AnalysisContext(this);
     }

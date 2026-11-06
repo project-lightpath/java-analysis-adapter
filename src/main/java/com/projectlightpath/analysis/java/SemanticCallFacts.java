@@ -92,7 +92,8 @@ public final class SemanticCallFacts {
       return new Evidence(kind, path, symbols, null, Map.of());
     }
 
-    public static Evidence sootup(String path, int line, String caller, String callee, String basis) {
+  /** Creates provider evidence emitted from a SootUp call edge. */
+  public static Evidence sootup(String path, int line, String caller, String callee, String basis) {
       Map<String, String> attributes = new LinkedHashMap<>();
       attributes.put("basis", basis);
       attributes.put("caller", caller);
@@ -265,6 +266,29 @@ public final class SemanticCallFacts {
           limitation);
     }
 
+    /** Attach an exact provider fact identity without changing the framework claim. */
+    public Fact withDerivedFrom(String providerFactId) {
+      return new Fact(
+          id,
+          framework,
+          contextId,
+          caller,
+          callee,
+          relationshipType,
+          certainty,
+          status,
+          factSet,
+          evidenceOrigin,
+          modelRule,
+          claim,
+          runtimeSelection,
+          providerCallerAbsence,
+          selectionCriteria,
+          providerFactId,
+          evidence,
+          limitation);
+    }
+
     private static void require(String value, String name) {
       if (value == null || value.isBlank()) {
         throw new IllegalArgumentException(name + " must not be blank");
@@ -430,6 +454,7 @@ public final class SemanticCallFacts {
     return result;
   }
 
+  /** Validates fact-set ownership and freezes facts for the result. */
   private static List<Fact> immutableFacts(List<Fact> facts, FactSet expectedSet) {
     List<Fact> result = List.copyOf(facts == null ? List.of() : facts);
     if (result.stream().anyMatch(fact -> fact.factSet() != expectedSet)) {
@@ -438,6 +463,7 @@ public final class SemanticCallFacts {
     return result;
   }
 
+  /** Validates that every link references facts in the corresponding sets. */
   private void validateLinks() {
     Map<String, Fact> providers = new LinkedHashMap<>();
     providerFacts.forEach(fact -> providers.put(fact.id(), fact));
