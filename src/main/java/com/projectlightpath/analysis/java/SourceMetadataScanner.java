@@ -61,6 +61,8 @@ final class SourceMetadataScanner {
       "Class", "Cloneable", "Comparable", "Double", "Enum", "Exception", "Float",
       "Integer", "Iterable", "Long", "Math", "Number", "Object", "Record", "Runnable",
       "RuntimeException", "Short", "StrictMath", "String", "Thread", "Throwable", "Void");
+  private static final Set<String> JAVA_PRIMITIVE_TYPES = Set.of(
+      "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
   private static final Set<String> CDI_PRODUCER_ANNOTATIONS = Set.of(
       "jakarta.enterprise.inject.Produces", "javax.enterprise.inject.Produces");
   private static final Set<String> SPRING_PROXY_ANNOTATIONS = Set.of(
@@ -106,6 +108,17 @@ final class SourceMetadataScanner {
   /** Resolves a source type using explicit imports, the declaring package, or java.lang. */
   Optional<String> resolveReferenceType(String type, SourceFile sourceFile) {
     String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    if (normalized.endsWith("...")) {
+      normalized = normalized.substring(0, normalized.length() - 3) + "[]";
+    }
+    if (normalized.endsWith("[]")) {
+      return resolveReferenceType(normalized.substring(0, normalized.length() - 2), sourceFile)
+          .map(value -> value + "[]");
+    }
+    if (JAVA_PRIMITIVE_TYPES.contains(normalized)) {
+      return Optional.of(normalized);
+    }
+    String referenceName = normalized;
     List<String> imported = importedTypes(normalized, sourceFile);
     if (imported.size() > 1) {
       return Optional.empty();
@@ -118,7 +131,7 @@ final class SourceMetadataScanner {
     }
     List<String> samePackage = files().stream()
         .filter(file -> file.packageName().equals(sourceFile.packageName()))
-        .filter(file -> file.simpleTypeName().equals(normalized))
+        .filter(file -> file.simpleTypeName().equals(referenceName))
         .map(SourceFile::typeName)
         .distinct()
         .toList();
@@ -349,7 +362,8 @@ final class SourceMetadataScanner {
       String block = file.classAnnotationBlock();
       boolean bean = framework == AnalysisContext.Framework.QUARKUS
           ? cdiBean(block)
-          : springComponent(block) || file.source().matches("(?s).*\\binterface\\s+\\w+\\s+extends\\s+[^;]*\\b(?:JpaRepository|Repository)\\b.*");
+          : springComponent(block) || file.structuralSource().matches(
+              "(?s).*\\binterface\\s+\\w+\\s+extends\\s+[^;]*\\b(?:JpaRepository|Repository)\\b.*");
       if (bean) {
         Set<String> contracts = contracts(file);
         result.add(new BeanCandidate(
@@ -363,6 +377,7 @@ final class SourceMetadataScanner {
             conditionAnnotations(block),
             hasAnnotation(block, "Alternative"),
             hasAnnotation(block, "Primary"),
+            null,
             null,
             null));
       }
@@ -389,7 +404,8 @@ final class SourceMetadataScanner {
             hasAnnotation(block, "Alternative") || hasAnnotation(method.annotationBlock(), "Alternative"),
             hasAnnotation(block, "Primary") || hasAnnotation(method.annotationBlock(), "Primary"),
             method.name(),
-            method.returnType()));
+            method.returnType(),
+            method.parameters()));
       }
     }
     return List.copyOf(result);
@@ -412,7 +428,9 @@ final class SourceMetadataScanner {
             ? !method.name().equals(file.simpleTypeName())
             : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
                 || SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(classBlock, name));
-        if (selected) {
+        if (selected && (framework != AnalysisContext.Framework.SPRING_BOOT
+            || (!hasModifier(method.annotationBlock(), "private")
+                && !hasModifier(method.annotationBlock(), "static")))) {
           result.add(new ProxyTarget(
               file,
               method,
@@ -801,18 +819,71 @@ final class SourceMetadataScanner {
         || hasAnnotation(block, "Resource");
   }
 
-  /** Extracts implemented and extended contract type names. */
+  /** Extracts implemented interfaces and the direct superclass from one type header. */
   private static Set<String> contracts(SourceFile file) {
     Set<String> contracts = new LinkedHashSet<>();
-    Matcher implementsMatcher = Pattern.compile("\\bimplements\\s+([^\\{]+)").matcher(file.structuralSource());
-    if (implementsMatcher.find()) {
-      contracts.addAll(typeNames(implementsMatcher.group(1)));
+    String header = typeHeader(file);
+    String normalized = stripBalancedGenericArguments(header);
+    int implementsIndex = keywordIndex(normalized, "implements");
+    int extendsIndex = keywordIndex(normalized, "extends");
+    if (implementsIndex >= 0) {
+      int end = keywordIndexAfter(normalized, "permits", implementsIndex + "implements".length());
+      String implemented = normalized.substring(
+          implementsIndex + "implements".length(), end >= 0 ? end : normalized.length());
+      contracts.addAll(typeNames(implemented));
     }
-    Matcher extendsMatcher = Pattern.compile("\\bextends\\s+([^\\{]+)").matcher(file.structuralSource());
-    if (extendsMatcher.find()) {
-      contracts.addAll(typeNames(extendsMatcher.group(1)));
+    if (extendsIndex >= 0) {
+      int end = implementsIndex >= 0 ? implementsIndex : keywordIndexAfter(
+          normalized, "permits", extendsIndex + "extends".length());
+      String extended = normalized.substring(
+          extendsIndex + "extends".length(), end >= 0 ? end : normalized.length());
+      List<String> extendedTypes = typeNames(extended);
+      if (normalized.matches("(?s).*\\binterface\\s+\\w+.*")) {
+        contracts.addAll(extendedTypes);
+      } else if (!extendedTypes.isEmpty()) {
+        contracts.add(extendedTypes.get(0));
+      }
     }
     return Set.copyOf(contracts);
+  }
+
+  /** Returns the declaration header before its top-level body. */
+  private static String typeHeader(SourceFile file) {
+    String source = file.structuralSource();
+    int angleDepth = 0;
+    int parenthesisDepth = 0;
+    int bracketDepth = 0;
+    for (int index = file.typeDeclarationStart(); index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '<') {
+        angleDepth++;
+      } else if (character == '>' && angleDepth > 0) {
+        angleDepth--;
+      } else if (character == '(') {
+        parenthesisDepth++;
+      } else if (character == ')' && parenthesisDepth > 0) {
+        parenthesisDepth--;
+      } else if (character == '[') {
+        bracketDepth++;
+      } else if (character == ']' && bracketDepth > 0) {
+        bracketDepth--;
+      } else if (character == '{' && angleDepth == 0 && parenthesisDepth == 0 && bracketDepth == 0) {
+        return source.substring(file.typeDeclarationStart(), index);
+      }
+    }
+    return source.substring(file.typeDeclarationStart());
+  }
+
+  /** Finds a word boundary keyword in a declaration header. */
+  private static int keywordIndex(String source, String keyword) {
+    return keywordIndexAfter(source, keyword, 0);
+  }
+
+  /** Finds a word boundary keyword after a declaration-header offset. */
+  private static int keywordIndexAfter(String source, String keyword, int offset) {
+    Matcher matcher = Pattern.compile("\\b" + Pattern.quote(keyword) + "\\b")
+        .matcher(source);
+    return matcher.find(offset) ? matcher.start() : -1;
   }
 
   /** Extracts profile values from an annotation block. */
@@ -987,7 +1058,7 @@ final class SourceMetadataScanner {
   private static List<String> typeNames(String source) {
     List<String> result = new ArrayList<>();
     for (String raw : splitArguments(source)) {
-      String type = raw.trim().replaceAll("<.*>", "").trim();
+      String type = stripBalancedGenericArguments(raw.trim()).trim();
       if (!type.isBlank()) {
         result.add(simpleName(type));
       }
@@ -1029,6 +1100,12 @@ final class SourceMetadataScanner {
     return !annotationOccurrences(block, name).isEmpty();
   }
 
+  /** Checks a method declaration modifier without reading annotation arguments as modifiers. */
+  private static boolean hasModifier(String block, String modifier) {
+    String structural = maskAnnotationArguments(stripComments(block == null ? "" : block));
+    return Pattern.compile("\\b" + Pattern.quote(modifier) + "\\b").matcher(structural).find();
+  }
+
   /** Recognizes only the CDI producer annotation, not JAX-RS response producers. */
   private static boolean cdiProducerAnnotation(SourceFile file, String block) {
     return annotationOccurrences(block, "Produces").stream()
@@ -1040,11 +1117,30 @@ final class SourceMetadataScanner {
 
   /** Checks whether a simple {@code @Produces} resolves to a CDI import. */
   private static boolean importsCdiProducer(SourceFile file) {
-    Matcher matcher = Pattern.compile(
-        "(?m)^\\s*import\\s+(jakarta\\.enterprise\\.inject\\.Produces|javax\\.enterprise\\.inject\\.Produces|"
-            + "jakarta\\.enterprise\\.inject\\.\\*|javax\\.enterprise\\.inject\\.\\*)\\s*;")
+    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*(?:\\.\\*)?)\\s*;")
         .matcher(file.structuralSource());
-    return matcher.find();
+    boolean explicitCdi = false;
+    boolean explicitOther = false;
+    boolean cdiWildcard = false;
+    while (matcher.find()) {
+      String imported = matcher.group(1);
+      if (CDI_PRODUCER_ANNOTATIONS.contains(imported)) {
+        explicitCdi = true;
+      } else if (imported.endsWith(".Produces")) {
+        explicitOther = true;
+      }
+      if (imported.equals("jakarta.enterprise.inject.*")
+          || imported.equals("javax.enterprise.inject.*")) {
+        cdiWildcard = true;
+      }
+    }
+    if (explicitOther) {
+      return false;
+    }
+    if (explicitCdi) {
+      return true;
+    }
+    return cdiWildcard;
   }
 
   /** Extracts the annotation type name from its source spelling. */
@@ -1413,7 +1509,8 @@ final class SourceMetadataScanner {
       boolean alternative,
       boolean primary,
       String producerMethod,
-      String producerSignature) {
+      String producerSignature,
+      String producerParameters) {
     BeanCandidate(SourceFile file, Set<String> contracts, String kind) {
       this(
           file,
@@ -1426,6 +1523,7 @@ final class SourceMetadataScanner {
           List.of(),
           false,
           false,
+          null,
           null,
           null);
     }

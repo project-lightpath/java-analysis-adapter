@@ -876,9 +876,36 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && !metadataTypeMatches(scanner, row.declaringType(), candidate.file().typeName())) {
       return false;
     }
-    return row.producerMethod() == null
-        || row.producerMethod().isBlank()
-        || row.producerMethod().equals(candidate.producerMethod());
+    if (row.producerMethod() != null && !row.producerMethod().isBlank()) {
+      if (!candidate.producer() || !row.producerMethod().equals(candidate.producerMethod())) {
+        return false;
+      }
+      return producerSignatureMatches(scanner, row, candidate);
+    }
+    if (row.producerSignature() != null && !row.producerSignature().isBlank()) {
+      return candidate.producer() && producerSignatureMatches(scanner, row, candidate);
+    }
+    return !candidate.producer() || producerOverloadCount(candidate) == 1;
+  }
+
+  /** Matches a producer metadata descriptor without conflating overloaded methods. */
+  private static boolean producerSignatureMatches(
+      SourceMetadataScanner scanner,
+      AnalysisContext.BindingCandidateMetadata row,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    if (row.producerSignature() == null || row.producerSignature().isBlank()) {
+      return producerOverloadCount(candidate) == 1;
+    }
+    return producerDescriptor(scanner, candidate)
+        .map(row.producerSignature()::equals)
+        .orElse(false);
+  }
+
+  /** Counts declarations sharing a producer method name for conservative fallback matching. */
+  private static long producerOverloadCount(SourceMetadataScanner.BeanCandidate candidate) {
+    return SourceMetadataScanner.methods(candidate.file()).stream()
+        .filter(method -> method.name().equals(candidate.producerMethod()))
+        .count();
   }
 
   /** Finds resolved binding rows for one source injection parameter. */
@@ -983,18 +1010,37 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   private static Optional<String> methodDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScanner.ProxyTarget target) {
+    return methodDescriptor(scanner, target.file(), target.method().parameters(), target.method().returnType());
+  }
+
+  /** Builds a JVM descriptor from one source method signature. */
+  private static Optional<String> methodDescriptor(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile sourceFile,
+      String parameters,
+      String returnType) {
     StringBuilder descriptor = new StringBuilder("(");
-    for (SourceMetadataScanner.Parameter parameter :
-        SourceMetadataScanner.parameters(target.method().parameters())) {
-      Optional<String> parameterDescriptor = jvmDescriptor(parameter.type(), target.file(), scanner);
+    for (SourceMetadataScanner.Parameter parameter : SourceMetadataScanner.parameters(parameters)) {
+      Optional<String> parameterDescriptor = jvmDescriptor(parameter.type(), sourceFile, scanner);
       if (parameterDescriptor.isEmpty()) {
         return Optional.empty();
       }
       descriptor.append(parameterDescriptor.get());
     }
     descriptor.append(')');
-    Optional<String> returnDescriptor = jvmDescriptor(target.method().returnType(), target.file(), scanner);
+    Optional<String> returnDescriptor = jvmDescriptor(returnType, sourceFile, scanner);
     return returnDescriptor.map(value -> descriptor.append(value).toString());
+  }
+
+  /** Builds a JVM descriptor for a source producer candidate. */
+  private static Optional<String> producerDescriptor(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    return methodDescriptor(
+        scanner,
+        candidate.file(),
+        candidate.producerParameters(),
+        candidate.producerSignature());
   }
 
   /** Resolves one Java type to a JVM descriptor without guessing unknown references. */
@@ -1352,7 +1398,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         parameter.type(),
         candidate == null ? "unresolved" : candidate.candidateId(),
         candidate == null ? "" : candidate.candidateType(),
-        candidate == null ? "" : candidate.producerSignature());
+        candidate == null ? "" : candidate.producerSignature(),
+        candidate == null ? "" : candidate.producerParameters());
     return framework.id() + "-injection-"
         + slug(injection.file().typeName() + "-" + injection.member() + "-" + parameter.type()
             + "-" + candidateName)

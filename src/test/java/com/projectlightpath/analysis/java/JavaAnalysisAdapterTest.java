@@ -1372,6 +1372,146 @@ class JavaAnalysisAdapterTest {
     assertEquals(2, proxies.stream().map(SemanticCallFacts.Fact::id).distinct().count());
   }
 
+  /** Uses producer descriptors for overloads and resolves primitive and array return types. */
+  @Test
+  void producerMetadataUsesDescriptorsAndResolvesPrimitiveArrayTypes() throws IOException {
+    Path sourceRoot = temp.resolve("producer-descriptors/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject Token token;
+          @Inject String[] names;
+          @Inject int count;
+        }
+        """);
+    write(sourceRoot, "demo/Token.java", "package demo; public class Token { }\n");
+    write(sourceRoot, "demo/Producer.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class Producer {
+          @jakarta.enterprise.inject.Produces Token token() { return null; }
+          @jakarta.enterprise.inject.Produces Token token(String name) { return null; }
+          @jakarta.enterprise.inject.Produces String[] names() { return null; }
+          @jakarta.enterprise.inject.Produces int count() { return 0; }
+        }
+        """);
+    write(sourceRoot, "demo/RestResource.java", """
+        package demo;
+        import jakarta.enterprise.inject.*;
+        import jakarta.ws.rs.Produces;
+        @jakarta.enterprise.context.ApplicationScoped public class RestResource {
+          @Produces("text/plain") Token response() { return null; }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "token-noarg-row", "demo.Token", List.of(), List.of(), "producer",
+                "demo.Producer", "token", "()Ldemo/Token;", List.of(), List.of(), false,
+                false, false, null, null),
+            new AnalysisContext.BindingCandidateMetadata(
+                "token-arg-row", "demo.Token", List.of(), List.of(), "producer",
+                "demo.Producer", "token", "(Ljava/lang/String;)Ldemo/Token;", List.of(), List.of(), true,
+                false, false, null, null)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "consumer-token", "demo.Consumer", "token", "Token", null, List.of(),
+            "token-arg-row", true, true, "selected overload", null, null)),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(3, injections.size());
+    SemanticCallFacts.Fact token = injections.stream()
+        .filter(item -> item.callee().equals("demo.Producer#token"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.Producer#token", token.callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, token.certainty());
+    assertTrue(token.evidence().stream().anyMatch(item ->
+        "token-arg-row".equals(item.attributes().get("candidateMetadataId"))), token.toString());
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("demo.Producer#names")));
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("demo.Producer#count")));
+    assertFalse(injections.stream().anyMatch(item -> item.callee().equals("demo.RestResource#response")));
+  }
+
+  /** Keeps superclass and interface contracts separate for inherited injection matching. */
+  @Test
+  void inheritedSuperclassContractMatchesInjectionWithoutCapturingImplementsClause() throws IOException {
+    Path sourceRoot = temp.resolve("inheritance-contracts/src/main/java");
+    write(sourceRoot, "demo/ParentService.java", "package demo; public class ParentService { }\n");
+    write(sourceRoot, "demo/ServiceContract.java", "package demo; public interface ServiceContract { }\n");
+    write(sourceRoot, "demo/ChildService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class ChildService extends ParentService implements ServiceContract { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject ParentService service;
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SemanticCallFacts.Fact injection = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty())
+        .frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.ChildService#<init>", injection.callee());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injection.certainty());
+  }
+
+  /** Excludes Spring methods that proxy infrastructure cannot intercept. */
+  @Test
+  void springProxyTargetsExcludePrivateAndStaticMethods() throws IOException {
+    Path sourceRoot = temp.resolve("spring-proxy-modifiers/src/main/java");
+    write(sourceRoot, "demo/ProxyService.java", """
+        package demo;
+        import org.springframework.scheduling.annotation.Async;
+        import org.springframework.stereotype.Service;
+        @Async @Service public class ProxyService {
+          public void visible() { }
+          private void hidden() { }
+          static void staticWork() { }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(
+            new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"),
+            new AnalysisContext.FrameworkMetadata(
+                "spring-aop-advisor-metadata", "runtime_or_build_metadata", AnalysisContext.MetadataStatus.OBSERVED,
+                "target/aop.json")));
+
+    List<SemanticCallFacts.Fact> proxies = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .toList();
+    assertEquals(1, proxies.size());
+    assertEquals("demo.ProxyService#visible", proxies.get(0).callee());
+  }
+
   /** Builds the minimal production context used by adapter fixtures. */
   private AnalysisContext context(
       AnalysisContext.Framework framework,
