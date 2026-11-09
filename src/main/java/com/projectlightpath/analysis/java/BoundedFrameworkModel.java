@@ -140,13 +140,13 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         : "spring-bean-definition-registry";
     List<SourceMetadataScanner.InjectionPoint> injectionPoints =
         scanner.injectionPoints(framework);
-    Map<String, Integer> injectionCounts = new HashMap<>();
+    Map<String, Integer> injectionParameterCounts = new HashMap<>();
     for (SourceMetadataScanner.InjectionPoint injection : injectionPoints) {
-      injectionCounts.merge(
+      injectionParameterCounts.merge(
           injection.file().simpleTypeName(), injection.parameters().size(), Integer::sum);
     }
     for (SourceMetadataScanner.InjectionPoint injection : injectionPoints) {
-      boolean uniqueInjectionSite = injectionCounts.getOrDefault(
+      boolean uniqueInjectionSite = injectionParameterCounts.getOrDefault(
           injection.file().simpleTypeName(), 0) == 1;
       for (int parameterIndex = 0;
           parameterIndex < injection.parameters().size();
@@ -1571,12 +1571,18 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && legacyIdAllowed) {
       return "spring-controller-to-service-injection";
     }
+    String injectionSignature = injection.member() + "("
+        + String.join(",", injection.parameters().stream()
+            .map(SourceMetadataScanner.Parameter::type)
+            .toList())
+        + ")";
     String identity = String.join("\u0000",
         framework.id(),
         injection.file().typeName(),
         injection.file().displayPath(),
         injection.member(),
         injection.kind(),
+        injectionSignature,
         parameter.name(),
         parameter.type(),
         candidate == null ? "unresolved" : candidate.candidateId(),

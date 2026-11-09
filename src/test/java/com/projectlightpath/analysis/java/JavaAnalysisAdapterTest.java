@@ -483,6 +483,55 @@ class JavaAnalysisAdapterTest {
         item -> item.id().equals("spring-controller-to-service-injection")));
   }
 
+  /** Includes overloaded injection method signatures in fallback fact IDs. */
+  @Test
+  void overloadedInjectionMethodsReceiveDistinctFactIds() throws IOException {
+    Path sourceRoot = temp.resolve("overloaded-injection-ids/quarkus/src/main/java");
+    write(sourceRoot, "demo/TransferResource.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/transfers") public class TransferResource {
+          @Inject void set(DefaultTransferService service) { }
+          @Inject void set(DefaultTransferService service, OtherService other) { }
+        }
+        """);
+    write(sourceRoot, "demo/DefaultTransferService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class DefaultTransferService { }
+        """);
+    write(sourceRoot, "demo/OtherService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class OtherService { }
+        """);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.QUARKUS,
+            sourceRoot,
+            null,
+            List.of(new AnalysisContext.FrameworkMetadata(
+                "quarkus-cdi-annotations",
+                "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"))),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> defaultServiceInjections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.callee().equals("demo.DefaultTransferService#<init>"))
+        .toList();
+
+    assertEquals(2, defaultServiceInjections.size());
+    assertEquals(2, defaultServiceInjections.stream()
+        .map(SemanticCallFacts.Fact::id)
+        .distinct()
+        .count());
+    assertTrue(defaultServiceInjections.stream()
+        .noneMatch(item -> item.id().equals("quarkus-resource-to-cdi-bean")));
+  }
+
   /** Enumerates Quarkus route paths and rejects method-only roots. */
   @Test
   void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {
