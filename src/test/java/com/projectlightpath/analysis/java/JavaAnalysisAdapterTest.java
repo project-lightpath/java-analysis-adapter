@@ -409,6 +409,80 @@ class JavaAnalysisAdapterTest {
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.id().equals("spring-boot-to-data-seeder")));
   }
 
+  /** Avoids reusing legacy injection IDs when one owner has multiple injection sites. */
+  @Test
+  void repeatedLegacyInjectionSitesReceiveDistinctFactIds() throws IOException {
+    Path quarkusSource = temp.resolve("repeated-injection-ids/quarkus/src/main/java");
+    write(quarkusSource, "demo/TransferResource.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/transfers") public class TransferResource {
+          @Inject DefaultTransferService first;
+          @Inject DefaultTransferService second;
+        }
+        """);
+    write(quarkusSource, "demo/DefaultTransferService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class DefaultTransferService { }
+        """);
+
+    SemanticCallFacts quarkusFacts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.QUARKUS,
+            quarkusSource,
+            null,
+            List.of(new AnalysisContext.FrameworkMetadata(
+                "quarkus-cdi-annotations",
+                "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"))),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> quarkusInjections = quarkusFacts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, quarkusInjections.size());
+    assertEquals(2, quarkusInjections.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(quarkusInjections.stream().noneMatch(
+        item -> item.id().equals("quarkus-resource-to-cdi-bean")));
+
+    Path springSource = temp.resolve("repeated-injection-ids/spring/src/main/java");
+    write(springSource, "demo/TransferController.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController public class TransferController {
+          @Autowired TransactionService first;
+          @Autowired TransactionService second;
+        }
+        """);
+    write(springSource, "demo/TransactionService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class TransactionService { }
+        """);
+
+    SemanticCallFacts springFacts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            springSource,
+            null,
+            List.of(new AnalysisContext.FrameworkMetadata(
+                "spring-bean-annotations",
+                "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"))),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> springInjections = springFacts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, springInjections.size());
+    assertEquals(2, springInjections.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(springInjections.stream().noneMatch(
+        item -> item.id().equals("spring-controller-to-service-injection")));
+  }
+
   /** Enumerates Quarkus route paths and rejects method-only roots. */
   @Test
   void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {

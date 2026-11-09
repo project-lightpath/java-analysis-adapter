@@ -105,10 +105,11 @@ public final class SootUpBaseGraphProvider {
         continue;
       }
       String sourcePath = sourcePath(context, caller.owner());
-      String methodSource = scanner.methodSource(caller, call.getLineNumber()).orElse("");
-      boolean serviceLoaderCall = scanner.sourceLineContains(
-          caller, call.getLineNumber(), "ServiceLoader.load")
-          || (call.getLineNumber() <= 0 && methodSource.contains("ServiceLoader.load"));
+      boolean serviceLoaderCall = call.getLineNumber() > 0
+          ? scanner.sourceLineContains(caller, call.getLineNumber(), "ServiceLoader.load")
+          : scanner.methodSource(caller, call.getLineNumber())
+              .map(source -> source.contains("ServiceLoader.load"))
+              .orElse(false);
       boolean interfaceDispatch = scanner.isInterfaceType(callee.owner())
           || call.invokableStmt().getInvokeExpr()
               .map(expression -> expression instanceof JInterfaceInvokeExpr)
@@ -129,7 +130,12 @@ public final class SootUpBaseGraphProvider {
           certainty,
           relationshipType));
     }
-    result.sort(Comparator.comparing(edge -> edge.caller().descriptor() + "->" + edge.callee().descriptor()));
+    result.sort(Comparator.comparing((CallEdge edge) -> edge.caller().displayName())
+        .thenComparing(edge -> edge.caller().descriptor())
+        .thenComparing(edge -> edge.callee().displayName())
+        .thenComparing(edge -> edge.callee().descriptor())
+        .thenComparingInt(CallEdge::line)
+        .thenComparing(CallEdge::relationshipType));
     return List.copyOf(result);
   }
 

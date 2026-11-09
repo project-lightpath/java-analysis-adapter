@@ -138,8 +138,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     String registryMetadata = framework == AnalysisContext.Framework.QUARKUS
         ? "quarkus-arc-bean-index"
         : "spring-bean-definition-registry";
-    for (SourceMetadataScanner.InjectionPoint injection : scanner.injectionPoints(framework)) {
-      for (int parameterIndex = 0; parameterIndex < injection.parameters().size(); parameterIndex++) {
+    List<SourceMetadataScanner.InjectionPoint> injectionPoints =
+        scanner.injectionPoints(framework);
+    Map<String, Integer> injectionCounts = new HashMap<>();
+    for (SourceMetadataScanner.InjectionPoint injection : injectionPoints) {
+      injectionCounts.merge(
+          injection.file().simpleTypeName(), injection.parameters().size(), Integer::sum);
+    }
+    for (SourceMetadataScanner.InjectionPoint injection : injectionPoints) {
+      boolean uniqueInjectionSite = injectionCounts.getOrDefault(
+          injection.file().simpleTypeName(), 0) == 1;
+      for (int parameterIndex = 0;
+          parameterIndex < injection.parameters().size();
+          parameterIndex++) {
         SourceMetadataScanner.Parameter parameter = injection.parameters().get(parameterIndex);
         List<SourceMetadataScanner.BeanCandidate> typeMatches = candidates.stream()
             .filter(candidate -> matches(context, scanner, injection.file(), parameter.type(), candidate))
@@ -195,6 +206,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         if (selectedRows.isEmpty()) {
           matches = bindingPreference(context, scanner, matches);
         }
+        boolean legacyIdAllowed = uniqueInjectionSite && matches.size() == 1;
 
         if (matches.isEmpty()) {
           facts.add(injectionFact(
@@ -210,6 +222,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               List.of(),
               null,
               scanner,
+              legacyIdAllowed,
               "No active bounded bean candidate matches the injection type, qualifiers, profile, or binding metadata."));
           continue;
         }
@@ -281,6 +294,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               bindingRows,
               parameterIndex,
               scanner,
+              legacyIdAllowed,
               limitation));
         }
       }
@@ -302,13 +316,14 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       List<AnalysisContext.ResolvedBindingMetadata> bindingRows,
       Integer parameterIndex,
       SourceMetadataScanner scanner,
+      boolean legacyIdAllowed,
       String limitation) {
     String owner = injection.file().typeName();
     String target = candidate == null
         ? parameter.type() + "#<unresolved-bean>"
         : candidate.target();
     String callerPrefix = framework == AnalysisContext.Framework.QUARKUS ? "quarkus" : "spring";
-    String id = injectionFactId(scanner, injection, parameter, candidate);
+    String id = injectionFactId(scanner, injection, parameter, candidate, legacyIdAllowed);
     String displayedQualifiers = String.join(",", displayQualifiers(
         mergeQualifiers(injection.qualifiers(), parameter.qualifiers())));
     List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
@@ -319,9 +334,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         injection.line(),
         Map.of(
             "parameter", parameter.type(),
-             "parameterIndex", parameterIndex == null ? "" : parameterIndex.toString(),
-             "injectionKind", injection.kind(),
-             "qualifiers", displayedQualifiers)));
+            "parameterIndex", parameterIndex == null ? "" : parameterIndex.toString(),
+            "injectionKind", injection.kind(),
+            "qualifiers", displayedQualifiers)));
     if (candidate != null) {
       Map<String, String> attributes = new HashMap<>();
       attributes.put("candidateCount", Integer.toString(candidateCount));
@@ -1532,7 +1547,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SourceMetadataScanner scanner,
       SourceMetadataScanner.InjectionPoint injection,
       SourceMetadataScanner.Parameter parameter,
-      SourceMetadataScanner.BeanCandidate candidate) {
+      SourceMetadataScanner.BeanCandidate candidate,
+      boolean legacyIdAllowed) {
     String owner = injection.file().simpleTypeName();
     String candidateName = candidate == null ? "unresolved" : candidate.file().simpleTypeName();
     if (framework == AnalysisContext.Framework.QUARKUS
@@ -1541,7 +1557,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && !candidate.producer()
         && candidateName.equals("DefaultTransferService")
         && uniqueSimpleType(scanner, owner)
-        && uniqueSimpleType(scanner, candidateName)) {
+        && uniqueSimpleType(scanner, candidateName)
+        && legacyIdAllowed) {
       return "quarkus-resource-to-cdi-bean";
     }
     if (framework == AnalysisContext.Framework.SPRING_BOOT
@@ -1550,7 +1567,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && !candidate.producer()
         && candidateName.equals("TransactionService")
         && uniqueSimpleType(scanner, owner)
-        && uniqueSimpleType(scanner, candidateName)) {
+        && uniqueSimpleType(scanner, candidateName)
+        && legacyIdAllowed) {
       return "spring-controller-to-service-injection";
     }
     String identity = String.join("\u0000",
