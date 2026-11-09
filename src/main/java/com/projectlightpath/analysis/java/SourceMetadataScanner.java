@@ -161,6 +161,7 @@ final class SourceMetadataScanner {
 
   private final AnalysisContext context;
   private List<SourceFile> files;
+  private Set<String> declaredTypeNames;
 
   /** Creates a scanner over the selected analysis source roots. */
   SourceMetadataScanner(AnalysisContext context) {
@@ -190,6 +191,21 @@ final class SourceMetadataScanner {
     result.sort(Comparator.comparing(SourceFile::displayPath));
     files = List.copyOf(result);
     return files;
+  }
+
+  /** Returns fully qualified source owners, including nested declarations. */
+  Set<String> declaredTypeNames() {
+    if (declaredTypeNames != null) {
+      return declaredTypeNames;
+    }
+    Set<String> result = new LinkedHashSet<>();
+    for (SourceFile file : files()) {
+      for (TypeInfo type : typeDeclarations(file)) {
+        result.add(typeContaining(file, type.start()));
+      }
+    }
+    declaredTypeNames = Set.copyOf(result);
+    return declaredTypeNames;
   }
 
   /** Returns whether a source declaration is an interface in the selected roots. */

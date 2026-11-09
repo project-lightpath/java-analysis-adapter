@@ -650,6 +650,91 @@ class JavaAnalysisAdapterTest {
     assertEquals("first-service", injections.get(0).evidence().get(1).attributes().get("bindingMetadataId"));
   }
 
+  /** Keeps an unqualified nested owner ambiguous across packages. */
+  @Test
+  void ambiguousNestedOwnerMetadataDoesNotPromoteBindings() throws IOException {
+    Path sourceRoot = temp.resolve("ambiguous-nested-owner/quarkus/src/main/java");
+    write(sourceRoot, "one/Outer.java", """
+        package one;
+        import api.Service;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/one") public class Outer {
+          static class Nested { @Inject Service service; }
+        }
+        """);
+    write(sourceRoot, "two/Outer.java", """
+        package two;
+        import api.Service;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/two") public class Outer {
+          static class Nested { @Inject Service service; }
+        }
+        """);
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { }\n");
+    write(sourceRoot, "one/OneService.java", """
+        package one;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class OneService implements api.Service { }
+        """);
+    write(sourceRoot, "two/TwoService.java", """
+        package two;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class TwoService implements api.Service { }
+        """);
+
+    AnalysisContext.FrameworkBindingMetadata bindingMetadata =
+        new AnalysisContext.FrameworkBindingMetadata(
+            "0.1.0",
+            List.of(
+                new AnalysisContext.BindingCandidateMetadata(
+                    "one-service", "one.OneService", List.of("api.Service", "Service"), List.of(), "bean",
+                    true, false, false),
+                new AnalysisContext.BindingCandidateMetadata(
+                    "two-service", "two.TwoService", List.of("api.Service", "Service"), List.of(), "bean",
+                    true, false, false)),
+            List.of(new AnalysisContext.ResolvedBindingMetadata(
+                "ambiguous-nested-binding",
+                "Outer$Nested",
+                "service",
+                "Service",
+                null,
+                List.of(),
+                "one-service",
+                true,
+                true,
+                "ambiguous unqualified nested owner",
+                null,
+                null)),
+            List.of());
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.QUARKUS,
+            sourceRoot,
+            null,
+            List.of(new AnalysisContext.FrameworkMetadata(
+                "quarkus-cdi-annotations",
+                "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java")),
+            bindingMetadata),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    assertEquals(4, injections.size());
+    assertTrue(injections.stream()
+        .allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
+    assertEquals(2, injections.stream()
+        .map(SemanticCallFacts.Fact::caller)
+        .map(caller -> caller.substring(0, caller.indexOf('#')))
+        .distinct()
+        .count());
+  }
+
   /** Enumerates Quarkus route paths and rejects method-only roots. */
   @Test
   void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {

@@ -1124,8 +1124,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return normalizedMetadata.equals(normalizedSource)
         || (!normalizedMetadata.contains(".")
             && normalizedMetadata.equals(simpleName(normalizedSource))
-            && scanner.files().stream()
-                .filter(file -> file.simpleTypeName().equalsIgnoreCase(normalizedMetadata))
+            && scanner.declaredTypeNames().stream()
+                .filter(type -> simpleName(type).equalsIgnoreCase(normalizedMetadata))
                 .count() <= 1);
   }
 
