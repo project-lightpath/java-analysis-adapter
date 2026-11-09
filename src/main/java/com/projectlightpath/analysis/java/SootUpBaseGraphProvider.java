@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import sootup.callgraph.CallGraph;
 import sootup.callgraph.ClassHierarchyAnalysisAlgorithm;
 import sootup.core.inputlocation.AnalysisInputLocation;
+import sootup.core.jimple.common.expr.JInterfaceInvokeExpr;
 import sootup.core.model.SootMethod;
 import sootup.core.model.SourceType;
 import sootup.core.signatures.MethodSignature;
@@ -104,17 +105,20 @@ public final class SootUpBaseGraphProvider {
         continue;
       }
       String sourcePath = sourcePath(context, caller.owner());
-      String source = sourceFor(scanner, caller.owner());
-      boolean serviceLoaderCall = source.contains("ServiceLoader.load")
-          || (caller.owner().endsWith("ServiceLoaderBridge") && caller.name().startsWith("lambda$"));
-      String relationshipType = serviceLoaderCall ? "service_loader"
-          : caller.name().startsWith("lambda$") ? "callback" : "invokes";
-      boolean boundedDispatch = scanner.files().stream()
-          .filter(file -> file.typeName().equals(callee.owner()))
-          .anyMatch(file -> file.source().matches("(?s).*\\bimplements\\s+[^\\{]+.*"));
-      boolean sourceNamesConcreteTarget = source.contains(simpleName(callee.owner()));
+      String methodSource = scanner.methodSource(caller, call.getLineNumber()).orElse("");
+      boolean serviceLoaderCall = scanner.sourceLineContains(
+          caller, call.getLineNumber(), "ServiceLoader.load")
+          || (call.getLineNumber() <= 0 && methodSource.contains("ServiceLoader.load"));
+      boolean interfaceDispatch = scanner.isInterfaceType(callee.owner())
+          || call.invokableStmt().getInvokeExpr()
+              .map(expression -> expression instanceof JInterfaceInvokeExpr)
+              .orElse(false);
+      String relationshipType = serviceLoaderCall
+          ? "service_loader"
+          : interfaceDispatch
+              ? "interface_dispatch"
+              : caller.name().startsWith("lambda$") ? "callback" : "invokes";
       SemanticCallFacts.Certainty certainty = relationshipType.equals("invokes")
-              && !(boundedDispatch && !sourceNamesConcreteTarget)
           ? SemanticCallFacts.Certainty.DEFINITE
           : SemanticCallFacts.Certainty.POSSIBLE;
       result.add(new CallEdge(
@@ -129,11 +133,6 @@ public final class SootUpBaseGraphProvider {
     return List.copyOf(result);
   }
 
-  private static String simpleName(String typeName) {
-    int dot = typeName.lastIndexOf('.');
-    return dot < 0 ? typeName : typeName.substring(dot + 1);
-  }
-
   private static String sourcePath(AnalysisContext context, String owner) {
     String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
     String relative = topLevel.replace('.', '/') + ".java";
@@ -146,12 +145,4 @@ public final class SootUpBaseGraphProvider {
     return "unknown";
   }
 
-  private static String sourceFor(SourceMetadataScanner scanner, String owner) {
-    String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
-    return scanner.files().stream()
-        .filter(file -> file.typeName().equals(topLevel))
-        .map(SourceMetadataScanner.SourceFile::source)
-        .findFirst()
-        .orElse("");
-  }
 }

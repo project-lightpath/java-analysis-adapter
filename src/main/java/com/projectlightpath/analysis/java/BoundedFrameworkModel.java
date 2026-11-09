@@ -561,7 +561,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           : SemanticCallFacts.Certainty.UNRESOLVED;
       String callee = generated.file().typeName() + "#" + generated.method().name();
       facts.add(SemanticCallFacts.Fact.framework(
-          generatedFactId(generated),
+          generatedFactId(scanner, generated),
           context,
           "quarkus:generated-source:" + generated.file().typeName(),
           callee,
@@ -585,6 +585,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   private List<SemanticCallFacts.Fact> dynamicProxyFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
+    Set<String> factIds = new LinkedHashSet<>();
     for (DynamicFeature feature : scanner.dynamicFeatures()) {
       if (feature.kind() != DynamicFeature.Kind.DYNAMIC_PROXY) {
         continue;
@@ -593,8 +594,12 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           ? feature.target().substring(0, feature.target().indexOf('#'))
           : feature.target();
       String caller = framework.id() + ":dynamic-proxy:" + targetOwner;
+      String factId = uniqueFactId(
+          factIds,
+          dynamicProxyFactId(scanner, feature),
+          dynamicFeatureIdentity(feature));
       facts.add(SemanticCallFacts.Fact.framework(
-          dynamicProxyFactId(feature),
+          factId,
           context,
           caller,
           feature.target(),
@@ -605,8 +610,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               "dynamic_proxy_call",
               feature.sourcePath(),
               feature.symbols(),
-              null,
-              Map.of("caller", feature.caller().displayName()))),
+              feature.sourceLine() > 0 ? feature.sourceLine() : null,
+              dynamicProxyEvidenceAttributes(feature))),
           feature.limitation()));
     }
     return facts;
@@ -617,17 +622,15 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     boolean metadataAvailable = context.metadataObserved("spring-data-repository-contract");
-    for (SourceMetadataScanner.BeanCandidate candidate : scanner.beanCandidates(framework)) {
+    List<SourceMetadataScanner.BeanCandidate> candidates = scanner.beanCandidates(framework);
+    for (SourceMetadataScanner.BeanCandidate candidate : candidates) {
       if (!candidate.kind().equals("repository_interface")) {
         continue;
       }
       SemanticCallFacts.Certainty certainty = metadataAvailable
           ? SemanticCallFacts.Certainty.POSSIBLE
           : SemanticCallFacts.Certainty.UNRESOLVED;
-      String simple = candidate.file().simpleTypeName();
-      String id = simple.equals("AccountRepository")
-          ? "spring-data-generated-account-repository"
-          : "spring-data-generated-" + slug(simple);
+      String id = springRepositoryFactId(scanner, candidates, candidate);
       facts.add(SemanticCallFacts.Fact.framework(
           id,
           context,
@@ -662,7 +665,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             continue;
           }
           facts.add(SemanticCallFacts.Fact.framework(
-              lifecycleFactId(file, method, "bean"),
+              lifecycleFactId(scanner, file, method, "bean"),
               context,
               "Spring ApplicationContext",
               file.typeName() + "#" + method.name(),
@@ -684,7 +687,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
             continue;
           }
           facts.add(SemanticCallFacts.Fact.framework(
-              lifecycleFactId(file, method, "runner"),
+              lifecycleFactId(scanner, file, method, "runner"),
               context,
               "Spring Boot application lifecycle",
               file.typeName() + "#run",
@@ -1617,29 +1620,161 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .count() == 1;
   }
 
-  private String generatedFactId(SourceMetadataScanner.GeneratedMethod generated) {
+  private String generatedFactId(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.GeneratedMethod generated) {
     if (generated.file().simpleTypeName().equals("GeneratedTransferMapper")
-        && generated.method().name().equals("toResponse")) {
+        && generated.method().name().equals("toResponse")
+        && uniqueSimpleType(scanner, generated.file().simpleTypeName())
+        && uniqueMethodName(generated.file(), generated.method().name())
+        && scanner.generatedMethods().stream()
+            .filter(item -> item.file().simpleTypeName().equals(generated.file().simpleTypeName()))
+            .filter(item -> item.method().name().equals(generated.method().name()))
+            .count() == 1) {
       return "quarkus-generated-mapper-binding";
     }
-    return "quarkus-generated-" + slug(generated.file().simpleTypeName() + "-" + generated.method().name());
+    String identity = String.join("\u0000",
+        framework.id(),
+        generated.file().typeName(),
+        generated.file().displayPath(),
+        generated.method().name(),
+        generated.method().parameters().replaceAll("\\s+", " ").trim(),
+        generated.method().returnType(),
+        Integer.toString(generated.method().start()));
+    return framework.id() + "-generated-"
+        + slug(generated.file().typeName() + "-" + generated.method().name())
+        + "-" + digest(identity).substring(0, 16);
   }
 
-  private String dynamicProxyFactId(DynamicFeature feature) {
-    if (framework == AnalysisContext.Framework.QUARKUS && feature.target().contains("AuthCallback#onAuthenticated")) {
+  private String dynamicProxyFactId(SourceMetadataScanner scanner, DynamicFeature feature) {
+    if (framework == AnalysisContext.Framework.QUARKUS
+        && dynamicTargetSimpleName(feature.target()).equals("AuthCallback")
+        && dynamicTargetMethod(feature.target()).equals("onAuthenticated")
+        && scanner.dynamicFeatures().stream()
+            .filter(item -> item.kind() == DynamicFeature.Kind.DYNAMIC_PROXY)
+            .filter(item -> dynamicTargetSimpleName(item.target()).equals("AuthCallback"))
+            .filter(item -> dynamicTargetMethod(item.target()).equals("onAuthenticated"))
+            .count() == 1) {
       return "quarkus-unbounded-proxy-abstention";
     }
-    return framework.id() + "-dynamic-proxy-" + slug(feature.target());
+    return framework.id() + "-dynamic-proxy-" + slug(feature.target())
+        + "-" + digest(dynamicFeatureIdentity(feature)).substring(0, 16);
   }
 
-  private String lifecycleFactId(SourceMetadataScanner.SourceFile file, SourceMetadataScanner.MethodInfo method, String kind) {
-    if (file.simpleTypeName().equals("SecurityConfig") && method.name().equals("securityFilterChain")) {
+  private String springRepositoryFactId(
+      SourceMetadataScanner scanner,
+      List<SourceMetadataScanner.BeanCandidate> candidates,
+      SourceMetadataScanner.BeanCandidate candidate) {
+    boolean uniqueLegacyRepository = candidate.file().simpleTypeName().equals("AccountRepository")
+        && uniqueSimpleType(scanner, candidate.file().simpleTypeName())
+        && candidates.stream()
+            .filter(item -> item.kind().equals("repository_interface"))
+            .filter(item -> item.file().simpleTypeName().equals("AccountRepository"))
+            .count() == 1
+        && SourceMetadataScanner.methods(candidate.file()).stream()
+            .filter(method -> method.name().equals("findById"))
+            .count() <= 1;
+    if (uniqueLegacyRepository) {
+      return "spring-data-generated-account-repository";
+    }
+    String identity = String.join("\u0000",
+        framework.id(),
+        candidate.file().typeName(),
+        candidate.file().displayPath(),
+        candidate.candidateId(),
+        candidate.candidateType(),
+        candidate.kind(),
+        "findById");
+    return "spring-data-generated-"
+        + slug(candidate.file().typeName() + "-findById")
+        + "-" + digest(identity).substring(0, 16);
+  }
+
+  private static String dynamicFeatureIdentity(DynamicFeature feature) {
+    return String.join("\u0000",
+        feature.kind().name(),
+        feature.caller().owner(),
+        feature.caller().name(),
+        feature.caller().descriptor(),
+        feature.target(),
+        feature.targetDescriptor(),
+        feature.sourcePath(),
+        Integer.toString(feature.sourceLine()),
+        Integer.toString(feature.sourceOffset()),
+        feature.symbols().toString());
+  }
+
+  private static String dynamicTargetSimpleName(String target) {
+    int separator = target.indexOf('#');
+    String owner = separator < 0 ? target : target.substring(0, separator);
+    return simpleName(owner);
+  }
+
+  private static String dynamicTargetMethod(String target) {
+    int separator = target.indexOf('#');
+    return separator < 0 ? "" : target.substring(separator + 1);
+  }
+
+  private static String uniqueFactId(Set<String> ids, String baseId, String identity) {
+    if (ids.add(baseId)) {
+      return baseId;
+    }
+    String suffix = digest(identity).substring(0, 16);
+    String candidate = baseId + "-" + suffix;
+    int duplicate = 2;
+    while (!ids.add(candidate)) {
+      candidate = baseId + "-" + suffix + "-" + duplicate++;
+    }
+    return candidate;
+  }
+
+  private static Map<String, String> dynamicProxyEvidenceAttributes(DynamicFeature feature) {
+    if (feature.targetDescriptor().isBlank()) {
+      return Map.of("caller", feature.caller().displayName());
+    }
+    return Map.of(
+        "caller", feature.caller().displayName(),
+        "targetDescriptor", feature.targetDescriptor());
+  }
+
+  private String lifecycleFactId(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      SourceMetadataScanner.MethodInfo method,
+      String kind) {
+    if (file.simpleTypeName().equals("SecurityConfig")
+        && method.name().equals("securityFilterChain")
+        && uniqueLifecycleMethod(scanner, file, method)) {
       return "spring-bean-factory-to-security-config";
     }
-    if (file.simpleTypeName().equals("DataSeeder") && method.name().equals("run")) {
+    if (file.simpleTypeName().equals("DataSeeder")
+        && method.name().equals("run")
+        && uniqueLifecycleMethod(scanner, file, method)) {
       return "spring-boot-to-data-seeder";
     }
-    return "spring-lifecycle-" + kind + "-" + slug(file.simpleTypeName() + "-" + method.name());
+    String identity = String.join("\u0000",
+        framework.id(),
+        kind,
+        file.typeName(),
+        file.displayPath(),
+        method.name(),
+        method.parameters().replaceAll("\\s+", " ").trim(),
+        method.returnType(),
+        Integer.toString(method.start()));
+    return "spring-lifecycle-" + kind + "-"
+        + slug(file.typeName() + "-" + method.name())
+        + "-" + digest(identity).substring(0, 16);
+  }
+
+  private static boolean uniqueLifecycleMethod(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      SourceMetadataScanner.MethodInfo method) {
+    return scanner.files().stream()
+        .filter(candidate -> candidate.simpleTypeName().equals(file.simpleTypeName()))
+        .flatMap(candidate -> SourceMetadataScanner.methods(candidate).stream())
+        .filter(candidate -> candidate.name().equals(method.name()))
+        .count() == 1;
   }
 
   private static String simpleName(String value) {

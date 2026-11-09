@@ -61,7 +61,8 @@ public final class JavaAnalysisAdapter {
     for (SemanticCallFacts.Fact frameworkFact : frameworkFacts) {
       if (frameworkFact.derivedFrom() != null) {
         boolean providerExists = providerFacts.stream()
-            .anyMatch(provider -> provider.id().equals(frameworkFact.derivedFrom()));
+            .anyMatch(provider -> provider.id().equals(frameworkFact.derivedFrom())
+                && provider.certainty() != SemanticCallFacts.Certainty.UNRESOLVED);
         result.add(providerExists
             ? frameworkFact
             : frameworkFact.withDerivedFrom(null));
@@ -120,7 +121,7 @@ public final class JavaAnalysisAdapter {
         continue;
       }
       SemanticCallFacts.Fact provider = providers.get(frameworkFact.derivedFrom());
-      if (provider != null) {
+      if (provider != null && provider.certainty() != SemanticCallFacts.Certainty.UNRESOLVED) {
         result.add(new SemanticCallFacts.Link(
             frameworkFact.id(),
             provider.id(),
