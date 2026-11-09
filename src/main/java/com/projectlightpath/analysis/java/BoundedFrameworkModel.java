@@ -1087,7 +1087,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       int parameterIndex,
       List<SourceMetadataScanner.BeanCandidate> candidates) {
     return context.resolvedBindings().stream()
-        .filter(row -> injectionOwnerMatches(scanner, row.injectionOwner(), injection.file().typeName()))
+        .filter(row -> injectionOwnerMatches(scanner, row.injectionOwner(), injection.ownerType()))
         .filter(row -> memberMatches(row.injectionMember(), injection.member()))
         .filter(row -> injectionTypesMatch(scanner, injection.file(), row.injectionType(), parameter.type()))
         .filter(row -> row.parameterIndex() == null || row.parameterIndex() == parameterIndex)

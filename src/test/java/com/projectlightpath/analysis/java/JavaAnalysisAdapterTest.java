@@ -577,6 +577,79 @@ class JavaAnalysisAdapterTest {
     assertTrue(injections.stream().anyMatch(item -> item.caller().contains("demo.TransferResource$Second")));
   }
 
+  /** Matches resolved binding metadata against nested injection owners. */
+  @Test
+  void resolvedBindingMatchesNestedInjectionOwner() throws IOException {
+    Path sourceRoot = temp.resolve("nested-binding-owner/quarkus/src/main/java");
+    write(sourceRoot, "demo/TransferResource.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/transfers") public class TransferResource {
+          static class First {
+            @Inject Service service;
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/DefaultService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class DefaultService implements Service { }
+        """);
+    write(sourceRoot, "demo/OtherService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class OtherService implements Service { }
+        """);
+
+    AnalysisContext.FrameworkBindingMetadata bindingMetadata =
+        new AnalysisContext.FrameworkBindingMetadata(
+            "0.1.0",
+            List.of(
+                new AnalysisContext.BindingCandidateMetadata(
+                    "default", "demo.DefaultService", List.of("Service"), List.of(), "bean",
+                    true, false, false),
+                new AnalysisContext.BindingCandidateMetadata(
+                    "other", "demo.OtherService", List.of("Service"), List.of(), "bean",
+                    true, false, false)),
+            List.of(new AnalysisContext.ResolvedBindingMetadata(
+                "first-service",
+                "demo.TransferResource$First",
+                "service",
+                "Service",
+                0,
+                List.of(),
+                "default",
+                true,
+                true,
+                "selected nested binding",
+                null,
+                null)),
+            List.of());
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.QUARKUS,
+            sourceRoot,
+            null,
+            List.of(new AnalysisContext.FrameworkMetadata(
+                "quarkus-cdi-annotations",
+                "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java")),
+            bindingMetadata),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    assertEquals(1, injections.size());
+    assertEquals("demo.DefaultService#<init>", injections.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, injections.get(0).certainty());
+    assertEquals("first-service", injections.get(0).evidence().get(1).attributes().get("bindingMetadataId"));
+  }
+
   /** Enumerates Quarkus route paths and rejects method-only roots. */
   @Test
   void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {
