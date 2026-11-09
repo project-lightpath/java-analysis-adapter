@@ -143,11 +143,11 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     Map<String, Integer> injectionParameterCounts = new HashMap<>();
     for (SourceMetadataScanner.InjectionPoint injection : injectionPoints) {
       injectionParameterCounts.merge(
-          injection.file().simpleTypeName(), injection.parameters().size(), Integer::sum);
+          injection.ownerType(), injection.parameters().size(), Integer::sum);
     }
     for (SourceMetadataScanner.InjectionPoint injection : injectionPoints) {
       boolean uniqueInjectionSite = injectionParameterCounts.getOrDefault(
-          injection.file().simpleTypeName(), 0) == 1;
+          injection.ownerType(), 0) == 1;
       for (int parameterIndex = 0;
           parameterIndex < injection.parameters().size();
           parameterIndex++) {
@@ -318,7 +318,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SourceMetadataScanner scanner,
       boolean legacyIdAllowed,
       String limitation) {
-    String owner = injection.file().typeName();
+    String owner = injection.ownerType();
     String target = candidate == null
         ? parameter.type() + "#<unresolved-bean>"
         : candidate.target();
@@ -1556,6 +1556,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && candidate != null
         && !candidate.producer()
         && candidateName.equals("DefaultTransferService")
+        && injection.ownerType().equals(injection.file().typeName())
         && uniqueSimpleType(scanner, owner)
         && uniqueSimpleType(scanner, candidateName)
         && legacyIdAllowed) {
@@ -1566,6 +1567,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         && candidate != null
         && !candidate.producer()
         && candidateName.equals("TransactionService")
+        && injection.ownerType().equals(injection.file().typeName())
         && uniqueSimpleType(scanner, owner)
         && uniqueSimpleType(scanner, candidateName)
         && legacyIdAllowed) {
@@ -1580,6 +1582,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         framework.id(),
         injection.file().typeName(),
         injection.file().displayPath(),
+        injection.ownerType(),
+        Integer.toString(injection.sourceOffset()),
         injection.member(),
         injection.kind(),
         injectionSignature,
@@ -1590,7 +1594,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         candidate == null ? "" : candidate.producerSignature(),
         candidate == null ? "" : candidate.producerParameters());
     return framework.id() + "-injection-"
-        + slug(injection.file().typeName() + "-" + injection.member() + "-" + parameter.type()
+        + slug(injection.ownerType() + "-" + injection.member() + "-" + parameter.type()
             + "-" + candidateName)
         + "-" + digest(identity).substring(0, 16);
   }

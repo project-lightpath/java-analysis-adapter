@@ -532,6 +532,51 @@ class JavaAnalysisAdapterTest {
         .noneMatch(item -> item.id().equals("quarkus-resource-to-cdi-bean")));
   }
 
+  /** Includes nested injection owners and source offsets in fallback fact IDs. */
+  @Test
+  void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
+    Path sourceRoot = temp.resolve("nested-injection-ids/quarkus/src/main/java");
+    write(sourceRoot, "demo/TransferResource.java", """
+        package demo;
+        import jakarta.inject.Inject;
+        import jakarta.ws.rs.Path;
+        @Path("/transfers") public class TransferResource {
+          static class First {
+            @Inject DefaultTransferService service;
+          }
+          static class Second {
+            @Inject DefaultTransferService service;
+          }
+        }
+        """);
+    write(sourceRoot, "demo/DefaultTransferService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped
+        public class DefaultTransferService { }
+        """);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.QUARKUS,
+            sourceRoot,
+            null,
+            List.of(new AnalysisContext.FrameworkMetadata(
+                "quarkus-cdi-annotations",
+                "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED,
+                "src/main/java"))),
+        AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.callee().equals("demo.DefaultTransferService#<init>"))
+        .toList();
+
+    assertEquals(2, injections.size());
+    assertEquals(2, injections.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(injections.stream().anyMatch(item -> item.caller().contains("demo.TransferResource$First")));
+    assertTrue(injections.stream().anyMatch(item -> item.caller().contains("demo.TransferResource$Second")));
+  }
+
   /** Enumerates Quarkus route paths and rejects method-only roots. */
   @Test
   void quarkusRoutesEnumerateMethodPathsAndKeepMethodOnlyPaths() throws IOException {

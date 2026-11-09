@@ -623,6 +623,8 @@ final class SourceMetadataScanner {
               file,
               parsedParameters,
               file.lineAt(constructorInfo.start()),
+              constructorInfo.start(),
+              typeContaining(file, constructorInfo.start()),
               "<init>",
               "constructor",
               qualifierNames(constructorInfo.annotations())));
@@ -645,6 +647,8 @@ final class SourceMetadataScanner {
               file,
               List.of(parameter),
               file.lineAt(fieldMatcher.start()),
+              fieldMatcher.start(),
+              typeContaining(file, fieldMatcher.start()),
               fieldMatcher.group(3),
               "field",
               fieldQualifiers));
@@ -662,6 +666,8 @@ final class SourceMetadataScanner {
                 file,
                 parsedParameters,
                 method.line(),
+                method.start(),
+                typeContaining(file, method.start()),
                 method.name(),
                 "method",
                 methodQualifiers));
@@ -4911,11 +4917,13 @@ final class SourceMetadataScanner {
       SourceFile file,
       List<Parameter> parameters,
       int line,
+      int sourceOffset,
+      String ownerType,
       String member,
       String kind,
       List<String> qualifiers) {
     InjectionPoint(SourceFile file, List<Parameter> parameters, int line) {
-      this(file, parameters, line, "<init>", "constructor", List.of());
+      this(file, parameters, line, 0, file.typeName(), "<init>", "constructor", List.of());
     }
 
     InjectionPoint {
