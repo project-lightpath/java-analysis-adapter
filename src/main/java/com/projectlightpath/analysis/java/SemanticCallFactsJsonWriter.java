@@ -64,6 +64,21 @@ public final class SemanticCallFactsJsonWriter {
     result.put("graphCallCount", metadata.graphCallCount());
     result.put("provenance", provenance(metadata.provenance()));
     result.put("handoff", handoff(metadata.handoff()));
+    result.put("generatedSourceRoots", metadata.generatedSourceRoots().stream()
+        .map(SemanticCallFactsJsonWriter::sourceRoot)
+        .toList());
+    return result;
+  }
+
+  private static Map<String, Object> sourceRoot(AnalysisContext.SourceRoot root) {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("declaredPath", root.declaredPath());
+    result.put("path", root.path().toString());
+    result.put("scope", root.scope().id());
+    result.put("generated", root.generated());
+    result.put("included", root.included());
+    result.put("required", root.required());
+    result.put("fingerprint", root.fingerprint());
     return result;
   }
 

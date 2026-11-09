@@ -57,7 +57,19 @@ public final class AnalysisContext {
       Scope scope,
       boolean generated,
       boolean included,
-      boolean required) {
+      boolean required,
+      String fingerprint) {
+    /** Compatibility constructor for callers that do not provide a root fingerprint. */
+    public SourceRoot(
+        String declaredPath,
+        Path path,
+        Scope scope,
+        boolean generated,
+        boolean included,
+        boolean required) {
+      this(declaredPath, path, scope, generated, included, required, null);
+    }
+
     /** Validates and normalizes one source root declaration. */
     public SourceRoot {
       if (declaredPath == null || declaredPath.isBlank()) {
@@ -70,12 +82,27 @@ public final class AnalysisContext {
 
     /** Creates an included application source root. */
     public static SourceRoot source(String declaredPath, Path path, Scope scope, boolean required) {
-      return new SourceRoot(declaredPath, path, scope, false, true, required);
+      return source(declaredPath, path, scope, required, null);
+    }
+
+    public static SourceRoot source(
+        String declaredPath, Path path, Scope scope, boolean required, String fingerprint) {
+      return new SourceRoot(declaredPath, path, scope, false, true, required, fingerprint);
     }
 
     public static SourceRoot generated(
         String declaredPath, Path path, Scope scope, boolean included, boolean required) {
-      return new SourceRoot(declaredPath, path, scope, true, included, required);
+      return generated(declaredPath, path, scope, included, required, null);
+    }
+
+    public static SourceRoot generated(
+        String declaredPath,
+        Path path,
+        Scope scope,
+        boolean included,
+        boolean required,
+        String fingerprint) {
+      return new SourceRoot(declaredPath, path, scope, true, included, required, fingerprint);
     }
   }
 
@@ -616,14 +643,32 @@ public final class AnalysisContext {
 
     /** Adds an included application source root. */
     public Builder sourceRoot(String declaredPath, Path path, Scope scope, boolean required) {
-      sourceRoots.add(SourceRoot.source(declaredPath, path, scope, required));
+      return sourceRoot(declaredPath, path, scope, required, null);
+    }
+
+    /** Adds an included application source root with its handoff fingerprint. */
+    public Builder sourceRoot(
+        String declaredPath, Path path, Scope scope, boolean required, String fingerprint) {
+      sourceRoots.add(SourceRoot.source(declaredPath, path, scope, required, fingerprint));
       return this;
     }
 
     /** Adds an included or excluded generated source root. */
     public Builder generatedSourceRoot(
         String declaredPath, Path path, Scope scope, boolean included, boolean required) {
-      generatedSourceRoots.add(SourceRoot.generated(declaredPath, path, scope, included, required));
+      return generatedSourceRoot(declaredPath, path, scope, included, required, null);
+    }
+
+    /** Adds an included or excluded generated source root with its handoff fingerprint. */
+    public Builder generatedSourceRoot(
+        String declaredPath,
+        Path path,
+        Scope scope,
+        boolean included,
+        boolean required,
+        String fingerprint) {
+      generatedSourceRoots.add(
+          SourceRoot.generated(declaredPath, path, scope, included, required, fingerprint));
       return this;
     }
 
