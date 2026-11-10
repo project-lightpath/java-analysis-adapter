@@ -4,8 +4,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -16,13 +18,18 @@ final class ProviderFactNormalizer {
   static List<SemanticCallFacts.Fact> normalize(AnalysisContext context, AnalysisGraph graph) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     Set<String> ids = new HashSet<>();
+    Map<String, Integer> baseIdCounts = new HashMap<>();
+    for (CallEdge edge : graph.calls()) {
+      baseIdCounts.merge(legacyCallId(edge), 1, Integer::sum);
+    }
     for (CallEdge edge : graph.calls()) {
       String callIdentity = edge.caller().displayName() + "|" + edge.caller().descriptor()
           + "->" + edge.callee().displayName() + "|" + edge.callee().descriptor()
           + "@" + edge.line() + "|" + edge.sourcePath() + "|" + edge.relationshipType();
-      String baseId = "sootup-call-" + Integer.toHexString(
-          (edge.caller().descriptor() + "->" + edge.callee().descriptor() + "@" + edge.line()).hashCode());
-      String id = uniqueId(ids, baseId, callIdentity);
+      String baseId = legacyCallId(edge);
+      String id = baseIdCounts.get(baseId) == 1
+          ? uniqueId(ids, baseId, callIdentity)
+          : uniqueId(ids, baseId + "-" + sha256(callIdentity), callIdentity);
       boolean openWorldDynamic = isOpenWorldDynamic(edge.relationshipType());
       SemanticCallFacts.Certainty certainty = openWorldDynamic
           ? SemanticCallFacts.Certainty.UNRESOLVED
@@ -83,17 +90,13 @@ final class ProviderFactNormalizer {
         + feature.sourceLine() + "|"
         + feature.sourceOffset() + "|"
         + feature.symbols();
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] bytes = digest.digest(identity.getBytes(StandardCharsets.UTF_8));
-      StringBuilder hex = new StringBuilder(bytes.length * 2);
-      for (byte value : bytes) {
-        hex.append(String.format("%02x", value));
-      }
-      return "sootup-" + feature.kind().name().toLowerCase() + "-" + hex;
-    } catch (NoSuchAlgorithmException error) {
-      throw new IllegalStateException("SHA-256 is unavailable", error);
-    }
+    return "sootup-" + feature.kind().name().toLowerCase(Locale.ROOT) + "-" + sha256(identity);
+  }
+
+  /** Returns the legacy provider ID seed used for ordinary call edges. */
+  private static String legacyCallId(CallEdge edge) {
+    return "sootup-call-" + Integer.toHexString(
+        (edge.caller().descriptor() + "->" + edge.callee().descriptor() + "@" + edge.line()).hashCode());
   }
 
   /** Keeps legacy IDs stable for ordinary edges while making collisions explicit and safe. */

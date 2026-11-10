@@ -5141,9 +5141,9 @@ class JavaAnalysisAdapterTest {
         item.evidence().get(0).attributes().containsKey("targetDescriptor")));
   }
 
-  /** Keeps repeated provider observations on one source line distinct without aborting the run. */
+  /** Keeps colliding provider identities stable without reserving the legacy ID for one edge. */
   @Test
-  void repeatedProviderCallSitesReceiveDistinctFactIds() throws IOException {
+  void collidingProviderBaseIdsAreStableAndNeverUseLegacyId() throws IOException {
     Path sourceRoot = temp.resolve("repeated-calls/src/main/java");
     write(sourceRoot, "demo/RepeatedCalls.java", "package demo; class RepeatedCalls {}\n");
     AnalysisContext context = context(
@@ -5154,16 +5154,29 @@ class JavaAnalysisAdapterTest {
     MethodSymbol caller = new MethodSymbol("demo.RepeatedCalls", "run", "()V");
     MethodSymbol callee = new MethodSymbol("demo.Target", "call", "()V");
     CallEdge first = new CallEdge(
-        caller, callee, 4, "src/main/java/demo/RepeatedCalls.java",
+        caller, callee, 4, "src/main/java/demo/First.java",
         SemanticCallFacts.Certainty.DEFINITE, "invokes");
     CallEdge second = new CallEdge(
-        caller, callee, 4, "src/main/java/demo/RepeatedCalls.java",
+        caller, callee, 4, "src/main/java/demo/Second.java",
         SemanticCallFacts.Certainty.DEFINITE, "invokes");
 
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
         List.of(first, second), List.of(), Set.of(), "SootUp", "3.0.1", 1, 2));
+    SemanticCallFacts reversedFacts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(second, first), List.of(), Set.of(), "SootUp", "3.0.1", 1, 2));
+    String legacyId = "sootup-call-" + Integer.toHexString(
+        (caller.descriptor() + "->" + callee.descriptor() + "@4").hashCode());
+
     assertEquals(2, facts.providerFacts().size());
     assertNotEquals(facts.providerFacts().get(0).id(), facts.providerFacts().get(1).id());
+    assertTrue(facts.providerFacts().stream().noneMatch(fact -> fact.id().equals(legacyId)));
+    Map<String, String> idsByPath = facts.providerFacts().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            fact -> fact.evidence().get(0).path(), SemanticCallFacts.Fact::id));
+    Map<String, String> reversedIdsByPath = reversedFacts.providerFacts().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            fact -> fact.evidence().get(0).path(), SemanticCallFacts.Fact::id));
+    assertEquals(idsByPath, reversedIdsByPath);
   }
 
   /** Preserves selected build context and generated roots in the serialized run metadata. */
