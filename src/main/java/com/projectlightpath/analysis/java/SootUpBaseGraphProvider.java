@@ -110,10 +110,9 @@ public final class SootUpBaseGraphProvider {
           : scanner.methodSource(caller, call.getLineNumber())
               .map(source -> source.contains("ServiceLoader.load"))
               .orElse(false);
-      boolean interfaceDispatch = scanner.isInterfaceType(callee.owner())
-          || call.invokableStmt().getInvokeExpr()
-              .map(expression -> expression instanceof JInterfaceInvokeExpr)
-              .orElse(false);
+      boolean interfaceDispatch = call.invokableStmt().getInvokeExpr()
+          .map(expression -> expression instanceof JInterfaceInvokeExpr)
+          .orElseGet(() -> scanner.isInterfaceType(callee.owner()));
       String relationshipType = serviceLoaderCall
           ? "service_loader"
           : interfaceDispatch

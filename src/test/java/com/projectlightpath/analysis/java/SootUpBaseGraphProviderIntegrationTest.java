@@ -25,6 +25,7 @@ class SootUpBaseGraphProviderIntegrationTest {
         package demo;
         public interface Service {
           String run(String value);
+          static String staticRun(String value) { return value; }
         }
         """);
     write(sourceRoot, "demo/Impl.java", """
@@ -38,6 +39,7 @@ class SootUpBaseGraphProviderIntegrationTest {
         public class App {
           private final Impl field = new Impl();
           public String interfaceCall(Service service) { return service.run("x"); }
+          public String interfaceStaticCall() { return Service.staticRun("x"); }
           public String directCall(Impl implementation) { return implementation.run("x"); }
           public String directFieldCall() { return field.run("x"); }
         }
@@ -86,6 +88,15 @@ class SootUpBaseGraphProviderIntegrationTest {
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
     assertEquals(SemanticCallFacts.Certainty.DEFINITE, directFieldCall.certainty());
+    SemanticCallFacts.Fact interfaceStaticCall = facts.providerFacts().stream()
+        .filter(fact -> fact.caller().equals("demo.App#interfaceStaticCall"))
+        .filter(fact -> fact.callee().equals("demo.Service#staticRun"))
+        .filter(fact -> fact.relationshipType().equals("invokes"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, interfaceStaticCall.certainty());
+    assertEquals("(Ljava/lang/String;)Ljava/lang/String;",
+        interfaceStaticCall.evidence().get(0).attributes().get("calleeSignature"));
     assertTrue(facts.providerFacts().stream().allMatch(fact ->
         fact.evidence().get(0).attributes().get("calleeSignature").startsWith("(")));
   }
