@@ -58,9 +58,10 @@ policy, controller, runtime validation, or durable repository-profile wiring.
 ## Manual VPE integration
 
 The VPE `AnalysisContext` JSON handoff is loaded by
-`AnalysisContextLoader`. The manual command preserves source/build/provenance
-fingerprints and emits normalized facts with separate provider and framework
-sets:
+`AnalysisContextLoader`. The manual command preserves the selected profile,
+production/test scope, generated-root declarations, source/build/provenance
+fingerprints, and handoff limitations. It emits normalized facts with separate
+provider and framework sets:
 
 ```sh
 spike/scripts/run-manual-integration.sh

@@ -9,7 +9,34 @@ public record DynamicFeature(
     String target,
     String sourcePath,
     List<String> symbols,
-    String limitation) {
+    String limitation,
+    int sourceLine,
+    int sourceOffset,
+    String targetDescriptor) {
+  /** Compatibility constructor for callers that provide source-site coordinates only. */
+  public DynamicFeature(
+      Kind kind,
+      MethodSymbol caller,
+      String target,
+      String sourcePath,
+      List<String> symbols,
+      String limitation,
+      int sourceLine,
+      int sourceOffset) {
+    this(kind, caller, target, sourcePath, symbols, limitation, sourceLine, sourceOffset, "");
+  }
+
+  /** Compatibility constructor for provider callers that do not have source-site coordinates. */
+  public DynamicFeature(
+      Kind kind,
+      MethodSymbol caller,
+      String target,
+      String sourcePath,
+      List<String> symbols,
+      String limitation) {
+    this(kind, caller, target, sourcePath, symbols, limitation, 0, 0, "");
+  }
+
   public enum Kind {
     REFLECTION,
     DYNAMIC_PROXY
@@ -26,5 +53,8 @@ public record DynamicFeature(
     limitation = limitation == null || limitation.isBlank()
         ? "dynamic target is not uniquely identified by the selected context"
         : limitation;
+    sourceLine = Math.max(0, sourceLine);
+    sourceOffset = Math.max(0, sourceOffset);
+    targetDescriptor = targetDescriptor == null ? "" : targetDescriptor;
   }
 }

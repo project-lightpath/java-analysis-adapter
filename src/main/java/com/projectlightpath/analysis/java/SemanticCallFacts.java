@@ -3,10 +3,12 @@ package com.projectlightpath.analysis.java;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** Provenance-preserving provider and framework relationships for one analysis context. */
 public final class SemanticCallFacts {
@@ -337,7 +339,45 @@ public final class SemanticCallFacts {
       int graphMethodCount,
       int graphCallCount,
       AnalysisContext.Provenance provenance,
-      AnalysisContext.Handoff handoff) {
+      AnalysisContext.Handoff handoff,
+      List<AnalysisContext.SourceRoot> generatedSourceRoots) {
+    public RunMetadata {
+      generatedSourceRoots = List.copyOf(
+          generatedSourceRoots == null ? List.of() : generatedSourceRoots);
+    }
+
+    /** Compatibility constructor for callers that already provide build handoff metadata. */
+    public RunMetadata(
+        String contextId,
+        String framework,
+        String frameworkVersion,
+        String fixtureId,
+        String selectedProfile,
+        String analysisScope,
+        int javaRelease,
+        String providerName,
+        String providerVersion,
+        int graphMethodCount,
+        int graphCallCount,
+        AnalysisContext.Provenance provenance,
+        AnalysisContext.Handoff handoff) {
+      this(
+          contextId,
+          framework,
+          frameworkVersion,
+          fixtureId,
+          selectedProfile,
+          analysisScope,
+          javaRelease,
+          providerName,
+          providerVersion,
+          graphMethodCount,
+          graphCallCount,
+          provenance,
+          handoff,
+          List.of());
+    }
+
     /** Compatibility constructor for callers that predate the JSON handoff metadata. */
     public RunMetadata(
         String contextId,
@@ -365,7 +405,8 @@ public final class SemanticCallFacts {
           graphMethodCount,
           graphCallCount,
           provenance,
-          AnalysisContext.Handoff.empty());
+          AnalysisContext.Handoff.empty(),
+          List.of());
     }
   }
 
@@ -410,7 +451,8 @@ public final class SemanticCallFacts {
         graph.methodCount(),
         graph.callCount(),
         context.provenance(),
-        context.handoff());
+        context.handoff(),
+        context.generatedSourceRoots());
     validateLinks();
   }
 
@@ -457,8 +499,14 @@ public final class SemanticCallFacts {
   /** Validates fact-set ownership and freezes facts for the result. */
   private static List<Fact> immutableFacts(List<Fact> facts, FactSet expectedSet) {
     List<Fact> result = List.copyOf(facts == null ? List.of() : facts);
-    if (result.stream().anyMatch(fact -> fact.factSet() != expectedSet)) {
-      throw new IllegalArgumentException("facts must remain in their declared relationship set");
+    Set<String> ids = new HashSet<>();
+    for (Fact fact : result) {
+      if (fact.factSet() != expectedSet) {
+        throw new IllegalArgumentException("facts must remain in their declared relationship set");
+      }
+      if (!ids.add(fact.id())) {
+        throw new IllegalArgumentException("fact IDs must be unique within a relationship set: " + fact.id());
+      }
     }
     return result;
   }

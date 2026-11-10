@@ -195,12 +195,13 @@ public final class AnalysisContextLoader {
     AnalysisContext.Scope scope = parseScope(root.scope());
     boolean generated = generatedCollection || root.generated();
     if (generated) {
-      builder.generatedSourceRoot(declaredPath, resolved, scope, root.included(), root.required());
+      builder.generatedSourceRoot(
+          declaredPath, resolved, scope, root.included(), root.required(), root.fingerprint());
     } else {
       if (root.required() && !root.included()) {
         throw new IllegalArgumentException("required source root must be included: " + declaredPath);
       }
-      builder.sourceRoot(declaredPath, resolved, scope, root.required());
+      builder.sourceRoot(declaredPath, resolved, scope, root.required(), root.fingerprint());
     }
   }
 

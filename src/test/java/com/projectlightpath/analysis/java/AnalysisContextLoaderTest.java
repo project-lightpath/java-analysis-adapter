@@ -17,9 +17,11 @@ class AnalysisContextLoaderTest {
   @Test
   void loadsVpeContextAndPreservesBuildAndProvenanceHandoff() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
+    Path generatedRoot = temp.resolve("target/generated-sources");
     Path classes = temp.resolve("target/classes");
     Path dependency = temp.resolve("dependency.jar");
     Files.createDirectories(sourceRoot);
+    Files.createDirectories(generatedRoot);
     Files.createDirectories(classes);
     Files.writeString(sourceRoot.resolve("Application.java"), "package demo; class Application {}\n");
     Files.writeString(dependency, "dependency");
@@ -48,7 +50,15 @@ class AnalysisContextLoaderTest {
             "required": true,
             "fingerprint": "source-fingerprint"
           }],
-          "generatedSourceRoots": [],
+          "generatedSourceRoots": [{
+            "declaredPath": "target/generated-sources",
+            "path": "%s",
+            "scope": "production",
+            "generated": true,
+            "included": true,
+            "required": false,
+            "fingerprint": "generated-root-fingerprint"
+          }],
           "dependencyClasspath": ["%s"],
           "applicationClasses": "%s",
           "frameworkMetadata": [{
@@ -115,11 +125,12 @@ class AnalysisContextLoaderTest {
           "limitations": ["manual run"]
         }
         """.formatted(
-        temp,
-        temp,
-        sourceRoot,
-        dependency,
-        classes));
+         temp,
+         temp,
+         sourceRoot,
+         generatedRoot,
+         dependency,
+         classes));
 
     AnalysisContext context = AnalysisContextLoader.load(contextFile);
 
@@ -129,6 +140,7 @@ class AnalysisContextLoaderTest {
     assertTrue(context.dependencyClasspathRequired());
     assertEquals("0123456789012345678901234567890123456789", context.provenance().gitRevision());
     assertEquals("dependency-fingerprint", context.provenance().dependencyFingerprint());
+    assertEquals("generated-root-fingerprint", context.generatedSourceRoots().get(0).fingerprint());
     assertEquals("maven", context.handoff().buildTool());
     assertEquals(List.of("mvn", "package"), context.handoff().buildCommand());
     assertEquals(List.of("manual run"), context.handoff().limitations());
@@ -139,5 +151,10 @@ class AnalysisContextLoaderTest {
     assertEquals("demo-service", context.resolvedBindings().get(0).candidateId());
     assertEquals(1, context.proxyTargetMetadata().size());
     assertEquals("call", context.proxyTargetMetadata().get(0).methodName());
+
+    Path factsFile = temp.resolve("semantic-call-facts.json");
+    SemanticCallFactsJsonWriter.write(
+        new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty()), factsFile);
+    assertTrue(Files.readString(factsFile).contains("\"fingerprint\" : \"generated-root-fingerprint\""));
   }
 }
