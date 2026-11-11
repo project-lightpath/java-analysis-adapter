@@ -24,10 +24,26 @@ make package
 ```
 
 The `Adapter tests` CI lane runs `make adapter-test` and `make spike-validate`
-on pull requests and pushes to `main`.
+on pull requests and pushes to `main`. The separate `Java lint` CI lane runs
+the enforced production-quality gate with `make java-lint` and uploads the
+PMD/CPD reports as workflow artifacts, including when the gate fails.
 
 See [`docs/flpath-5002-java-adapter.md`](docs/flpath-5002-java-adapter.md) for
 the implementation boundary.
+
+Run the enforced Java quality gate with:
+
+```sh
+make java-lint
+```
+
+It runs the pinned PMD/CPD configuration against production Java sources,
+compares normalized findings and the effective Maven CPD configuration with
+[`config/java-lint-baseline.json`](config/java-lint-baseline.json), and fails
+on new findings, changed lint configuration, or partial PMD/CPD reports. For
+exploratory reports without enforcement, use `make java-lint-report`. See
+[`docs/java-lint.md`](docs/java-lint.md) for the rule rationale, baseline,
+limitations, and review process.
 
 ## FLPATH-5000 spike and findings
 

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="Production Java quality gate"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.github.io/schema/rule-configuration.xsd">
+  <description>
+    Focused PMD rules for production-quality signals: complexity and size,
+    exception safety, dead-looking code, accidental API surface, and narrowly
+    scoped public type documentation. Copy/paste detection is run separately by
+    the Maven PMD plugin's CPD goal. This ruleset is not an AI detector.
+  </description>
+
+  <!-- Complexity and size: thresholds are deliberately high enough to find
+       structural risks without turning ordinary adapter code into style noise. -->
+  <rule ref="category/java/design.xml/CognitiveComplexity">
+    <properties>
+      <property name="reportLevel" value="20" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/CyclomaticComplexity">
+    <properties>
+      <property name="methodReportLevel" value="15" />
+      <property name="classReportLevel" value="120" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/NPathComplexity">
+    <properties>
+      <property name="reportLevel" value="300" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/NcssCount">
+    <properties>
+      <property name="methodReportLevel" value="100" />
+      <property name="classReportLevel" value="2000" />
+      <property name="ncssOptions" value="" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/ExcessiveParameterList">
+    <properties>
+      <property name="minimum" value="8" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/ExcessivePublicCount">
+    <properties>
+      <property name="minimum" value="40" />
+    </properties>
+  </rule>
+  <rule ref="category/java/design.xml/GodClass" />
+  <rule ref="category/java/design.xml/AvoidDeeplyNestedIfStmts">
+    <properties>
+      <property name="problemDepth" value="4" />
+    </properties>
+  </rule>
+
+  <!-- Exception handling: broad catches and empty/lost exception paths hide
+       failures, especially in generated command-line or adapter glue code. -->
+  <rule ref="category/java/design.xml/AvoidCatchingGenericException" />
+  <rule ref="category/java/errorprone.xml/EmptyCatchBlock" />
+  <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes" />
+  <rule ref="category/java/design.xml/AvoidRethrowingException" />
+  <rule ref="category/java/design.xml/ExceptionAsFlowControl" />
+  <rule ref="category/java/bestpractices.xml/PreserveStackTrace" />
+
+  <!-- Dead-looking or mechanically padded code. These are intentionally
+       report-only because source scanners and reflection can hide usages. -->
+  <rule ref="category/java/bestpractices.xml/UnusedAssignment" />
+  <rule ref="category/java/bestpractices.xml/UnusedLocalVariable" />
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateField" />
+  <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod" />
+  <rule ref="category/java/codestyle.xml/EmptyControlStatement" />
+  <rule ref="category/java/codestyle.xml/IdenticalCatchBranches" />
+
+  <!-- Public class/interface review only. PMD 7.17's classCommentRequirement
+       has no visibility-specific setting, so suppress its violations on
+       private/package-private declarations. Method-level documentation is
+       deliberately not enforced here: this unreleased adapter has many
+       data-carrier accessors, builder methods, and record compact constructors
+       whose contracts are already expressed by their names and types. -->
+  <rule ref="category/java/documentation.xml/CommentRequired">
+    <properties>
+      <property name="methodWithOverrideCommentRequirement" value="Ignored" />
+      <property name="accessorCommentRequirement" value="Ignored" />
+      <property name="classCommentRequirement" value="Required" />
+      <property name="violationSuppressXPath" value=".[@Visibility != 'public']" />
+      <property name="fieldCommentRequirement" value="Ignored" />
+      <property name="publicMethodCommentRequirement" value="Ignored" />
+      <property name="protectedMethodCommentRequirement" value="Ignored" />
+      <property name="enumCommentRequirement" value="Ignored" />
+      <property name="serialVersionUIDCommentRequired" value="Ignored" />
+      <property name="serialPersistentFieldsCommentRequired" value="Ignored" />
+    </properties>
+  </rule>
+  <!-- PMD 7.17 reports valid record compact-constructor Javadocs and Javadocs
+       placed after annotations as dangling. Keep API docs human-reviewed rather
+       than failing on those parser/version-specific false positives. -->
+  <rule ref="category/java/documentation.xml/UncommentedEmptyConstructor" />
+  <rule ref="category/java/documentation.xml/UncommentedEmptyMethodBody" />
+
+  <!-- Small, high-confidence cleanup checks; these catch generated padding or
+       copy/paste mistakes without enforcing a broad personal style guide. -->
+  <rule ref="category/java/codestyle.xml/UnnecessaryModifier" />
+</ruleset>

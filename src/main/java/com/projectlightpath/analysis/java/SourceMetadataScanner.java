@@ -455,46 +455,53 @@ final class SourceMetadataScanner {
 
   /** Resolves on-demand imports only against unambiguous scanned source types. */
   private List<String> onDemandImportedTypes(String type, SourceFile sourceFile) {
+    return onDemandImportedTypeNames(
+        type,
+        sourceFile,
+        files().stream().map(SourceFile::typeName));
+  }
+
+  /** Resolves on-demand imports against the bounded set of known JDK types. */
+  private static List<String> onDemandImportedJdkTypes(String type, SourceFile sourceFile) {
+    return onDemandImportedTypeNames(type, sourceFile, KNOWN_JDK_TYPE_NAMES.stream());
+  }
+
+  /** Applies one on-demand import lookup to either source or JDK type candidates. */
+  private static List<String> onDemandImportedTypeNames(
+      String type, SourceFile sourceFile, Stream<String> candidates) {
     String simpleType = type;
     int nestedSeparator = type.indexOf('.');
     if (nestedSeparator >= 0) {
       simpleType = type.substring(0, nestedSeparator);
     }
-    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
-        .matcher(maskStringLiterals(sourceFile.structuralSource()));
-    Set<String> packages = new LinkedHashSet<>();
-    while (matcher.find()) {
-      packages.add(matcher.group(1));
-    }
+    Set<String> packages = onDemandImportPackages(sourceFile);
     String suffix = type.substring(simpleType.length());
     String requestedSimpleType = simpleType;
-    return files().stream()
-        .filter(file -> packages.contains(file.packageName()))
-        .filter(file -> file.simpleTypeName().equals(requestedSimpleType))
-        .map(file -> file.typeName() + suffix)
+    return candidates
+        .filter(candidate -> packages.contains(packageName(candidate)))
+        .filter(candidate -> qualifiedSimpleName(candidate).equals(requestedSimpleType))
+        .map(candidate -> candidate + suffix)
         .distinct()
         .toList();
   }
 
-  private static List<String> onDemandImportedJdkTypes(String type, SourceFile sourceFile) {
-    String simpleType = type;
-    int nestedSeparator = type.indexOf('.');
-    if (nestedSeparator >= 0) {
-      simpleType = type.substring(0, nestedSeparator);
-    }
+  private static Set<String> onDemandImportPackages(SourceFile sourceFile) {
     Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
         .matcher(maskStringLiterals(sourceFile.structuralSource()));
     Set<String> packages = new LinkedHashSet<>();
     while (matcher.find()) {
       packages.add(matcher.group(1));
     }
-    String suffix = type.substring(simpleType.length());
-    String requestedSimpleType = simpleType;
-    return KNOWN_JDK_TYPE_NAMES.stream()
-        .filter(candidate -> packages.contains(candidate.substring(0, candidate.lastIndexOf('.'))))
-        .filter(candidate -> candidate.substring(candidate.lastIndexOf('.') + 1).equals(requestedSimpleType))
-        .map(candidate -> candidate + suffix)
-        .toList();
+    return packages;
+  }
+
+  private static String packageName(String qualifiedName) {
+    int separator = qualifiedName.lastIndexOf('.');
+    return separator < 0 ? "" : qualifiedName.substring(0, separator);
+  }
+
+  private static String qualifiedSimpleName(String qualifiedName) {
+    return qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1);
   }
 
   /** Scans bounded Quarkus and Spring route annotations. */
@@ -913,6 +920,12 @@ final class SourceMetadataScanner {
 
   /** Splits one call's arguments without crossing nested expressions. */
   private static List<String> splitTopLevelArguments(String arguments) {
+    return splitBalanced(arguments, ',', false);
+  }
+
+  /** Splits text at one delimiter while preserving nested Java expression boundaries. */
+  private static List<String> splitBalanced(
+      String source, char separator, boolean inferGenericStarts) {
     List<String> result = new ArrayList<>();
     int start = 0;
     int parentheses = 0;
@@ -921,8 +934,8 @@ final class SourceMetadataScanner {
     int angleBrackets = 0;
     boolean quoted = false;
     boolean escaped = false;
-    for (int index = 0; index < arguments.length(); index++) {
-      char character = arguments.charAt(index);
+    for (int index = 0; index < source.length(); index++) {
+      char character = source.charAt(index);
       if (character == '"' && !escaped) {
         quoted = !quoted;
       }
@@ -942,25 +955,32 @@ final class SourceMetadataScanner {
         case '{' -> braces++;
         case '}' -> braces--;
         case '<' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0) {
+          boolean atTopLevel = parentheses == 0 && brackets == 0 && braces == 0;
+          if (inferGenericStarts
+              ? looksLikeGenericStart(source, index, angleBrackets)
+              : atTopLevel) {
             angleBrackets++;
           }
         }
         case '>' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0) {
+          if (inferGenericStarts
+              || (parentheses == 0 && brackets == 0 && braces == 0)) {
             angleBrackets = Math.max(0, angleBrackets - 1);
           }
         }
-        case ',' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0 && angleBrackets == 0) {
-            result.add(arguments.substring(start, index).trim());
+        default -> {
+          if (character == separator
+              && parentheses == 0
+              && brackets == 0
+              && braces == 0
+              && angleBrackets == 0) {
+            result.add(source.substring(start, index).trim());
             start = index + 1;
           }
         }
-        default -> { }
       }
     }
-    result.add(arguments.substring(start).trim());
+    result.add(source.substring(start).trim());
     return result;
   }
 
@@ -1059,8 +1079,6 @@ final class SourceMetadataScanner {
       List<DynamicSite> result, String dynamicSource, String source, SourceFile file) {
     Matcher matcher = STATIC_FOR_NAME.matcher(dynamicSource);
     while (matcher.find()) {
-      int prefixStart = Math.max(0, matcher.start() - 24);
-      String prefix = dynamicSource.substring(prefixStart, matcher.start());
       int previous = matcher.start() - 1;
       while (previous >= 0 && Character.isWhitespace(dynamicSource.charAt(previous))) {
         previous--;
@@ -1406,55 +1424,7 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> splitTypeIntersectionBounds(String expression) {
-    List<String> result = new ArrayList<>();
-    int start = 0;
-    int parentheses = 0;
-    int brackets = 0;
-    int braces = 0;
-    int angleBrackets = 0;
-    boolean quoted = false;
-    boolean escaped = false;
-    for (int index = 0; index < expression.length(); index++) {
-      char character = expression.charAt(index);
-      if (character == '"' && !escaped) {
-        quoted = !quoted;
-      }
-      if (quoted) {
-        escaped = character == '\\' && !escaped;
-        if (character != '\\') {
-          escaped = false;
-        }
-        continue;
-      }
-      escaped = false;
-      switch (character) {
-        case '(' -> parentheses++;
-        case ')' -> parentheses = Math.max(0, parentheses - 1);
-        case '[' -> brackets++;
-        case ']' -> brackets = Math.max(0, brackets - 1);
-        case '{' -> braces++;
-        case '}' -> braces = Math.max(0, braces - 1);
-        case '<' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0) {
-            angleBrackets++;
-          }
-        }
-        case '>' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0) {
-            angleBrackets = Math.max(0, angleBrackets - 1);
-          }
-        }
-        case '&' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0 && angleBrackets == 0) {
-            result.add(expression.substring(start, index).trim());
-            start = index + 1;
-          }
-        }
-        default -> { }
-      }
-    }
-    result.add(expression.substring(start).trim());
-    return result;
+    return splitBalanced(expression, '&', false);
   }
 
   private boolean isJdkTypeOrSubclass(
@@ -2290,51 +2260,7 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> splitFieldDeclarators(String source) {
-    List<String> result = new ArrayList<>();
-    int start = 0;
-    int parentheses = 0;
-    int brackets = 0;
-    int braces = 0;
-    int angleBrackets = 0;
-    boolean quoted = false;
-    boolean escaped = false;
-    for (int index = 0; index < source.length(); index++) {
-      char character = source.charAt(index);
-      if (character == '"' && !escaped) {
-        quoted = !quoted;
-      }
-      if (quoted) {
-        escaped = character == '\\' && !escaped;
-        if (character != '\\') {
-          escaped = false;
-        }
-        continue;
-      }
-      escaped = false;
-      switch (character) {
-        case '(' -> parentheses++;
-        case ')' -> parentheses = Math.max(0, parentheses - 1);
-        case '[' -> brackets++;
-        case ']' -> brackets = Math.max(0, brackets - 1);
-        case '{' -> braces++;
-        case '}' -> braces = Math.max(0, braces - 1);
-        case '<' -> {
-          if (looksLikeGenericStart(source, index, angleBrackets)) {
-            angleBrackets++;
-          }
-        }
-        case '>' -> angleBrackets = Math.max(0, angleBrackets - 1);
-        case ',' -> {
-          if (parentheses == 0 && brackets == 0 && braces == 0 && angleBrackets == 0) {
-            result.add(source.substring(start, index).trim());
-            start = index + 1;
-          }
-        }
-        default -> { }
-      }
-    }
-    result.add(source.substring(start).trim());
-    return result;
+    return splitBalanced(source, ',', true);
   }
 
   private static boolean looksLikeGenericStart(String source, int opening, int currentDepth) {
@@ -2550,30 +2476,6 @@ final class SourceMetadataScanner {
       }
     }
     return null;
-  }
-
-  private String resolveSuperType(TypeReference reference) {
-    String source = maskStringLiterals(reference.file().structuralSource());
-    int opening = typeBodyOpening(source, reference.type().start());
-    if (opening < 0) {
-      return null;
-    }
-    Matcher extendsClause = Pattern.compile("\\bextends\\s+([A-Za-z_$][\\w$.]*)")
-        .matcher(source.substring(reference.type().start(), opening));
-    if (!extendsClause.find()) {
-      return null;
-    }
-    String name = extendsClause.group(1);
-    List<String> imported = importedTypes(name, reference.file());
-    if (imported.size() == 1) {
-      List<String> importedDeclared = declaredTypeCandidates(
-          imported.get(0), reference.file(), reference.type().start());
-      return importedDeclared.size() == 1
-          ? importedDeclared.get(0)
-          : normalizeDeclaredTypeName(imported.get(0), reference.file());
-    }
-    List<String> declared = declaredTypeCandidates(name, reference.file(), reference.type().start());
-    return declared.size() == 1 ? declared.get(0) : null;
   }
 
   /** Resolves top-level and nested source types to the binary names used by field lookup. */
@@ -3245,28 +3147,33 @@ final class SourceMetadataScanner {
 
   /** Reads source text and derives its package and top-level type identity. */
   private SourceFile read(Path path, AnalysisContext.SourceRoot root) {
+    String source = readSource(path);
+    String structuralSource = stripComments(source);
+    String maskedStructuralSource = maskStringLiterals(structuralSource);
+    Matcher packageMatcher = PACKAGE.matcher(maskedStructuralSource);
+    String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
+    Matcher typeMatcher = TYPE.matcher(maskedStructuralSource);
+    if (!typeMatcher.find()) {
+      throw new IllegalStateException("Java source has no top-level type: " + path);
+    }
+    String simpleName = typeMatcher.group(1);
+    String typeName = packageName.isBlank() ? simpleName : packageName + "." + simpleName;
+    return new SourceFile(
+        path,
+        context.displayPath(path),
+        source,
+        structuralSource,
+        packageName,
+        typeName,
+        simpleName,
+        typeMatcher.start(),
+        root.generated());
+  }
+
+  /** Reads one source file while preserving the scanner's unchecked failure contract. */
+  private static String readSource(Path path) {
     try {
-      String source = Files.readString(path);
-      String structuralSource = stripComments(source);
-      String maskedStructuralSource = maskStringLiterals(structuralSource);
-      Matcher packageMatcher = PACKAGE.matcher(maskedStructuralSource);
-      String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
-      Matcher typeMatcher = TYPE.matcher(maskedStructuralSource);
-      if (!typeMatcher.find()) {
-        throw new IllegalStateException("Java source has no top-level type: " + path);
-      }
-      String simpleName = typeMatcher.group(1);
-      String typeName = packageName.isBlank() ? simpleName : packageName + "." + simpleName;
-      return new SourceFile(
-          path,
-          context.displayPath(path),
-          source,
-          structuralSource,
-          packageName,
-          typeName,
-          simpleName,
-          typeMatcher.start(),
-          root.generated());
+      return Files.readString(path);
     } catch (IOException error) {
       throw new IllegalStateException("cannot read Java source " + path, error);
     }

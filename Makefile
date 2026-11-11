@@ -1,4 +1,4 @@
-.PHONY: test package adapter-test adapter-package manual-analysis spike-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis
+.PHONY: test package adapter-test adapter-package java-lint java-lint-report java-lint-test manual-analysis spike-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis
 
 adapter-test test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp test -f pom.xml
@@ -14,6 +14,24 @@ manual-analysis:
 
 adapter-package package:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp package -DskipTests -f pom.xml
+
+java-lint-test:
+	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
+	"$${MAVEN_BIN}" -B -ntp test -f tools/java-lint-maven-plugin/pom.xml
+
+java-lint: java-lint-test
+	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
+	"$${MAVEN_BIN}" -B -ntp install -DskipTests -f tools/java-lint-maven-plugin/pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp help:effective-pom -Doutput=target/java-lint-effective-pom.xml -f pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp pmd:pmd pmd:cpd -f pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp org.projectlightpath:java-lint-maven-plugin:0.1.0:validate -DjavaLint.enforce=true -f pom.xml
+
+java-lint-report:
+	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
+	"$${MAVEN_BIN}" -B -ntp install -DskipTests -f tools/java-lint-maven-plugin/pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp help:effective-pom -Doutput=target/java-lint-effective-pom.xml -f pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp pmd:pmd pmd:cpd -f pom.xml && \
+	"$${MAVEN_BIN}" -B -ntp org.projectlightpath:java-lint-maven-plugin:0.1.0:validate -DjavaLint.enforce=false -f pom.xml
 
 spike-validate:
 	python3 spike/scripts/validate_spike.py

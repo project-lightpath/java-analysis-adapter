@@ -64,6 +64,9 @@ public final class SemanticCallFactsJsonWriter {
     result.put("graphCallCount", metadata.graphCallCount());
     result.put("provenance", provenance(metadata.provenance()));
     result.put("handoff", handoff(metadata.handoff()));
+    result.put("sourceRoots", metadata.sourceRoots().stream()
+        .map(SemanticCallFactsJsonWriter::sourceRoot)
+        .toList());
     result.put("generatedSourceRoots", metadata.generatedSourceRoots().stream()
         .map(SemanticCallFactsJsonWriter::sourceRoot)
         .toList());
