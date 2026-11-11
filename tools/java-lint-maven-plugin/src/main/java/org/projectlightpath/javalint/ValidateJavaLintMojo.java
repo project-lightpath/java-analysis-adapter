@@ -18,6 +18,7 @@ public final class ValidateJavaLintMojo extends AbstractMojo {
   @Parameter(property = "javaLint.enforce", defaultValue = "true")
   private boolean enforce;
 
+  /** Loads the generated reports and fails when the reviewed lint contract is violated. */
   @Override
   public void execute() throws MojoExecutionException, MojoFailureException {
     try {

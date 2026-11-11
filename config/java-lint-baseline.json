@@ -7,6 +7,7 @@
   },
   "description": "Reviewed PMD/CPD findings for the production Java quality gate. New fingerprints fail CI; resolved baseline entries are reported for cleanup.",
   "pmd": {
+    "includeTests": false,
     "findings": [
       {
         "class": "AnalysisContextLoader",
@@ -757,8 +758,15 @@
         "variable": ""
       }
     ],
+    "minimumPriority": 3,
     "pmdVersion": "7.17.0",
-    "rulesetSha256": "08c9bf5e0f1a4e1a95d46d8ef69bf397426bbaf048513e00c353f490bc566146"
+    "rulesetSha256": "08c9bf5e0f1a4e1a95d46d8ef69bf397426bbaf048513e00c353f490bc566146",
+    "rulesets": [
+      "config/pmd-production.xml"
+    ],
+    "sourceScope": [
+      "src/main/java"
+    ]
   },
   "schemaVersion": 1
 }

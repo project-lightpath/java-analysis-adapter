@@ -62,8 +62,11 @@ target/java-lint/
 ## Baseline and enforcement
 
 [`config/java-lint-baseline.json`](../config/java-lint-baseline.json) is the
-reviewed baseline. It records the PMD/CPD version, the PMD ruleset digest, the
-CPD token threshold, normalized finding details, classification, and rationale.
+reviewed baseline. It records the PMD/CPD versions, selected ruleset, minimum
+priority, production source scope, CPD token threshold, normalized finding
+details, classification, and rationale. The validator compares those PMD
+settings with Maven's effective POM so a changed ruleset, priority, or test
+scope cannot make findings disappear silently.
 
 The normalizer intentionally excludes source line numbers:
 
@@ -74,10 +77,10 @@ The normalizer intentionally excludes source line numbers:
 
 The gate compares fingerprints as multisets. It fails when a current finding is
 outside the baseline, when the PMD version/ruleset/CPD configuration changes,
-or when either XML report contains a processing error. Resolved baseline
-findings are reported but do not fail the build. This makes line shifts and
-duplicate findings deterministic without silently accepting new quality
-regressions or partial reports.
+or when either XML report contains a processing/configuration error. Resolved
+baseline findings are reported but do not fail the build. This makes line
+shifts and duplicate findings deterministic without silently accepting new
+quality regressions or partial reports.
 
 ### Baseline captured for this change
 
