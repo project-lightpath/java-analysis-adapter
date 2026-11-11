@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -5181,7 +5182,7 @@ class JavaAnalysisAdapterTest {
 
   /** Preserves selected build context and generated roots in the serialized run metadata. */
   @Test
-  void runMetadataPreservesProfileScopeRootsFingerprintsAndLimitations() throws IOException {
+  void runMetadataFactoryPreservesProfileScopeRootsFingerprintsAndLimitations() throws IOException {
     Path sourceRoot = temp.resolve("metadata/src/test/java");
     Path generatedRoot = temp.resolve("metadata/target/generated-test-sources");
     Files.createDirectories(sourceRoot);
@@ -5196,7 +5197,12 @@ class JavaAnalysisAdapterTest {
         .applicationClasses(temp.resolve("metadata/classes"))
         .selectedProfile("test")
         .analysisScope(AnalysisContext.Scope.TEST)
-        .sourceRoot("src/test/java", sourceRoot, AnalysisContext.Scope.TEST, true)
+        .sourceRoot(
+            "src/test/java",
+            sourceRoot,
+            AnalysisContext.Scope.TEST,
+            true,
+            "source-root-fingerprint")
         .generatedSourceRoot(
             "target/generated-test-sources",
             generatedRoot,
@@ -5231,16 +5237,26 @@ class JavaAnalysisAdapterTest {
             List.of("dynamic behavior remains unresolved")))
         .build();
 
-    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    AnalysisGraph graph = new AnalysisGraph(
+        List.of(), List.of(), Set.of(), "SootUp", "3.0.1", 42, 17);
+    SemanticCallFacts.RunMetadata factoryMetadata = SemanticCallFacts.RunMetadata.from(context, graph);
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, graph);
     SemanticCallFacts.RunMetadata metadata = facts.runMetadata();
+    assertEquals(factoryMetadata, metadata);
     assertEquals("test", metadata.selectedProfile());
     assertEquals("test", metadata.analysisScope());
+    assertEquals("SootUp", metadata.providerName());
+    assertEquals(42, metadata.graphMethodCount());
+    assertEquals(17, metadata.graphCallCount());
     assertEquals(List.of(generatedRoot.toAbsolutePath().normalize()), metadata.generatedSourceRoots().stream()
         .map(AnalysisContext.SourceRoot::path)
         .toList());
+    assertEquals("source-root-fingerprint", metadata.sourceRoots().get(0).fingerprint());
     assertEquals("generated-fingerprint", metadata.provenance().generatedSourceFingerprint());
     assertEquals("profile-digest", metadata.provenance().profileDigest());
     assertEquals(List.of("dynamic behavior remains unresolved"), metadata.handoff().limitations());
+    assertThrows(UnsupportedOperationException.class, () -> factoryMetadata.sourceRoots().clear());
+    assertThrows(UnsupportedOperationException.class, () -> factoryMetadata.generatedSourceRoots().clear());
 
     Path output = temp.resolve("metadata/semantic-call-facts.json");
     SemanticCallFactsJsonWriter.write(facts, output);
@@ -5249,6 +5265,8 @@ class JavaAnalysisAdapterTest {
     assertTrue(json.contains("\"analysisScope\" : \"test\""));
     assertTrue(json.contains("\"generatedSourceRoots\""));
     assertTrue(json.contains(generatedRoot.toAbsolutePath().normalize().toString()));
+    assertTrue(json.contains("\"sourceRoots\""));
+    assertTrue(json.contains("\"source-root-fingerprint\""));
     assertTrue(json.contains("\"generatedSourceFingerprint\" : \"generated-fingerprint\""));
     assertTrue(json.contains("dynamic behavior remains unresolved"));
   }

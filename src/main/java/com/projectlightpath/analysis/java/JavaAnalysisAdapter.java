@@ -53,12 +53,16 @@ public final class JavaAnalysisAdapter {
         links(providerFacts, frameworkFacts));
   }
 
-  /** Attaches provider identities only for unique eligible framework targets. */
+  /** Abstains open-world dynamic evidence and attaches identities for eligible targets. */
   private static List<SemanticCallFacts.Fact> attachExactProviderIdentities(
       List<SemanticCallFacts.Fact> frameworkFacts,
       List<SemanticCallFacts.Fact> providerFacts) {
     List<SemanticCallFacts.Fact> result = new ArrayList<>();
     for (SemanticCallFacts.Fact frameworkFact : frameworkFacts) {
+      if (DynamicCertaintyPolicy.isOpenWorldFrameworkFact(frameworkFact)) {
+        result.add(frameworkFact.abstainDynamic());
+        continue;
+      }
       if (frameworkFact.derivedFrom() != null) {
         boolean providerExists = providerFacts.stream()
             .anyMatch(provider -> provider.id().equals(frameworkFact.derivedFrom())
@@ -116,6 +120,9 @@ public final class JavaAnalysisAdapter {
     providerFacts.forEach(fact -> providers.put(fact.id(), fact));
     List<SemanticCallFacts.Link> result = new ArrayList<>();
     for (SemanticCallFacts.Fact frameworkFact : frameworkFacts) {
+      if (DynamicCertaintyPolicy.isOpenWorldFrameworkFact(frameworkFact)) {
+        continue;
+      }
       if (frameworkFact.derivedFrom() == null
           && !frameworkFact.relationshipType().equals("framework_entrypoint")) {
         continue;

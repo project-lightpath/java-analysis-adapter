@@ -24,6 +24,23 @@ import java.util.Set;
 abstract class BoundedFrameworkModel implements FrameworkModel {
   private final AnalysisContext.Framework framework;
 
+  /** Named inputs for one emitted injection fact, avoiding positional arguments. */
+  private record InjectionFactRequest(
+      AnalysisContext context,
+      SourceMetadataScanner.InjectionPoint injection,
+      SourceMetadataScanner.Parameter parameter,
+      SourceMetadataScanner.BeanCandidate candidate,
+      SemanticCallFacts.Certainty certainty,
+      String registryMetadata,
+      int candidateCount,
+      AnalysisContext.BindingCandidateMetadata candidateMetadata,
+      AnalysisContext.ResolvedBindingMetadata binding,
+      List<AnalysisContext.ResolvedBindingMetadata> bindingRows,
+      Integer parameterIndex,
+      SourceMetadataScanner scanner,
+      boolean legacyIdAllowed,
+      String limitation) {}
+
   /** Creates a bounded model for one supported framework. */
   BoundedFrameworkModel(AnalysisContext.Framework framework) {
     this.framework = Objects.requireNonNull(framework, "framework");
@@ -34,8 +51,8 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     return framework;
   }
 
-  @Override
   /** Enriches the provider graph with framework-owned facts without replacing it. */
+  @Override
   public final List<SemanticCallFacts.Fact> enrich(AnalysisContext context, AnalysisGraph graph) {
     if (context.framework() != framework) {
       throw new IllegalArgumentException(
@@ -100,23 +117,24 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SemanticCallFacts.Fact fact = SemanticCallFacts.Fact.framework(
           id,
           context,
-          "external HTTP " + route.httpMethod() + " " + route.path(),
-          callee,
-          "framework_entrypoint",
-          certainty,
-          rule,
-          List.of(new SemanticCallFacts.Evidence(
-              "route_annotations",
-              route.file().displayPath(),
-              route.symbols(),
-              route.method().line(),
-              Map.of(
-                  "annotationMetadata", metadataId,
-                  "registrationMetadata", registrationMetadataId,
-                  "registrationMetadataObserved", Boolean.toString(registrationMetadataAvailable),
-                  "registeredRouteMapping", Boolean.toString(certainty == SemanticCallFacts.Certainty.DEFINITE),
-                  "routeCandidate", "true"))),
-          limitation);
+          new SemanticCallFacts.Fact.FrameworkInput(
+              "external HTTP " + route.httpMethod() + " " + route.path(),
+              callee,
+              "framework_entrypoint",
+              certainty,
+              rule,
+              List.of(new SemanticCallFacts.Evidence(
+                  "route_annotations",
+                  route.file().displayPath(),
+                  route.symbols(),
+                  route.method().line(),
+                  Map.of(
+                      "annotationMetadata", metadataId,
+                      "registrationMetadata", registrationMetadataId,
+                      "registrationMetadataObserved", Boolean.toString(registrationMetadataAvailable),
+                      "registeredRouteMapping", Boolean.toString(certainty == SemanticCallFacts.Certainty.DEFINITE),
+                      "routeCandidate", "true"))),
+              limitation));
       facts.add(fact.withFrameworkDetails(
           "registered_route_mapping",
           "potential_request_match",
@@ -209,7 +227,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         boolean legacyIdAllowed = uniqueInjectionSite && matches.size() == 1;
 
         if (matches.isEmpty()) {
-          facts.add(injectionFact(
+          facts.add(injectionFact(new InjectionFactRequest(
               context,
               injection,
               parameter,
@@ -223,7 +241,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               null,
               scanner,
               legacyIdAllowed,
-              "No active bounded bean candidate matches the injection type, qualifiers, profile, or binding metadata."));
+              "No active bounded bean candidate matches the injection type, qualifiers, profile, or binding metadata.")));
           continue;
         }
 
@@ -281,7 +299,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
                       : matches.size() > 1
                           ? "Multiple active bounded bean candidates remain after source-level filtering."
                           : "The source-visible candidate is bounded, but exact framework selection metadata is incomplete.";
-          facts.add(injectionFact(
+          facts.add(injectionFact(new InjectionFactRequest(
               context,
               injection,
               parameter,
@@ -295,7 +313,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
               parameterIndex,
               scanner,
               legacyIdAllowed,
-              limitation));
+              limitation)));
         }
       }
     }
@@ -303,21 +321,21 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   }
 
   /** Builds one framework injection fact and its candidate evidence. */
-  private SemanticCallFacts.Fact injectionFact(
-      AnalysisContext context,
-      SourceMetadataScanner.InjectionPoint injection,
-      SourceMetadataScanner.Parameter parameter,
-      SourceMetadataScanner.BeanCandidate candidate,
-      SemanticCallFacts.Certainty certainty,
-      String registryMetadata,
-      int candidateCount,
-      AnalysisContext.BindingCandidateMetadata candidateMetadata,
-      AnalysisContext.ResolvedBindingMetadata binding,
-      List<AnalysisContext.ResolvedBindingMetadata> bindingRows,
-      Integer parameterIndex,
-      SourceMetadataScanner scanner,
-      boolean legacyIdAllowed,
-      String limitation) {
+  private SemanticCallFacts.Fact injectionFact(InjectionFactRequest request) {
+    AnalysisContext context = request.context();
+    SourceMetadataScanner.InjectionPoint injection = request.injection();
+    SourceMetadataScanner.Parameter parameter = request.parameter();
+    SourceMetadataScanner.BeanCandidate candidate = request.candidate();
+    SemanticCallFacts.Certainty certainty = request.certainty();
+    String registryMetadata = request.registryMetadata();
+    int candidateCount = request.candidateCount();
+    AnalysisContext.BindingCandidateMetadata candidateMetadata = request.candidateMetadata();
+    AnalysisContext.ResolvedBindingMetadata binding = request.binding();
+    List<AnalysisContext.ResolvedBindingMetadata> bindingRows = request.bindingRows();
+    Integer parameterIndex = request.parameterIndex();
+    SourceMetadataScanner scanner = request.scanner();
+    boolean legacyIdAllowed = request.legacyIdAllowed();
+    String limitation = request.limitation();
     String owner = injection.ownerType();
     String target = candidate == null
         ? parameter.type() + "#<unresolved-bean>"
@@ -380,16 +398,17 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     SemanticCallFacts.Fact fact = SemanticCallFacts.Fact.framework(
         id,
         context,
-        callerPrefix + ":injection:" + owner + "#" + injection.member()
-            + "(" + parameter.type() + ")",
-        target,
-        "dependency_injection",
-        certainty,
-        framework == AnalysisContext.Framework.QUARKUS
-            ? "quarkus-unique-cdi-bean"
-            : "spring-unique-component-bean",
-        evidence,
-        limitation);
+        new SemanticCallFacts.Fact.FrameworkInput(
+            callerPrefix + ":injection:" + owner + "#" + injection.member()
+                + "(" + parameter.type() + ")",
+            target,
+            "dependency_injection",
+            certainty,
+            framework == AnalysisContext.Framework.QUARKUS
+                ? "quarkus-unique-cdi-bean"
+                : "spring-unique-component-bean",
+            evidence,
+            limitation));
     return fact.withFrameworkDetails(
         "resolved_bean_binding",
         certainty == SemanticCallFacts.Certainty.DEFINITE
@@ -501,30 +520,32 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       String id = proxyFactId(scanner, target);
       List<String> proxySymbols = new ArrayList<>(scanner.sourceAnnotations(target, framework));
       proxySymbols.add(target.method().name());
+      String limitation = exact
+          ? null
+          : framework == AnalysisContext.Framework.QUARKUS
+              ? "Arc-generated proxy and interceptor order are not captured by the adapter."
+              : "The selected proxy strategy and interceptor ordering are not captured by the adapter.";
+      SemanticCallFacts.Evidence proxyEvidence = new SemanticCallFacts.Evidence(
+          framework == AnalysisContext.Framework.QUARKUS ? "bean_scope" : "advisor_annotation",
+          target.file().displayPath(),
+          proxySymbols,
+          target.method().line(),
+          proxyAttributes(
+              metadataId,
+              target,
+              metadata,
+              methodDescriptor(scanner, target).orElse(null)));
       facts.add(SemanticCallFacts.Fact.framework(
           id,
           context,
-          prefix + owner,
-          owner + "#" + target.method().name(),
-          "proxy_dispatch",
-          certainty,
-          rule,
-          List.of(new SemanticCallFacts.Evidence(
-              framework == AnalysisContext.Framework.QUARKUS ? "bean_scope" : "advisor_annotation",
-              target.file().displayPath(),
-              proxySymbols,
-              target.method().line(),
-              proxyAttributes(
-                  metadataId,
-                  target,
-                  metadata,
-                  methodDescriptor(scanner, target).orElse(null)))),
-           exact
-               ? null
-               : framework == AnalysisContext.Framework.QUARKUS
-                   ? "Arc-generated proxy and interceptor order are not captured by the adapter."
-                   : "The selected proxy strategy and interceptor ordering are not captured by the adapter."
-        ));
+          new SemanticCallFacts.Fact.FrameworkInput(
+              prefix + owner,
+              owner + "#" + target.method().name(),
+              "proxy_dispatch",
+              certainty,
+              rule,
+              List.of(proxyEvidence),
+              limitation)));
       SemanticCallFacts.Fact fact = facts.remove(facts.size() - 1);
       facts.add(fact.withFrameworkDetails(
           "proxy_target_dispatch",
@@ -578,20 +599,21 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       facts.add(SemanticCallFacts.Fact.framework(
           generatedFactId(scanner, generated),
           context,
-          "quarkus:generated-source:" + generated.file().typeName(),
-          callee,
-          "generated_implementation",
-          certainty,
-          "quarkus-generated-source-binding",
-          List.of(new SemanticCallFacts.Evidence(
-              "generated_source",
-              generated.file().displayPath(),
-              List.of(generated.file().simpleTypeName() + "#" + generated.method().name()),
-              generated.method().line(),
-              Map.of("sourceRootRequired", "true"))),
-          certainty == SemanticCallFacts.Certainty.DEFINITE
-              ? null
-              : "Generated source was found, but the selected generated-source metadata is incomplete."));
+          new SemanticCallFacts.Fact.FrameworkInput(
+              "quarkus:generated-source:" + generated.file().typeName(),
+              callee,
+              "generated_implementation",
+              certainty,
+              "quarkus-generated-source-binding",
+              List.of(new SemanticCallFacts.Evidence(
+                  "generated_source",
+                  generated.file().displayPath(),
+                  List.of(generated.file().simpleTypeName() + "#" + generated.method().name()),
+                  generated.method().line(),
+                  Map.of("sourceRootRequired", "true"))),
+              certainty == SemanticCallFacts.Certainty.DEFINITE
+                  ? null
+                  : "Generated source was found, but the selected generated-source metadata is incomplete.")));
     }
     return facts;
   }
@@ -616,18 +638,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       facts.add(SemanticCallFacts.Fact.framework(
           factId,
           context,
-          caller,
-          feature.target(),
-          "proxy_dispatch",
-          SemanticCallFacts.Certainty.UNRESOLVED,
-          framework == AnalysisContext.Framework.QUARKUS ? "quarkus-unbounded-proxy" : "spring-open-reflection",
-          List.of(new SemanticCallFacts.Evidence(
-              "dynamic_proxy_call",
-              feature.sourcePath(),
-              feature.symbols(),
-              feature.sourceLine() > 0 ? feature.sourceLine() : null,
-              dynamicProxyEvidenceAttributes(feature))),
-          feature.limitation()));
+          new SemanticCallFacts.Fact.FrameworkInput(
+              caller,
+              feature.target(),
+              "proxy_dispatch",
+              SemanticCallFacts.Certainty.UNRESOLVED,
+              framework == AnalysisContext.Framework.QUARKUS ? "quarkus-unbounded-proxy" : "spring-open-reflection",
+              List.of(new SemanticCallFacts.Evidence(
+                  "dynamic_proxy_call",
+                  feature.sourcePath(),
+                  feature.symbols(),
+                  feature.sourceLine() > 0 ? feature.sourceLine() : null,
+                  dynamicProxyEvidenceAttributes(feature))),
+              feature.limitation())));
     }
     return facts;
   }
@@ -649,18 +672,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       facts.add(SemanticCallFacts.Fact.framework(
           id,
           context,
-          "spring-data-proxy:" + candidate.file().typeName(),
-          candidate.file().typeName() + "#findById",
-          "generated_implementation",
-          certainty,
-          "spring-data-generated-repository",
-          List.of(new SemanticCallFacts.Evidence(
-              "repository_interface",
-              candidate.file().displayPath(),
-              List.of("extends JpaRepository", "CrudRepository#findById"),
-              null,
-              Map.of("generatedImplementation", "outside application source"))),
-          "Spring Data implementation and proxy identity are generated outside application source."));
+          new SemanticCallFacts.Fact.FrameworkInput(
+              "spring-data-proxy:" + candidate.file().typeName(),
+              candidate.file().typeName() + "#findById",
+              "generated_implementation",
+              certainty,
+              "spring-data-generated-repository",
+              List.of(new SemanticCallFacts.Evidence(
+                  "repository_interface",
+                  candidate.file().displayPath(),
+                  List.of("extends JpaRepository", "CrudRepository#findById"),
+                  null,
+                  Map.of("generatedImplementation", "outside application source"))),
+              "Spring Data implementation and proxy identity are generated outside application source.")));
     }
     return facts;
   }
@@ -682,18 +706,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           facts.add(SemanticCallFacts.Fact.framework(
               lifecycleFactId(scanner, file, method, "bean"),
               context,
-              "Spring ApplicationContext",
-              file.typeName() + "#" + method.name(),
-              "lifecycle_callback",
-              certainty,
-              "spring-lifecycle-callback",
-              List.of(new SemanticCallFacts.Evidence(
-                  "bean_factory_annotation",
-                  file.displayPath(),
-                  List.of("@Configuration", "@Bean " + method.name()),
-                  method.line(),
-                  Map.of())),
-              "Conditional configuration and exact ApplicationContext construction are not captured."));
+              new SemanticCallFacts.Fact.FrameworkInput(
+                  "Spring ApplicationContext",
+                  file.typeName() + "#" + method.name(),
+                  "lifecycle_callback",
+                  certainty,
+                  "spring-lifecycle-callback",
+                  List.of(new SemanticCallFacts.Evidence(
+                      "bean_factory_annotation",
+                      file.displayPath(),
+                      List.of("@Configuration", "@Bean " + method.name()),
+                      method.line(),
+                      Map.of())),
+                  "Conditional configuration and exact ApplicationContext construction are not captured.")));
         }
       }
       if (file.source().matches("(?s).*\\bimplements\\s+CommandLineRunner\\b.*")) {
@@ -704,19 +729,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
           facts.add(SemanticCallFacts.Fact.framework(
               lifecycleFactId(scanner, file, method, "runner"),
               context,
-              "Spring Boot application lifecycle",
-              file.typeName() + "#run",
-              "lifecycle_callback",
-              certainty,
-              "spring-lifecycle-callback",
-              List.of(new SemanticCallFacts.Evidence(
-                  "lifecycle_interface",
-                  file.displayPath(),
-                  List.of("@Component", "implements CommandLineRunner", "run(String...)")
-                      ,
-                  method.line(),
-                  Map.of())),
-              "Startup ordering and conditional bean activation are not captured."));
+              new SemanticCallFacts.Fact.FrameworkInput(
+                  "Spring Boot application lifecycle",
+                  file.typeName() + "#run",
+                  "lifecycle_callback",
+                  certainty,
+                  "spring-lifecycle-callback",
+                  List.of(new SemanticCallFacts.Evidence(
+                      "lifecycle_interface",
+                      file.displayPath(),
+                      List.of("@Component", "implements CommandLineRunner", "run(String...)"),
+                      method.line(),
+                      Map.of())),
+                  "Startup ordering and conditional bean activation are not captured.")));
         }
       }
     }
@@ -743,12 +768,12 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     }
     return candidates.stream()
         .filter(candidate -> requested.stream().allMatch(requestedQualifier ->
-            qualifierMatches(context, scanner, requestedQualifier, candidate, candidates)))
+            matchesRequestedQualifier(context, scanner, requestedQualifier, candidate, candidates)))
         .toList();
   }
 
   /** Applies framework qualifier rules, including Spring bean-name fallbacks. */
-  private boolean qualifierMatches(
+  private boolean matchesRequestedQualifier(
       AnalysisContext context,
       SourceMetadataScanner scanner,
       String requestedQualifier,
@@ -1549,30 +1574,11 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SourceMetadataScanner.Parameter parameter,
       SourceMetadataScanner.BeanCandidate candidate,
       boolean legacyIdAllowed) {
-    String owner = injection.file().simpleTypeName();
+    String legacyId = legacyInjectionFactId(scanner, injection, candidate, legacyIdAllowed);
+    if (legacyId != null) {
+      return legacyId;
+    }
     String candidateName = candidate == null ? "unresolved" : candidate.file().simpleTypeName();
-    if (framework == AnalysisContext.Framework.QUARKUS
-        && owner.equals("TransferResource")
-        && candidate != null
-        && !candidate.producer()
-        && candidateName.equals("DefaultTransferService")
-        && injection.ownerType().equals(injection.file().typeName())
-        && uniqueSimpleType(scanner, owner)
-        && uniqueSimpleType(scanner, candidateName)
-        && legacyIdAllowed) {
-      return "quarkus-resource-to-cdi-bean";
-    }
-    if (framework == AnalysisContext.Framework.SPRING_BOOT
-        && owner.equals("TransferController")
-        && candidate != null
-        && !candidate.producer()
-        && candidateName.equals("TransactionService")
-        && injection.ownerType().equals(injection.file().typeName())
-        && uniqueSimpleType(scanner, owner)
-        && uniqueSimpleType(scanner, candidateName)
-        && legacyIdAllowed) {
-      return "spring-controller-to-service-injection";
-    }
     String injectionSignature = injection.member() + "("
         + String.join(",", injection.parameters().stream()
             .map(SourceMetadataScanner.Parameter::type)
@@ -1597,6 +1603,34 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         + slug(injection.ownerType() + "-" + injection.member() + "-" + parameter.type()
             + "-" + candidateName)
         + "-" + digest(identity).substring(0, 16);
+  }
+
+  /** Preserves fixture IDs only for the original unambiguous transfer bindings. */
+  private String legacyInjectionFactId(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.InjectionPoint injection,
+      SourceMetadataScanner.BeanCandidate candidate,
+      boolean legacyIdAllowed) {
+    if (candidate == null || candidate.producer() || !legacyIdAllowed
+        || !injection.ownerType().equals(injection.file().typeName())) {
+      return null;
+    }
+    String owner = injection.file().simpleTypeName();
+    String candidateName = candidate.file().simpleTypeName();
+    if (!uniqueSimpleType(scanner, owner) || !uniqueSimpleType(scanner, candidateName)) {
+      return null;
+    }
+    if (framework == AnalysisContext.Framework.QUARKUS
+        && owner.equals("TransferResource")
+        && candidateName.equals("DefaultTransferService")) {
+      return "quarkus-resource-to-cdi-bean";
+    }
+    if (framework == AnalysisContext.Framework.SPRING_BOOT
+        && owner.equals("TransferController")
+        && candidateName.equals("TransactionService")) {
+      return "spring-controller-to-service-injection";
+    }
+    return null;
   }
 
   /** Builds a stable proxy identity that includes the full target overload signature. */
@@ -1630,7 +1664,6 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         + "-" + digest(identity).substring(0, 16);
   }
 
-  /** Ensures legacy fixture IDs cannot collide with another package's simple type. */
   /** Checks whether a simple type name identifies one source declaration in this scan. */
   private static boolean uniqueSimpleType(SourceMetadataScanner scanner, String simpleType) {
     return scanner.files().stream()
@@ -1638,7 +1671,6 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         .count() == 1;
   }
 
-  /** Ensures a legacy proxy ID identifies one overload rather than a method family. */
   /** Checks whether a method name has one overload in its declaring source type. */
   private static boolean uniqueMethodName(
       SourceMetadataScanner.SourceFile file,

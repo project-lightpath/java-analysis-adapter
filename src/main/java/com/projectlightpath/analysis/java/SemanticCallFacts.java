@@ -210,35 +210,37 @@ public final class SemanticCallFacts {
           limitation);
     }
 
-    public static Fact framework(
-        String id,
-        AnalysisContext context,
+    /** Named framework-fact inputs so callers cannot swap positional evidence fields. */
+    public record FrameworkInput(
         String caller,
         String callee,
         String relationshipType,
         Certainty certainty,
         String modelRule,
         List<Evidence> evidence,
-        String limitation) {
+        String limitation) {}
+
+    public static Fact framework(String id, AnalysisContext context, FrameworkInput input) {
+      Objects.requireNonNull(input, "framework fact input");
       return new Fact(
           id,
           context.framework().id(),
           context.id(),
-          caller,
-          callee,
-          relationshipType,
-          certainty,
-          certainty == Certainty.UNRESOLVED ? Status.ABSTAINED : Status.EMITTED,
+          input.caller(),
+          input.callee(),
+          input.relationshipType(),
+          input.certainty(),
+          input.certainty() == Certainty.UNRESOLVED ? Status.ABSTAINED : Status.EMITTED,
           FactSet.FRAMEWORK,
           EvidenceOrigin.FRAMEWORK_MODEL,
-          modelRule,
+          input.modelRule(),
           null,
           null,
           null,
           null,
           null,
-          evidence,
-          limitation);
+          input.evidence(),
+          input.limitation());
     }
 
     public Fact withFrameworkDetails(
@@ -291,6 +293,37 @@ public final class SemanticCallFacts {
           limitation);
     }
 
+    /** Downgrades open-world dynamic evidence without preserving a misleading provider link. */
+    public Fact abstainDynamic() {
+      if (certainty == Certainty.UNRESOLVED
+          && derivedFrom == null
+          && limitation != null
+          && !limitation.isBlank()) {
+        return this;
+      }
+      return new Fact(
+          id,
+          framework,
+          contextId,
+          caller,
+          callee,
+          relationshipType,
+          Certainty.UNRESOLVED,
+          Status.ABSTAINED,
+          factSet,
+          evidenceOrigin,
+          modelRule,
+          claim,
+          runtimeSelection,
+          providerCallerAbsence,
+          selectionCriteria,
+          null,
+          evidence,
+          limitation == null || limitation.isBlank()
+              ? DynamicCertaintyPolicy.LIMITATION
+              : limitation);
+    }
+
     private static void require(String value, String name) {
       if (value == null || value.isBlank()) {
         throw new IllegalArgumentException(name + " must not be blank");
@@ -326,42 +359,137 @@ public final class SemanticCallFacts {
     }
   }
 
-  public record RunMetadata(
-      String contextId,
-      String framework,
-      String frameworkVersion,
-      String fixtureId,
-      String selectedProfile,
-      String analysisScope,
-      int javaRelease,
-      String providerName,
-      String providerVersion,
-      int graphMethodCount,
-      int graphCallCount,
-      AnalysisContext.Provenance provenance,
-      AnalysisContext.Handoff handoff,
-      List<AnalysisContext.SourceRoot> generatedSourceRoots) {
-    public RunMetadata {
-      generatedSourceRoots = List.copyOf(
-          generatedSourceRoots == null ? List.of() : generatedSourceRoots);
+  /** Immutable metadata emitted for one analysis context and provider graph. */
+  public static final class RunMetadata {
+    private final String contextId;
+    private final String framework;
+    private final String frameworkVersion;
+    private final String fixtureId;
+    private final String selectedProfile;
+    private final String analysisScope;
+    private final int javaRelease;
+    private final String providerName;
+    private final String providerVersion;
+    private final int graphMethodCount;
+    private final int graphCallCount;
+    private final AnalysisContext.Provenance provenance;
+    private final AnalysisContext.Handoff handoff;
+    private final List<AnalysisContext.SourceRoot> generatedSourceRoots;
+    private final List<AnalysisContext.SourceRoot> sourceRoots;
+
+    private RunMetadata(AnalysisContext context, AnalysisGraph graph) {
+      contextId = context.id();
+      framework = context.framework().id();
+      frameworkVersion = context.frameworkVersion();
+      fixtureId = context.fixtureId();
+      selectedProfile = context.selectedProfile();
+      analysisScope = context.analysisScope().id();
+      javaRelease = context.javaRelease();
+      providerName = graph.providerName();
+      providerVersion = graph.providerVersion();
+      graphMethodCount = graph.methodCount();
+      graphCallCount = graph.callCount();
+      provenance = context.provenance();
+      handoff = context.handoff();
+      generatedSourceRoots = List.copyOf(context.generatedSourceRoots());
+      sourceRoots = List.copyOf(context.sourceRoots());
     }
 
-    /** Compatibility constructor for callers that already provide build handoff metadata. */
-    public RunMetadata(
-        String contextId,
-        String framework,
-        String frameworkVersion,
-        String fixtureId,
-        String selectedProfile,
-        String analysisScope,
-        int javaRelease,
-        String providerName,
-        String providerVersion,
-        int graphMethodCount,
-        int graphCallCount,
-        AnalysisContext.Provenance provenance,
-        AnalysisContext.Handoff handoff) {
-      this(
+    /** Creates run metadata from the immutable context and provider graph inputs. */
+    public static RunMetadata from(AnalysisContext context, AnalysisGraph graph) {
+      return new RunMetadata(
+          Objects.requireNonNull(context, "analysis context"),
+          Objects.requireNonNull(graph, "analysis graph"));
+    }
+
+    public String contextId() {
+      return contextId;
+    }
+
+    public String framework() {
+      return framework;
+    }
+
+    public String frameworkVersion() {
+      return frameworkVersion;
+    }
+
+    public String fixtureId() {
+      return fixtureId;
+    }
+
+    public String selectedProfile() {
+      return selectedProfile;
+    }
+
+    public String analysisScope() {
+      return analysisScope;
+    }
+
+    public int javaRelease() {
+      return javaRelease;
+    }
+
+    public String providerName() {
+      return providerName;
+    }
+
+    public String providerVersion() {
+      return providerVersion;
+    }
+
+    public int graphMethodCount() {
+      return graphMethodCount;
+    }
+
+    public int graphCallCount() {
+      return graphCallCount;
+    }
+
+    public AnalysisContext.Provenance provenance() {
+      return provenance;
+    }
+
+    public AnalysisContext.Handoff handoff() {
+      return handoff;
+    }
+
+    public List<AnalysisContext.SourceRoot> generatedSourceRoots() {
+      return generatedSourceRoots;
+    }
+
+    public List<AnalysisContext.SourceRoot> sourceRoots() {
+      return sourceRoots;
+    }
+
+    @Override
+    public boolean equals(Object value) {
+      if (this == value) {
+        return true;
+      }
+      if (!(value instanceof RunMetadata other)) {
+        return false;
+      }
+      return javaRelease == other.javaRelease
+          && graphMethodCount == other.graphMethodCount
+          && graphCallCount == other.graphCallCount
+          && Objects.equals(contextId, other.contextId)
+          && Objects.equals(framework, other.framework)
+          && Objects.equals(frameworkVersion, other.frameworkVersion)
+          && Objects.equals(fixtureId, other.fixtureId)
+          && Objects.equals(selectedProfile, other.selectedProfile)
+          && Objects.equals(analysisScope, other.analysisScope)
+          && Objects.equals(providerName, other.providerName)
+          && Objects.equals(providerVersion, other.providerVersion)
+          && Objects.equals(provenance, other.provenance)
+          && Objects.equals(handoff, other.handoff)
+          && Objects.equals(generatedSourceRoots, other.generatedSourceRoots)
+          && Objects.equals(sourceRoots, other.sourceRoots);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(
           contextId,
           framework,
           frameworkVersion,
@@ -375,38 +503,28 @@ public final class SemanticCallFacts {
           graphCallCount,
           provenance,
           handoff,
-          List.of());
+          generatedSourceRoots,
+          sourceRoots);
     }
 
-    /** Compatibility constructor for callers that predate the JSON handoff metadata. */
-    public RunMetadata(
-        String contextId,
-        String framework,
-        String frameworkVersion,
-        String fixtureId,
-        String selectedProfile,
-        String analysisScope,
-        int javaRelease,
-        String providerName,
-        String providerVersion,
-        int graphMethodCount,
-        int graphCallCount,
-        AnalysisContext.Provenance provenance) {
-      this(
-          contextId,
-          framework,
-          frameworkVersion,
-          fixtureId,
-          selectedProfile,
-          analysisScope,
-          javaRelease,
-          providerName,
-          providerVersion,
-          graphMethodCount,
-          graphCallCount,
-          provenance,
-          AnalysisContext.Handoff.empty(),
-          List.of());
+    @Override
+    public String toString() {
+      return "RunMetadata[contextId=" + contextId
+          + ", framework=" + framework
+          + ", frameworkVersion=" + frameworkVersion
+          + ", fixtureId=" + fixtureId
+          + ", selectedProfile=" + selectedProfile
+          + ", analysisScope=" + analysisScope
+          + ", javaRelease=" + javaRelease
+          + ", providerName=" + providerName
+          + ", providerVersion=" + providerVersion
+          + ", graphMethodCount=" + graphMethodCount
+          + ", graphCallCount=" + graphCallCount
+          + ", provenance=" + provenance
+          + ", handoff=" + handoff
+          + ", generatedSourceRoots=" + generatedSourceRoots
+          + ", sourceRoots=" + sourceRoots
+          + "]";
     }
   }
 
@@ -438,21 +556,7 @@ public final class SemanticCallFacts {
     this.frameworkFacts = immutableFacts(frameworkFacts, FactSet.FRAMEWORK);
     this.links = List.copyOf(links == null ? List.of() : links);
     mergePolicy = MergePolicy.contract();
-    runMetadata = new RunMetadata(
-        context.id(),
-        context.framework().id(),
-        context.frameworkVersion(),
-        context.fixtureId(),
-        context.selectedProfile(),
-        context.analysisScope().id(),
-        context.javaRelease(),
-        graph.providerName(),
-        graph.providerVersion(),
-        graph.methodCount(),
-        graph.callCount(),
-        context.provenance(),
-        context.handoff(),
-        context.generatedSourceRoots());
+    runMetadata = RunMetadata.from(context, graph);
     validateLinks();
   }
 

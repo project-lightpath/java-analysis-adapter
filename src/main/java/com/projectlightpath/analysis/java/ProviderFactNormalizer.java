@@ -30,12 +30,13 @@ final class ProviderFactNormalizer {
       String id = baseIdCounts.get(baseId) == 1
           ? uniqueId(ids, baseId, callIdentity)
           : uniqueId(ids, baseId + "-" + sha256(callIdentity), callIdentity);
-      boolean openWorldDynamic = isOpenWorldDynamic(edge.relationshipType());
+      boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
+          edge.relationshipType());
       SemanticCallFacts.Certainty certainty = openWorldDynamic
           ? SemanticCallFacts.Certainty.UNRESOLVED
           : edge.certaintyHint();
       String limitation = openWorldDynamic
-          ? "Open-world dynamic behavior does not identify a unique runtime target."
+          ? DynamicCertaintyPolicy.LIMITATION
           : certainty == SemanticCallFacts.Certainty.POSSIBLE
           ? "CHA exposes a bounded implementation/callback candidate; runtime selection is not unique."
           : null;
@@ -136,10 +137,4 @@ final class ProviderFactNormalizer {
     }
   }
 
-  /** Keeps open-world reflection and proxy edges abstained even if a provider overstates certainty. */
-  private static boolean isOpenWorldDynamic(String relationshipType) {
-    return "reflection".equals(relationshipType)
-        || "dynamic_proxy".equals(relationshipType)
-        || "proxy_dispatch".equals(relationshipType);
-  }
 }

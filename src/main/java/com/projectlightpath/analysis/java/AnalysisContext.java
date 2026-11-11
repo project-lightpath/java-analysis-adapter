@@ -577,6 +577,7 @@ public final class AnalysisContext {
     return Objects.requireNonNull(path, name).toAbsolutePath().normalize();
   }
 
+  /** Mutable construction surface for one immutable analysis context. */
   public static final class Builder {
     private String id;
     private Framework framework;
