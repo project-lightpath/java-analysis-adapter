@@ -39,10 +39,13 @@ The configuration is deliberately narrow and is stored in
 | Dead-looking code | `UnusedAssignment`, `UnusedLocalVariable`, `UnusedPrivateField`, `UnusedPrivateMethod`, `EmptyControlStatement`, `IdenticalCatchBranches` | Find likely cleanup opportunities; source scanning and reflection require human review. |
 | Public type documentation | Narrow `CommentRequired` plus empty-constructor/method checks | Review public type intent without requiring mass Javadocs for accessors, overrides, or records. |
 | Mechanical cleanup | `UnnecessaryModifier` | Find small, high-confidence declaration mistakes. |
-| Copy/paste | PMD CPD, 100 tokens | Identify exact repeated code for inspection, not to label code or infer authorship. |
+| Copy/paste | PMD CPD, 100 tokens | Identify repeated, padded, or mechanically copied code that deserves review; it does not infer authorship. |
 
-This is a production maintainability gate, **not an AI detector**. Findings are
-review candidates and the baseline records why an existing finding is allowed.
+This is a production maintainability gate for preventing low-quality or
+AI-slop-like code patterns: unnecessary complexity, dead code, weak exception
+handling, accidental API surface, and mechanical duplication. It does not try
+to infer authorship. New findings fail the gate; existing baseline findings
+remain visible, reviewed, and justified.
 
 PMD type resolution is disabled because the project targets Java 17 while a
 newer host JDK can expose class files that the pinned PMD ASM reader cannot

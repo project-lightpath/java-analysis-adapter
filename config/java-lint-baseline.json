@@ -760,7 +760,7 @@
     ],
     "minimumPriority": 3,
     "pmdVersion": "7.17.0",
-    "rulesetSha256": "08c9bf5e0f1a4e1a95d46d8ef69bf397426bbaf048513e00c353f490bc566146",
+    "rulesetSha256": "780ee85ac689a3a9b651d08bda79ac36ac2f6983156510322e099a683e71f83f",
     "rulesets": [
       "config/pmd-production.xml"
     ],
