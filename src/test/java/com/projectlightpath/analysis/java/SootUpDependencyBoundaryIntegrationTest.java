@@ -143,6 +143,15 @@ class SootUpDependencyBoundaryIntegrationTest {
   }
 
   @Test
+  void keepsFinalVirtualDependencyTargetsDefinite() throws IOException {
+    Fixture fixture = fixture();
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(fixture.context());
+
+    assertFinalVirtualCallIsDefinite(facts, "dependencyFinalSubclassCall");
+    assertFinalVirtualCallIsDefinite(facts, "dependencyFinalOverrideCall");
+  }
+
+  @Test
   void preservesExistingInvalidDependencyClasspathBehavior() throws IOException {
     Fixture fixture = fixture();
     Path missing = temp.resolve("missing-dependency.jar");
@@ -330,6 +339,16 @@ class SootUpDependencyBoundaryIntegrationTest {
           @Override public String value() { return "override"; }
         }
         """);
+    write(dependencySource, "vulnerable/api/FinalVirtualApi.java", """
+        package vulnerable.api;
+        public final class FinalVirtualApi extends VirtualApi { }
+        """);
+    write(dependencySource, "vulnerable/api/FinalOverrideVirtualApi.java", """
+        package vulnerable.api;
+        public class FinalOverrideVirtualApi extends VirtualApi {
+          @Override public final String value() { return "final-override"; }
+        }
+        """);
     write(dependencySource, "vulnerable/api/Duplicate.java", """
         package vulnerable.api;
         public final class Duplicate {
@@ -363,6 +382,8 @@ class SootUpDependencyBoundaryIntegrationTest {
         import peer.api.PeerApi;
         import vulnerable.api.BoundaryService;
         import vulnerable.api.Duplicate;
+        import vulnerable.api.FinalOverrideVirtualApi;
+        import vulnerable.api.FinalVirtualApi;
         import vulnerable.api.VulnerableApi;
         import vulnerable.api.VirtualApi;
         public class Application {
@@ -373,6 +394,12 @@ class SootUpDependencyBoundaryIntegrationTest {
             return VulnerableApi.normalize(value);
           }
           public String dependencyVirtualCall(VirtualApi value) {
+            return value.value();
+          }
+          public String dependencyFinalSubclassCall(FinalVirtualApi value) {
+            return value.value();
+          }
+          public String dependencyFinalOverrideCall(FinalOverrideVirtualApi value) {
             return value.value();
           }
           public String dependencyInterfaceCall(BoundaryService service) {
@@ -468,6 +495,16 @@ class SootUpDependencyBoundaryIntegrationTest {
         .filter(item -> !item.relationshipType().equals("interface_dispatch"))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+  }
+
+  private static void assertFinalVirtualCallIsDefinite(SemanticCallFacts facts, String caller) {
+    List<SemanticCallFacts.Fact> dispatches = facts.providerFacts().stream()
+        .filter(item -> item.caller().equals("app.Application#" + caller))
+        .filter(item -> item.relationshipType().equals("invokes"))
+        .toList();
+    assertFalse(dispatches.isEmpty(), facts.providerFacts().toString());
+    assertTrue(dispatches.stream().allMatch(item ->
+        item.certainty() == SemanticCallFacts.Certainty.DEFINITE));
   }
 
   private static void compile(Path sourceRoot, Path classes, List<Path> classpath) throws IOException {

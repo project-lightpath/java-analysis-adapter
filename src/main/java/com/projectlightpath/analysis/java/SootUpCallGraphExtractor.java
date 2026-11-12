@@ -167,10 +167,13 @@ final class SootUpCallGraphExtractor {
     if (!virtualInvoke) {
       return false;
     }
-    boolean finalMethod = view.getMethod(call.targetMethodSignature())
+    MethodSignature declared = call.invokableStmt().getInvokeExpr()
+        .map(expression -> expression.getMethodSignature())
+        .orElseThrow();
+    boolean finalMethod = view.getMethod(declared)
         .map(SootMethod::isFinal)
         .orElse(false);
-    boolean finalClass = view.getClass(call.targetMethodSignature().getDeclClassType())
+    boolean finalClass = view.getClass(declared.getDeclClassType())
         .map(SootClass::isFinal)
         .orElse(false);
     return !finalMethod && !finalClass;
