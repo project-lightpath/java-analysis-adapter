@@ -234,16 +234,20 @@ class SootUpDependencyBoundaryIntegrationTest {
     AnalysisContext context = contextFor(
         applicationSource, applicationClasses, List.of(war));
 
+    SootUpInputLocationFactory.Inputs inputs = SootUpInputLocationFactory.createView(context);
+    Path expectedWar = war.toAbsolutePath().normalize();
+    assertEquals(expectedWar, mappedDependency(inputs, "war.api.WarApi"));
+    assertEquals(expectedWar, mappedDependency(inputs, "vulnerable.api.VulnerableApi"));
+
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
-    String expectedWar = war.toAbsolutePath().normalize().toString();
     SemanticCallFacts.Fact webClasses = fact(facts, "app.WarApplication#webClassesCall");
     assertEquals("war.api.WarApi#value", webClasses.callee());
     assertEquals(expectedWar,
-        webClasses.evidence().get(0).attributes().get("dependencyClasspathEntry"));
+        Path.of(webClasses.evidence().get(0).attributes().get("dependencyClasspathEntry")));
     SemanticCallFacts.Fact nestedJar = fact(facts, "app.WarApplication#nestedJarCall");
     assertEquals("vulnerable.api.VulnerableApi#check", nestedJar.callee());
     assertEquals(expectedWar,
-        nestedJar.evidence().get(0).attributes().get("dependencyClasspathEntry"));
+        Path.of(nestedJar.evidence().get(0).attributes().get("dependencyClasspathEntry")));
   }
 
   @Test
@@ -510,6 +514,15 @@ class SootUpDependencyBoundaryIntegrationTest {
         .filter(item -> !item.relationshipType().equals("interface_dispatch"))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+  }
+
+  private static Path mappedDependency(
+      SootUpInputLocationFactory.Inputs inputs, String className) {
+    return inputs.dependencyEntries().get(
+        inputs.view().getClass(inputs.view().getIdentifierFactory().getClassType(className))
+            .orElseThrow()
+            .getClassSource()
+            .getAnalysisInputLocation());
   }
 
   private static void assertFinalVirtualCallIsDefinite(SemanticCallFacts facts, String caller) {
