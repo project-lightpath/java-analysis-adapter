@@ -18,81 +18,136 @@ final class ProviderFactNormalizer {
   private ProviderFactNormalizer() {}
 
   static List<SemanticCallFacts.Fact> normalize(AnalysisContext context, AnalysisGraph graph) {
-    List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     Set<String> ids = new HashSet<>();
+    CallReferences references = collectCallReferences(graph);
+    Map<Integer, String> callIds = callIds(references, ids);
+    List<SemanticCallFacts.Fact> facts = callFacts(context, references.edges(), callIds);
+    facts.addAll(dynamicFacts(context, graph.dynamicFeatures(), ids));
+    return List.copyOf(facts);
+  }
+
+  /** Collects graph edges and the application collision counts used for stable IDs. */
+  private static CallReferences collectCallReferences(AnalysisGraph graph) {
     List<EdgeRef> edgeRefs = new ArrayList<>();
     Map<String, Integer> applicationBaseIdCounts = new HashMap<>();
     for (int index = 0; index < graph.calls().size(); index++) {
       CallEdge edge = graph.calls().get(index);
-      EdgeRef ref = new EdgeRef(index, edge, edgeIdentity(edge));
-      edgeRefs.add(ref);
-      if (edge.targetContext().origin() == CallEdge.TargetOrigin.APPLICATION) {
+      edgeRefs.add(new EdgeRef(index, edge, edgeIdentity(edge)));
+      if (isApplicationEdge(edge)) {
         applicationBaseIdCounts.merge(legacyCallId(edge), 1, Integer::sum);
       }
     }
+    return new CallReferences(List.copyOf(edgeRefs), Map.copyOf(applicationBaseIdCounts));
+  }
+
+  /** Assigns deterministic IDs without changing the graph's output order. */
+  private static Map<Integer, String> callIds(CallReferences references, Set<String> ids) {
     Map<Integer, String> idsByIndex = new HashMap<>();
-    edgeRefs.stream()
+    references.edges().stream()
         .sorted(Comparator.comparing(EdgeRef::identity).thenComparingInt(EdgeRef::index))
-        .forEach(ref -> {
-          CallEdge edge = ref.edge();
-          String id;
-          if (edge.targetContext().origin() == CallEdge.TargetOrigin.APPLICATION) {
-            String baseId = legacyCallId(edge);
-            id = applicationBaseIdCounts.get(baseId) == 1
-                ? uniqueId(ids, baseId, ref.identity())
-                : uniqueId(ids, baseId + "-" + sha256(ref.identity()), ref.identity());
-          } else {
-            id = uniqueId(ids, dependencyCallId(edge), ref.identity());
-      }
-      idsByIndex.put(ref.index(), id);
-    });
+        .forEach(ref -> idsByIndex.put(
+            ref.index(), callId(ref, references.applicationBaseIdCounts(), ids)));
+    return idsByIndex;
+  }
+
+  /** Selects the origin-aware ID namespace for one call edge. */
+  private static String callId(
+      EdgeRef ref, Map<String, Integer> applicationBaseIdCounts, Set<String> ids) {
+    if (!isApplicationEdge(ref.edge())) {
+      return uniqueId(ids, dependencyCallId(ref.edge()), ref.identity());
+    }
+    String baseId = legacyCallId(ref.edge());
+    if (applicationBaseIdCounts.get(baseId) == 1) {
+      return uniqueId(ids, baseId, ref.identity());
+    }
+    return uniqueId(ids, baseId + "-" + sha256(ref.identity()), ref.identity());
+  }
+
+  /** Normalizes ordinary call edges in their original provider order. */
+  private static List<SemanticCallFacts.Fact> callFacts(
+      AnalysisContext context, List<EdgeRef> edgeRefs, Map<Integer, String> callIds) {
+    List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     for (EdgeRef ref : edgeRefs) {
-      CallEdge edge = ref.edge();
-      String id = idsByIndex.get(ref.index());
-      boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
-          edge.relationshipType());
-      SemanticCallFacts.Certainty certainty = openWorldDynamic
-          ? SemanticCallFacts.Certainty.UNRESOLVED
-          : edge.certaintyHint();
-      String limitation = openWorldDynamic
-          ? DynamicCertaintyPolicy.LIMITATION
-          : certainty == SemanticCallFacts.Certainty.POSSIBLE
-          ? "CHA exposes a bounded implementation/callback candidate; runtime selection is not unique."
-          : null;
-      facts.add(SemanticCallFacts.Fact.provider(
-          id,
-          context,
-          edge.caller().displayName(),
-          edge.callee().displayName(),
-          edge.relationshipType(),
-          certainty,
-          List.of(sootupEvidence(edge)),
-          limitation));
+      facts.add(callFact(context, ref.edge(), callIds.get(ref.index())));
     }
-    for (DynamicFeature feature : graph.dynamicFeatures()) {
-      String relationship = feature.kind() == DynamicFeature.Kind.REFLECTION ? "reflection" : "proxy_dispatch";
-      String baseId = dynamicFeatureId(feature);
-      String id = baseId;
-      int duplicate = 1;
-      while (!ids.add(id)) {
-        id = baseId + "-" + duplicate++;
-      }
-      facts.add(SemanticCallFacts.Fact.provider(
-          id,
-          context,
-          feature.caller().displayName(),
-          feature.target(),
-          relationship,
-          SemanticCallFacts.Certainty.UNRESOLVED,
-          List.of(new SemanticCallFacts.Evidence(
-              feature.kind() == DynamicFeature.Kind.REFLECTION ? "reflection_api" : "dynamic_proxy_call",
-              feature.sourcePath(),
-              feature.symbols(),
-              feature.sourceLine() > 0 ? feature.sourceLine() : null,
-               dynamicEvidenceAttributes(feature))),
-          feature.limitation()));
+    return facts;
+  }
+
+  /** Normalizes one ordinary provider edge with the centralized certainty policy. */
+  private static SemanticCallFacts.Fact callFact(
+      AnalysisContext context, CallEdge edge, String id) {
+    boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
+        edge.relationshipType());
+    SemanticCallFacts.Certainty certainty = openWorldDynamic
+        ? SemanticCallFacts.Certainty.UNRESOLVED
+        : edge.certaintyHint();
+    return SemanticCallFacts.Fact.provider(
+        id,
+        context,
+        edge.caller().displayName(),
+        edge.callee().displayName(),
+        edge.relationshipType(),
+        certainty,
+        List.of(sootupEvidence(edge)),
+        limitation(openWorldDynamic, certainty));
+  }
+
+  /** Normalizes source-backed dynamic observations after ordinary call IDs exist. */
+  private static List<SemanticCallFacts.Fact> dynamicFacts(
+      AnalysisContext context, List<DynamicFeature> features, Set<String> ids) {
+    List<SemanticCallFacts.Fact> facts = new ArrayList<>();
+    for (DynamicFeature feature : features) {
+      facts.add(dynamicFact(context, feature, nextDynamicId(feature, ids)));
     }
-    return List.copyOf(facts);
+    return facts;
+  }
+
+  /** Creates one unresolved fact for a reflection or proxy observation. */
+  private static SemanticCallFacts.Fact dynamicFact(
+      AnalysisContext context, DynamicFeature feature, String id) {
+    String relationship = feature.kind() == DynamicFeature.Kind.REFLECTION
+        ? "reflection" : "proxy_dispatch";
+    String evidenceKind = feature.kind() == DynamicFeature.Kind.REFLECTION
+        ? "reflection_api" : "dynamic_proxy_call";
+    return SemanticCallFacts.Fact.provider(
+        id,
+        context,
+        feature.caller().displayName(),
+        feature.target(),
+        relationship,
+        SemanticCallFacts.Certainty.UNRESOLVED,
+        List.of(new SemanticCallFacts.Evidence(
+            evidenceKind,
+            feature.sourcePath(),
+            feature.symbols(),
+            feature.sourceLine() > 0 ? feature.sourceLine() : null,
+            dynamicEvidenceAttributes(feature))),
+        feature.limitation());
+  }
+
+  /** Allocates a deterministic dynamic ID without colliding with call IDs. */
+  private static String nextDynamicId(DynamicFeature feature, Set<String> ids) {
+    String baseId = dynamicFeatureId(feature);
+    String id = baseId;
+    int duplicate = 1;
+    while (!ids.add(id)) {
+      id = baseId + "-" + duplicate++;
+    }
+    return id;
+  }
+
+  /** Applies open-world abstention and bounded-candidate limitations. */
+  private static String limitation(boolean openWorldDynamic, SemanticCallFacts.Certainty certainty) {
+    if (openWorldDynamic) {
+      return DynamicCertaintyPolicy.LIMITATION;
+    }
+    return certainty == SemanticCallFacts.Certainty.POSSIBLE
+        ? "CHA exposes a bounded implementation/callback candidate; runtime selection is not unique."
+        : null;
+  }
+
+  private static boolean isApplicationEdge(CallEdge edge) {
+    return edge.targetContext().origin() == CallEdge.TargetOrigin.APPLICATION;
   }
 
   /** Uses the complete source identity so separate dynamic sites cannot silently collide. */
@@ -200,4 +255,7 @@ final class ProviderFactNormalizer {
   }
 
   private record EdgeRef(int index, CallEdge edge, String identity) {}
+
+  private record CallReferences(
+      List<EdgeRef> edges, Map<String, Integer> applicationBaseIdCounts) {}
 }
