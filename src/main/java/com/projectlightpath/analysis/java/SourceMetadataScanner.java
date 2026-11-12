@@ -993,11 +993,18 @@ final class SourceMetadataScanner {
   /** Returns source types registered by canonical Spring component bean methods. */
   private Set<String> registeredSpringBeanTypes() {
     Set<String> result = new LinkedHashSet<>();
-    for (BeanCandidate candidate : beanCandidates(AnalysisContext.Framework.SPRING_BOOT)) {
-      if (candidate.producer()
-          && springComponent(candidate.file())
-          && !candidate.candidateType().isBlank()) {
-        result.add(candidate.candidateType());
+    for (SourceFile file : files()) {
+      for (MethodInfo method : methods(file)) {
+        if (!springBeanAnnotation(file, method.annotationBlock()) || method.returnType().isBlank()) {
+          continue;
+        }
+        String declaringType = typeContaining(file, declarationStart(file, method.start()));
+        if (!springComponent(file, declaringType)) {
+          continue;
+        }
+        resolveReferenceType(method.returnType(), file)
+            .filter(type -> !type.isBlank())
+            .ifPresent(result::add);
       }
     }
     return Set.copyOf(result);
@@ -4234,7 +4241,23 @@ final class SourceMetadataScanner {
 
   /** Recognizes the bounded Spring component stereotype subset. */
   private static boolean springComponent(SourceFile file) {
-    String block = file.classAnnotationBlock();
+    return springComponentAnnotations(file, file.classAnnotationBlock());
+  }
+
+  /** Recognizes a canonical Spring component stereotype on one source type. */
+  private static boolean springComponent(SourceFile file, String typeName) {
+    if (file.typeName().equals(typeName)) {
+      return springComponent(file);
+    }
+    return typeDeclarations(file).stream()
+        .filter(type -> typeContaining(file, type.start()).equals(typeName))
+        .filter(type -> !isLocalType(file, type))
+        .map(type -> typeAnnotationBlock(file, type))
+        .anyMatch(block -> springComponentAnnotations(file, block));
+  }
+
+  /** Recognizes the bounded Spring component stereotype subset in an annotation block. */
+  private static boolean springComponentAnnotations(SourceFile file, String block) {
     return canonicalAnnotation(file, block, "Service", "org.springframework.stereotype.Service")
         || canonicalAnnotation(file, block, "Component", "org.springframework.stereotype.Component")
         || canonicalAnnotation(file, block, "Repository", "org.springframework.stereotype.Repository")
@@ -4244,6 +4267,16 @@ final class SourceMetadataScanner {
         || canonicalAnnotation(
             file, block, "RestController", "org.springframework.web.bind.annotation.RestController")
         || canonicalAnnotation(file, block, "Named", "jakarta.inject.Named", "javax.inject.Named");
+  }
+
+  /** Returns the annotation-bearing declaration prefix for one nested source type. */
+  private static String typeAnnotationBlock(SourceFile file, TypeInfo type) {
+    String source = file.structuralSource();
+    int boundary = type.start() - 1;
+    while (boundary >= 0 && "{};".indexOf(source.charAt(boundary)) < 0) {
+      boundary--;
+    }
+    return source.substring(boundary + 1, type.start());
   }
 
   /** Recognizes CDI scopes, stereotypes, and named beans. */

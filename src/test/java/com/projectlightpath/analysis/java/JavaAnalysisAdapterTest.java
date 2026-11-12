@@ -416,7 +416,35 @@ class JavaAnalysisAdapterTest {
         @Component public class BeanFactory {
           @Bean public Object suppliedBean() { return new Object(); }
           static class NestedFactory {
-            @Bean public Object nestedBean() { return new Object(); }
+            @Bean public NestedUnregisteredRunner nestedRunner() {
+              return new NestedUnregisteredRunner();
+            }
+          }
+        }
+        """);
+    write(sourceRoot, "demo/NestedUnregisteredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class NestedUnregisteredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/NestedConfiguredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class NestedConfiguredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/NestedConfigurationOwner.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        public class NestedConfigurationOwner {
+          @Configuration static class RegisteredNestedConfiguration {
+            @Bean public NestedConfiguredRunner nestedConfiguredRunner() {
+              return new NestedConfiguredRunner();
+            }
           }
         }
         """);
@@ -501,7 +529,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> lifecycleFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("lifecycle_callback"))
         .toList();
-    assertEquals(4, lifecycleFacts.size());
+    assertEquals(5, lifecycleFacts.size());
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.RegisteredRunner#run")
         && item.evidence().get(0).symbols().contains("@Component")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
@@ -513,8 +541,12 @@ class JavaAnalysisAdapterTest {
         && item.evidence().get(0).symbols().contains("@Bean configuredRunner")));
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.ConfiguredRunner#run")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfiguredRunner#run")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredFactory")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("NestedUnregisteredRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("Lookalike")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("WildcardRunner")));
