@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,7 +23,7 @@ public final class ManualAnalysisMain {
           facts.providerFacts().size(),
           facts.frameworkFacts().size(),
           outputPath);
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       System.err.println("manual Java analysis failed: " + error.getMessage());
       System.exit(1);
     }

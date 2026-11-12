@@ -1,5 +1,6 @@
 # Java/Maven build output
 /target/
+tools/java-lint-maven-plugin/target/
 
 # FLPATH-5000 disposable analysis output
 spike/runs/

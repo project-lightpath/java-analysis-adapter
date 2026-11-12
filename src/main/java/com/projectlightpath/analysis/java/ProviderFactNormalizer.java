@@ -43,18 +43,19 @@ final class ProviderFactNormalizer {
                 : uniqueId(ids, baseId + "-" + sha256(ref.identity()), ref.identity());
           } else {
             id = uniqueId(ids, dependencyCallId(edge), ref.identity());
-          }
-          idsByIndex.put(ref.index(), id);
-        });
+      }
+      idsByIndex.put(ref.index(), id);
+    });
     for (EdgeRef ref : edgeRefs) {
       CallEdge edge = ref.edge();
       String id = idsByIndex.get(ref.index());
-      boolean openWorldDynamic = isOpenWorldDynamic(edge.relationshipType());
+      boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
+          edge.relationshipType());
       SemanticCallFacts.Certainty certainty = openWorldDynamic
           ? SemanticCallFacts.Certainty.UNRESOLVED
           : edge.certaintyHint();
       String limitation = openWorldDynamic
-          ? "Open-world dynamic behavior does not identify a unique runtime target."
+          ? DynamicCertaintyPolicy.LIMITATION
           : certainty == SemanticCallFacts.Certainty.POSSIBLE
           ? "CHA exposes a bounded implementation/callback candidate; runtime selection is not unique."
           : null;
@@ -196,13 +197,6 @@ final class ProviderFactNormalizer {
     } catch (NoSuchAlgorithmException error) {
       throw new IllegalStateException("SHA-256 is unavailable", error);
     }
-  }
-
-  /** Keeps open-world reflection and proxy edges abstained even if a provider overstates certainty. */
-  private static boolean isOpenWorldDynamic(String relationshipType) {
-    return "reflection".equals(relationshipType)
-        || "dynamic_proxy".equals(relationshipType)
-        || "proxy_dispatch".equals(relationshipType);
   }
 
   private record EdgeRef(int index, CallEdge edge, String identity) {}
