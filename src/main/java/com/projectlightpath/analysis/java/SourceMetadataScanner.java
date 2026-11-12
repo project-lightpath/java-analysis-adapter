@@ -802,8 +802,7 @@ final class SourceMetadataScanner {
     }
     for (MethodInfo method : methods(file)) {
       if (typeContaining(file, method.start()).equals(file.typeName())
-          && abstractInstanceRepositoryMethod(method)
-          && !method.name().equals("findById")) {
+          && abstractInstanceRepositoryMethod(method)) {
         RepositoryMethod repositoryMethod = new RepositoryMethod(
             method.name(), repositoryMethodSignature(method), false);
         result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);

@@ -375,9 +375,10 @@ class JavaAnalysisAdapterTest {
     write(sourceRoot, "demo/OverloadedRepository.java", """
         package demo;
         public interface OverloadedRepository
-            extends org.springframework.data.repository.Repository<Account, Long> {
+        extends org.springframework.data.repository.Repository<Account, Long> {
           String findByEmail(String email);
           String findByEmail(int email);
+          Account findById(String id);
           default String helper() { return "default"; }
           static String staticHelper() { return "static"; }
         }
@@ -409,7 +410,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
-    assertEquals(4, repositoryFacts.size());
+    assertEquals(5, repositoryFacts.size());
     SemanticCallFacts.Fact custom = repositoryFacts.stream()
         .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
         .findFirst()
@@ -421,6 +422,8 @@ class JavaAnalysisAdapterTest {
         "demo.OverloadedRepository#findByEmail(String)")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.OverloadedRepository#findByEmail(int)")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findById(String)")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#helper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#staticHelper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRepository")));
