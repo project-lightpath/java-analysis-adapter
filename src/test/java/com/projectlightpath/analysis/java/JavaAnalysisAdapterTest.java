@@ -170,6 +170,57 @@ class JavaAnalysisAdapterTest {
     assertEquals("(Ljava/lang/String;)Z", facts.providerFacts().get(0).evidence().get(0).attributes().get("callerSignature"));
   }
 
+  /** Deduplicates files in overlapping roots and keeps the most-specific generated provenance. */
+  @Test
+  void overlappingGeneratedRootsAreScannedOnceWithSpecificProvenance() throws IOException {
+    Path sourceRoot = temp.resolve("overlapping/src/main/java");
+    Path generatedRoot = sourceRoot.resolve("generated-src/main/java");
+    write(generatedRoot, "demo/generated/GeneratedTransferMapper.java", """
+        package demo.generated;
+        public class GeneratedTransferMapper {
+          public String toResponse(String value) { return value; }
+        }
+        """);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .generatedSourceRoot(
+            "generated-src/main/java",
+            generatedRoot,
+            AnalysisContext.Scope.PRODUCTION,
+            true,
+            true,
+            "generated-root-fingerprint")
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "quarkus-generated-source-root",
+            "generated_source_root",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "generated-src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+
+    List<SemanticCallFacts.Fact> generatedFacts = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("generated_implementation"))
+        .toList();
+    assertEquals(1, generatedFacts.size());
+    assertEquals("generated-src/main/java",
+        generatedFacts.get(0).evidence().get(0).attributes().get("sourceRoot"));
+    assertEquals("generated-root-fingerprint",
+        generatedFacts.get(0).evidence().get(0).attributes().get("sourceRootFingerprint"));
+  }
+
   /** Covers Spring MVC, injection, proxy, repository, and lifecycle facts. */
   @Test
   void springFactsCoverMvcInjectionProxyRepositoryAndLifecycle() throws IOException {
@@ -325,6 +376,21 @@ class JavaAnalysisAdapterTest {
           public void run(String... args) { }
         }
         """);
+    write(sourceRoot, "demo/Component.java", "package demo; public @interface Component {}\n");
+    write(sourceRoot, "demo/Configuration.java", "package demo; public @interface Configuration {}\n");
+    write(sourceRoot, "demo/FakeComponent.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        @demo.Component public class FakeComponent implements CommandLineRunner {
+          public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/FakeConfiguration.java", """
+        package demo;
+        @demo.Configuration public class FakeConfiguration {
+          @org.springframework.context.annotation.Bean public Object fakeBean() { return null; }
+        }
+        """);
 
     AnalysisContext context = context(
         AnalysisContext.Framework.SPRING_BOOT,
@@ -352,6 +418,12 @@ class JavaAnalysisAdapterTest {
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("Lookalike")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("WildcardRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("FakeComponent")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("FakeConfiguration")));
+    assertFalse(facts.frameworkFacts().stream().anyMatch(item -> item.caller().contains("FakeComponent")
+        || item.caller().contains("FakeConfiguration")
+        || item.callee().contains("FakeComponent")
+        || item.callee().contains("FakeConfiguration")));
     assertTrue(lifecycleFacts.stream().allMatch(item -> item.factSet() == SemanticCallFacts.FactSet.FRAMEWORK));
     assertTrue(facts.providerFacts().isEmpty());
   }
@@ -404,6 +476,14 @@ class JavaAnalysisAdapterTest {
         import org.springframework.data.repository.*;
         public interface WildcardRepository extends Repository<Account, Long> { }
         """);
+    write(sourceRoot, "demo/GenericRepository.java", """
+        package demo;
+        public interface GenericRepository<T, ID>
+            extends org.springframework.data.repository.CrudRepository<T, ID> {
+          T findById(ID id);
+          T findById(String id);
+        }
+        """);
 
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
         context(
@@ -426,7 +506,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
-    assertEquals(5, repositoryFacts.size());
+    assertEquals(7, repositoryFacts.size());
     SemanticCallFacts.Fact custom = repositoryFacts.stream()
         .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
         .findFirst()
@@ -448,6 +528,10 @@ class JavaAnalysisAdapterTest {
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRepository")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("MarkerRepository")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("WildcardRepository")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.GenericRepository#findById(String)")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.GenericRepository#findById(ID)")));
   }
 
   /** Keeps fixture IDs stable only when their complete source identity is unique. */
