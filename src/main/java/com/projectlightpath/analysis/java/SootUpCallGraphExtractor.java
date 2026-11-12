@@ -15,6 +15,7 @@ import sootup.callgraph.CallGraph;
 import sootup.core.frontend.SootClassSource;
 import sootup.core.inputlocation.AnalysisInputLocation;
 import sootup.core.jimple.common.expr.JInterfaceInvokeExpr;
+import sootup.core.jimple.common.expr.JVirtualInvokeExpr;
 import sootup.core.model.SootClass;
 import sootup.core.model.SootMethod;
 import sootup.core.signatures.MethodSignature;
@@ -98,7 +99,7 @@ final class SootUpCallGraphExtractor {
         callee,
         call.getLineNumber(),
         sourcePath(context, caller.owner()),
-        certainty(relationshipType),
+        certainty(call, view, relationshipType, targetContext),
         relationshipType,
         targetContext));
   }
@@ -143,10 +144,36 @@ final class SootUpCallGraphExtractor {
         .orElseGet(() -> scanner.isInterfaceType(callee.owner()));
   }
 
-  private static SemanticCallFacts.Certainty certainty(String relationshipType) {
-    return relationshipType.equals("invokes")
-        ? SemanticCallFacts.Certainty.DEFINITE
-        : SemanticCallFacts.Certainty.POSSIBLE;
+  private static SemanticCallFacts.Certainty certainty(
+      CallGraph.Call call,
+      JavaView view,
+      String relationshipType,
+      CallEdge.TargetContext targetContext) {
+    if (!relationshipType.equals("invokes")) {
+      return SemanticCallFacts.Certainty.POSSIBLE;
+    }
+    if (targetContext.origin() == CallEdge.TargetOrigin.DEPENDENCY
+        && virtualTargetMayDispatch(view, call)) {
+      return SemanticCallFacts.Certainty.POSSIBLE;
+    }
+    return SemanticCallFacts.Certainty.DEFINITE;
+  }
+
+  /** Returns whether CHA may have emitted one of several virtual dependency targets. */
+  private static boolean virtualTargetMayDispatch(JavaView view, CallGraph.Call call) {
+    boolean virtualInvoke = call.invokableStmt().getInvokeExpr()
+        .map(expression -> expression instanceof JVirtualInvokeExpr)
+        .orElse(false);
+    if (!virtualInvoke) {
+      return false;
+    }
+    boolean finalMethod = view.getMethod(call.targetMethodSignature())
+        .map(SootMethod::isFinal)
+        .orElse(false);
+    boolean finalClass = view.getClass(call.targetMethodSignature().getDeclClassType())
+        .map(SootClass::isFinal)
+        .orElse(false);
+    return !finalMethod && !finalClass;
   }
 
   private static CallEdge.TargetContext dependencyTarget(

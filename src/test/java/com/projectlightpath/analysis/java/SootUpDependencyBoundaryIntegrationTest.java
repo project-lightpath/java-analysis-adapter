@@ -125,6 +125,24 @@ class SootUpDependencyBoundaryIntegrationTest {
   }
 
   @Test
+  void retainsPossibleVirtualDependencyDispatchWithoutPromotingCertainty() throws IOException {
+    Fixture fixture = fixture();
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(fixture.context());
+
+    List<SemanticCallFacts.Fact> dispatches = facts.providerFacts().stream()
+        .filter(item -> item.caller().equals("app.Application#dependencyVirtualCall"))
+        .filter(item -> item.callee().startsWith("vulnerable.api.VirtualApi"))
+        .filter(item -> item.relationshipType().equals("invokes"))
+        .toList();
+    assertFalse(dispatches.isEmpty(), facts.providerFacts().toString());
+    assertTrue(dispatches.stream().allMatch(item ->
+        item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
+    assertTrue(dispatches.stream().allMatch(item ->
+        fixture.vulnerableJar().toAbsolutePath().normalize().toString().equals(
+            item.evidence().get(0).attributes().get("dependencyClasspathEntry"))));
+  }
+
+  @Test
   void preservesExistingInvalidDependencyClasspathBehavior() throws IOException {
     Fixture fixture = fixture();
     Path missing = temp.resolve("missing-dependency.jar");
@@ -175,6 +193,47 @@ class SootUpDependencyBoundaryIntegrationTest {
     SemanticCallFacts.Fact peer = fact(facts, "app.Application#peerCall");
     assertEquals(peerJar.toAbsolutePath().normalize().toString(),
         peer.evidence().get(0).attributes().get("dependencyClasspathEntry"));
+  }
+
+  @Test
+  void attributesWarContainedClassesToTheOuterDependencyEntry() throws IOException {
+    Fixture fixture = fixture();
+    Path warSource = temp.resolve("war/src/main/java");
+    Path warClasses = temp.resolve("war/target/classes");
+    write(warSource, "war/api/WarApi.java", """
+        package war.api;
+        public class WarApi {
+          public static String value() { return "war"; }
+        }
+        """);
+    compile(warSource, warClasses, List.of());
+    Path war = war(warClasses, fixture.vulnerableJar(), temp.resolve("application.war"));
+
+    Path applicationSource = temp.resolve("war-application/src/main/java");
+    Path applicationClasses = temp.resolve("war-application/target/classes");
+    write(applicationSource, "app/WarApplication.java", """
+        package app;
+        import vulnerable.api.VulnerableApi;
+        import war.api.WarApi;
+        public class WarApplication {
+          public String webClassesCall() { return WarApi.value(); }
+          public boolean nestedJarCall(String value) { return VulnerableApi.check(value); }
+        }
+        """);
+    compile(applicationSource, applicationClasses, List.of(warClasses, fixture.vulnerableJar()));
+    AnalysisContext context = contextFor(
+        applicationSource, applicationClasses, List.of(war));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+    String expectedWar = war.toAbsolutePath().normalize().toString();
+    SemanticCallFacts.Fact webClasses = fact(facts, "app.WarApplication#webClassesCall");
+    assertEquals("war.api.WarApi#value", webClasses.callee());
+    assertEquals(expectedWar,
+        webClasses.evidence().get(0).attributes().get("dependencyClasspathEntry"));
+    SemanticCallFacts.Fact nestedJar = fact(facts, "app.WarApplication#nestedJarCall");
+    assertEquals("vulnerable.api.VulnerableApi#check", nestedJar.callee());
+    assertEquals(expectedWar,
+        nestedJar.evidence().get(0).attributes().get("dependencyClasspathEntry"));
   }
 
   @Test
@@ -259,6 +318,18 @@ class SootUpDependencyBoundaryIntegrationTest {
           public String execute(String value) { return value; }
         }
         """);
+    write(dependencySource, "vulnerable/api/VirtualApi.java", """
+        package vulnerable.api;
+        public class VirtualApi {
+          public String value() { return "base"; }
+        }
+        """);
+    write(dependencySource, "vulnerable/api/VirtualApiOverride.java", """
+        package vulnerable.api;
+        public class VirtualApiOverride extends VirtualApi {
+          @Override public String value() { return "override"; }
+        }
+        """);
     write(dependencySource, "vulnerable/api/Duplicate.java", """
         package vulnerable.api;
         public final class Duplicate {
@@ -293,12 +364,16 @@ class SootUpDependencyBoundaryIntegrationTest {
         import vulnerable.api.BoundaryService;
         import vulnerable.api.Duplicate;
         import vulnerable.api.VulnerableApi;
+        import vulnerable.api.VirtualApi;
         public class Application {
           public boolean dependencyCall(String value) {
             return VulnerableApi.check(value);
           }
           public String dependencyBodyCall(Object value) {
             return VulnerableApi.normalize(value);
+          }
+          public String dependencyVirtualCall(VirtualApi value) {
+            return value.value();
           }
           public String dependencyInterfaceCall(BoundaryService service) {
             return service.execute("value");
@@ -341,6 +416,25 @@ class SootUpDependencyBoundaryIntegrationTest {
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
     return new Fixture(context, vulnerableJar, peerJar);
+  }
+
+  private static AnalysisContext contextFor(
+      Path applicationSource, Path applicationClasses, List<Path> dependencies) {
+    return AnalysisContext.builder()
+        .id("war-dependency-boundary")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("sootup-war-dependency-boundary")
+        .javaRelease(17)
+        .repositoryRoot(applicationSource.getParent().getParent())
+        .applicationClasses(applicationClasses)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", applicationSource, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(dependencies)
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
   }
 
   private static AnalysisContext contextWithDependencies(Fixture fixture, List<Path> dependencies) {
@@ -417,6 +511,33 @@ class SootUpDependencyBoundaryIntegrationTest {
       }
     }
     return jar;
+  }
+
+  private static Path war(Path classes, Path nestedJar, Path war) throws IOException {
+    try (OutputStream stream = Files.newOutputStream(war);
+         JarOutputStream output = new JarOutputStream(stream)) {
+      for (String directory : List.of(
+          "WEB-INF/", "WEB-INF/classes/", "WEB-INF/classes/war/",
+          "WEB-INF/classes/war/api/", "WEB-INF/lib/")) {
+        output.putNextEntry(new JarEntry(directory));
+        output.closeEntry();
+      }
+      List<Path> files = Files.walk(classes)
+          .filter(Files::isRegularFile)
+          .sorted(Comparator.comparing(Path::toString))
+          .toList();
+      for (Path file : files) {
+        String entryName = "WEB-INF/classes/" + classes.relativize(file).toString()
+            .replace(file.getFileSystem().getSeparator(), "/");
+        output.putNextEntry(new JarEntry(entryName));
+        Files.copy(file, output);
+        output.closeEntry();
+      }
+      output.putNextEntry(new JarEntry("WEB-INF/lib/nested.jar"));
+      Files.copy(nestedJar, output);
+      output.closeEntry();
+    }
+    return war;
   }
 
   private static void write(Path root, String relative, String source) throws IOException {

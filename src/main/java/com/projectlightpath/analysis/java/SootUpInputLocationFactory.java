@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import sootup.core.inputlocation.AnalysisInputLocation;
+import sootup.core.inputlocation.FileType;
 import sootup.core.model.SourceType;
 import sootup.core.util.PathUtils;
 import sootup.interceptors.BytecodeBodyInterceptors;
@@ -37,7 +38,9 @@ final class SootUpInputLocationFactory {
           "dependency classpath contains no valid entries for AnalysisContext " + context.id());
     }
     locations.add(new DefaultRuntimeAnalysisInputLocation(SourceType.Library));
-    return new Inputs(new JavaView(locations), dependencyEntries);
+    JavaView view = new JavaView(locations);
+    mapContainedWarLocations(view, dependencyEntries);
+    return new Inputs(view, dependencyEntries);
   }
 
   private static void addDependencyLocations(
@@ -61,6 +64,20 @@ final class SootUpInputLocationFactory {
 
   private static boolean isValidInputLocation(Path path) {
     return Files.exists(path) && (Files.isDirectory(path) || PathUtils.isArchive(path));
+  }
+
+  /** Associates WAR-contained class sources with the outer WAR dependency entry. */
+  private static void mapContainedWarLocations(
+      JavaView view, Map<AnalysisInputLocation, Path> dependencyEntries) {
+    List<Map.Entry<AnalysisInputLocation, Path>> wars = dependencyEntries.entrySet().stream()
+        .filter(entry -> PathUtils.hasExtension(entry.getValue(), FileType.WAR))
+        .toList();
+    for (Map.Entry<AnalysisInputLocation, Path> war : wars) {
+      try (var sources = war.getKey().getClassSources(view)) {
+        sources.forEach(source -> dependencyEntries.put(
+            source.getAnalysisInputLocation(), war.getValue()));
+      }
+    }
   }
 
   /** Expands SootUp-compatible trailing wildcards into concrete JAR entries. */
