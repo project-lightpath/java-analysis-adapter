@@ -156,6 +156,17 @@ final class SourceMetadataScanner {
       "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
       "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
       "TransactionalEventListener");
+  private static final String SPRING_COMMAND_LINE_RUNNER =
+      "org.springframework.boot.CommandLineRunner";
+  private static final Map<String, String> SPRING_DATA_REPOSITORY_CONTRACTS = Map.of(
+      "org.springframework.data.repository.Repository", "Repository",
+      "org.springframework.data.repository.CrudRepository", "CrudRepository",
+      "org.springframework.data.jpa.repository.JpaRepository", "JpaRepository",
+      "org.springframework.data.repository.PagingAndSortingRepository", "PagingAndSortingRepository",
+      "org.springframework.data.repository.ListCrudRepository", "ListCrudRepository",
+      "org.springframework.data.repository.ListPagingAndSortingRepository", "ListPagingAndSortingRepository");
+  private static final Set<String> SPRING_DATA_FIND_BY_ID_CONTRACTS = Set.of(
+      "CrudRepository", "JpaRepository", "ListCrudRepository");
   private static final List<String> SUPPORTED_HTTP_METHODS =
       List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
@@ -706,16 +717,17 @@ final class SourceMetadataScanner {
     List<BeanCandidate> result = new ArrayList<>();
     for (SourceFile file : files()) {
       String block = file.classAnnotationBlock();
+      boolean repositoryInterface = framework == AnalysisContext.Framework.SPRING_BOOT
+          && springRepositoryContract(file).isPresent();
       boolean bean = framework == AnalysisContext.Framework.QUARKUS
           ? cdiBean(block)
-          : springComponent(block) || file.structuralSource().matches(
-              "(?s).*\\binterface\\s+\\w+\\s+extends\\s+[^;]*\\b(?:JpaRepository|Repository)\\b.*");
+          : springComponent(block) || repositoryInterface;
       if (bean) {
         Set<String> contracts = contracts(file);
         result.add(new BeanCandidate(
             file,
             contracts,
-            beanKind(block, framework),
+            repositoryInterface ? "repository_interface" : beanKind(block, framework),
             file.typeName(),
             file.typeName(),
             qualifierNames(block),
@@ -755,6 +767,126 @@ final class SourceMetadataScanner {
       }
     }
     return List.copyOf(result);
+  }
+
+  /** Finds bounded Spring Data repository interfaces, including annotated repositories. */
+  Optional<String> springRepositoryContract(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    if (!header.matches("(?s).*\\binterface\\s+\\w+\\b.*")) {
+      return Optional.empty();
+    }
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return Optional.empty();
+    }
+    int permitsIndex = topLevelKeywordIndex(header, "permits");
+    String extended = header.substring(
+        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
+    return typeNames(extended).stream()
+        .map(type -> resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet()))
+        .flatMap(Optional::stream)
+        .map(SPRING_DATA_REPOSITORY_CONTRACTS::get)
+        .findFirst();
+  }
+
+  /** Returns repository methods guaranteed by the contract or declared by the source interface. */
+  List<RepositoryMethod> springRepositoryMethods(SourceFile file) {
+    Optional<String> contract = springRepositoryContract(file);
+    if (contract.isEmpty()) {
+      return List.of();
+    }
+    Map<String, RepositoryMethod> result = new LinkedHashMap<>();
+    if (SPRING_DATA_FIND_BY_ID_CONTRACTS.contains(contract.get())) {
+      result.put("findById", new RepositoryMethod("findById", true));
+    }
+    for (MethodInfo method : methods(file)) {
+      if (typeContaining(file, method.start()).equals(file.typeName())) {
+        result.putIfAbsent(method.name(), new RepositoryMethod(method.name(), false));
+      }
+    }
+    return List.copyOf(result.values());
+  }
+
+  /** Resolves only known framework types, abstaining on ambiguous or unknown imports. */
+  private Optional<String> resolveKnownFrameworkType(
+      String type, SourceFile sourceFile, Set<String> canonicalTypes) {
+    String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    if (canonicalTypes.contains(normalized)) {
+      return Optional.of(normalized);
+    }
+    List<String> imported = importedTypes(normalized, sourceFile);
+    if (imported.size() > 1) {
+      return Optional.empty();
+    }
+    if (imported.size() == 1 && canonicalTypes.contains(imported.get(0))) {
+      return Optional.of(imported.get(0));
+    }
+    return resolveContractType(normalized, sourceFile).filter(canonicalTypes::contains);
+  }
+
+  /** Scans Spring @Bean and bounded CommandLineRunner lifecycle callbacks. */
+  List<LifecycleMethod> springLifecycleMethods() {
+    List<LifecycleMethod> result = new ArrayList<>();
+    for (SourceFile file : files()) {
+      boolean springBean = springComponent(file.classAnnotationBlock());
+      boolean commandLineRunner = springBean
+          && implementsNamedInterface(file, SPRING_COMMAND_LINE_RUNNER);
+      for (MethodInfo method : methods(file)) {
+        if (method.hasAnnotation("Bean")) {
+          result.add(new LifecycleMethod(
+              file,
+              method,
+              "bean",
+              lifecycleAnnotationSymbols(file, method)));
+        }
+        if (commandLineRunner
+            && method.name().equals("run")
+            && commandLineRunnerParameters(method.parameters())) {
+          result.add(new LifecycleMethod(
+              file,
+              method,
+              "runner",
+              lifecycleAnnotationSymbols(file, method)));
+        }
+      }
+    }
+    return List.copyOf(result);
+  }
+
+  /** Returns whether a class header implements the named interface. */
+  private boolean implementsNamedInterface(SourceFile file, String interfaceName) {
+    String header = maskStringLiterals(typeHeader(file));
+    int implementsIndex = keywordIndex(header, "implements");
+    if (implementsIndex < 0) {
+      return false;
+    }
+    int end = keywordIndexAfter(header, "permits", implementsIndex + "implements".length());
+    String implemented = header.substring(
+        implementsIndex + "implements".length(), end >= 0 ? end : header.length());
+    return typeNames(implemented).stream()
+        .map(type -> resolveKnownFrameworkType(type, file, Set.of(interfaceName)))
+        .flatMap(Optional::stream)
+        .anyMatch(interfaceName::equals);
+  }
+
+  /** Accepts both String... and the equivalent String[] CommandLineRunner signature. */
+  private static boolean commandLineRunnerParameters(String source) {
+    List<Parameter> parameters = parameters(source);
+    if (parameters.size() != 1) {
+      return false;
+    }
+    String type = parameters.get(0).type().replaceAll("\\s+", "");
+    return type.equals("String[]") || type.equals("java.lang.String[]");
+  }
+
+  /** Preserves the exact source annotations used to establish a lifecycle candidate. */
+  private static List<String> lifecycleAnnotationSymbols(SourceFile file, MethodInfo method) {
+    List<String> result = new ArrayList<>();
+    result.addAll(annotationSources(file.classAnnotationBlock(), List.of(
+        "Component", "Service", "Repository", "Configuration", "Controller",
+        "RestController", "Named")));
+    result.addAll(annotationSources(method.annotationBlock(), List.of("Bean")));
+    return List.copyOf(new LinkedHashSet<>(result));
   }
 
   /** Scans framework proxy targets and records CDI scope eligibility. */
@@ -4918,6 +5050,14 @@ final class SourceMetadataScanner {
   private record ConstructorInfo(String annotations, String parameters, int start) {}
 
   record GeneratedMethod(SourceFile file, MethodInfo method) {}
+
+  record LifecycleMethod(
+      SourceFile file,
+      MethodInfo method,
+      String kind,
+      List<String> annotationSymbols) {}
+
+  record RepositoryMethod(String name, boolean guaranteed) {}
 
   private record AnnotationOccurrence(String arguments, String source) {}
 }

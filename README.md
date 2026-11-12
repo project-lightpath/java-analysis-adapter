@@ -23,13 +23,13 @@ make test
 make package
 ```
 
-The `Adapter tests` CI lane runs `make adapter-test` and `make spike-validate`
+The `Adapter tests` CI lane runs `make adapter-test` and `make evidence-validate`
 on pull requests and pushes to `main`. The separate `Java lint` CI lane runs
 the enforced production-quality gate with `make java-lint` and uploads the
 PMD/CPD reports as workflow artifacts, including when the gate fails.
 
 See [`docs/flpath-5002-java-adapter.md`](docs/flpath-5002-java-adapter.md) for
-the implementation boundary.
+the implementation boundary and pre-release Java API versioning policy.
 
 Run the enforced Java quality gate with:
 
@@ -53,10 +53,10 @@ matrices, contracts, analyzer probes, scripts, and portable normalized results.
 The readiness report is in
 [`docs/flpath-5000-java-readiness.md`](docs/flpath-5000-java-readiness.md).
 
-Validate the checked-in spike evidence with:
+Validate the checked-in evidence contracts with:
 
 ```sh
-make spike-validate
+make evidence-validate
 ```
 
 The Spring Boot baseline remains external and is not vendored. The ignored

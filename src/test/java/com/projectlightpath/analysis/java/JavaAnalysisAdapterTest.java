@@ -140,6 +140,8 @@ class JavaAnalysisAdapterTest {
 
     SemanticCallFacts.Fact generated = fact(facts.frameworkFacts(), "quarkus-generated-mapper-binding");
     assertEquals(SemanticCallFacts.Certainty.DEFINITE, generated.certainty());
+    assertEquals("generated-src/main/java", generated.evidence().get(0).attributes().get("sourceRoot"));
+    assertEquals("generated-root-fingerprint", generated.evidence().get(0).attributes().get("sourceRootFingerprint"));
 
     SemanticCallFacts.Fact unresolvedProxy = fact(facts.frameworkFacts(), "quarkus-unbounded-proxy-abstention");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, unresolvedProxy.certainty());
@@ -195,7 +197,8 @@ class JavaAnalysisAdapterTest {
     write(sourceRoot, "demo/AccountRepository.java", """
         package demo;
         import org.springframework.data.jpa.repository.JpaRepository;
-        public interface AccountRepository extends JpaRepository<Account, Long> { }
+        import org.springframework.stereotype.Repository;
+        @Repository public interface AccountRepository extends JpaRepository<Account, Long> { }
         """);
     write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
     write(sourceRoot, "demo/SecurityConfig.java", """
@@ -240,8 +243,148 @@ class JavaAnalysisAdapterTest {
         && item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-data-generated-account-repository")
         || item.relationshipType().equals("dependency_injection")));
+    SemanticCallFacts.Fact repository = fact(facts.frameworkFacts(), "spring-data-generated-account-repository");
+    assertTrue(repository.evidence().get(0).symbols().contains("findById"));
+    assertEquals("JpaRepository", repository.evidence().get(0).attributes().get("repositoryContract"));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-bean-factory-to-security-config")));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-boot-to-data-seeder")));
+  }
+
+  /** Ignores unregistered runner lookalikes and preserves exact lifecycle source evidence. */
+  @Test
+  void springLifecycleFactsRequireBeanEvidenceAndRunnerSignature() throws IOException {
+    Path sourceRoot = temp.resolve("spring-lifecycle/src/main/java");
+    write(sourceRoot, "demo/RegisteredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        import org.springframework.stereotype.Component;
+        @Component public class RegisteredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+          public void run(String value) { }
+        }
+        """);
+    write(sourceRoot, "demo/UnregisteredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class UnregisteredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/BeanFactory.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.stereotype.Component;
+        @Component public class BeanFactory {
+          @Bean public Object suppliedBean() { return new Object(); }
+        }
+        """);
+    write(sourceRoot, "demo/Lookalike.java", """
+        package demo;
+        public class Lookalike {
+          String text = "@Configuration @Bean implements CommandLineRunner";
+          // @Configuration class Fake { @Bean Object fake() { return null; } }
+        }
+        """);
+    write(sourceRoot, "demo/CommandLineRunner.java", """
+        package demo;
+        public interface CommandLineRunner { }
+        """);
+    write(sourceRoot, "demo/LookalikeRunner.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class LookalikeRunner implements CommandLineRunner {
+          public void run(String... args) { }
+        }
+        """);
+
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations",
+            "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+
+    List<SemanticCallFacts.Fact> lifecycleFacts = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("lifecycle_callback"))
+        .toList();
+    assertEquals(2, lifecycleFacts.size());
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.RegisteredRunner#run")
+        && item.evidence().get(0).symbols().contains("@Component")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.BeanFactory#suppliedBean")
+        && item.evidence().get(0).symbols().contains("@Bean suppliedBean")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("Lookalike")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRunner")));
+    assertTrue(lifecycleFacts.stream().allMatch(item -> item.factSet() == SemanticCallFacts.FactSet.FRAMEWORK));
+    assertTrue(facts.providerFacts().isEmpty());
+  }
+
+  /** Requires canonical Spring Data contracts and does not invent marker or paging methods. */
+  @Test
+  void springRepositoryFactsRequireCanonicalContractsAndKnownMethods() throws IOException {
+    Path sourceRoot = temp.resolve("spring-repositories/src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/Repository.java", "package demo; public interface Repository<T> {}\n");
+    write(sourceRoot, "demo/LookalikeRepository.java", """
+        package demo;
+        import org.springframework.stereotype.Repository;
+        @Repository public interface LookalikeRepository extends Repository<Account> {
+          String findByEmail(String email);
+        }
+        """);
+    write(sourceRoot, "demo/MarkerRepository.java", """
+        package demo;
+        public interface MarkerRepository
+            extends org.springframework.data.repository.Repository<Account, Long> { }
+        """);
+    write(sourceRoot, "demo/PagingRepository.java", """
+        package demo;
+        public interface PagingRepository extends
+            org.springframework.data.repository.PagingAndSortingRepository<Account, Long> { }
+        """);
+    write(sourceRoot, "demo/CustomRepository.java", """
+        package demo;
+        public interface CustomRepository
+            extends org.springframework.data.repository.Repository<Account, Long> {
+          String findByEmail(String email);
+        }
+        """);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            sourceRoot,
+            null,
+            List.of(
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-bean-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-data-repository-contract",
+                    "source_interface_metadata",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"))),
+        AnalysisGraph.empty());
+
+    List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("generated_implementation"))
+        .toList();
+    assertEquals(1, repositoryFacts.size());
+    SemanticCallFacts.Fact custom = repositoryFacts.get(0);
+    assertEquals("demo.CustomRepository#findByEmail", custom.callee());
+    assertTrue(custom.evidence().get(0).symbols().contains("declared findByEmail"));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("findById")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRepository")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("MarkerRepository")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("PagingRepository")));
   }
 
   /** Keeps fixture IDs stable only when their complete source identity is unique. */
@@ -5304,7 +5447,12 @@ class JavaAnalysisAdapterTest {
         .provenance(AnalysisContext.Provenance.forTesting());
     if (generatedRoot != null) {
       builder.generatedSourceRoot(
-          "generated-src/main/java", generatedRoot, AnalysisContext.Scope.PRODUCTION, true, true);
+          "generated-src/main/java",
+          generatedRoot,
+          AnalysisContext.Scope.PRODUCTION,
+          true,
+          true,
+          "generated-root-fingerprint");
     }
     metadata.forEach(builder::frameworkMetadata);
     return builder.build();
