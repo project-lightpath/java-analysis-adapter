@@ -1,24 +1,32 @@
 package com.projectlightpath.analysis.java;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import sootup.callgraph.CallGraph;
 import sootup.callgraph.ClassHierarchyAnalysisAlgorithm;
+import sootup.core.frontend.SootClassSource;
 import sootup.core.inputlocation.AnalysisInputLocation;
 import sootup.core.jimple.common.expr.JInterfaceInvokeExpr;
+import sootup.core.model.SootClass;
 import sootup.core.model.SootMethod;
 import sootup.core.model.SourceType;
 import sootup.core.signatures.MethodSignature;
+import sootup.core.util.PathUtils;
 import sootup.java.bytecode.frontend.inputlocation.DefaultRuntimeAnalysisInputLocation;
 import sootup.java.bytecode.frontend.inputlocation.JavaClassPathAnalysisInputLocation;
+import sootup.java.bytecode.frontend.inputlocation.PathBasedAnalysisInputLocation;
+import sootup.interceptors.BytecodeBodyInterceptors;
 import sootup.java.core.views.JavaView;
 
 /** Builds the provider-owned SootUp CHA graph for a selected AnalysisContext. */
@@ -35,12 +43,14 @@ public final class SootUpBaseGraphProvider {
           "dependency classpath is required by AnalysisContext " + context.id());
     }
 
-    JavaView view = createView(context);
+    ProviderInputs inputs = createView(context);
+    JavaView view = inputs.view();
     Set<String> applicationClasses = discoverApplicationClasses(context.applicationClasses());
     List<MethodSignature> entryPoints = applicationMethods(view, applicationClasses);
     CallGraph graph = new ClassHierarchyAnalysisAlgorithm(view).initialize(entryPoints);
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
-    List<CallEdge> calls = applicationCalls(context, graph, applicationClasses, scanner);
+    List<CallEdge> calls = applicationCalls(
+        context, view, graph, applicationClasses, scanner, inputs.dependencyEntries());
     return new AnalysisGraph(
         calls,
         scanner.dynamicFeatures(),
@@ -51,18 +61,37 @@ public final class SootUpBaseGraphProvider {
         graph.callCount());
   }
 
-  private static JavaView createView(AnalysisContext context) {
+  private static ProviderInputs createView(AnalysisContext context) {
     List<AnalysisInputLocation> locations = new ArrayList<>();
     locations.add(new JavaClassPathAnalysisInputLocation(
         context.applicationClasses().toString(), SourceType.Application));
-    if (!context.dependencyClasspath().isEmpty()) {
-      String classpath = context.dependencyClasspath().stream()
-          .map(Path::toString)
-          .collect(Collectors.joining(File.pathSeparator));
-      locations.add(new JavaClassPathAnalysisInputLocation(classpath, SourceType.Library));
+    Map<AnalysisInputLocation, Path> dependencyEntries = new IdentityHashMap<>();
+    Set<Path> dependencyPaths = new LinkedHashSet<>();
+    for (Path dependency : context.dependencyClasspath()) {
+      Path normalized = dependency.toAbsolutePath().normalize();
+      if (!isValidInputLocation(normalized)) {
+        continue;
+      }
+      if (!dependencyPaths.add(normalized)) {
+        continue;
+      }
+      AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
+          normalized,
+          SourceType.Library,
+          BytecodeBodyInterceptors.Default.getBodyInterceptors());
+      locations.add(location);
+      dependencyEntries.put(location, normalized);
+    }
+    if (!context.dependencyClasspath().isEmpty() && dependencyEntries.isEmpty()) {
+      throw new IllegalArgumentException(
+          "dependency classpath contains no valid entries for AnalysisContext " + context.id());
     }
     locations.add(new DefaultRuntimeAnalysisInputLocation(SourceType.Library));
-    return new JavaView(locations);
+    return new ProviderInputs(new JavaView(locations), dependencyEntries);
+  }
+
+  private static boolean isValidInputLocation(Path path) {
+    return Files.exists(path) && (Files.isDirectory(path) || PathUtils.isArchive(path));
   }
 
   private static Set<String> discoverApplicationClasses(Path applicationRoot) {
@@ -94,14 +123,25 @@ public final class SootUpBaseGraphProvider {
 
   private static List<CallEdge> applicationCalls(
       AnalysisContext context,
+      JavaView view,
       CallGraph graph,
       Set<String> applicationClasses,
-      SourceMetadataScanner scanner) {
+      SourceMetadataScanner scanner,
+      Map<AnalysisInputLocation, Path> dependencyEntries) {
     List<CallEdge> result = new ArrayList<>();
     for (CallGraph.Call call : graph.getCalls()) {
+      if (view.getMethod(call.targetMethodSignature()).isEmpty()) {
+        continue;
+      }
       MethodSymbol caller = MethodSymbol.fromSootSignature(call.sourceMethodSignature().toString());
       MethodSymbol callee = MethodSymbol.fromSootSignature(call.targetMethodSignature().toString());
-      if (!applicationClasses.contains(caller.owner()) || !applicationClasses.contains(callee.owner())) {
+      if (!applicationClasses.contains(caller.owner())) {
+        continue;
+      }
+      CallEdge.TargetContext targetContext = applicationClasses.contains(callee.owner())
+          ? CallEdge.TargetContext.application()
+          : dependencyTarget(view, callee, dependencyEntries);
+      if (targetContext == null) {
         continue;
       }
       String sourcePath = sourcePath(context, caller.owner());
@@ -127,7 +167,8 @@ public final class SootUpBaseGraphProvider {
           call.getLineNumber(),
           sourcePath,
           certainty,
-          relationshipType));
+          relationshipType,
+          targetContext));
     }
     result.sort(Comparator.comparing((CallEdge edge) -> edge.caller().displayName())
         .thenComparing(edge -> edge.caller().descriptor())
@@ -136,6 +177,29 @@ public final class SootUpBaseGraphProvider {
         .thenComparingInt(CallEdge::line)
         .thenComparing(CallEdge::relationshipType));
     return List.copyOf(result);
+  }
+
+  private static CallEdge.TargetContext dependencyTarget(
+      JavaView view,
+      MethodSymbol callee,
+      Map<AnalysisInputLocation, Path> dependencyEntries) {
+    Optional<? extends SootClass> targetClass = view.getClass(
+        view.getIdentifierFactory().getClassType(callee.owner()));
+    if (targetClass.isEmpty()) {
+      return null;
+    }
+    SootClassSource source = targetClass.get().getClassSource();
+    Path dependency = dependencyEntries.get(source.getAnalysisInputLocation());
+    if (dependency == null) {
+      return null;
+    }
+    String bytecodePath = source.getSourcePath() == null ? "" : source.getSourcePath().toString();
+    String sourcePath = bytecodePath.endsWith(".java") ? bytecodePath : "";
+    return new CallEdge.TargetContext(
+        CallEdge.TargetOrigin.DEPENDENCY,
+        dependency.toString(),
+        bytecodePath,
+        sourcePath);
   }
 
   private static String sourcePath(AnalysisContext context, String owner) {
@@ -149,5 +213,9 @@ public final class SootUpBaseGraphProvider {
     }
     return "unknown";
   }
+
+  private record ProviderInputs(
+      JavaView view,
+      Map<AnalysisInputLocation, Path> dependencyEntries) {}
 
 }

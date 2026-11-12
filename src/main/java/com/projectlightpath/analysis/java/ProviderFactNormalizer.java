@@ -4,8 +4,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,18 +20,35 @@ final class ProviderFactNormalizer {
   static List<SemanticCallFacts.Fact> normalize(AnalysisContext context, AnalysisGraph graph) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     Set<String> ids = new HashSet<>();
-    Map<String, Integer> baseIdCounts = new HashMap<>();
-    for (CallEdge edge : graph.calls()) {
-      baseIdCounts.merge(legacyCallId(edge), 1, Integer::sum);
+    List<EdgeRef> edgeRefs = new ArrayList<>();
+    Map<String, Integer> applicationBaseIdCounts = new HashMap<>();
+    for (int index = 0; index < graph.calls().size(); index++) {
+      CallEdge edge = graph.calls().get(index);
+      EdgeRef ref = new EdgeRef(index, edge, edgeIdentity(edge));
+      edgeRefs.add(ref);
+      if (edge.targetContext().origin() == CallEdge.TargetOrigin.APPLICATION) {
+        applicationBaseIdCounts.merge(legacyCallId(edge), 1, Integer::sum);
+      }
     }
-    for (CallEdge edge : graph.calls()) {
-      String callIdentity = edge.caller().displayName() + "|" + edge.caller().descriptor()
-          + "->" + edge.callee().displayName() + "|" + edge.callee().descriptor()
-          + "@" + edge.line() + "|" + edge.sourcePath() + "|" + edge.relationshipType();
-      String baseId = legacyCallId(edge);
-      String id = baseIdCounts.get(baseId) == 1
-          ? uniqueId(ids, baseId, callIdentity)
-          : uniqueId(ids, baseId + "-" + sha256(callIdentity), callIdentity);
+    Map<Integer, String> idsByIndex = new HashMap<>();
+    edgeRefs.stream()
+        .sorted(Comparator.comparing(EdgeRef::identity).thenComparingInt(EdgeRef::index))
+        .forEach(ref -> {
+          CallEdge edge = ref.edge();
+          String id;
+          if (edge.targetContext().origin() == CallEdge.TargetOrigin.APPLICATION) {
+            String baseId = legacyCallId(edge);
+            id = applicationBaseIdCounts.get(baseId) == 1
+                ? uniqueId(ids, baseId, ref.identity())
+                : uniqueId(ids, baseId + "-" + sha256(ref.identity()), ref.identity());
+          } else {
+            id = uniqueId(ids, dependencyCallId(edge), ref.identity());
+          }
+          idsByIndex.put(ref.index(), id);
+        });
+    for (EdgeRef ref : edgeRefs) {
+      CallEdge edge = ref.edge();
+      String id = idsByIndex.get(ref.index());
       boolean openWorldDynamic = isOpenWorldDynamic(edge.relationshipType());
       SemanticCallFacts.Certainty certainty = openWorldDynamic
           ? SemanticCallFacts.Certainty.UNRESOLVED
@@ -46,12 +65,7 @@ final class ProviderFactNormalizer {
           edge.callee().displayName(),
           edge.relationshipType(),
           certainty,
-          List.of(SemanticCallFacts.Evidence.sootup(
-              edge.sourcePath(),
-              edge.line(),
-              edge.caller(),
-              edge.callee(),
-              "SootUp CHA application call")),
+          List.of(sootupEvidence(edge)),
           limitation));
     }
     for (DynamicFeature feature : graph.dynamicFeatures()) {
@@ -99,6 +113,54 @@ final class ProviderFactNormalizer {
         (edge.caller().descriptor() + "->" + edge.callee().descriptor() + "@" + edge.line()).hashCode());
   }
 
+  /** Gives dependency targets an origin-aware ID namespace without changing application IDs. */
+  private static String dependencyCallId(CallEdge edge) {
+    return "sootup-dependency-call-" + sha256(dependencyCallIdentity(edge));
+  }
+
+  /** Retains the pre-existing identity string for application call edges. */
+  private static String applicationCallIdentity(CallEdge edge) {
+    return edge.caller().displayName() + "|" + edge.caller().descriptor()
+        + "->" + edge.callee().displayName() + "|" + edge.callee().descriptor()
+        + "@" + edge.line() + "|" + edge.sourcePath() + "|" + edge.relationshipType();
+  }
+
+  /** Separates dependency target origin from the optional evidence path. */
+  private static String dependencyCallIdentity(CallEdge edge) {
+    return applicationCallIdentity(edge)
+        + "|" + edge.targetContext().origin().id()
+        + "|" + edge.targetContext().dependencyClasspathEntry();
+  }
+
+  private static String edgeIdentity(CallEdge edge) {
+    return edge.targetContext().origin() == CallEdge.TargetOrigin.APPLICATION
+        ? applicationCallIdentity(edge)
+        : dependencyCallIdentity(edge);
+  }
+
+  private static SemanticCallFacts.Evidence sootupEvidence(CallEdge edge) {
+    Map<String, String> attributes = new LinkedHashMap<>();
+    attributes.put("basis", "SootUp CHA application call");
+    attributes.put("caller", edge.caller().displayName());
+    attributes.put("callee", edge.callee().displayName());
+    attributes.put("callerSignature", edge.caller().descriptor());
+    attributes.put("calleeSignature", edge.callee().descriptor());
+    if (edge.targetContext().origin() == CallEdge.TargetOrigin.DEPENDENCY) {
+      attributes.put("calleeOwner", edge.callee().owner());
+      attributes.put("calleeMethod", edge.callee().name());
+      attributes.put("targetOrigin", edge.targetContext().origin().id());
+      attributes.put("dependencyClasspathEntry", edge.targetContext().dependencyClasspathEntry());
+      if (!edge.targetContext().targetBytecodePath().isBlank()) {
+        attributes.put("targetBytecodePath", edge.targetContext().targetBytecodePath());
+      }
+      if (!edge.targetContext().targetSourcePath().isBlank()) {
+        attributes.put("targetSourcePath", edge.targetContext().targetSourcePath());
+      }
+    }
+    return new SemanticCallFacts.Evidence(
+        "sootup_call", edge.sourcePath(), List.of(), edge.line(), attributes);
+  }
+
   /** Keeps legacy IDs stable for ordinary edges while making collisions explicit and safe. */
   private static String uniqueId(Set<String> ids, String baseId, String identity) {
     if (ids.add(baseId)) {
@@ -142,4 +204,6 @@ final class ProviderFactNormalizer {
         || "dynamic_proxy".equals(relationshipType)
         || "proxy_dispatch".equals(relationshipType);
   }
+
+  private record EdgeRef(int index, CallEdge edge, String identity) {}
 }
