@@ -35,6 +35,29 @@ a unique non-abstained provider target identity. Links use
 `enriches_without_replacing`, preserving separate provider and framework fact
 sets.
 
+## Java API versioning
+
+The Maven module is currently `0.1.0-SNAPSHOT` and has no production release.
+The public Java API, including `SemanticCallFacts`, `Fact.FrameworkInput`, and
+`RunMetadata`, is therefore pre-release and has no source or binary backwards-
+compatibility guarantee. Breaking API changes are allowed before the first
+production release when the adapter tests and handoff evidence are updated in
+the same change.
+
+This policy covers the intentional FLPATH-5076 API change:
+
+- positional `Fact.framework(...)` arguments were replaced by the named
+  `Fact.FrameworkInput` value;
+- public positional `RunMetadata` constructors were replaced by
+  `RunMetadata.from(AnalysisContext, AnalysisGraph)`; and
+- run metadata now derives immutable source-root information from the analysis
+  context and provider graph.
+
+No japicmp or Revapi comparison is configured because there is no released
+artifact to use as a compatibility baseline. Before the first production
+release, publish a stable version and add a dedicated compatibility policy and
+check if downstream Java consumers require source or binary compatibility.
+
 Route scanning expands literal class/method path arrays, HTTP method arrays, and
 Spring header/parameter/media conditions. Quarkus routes require a class-level
 `@Path`; method-level `@Path` narrows that root and an unregistered method-only

@@ -610,7 +610,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
                   generated.file().displayPath(),
                   List.of(generated.file().simpleTypeName() + "#" + generated.method().name()),
                   generated.method().line(),
-                  Map.of("sourceRootRequired", "true"))),
+                  generatedRootAttributes(context, generated))),
               certainty == SemanticCallFacts.Certainty.DEFINITE
                   ? null
                   : "Generated source was found, but the selected generated-source metadata is incomplete.")));
@@ -668,23 +668,37 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SemanticCallFacts.Certainty certainty = metadataAvailable
           ? SemanticCallFacts.Certainty.POSSIBLE
           : SemanticCallFacts.Certainty.UNRESOLVED;
-      String id = springRepositoryFactId(scanner, candidates, candidate);
-      facts.add(SemanticCallFacts.Fact.framework(
-          id,
-          context,
-          new SemanticCallFacts.Fact.FrameworkInput(
+      String repositoryContract = scanner.springRepositoryContract(candidate.file()).orElse("Repository");
+      for (SourceMetadataScanner.RepositoryMethod repositoryMethod
+          : scanner.springRepositoryMethods(candidate.file())) {
+        String methodName = repositoryMethod.name();
+        String methodIdentity = repositoryMethod.identity();
+        String id = springRepositoryFactId(scanner, candidates, candidate, methodIdentity);
+        List<String> symbols = new ArrayList<>(List.of("extends " + repositoryContract));
+        symbols.add(repositoryMethod.guaranteed()
+            ? "CrudRepository#" + methodName
+            : "declared " + methodIdentity);
+        symbols.add(methodName);
+        facts.add(SemanticCallFacts.Fact.framework(
+            id,
+            context,
+            new SemanticCallFacts.Fact.FrameworkInput(
               "spring-data-proxy:" + candidate.file().typeName(),
-              candidate.file().typeName() + "#findById",
-              "generated_implementation",
-              certainty,
-              "spring-data-generated-repository",
-              List.of(new SemanticCallFacts.Evidence(
-                  "repository_interface",
-                  candidate.file().displayPath(),
-                  List.of("extends JpaRepository", "CrudRepository#findById"),
-                  null,
-                  Map.of("generatedImplementation", "outside application source"))),
-              "Spring Data implementation and proxy identity are generated outside application source.")));
+              candidate.file().typeName() + "#" + methodIdentity,
+                "generated_implementation",
+                certainty,
+                "spring-data-generated-repository",
+                List.of(new SemanticCallFacts.Evidence(
+                    "repository_interface",
+                    candidate.file().displayPath(),
+                    List.copyOf(new LinkedHashSet<>(symbols)),
+                    null,
+                    Map.of(
+                        "generatedImplementation", "outside application source",
+                        "repositoryContract", repositoryContract,
+                        "repositoryMethod", methodIdentity))),
+                "Spring Data implementation and proxy identity are generated outside application source.")));
+      }
     }
     return facts;
   }
@@ -697,55 +711,60 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     SemanticCallFacts.Certainty certainty = sourceMetadataAvailable
         ? SemanticCallFacts.Certainty.POSSIBLE
         : SemanticCallFacts.Certainty.UNRESOLVED;
-    for (SourceMetadataScanner.SourceFile file : scanner.files()) {
-      if (file.source().contains("@Configuration")) {
-        for (SourceMetadataScanner.MethodInfo method : SourceMetadataScanner.methods(file)) {
-          if (!method.hasAnnotation("Bean")) {
-            continue;
-          }
-          facts.add(SemanticCallFacts.Fact.framework(
-              lifecycleFactId(scanner, file, method, "bean"),
-              context,
-              new SemanticCallFacts.Fact.FrameworkInput(
-                  "Spring ApplicationContext",
-                  file.typeName() + "#" + method.name(),
-                  "lifecycle_callback",
-                  certainty,
-                  "spring-lifecycle-callback",
-                  List.of(new SemanticCallFacts.Evidence(
-                      "bean_factory_annotation",
-                      file.displayPath(),
-                      List.of("@Configuration", "@Bean " + method.name()),
-                      method.line(),
-                      Map.of())),
-                  "Conditional configuration and exact ApplicationContext construction are not captured.")));
-        }
+    for (SourceMetadataScanner.LifecycleMethod lifecycle : scanner.springLifecycleMethods()) {
+      SourceMetadataScanner.SourceFile file = lifecycle.file();
+      SourceMetadataScanner.MethodInfo method = lifecycle.method();
+      String declaringType = lifecycle.declaringType();
+      boolean runner = lifecycle.kind().equals("runner");
+      List<String> symbols = new ArrayList<>(lifecycle.annotationSymbols());
+      if (!runner) {
+        symbols.add("@Bean " + method.name());
+      } else {
+        symbols.add("implements CommandLineRunner");
+        symbols.add("run(String...)");
       }
-      if (file.source().matches("(?s).*\\bimplements\\s+CommandLineRunner\\b.*")) {
-        for (SourceMetadataScanner.MethodInfo method : SourceMetadataScanner.methods(file)) {
-          if (!method.name().equals("run")) {
-            continue;
-          }
-          facts.add(SemanticCallFacts.Fact.framework(
-              lifecycleFactId(scanner, file, method, "runner"),
-              context,
-              new SemanticCallFacts.Fact.FrameworkInput(
-                  "Spring Boot application lifecycle",
-                  file.typeName() + "#run",
-                  "lifecycle_callback",
-                  certainty,
-                  "spring-lifecycle-callback",
-                  List.of(new SemanticCallFacts.Evidence(
-                      "lifecycle_interface",
-                      file.displayPath(),
-                      List.of("@Component", "implements CommandLineRunner", "run(String...)"),
-                      method.line(),
-                      Map.of())),
-                  "Startup ordering and conditional bean activation are not captured.")));
-        }
-      }
+      facts.add(SemanticCallFacts.Fact.framework(
+          lifecycleFactId(scanner, file, method, declaringType, lifecycle.kind()),
+          context,
+          new SemanticCallFacts.Fact.FrameworkInput(
+              runner ? "Spring Boot application lifecycle" : "Spring ApplicationContext",
+              declaringType + "#" + method.name(),
+              "lifecycle_callback",
+              certainty,
+              "spring-lifecycle-callback",
+              List.of(new SemanticCallFacts.Evidence(
+                  runner ? "lifecycle_interface" : "bean_factory_annotation",
+                  file.displayPath(),
+                  List.copyOf(new LinkedHashSet<>(symbols)),
+                  method.line(),
+                  Map.of())),
+              runner
+                  ? "Startup ordering and conditional bean activation are not captured."
+                  : "Conditional configuration and exact ApplicationContext construction are not captured.")));
     }
     return facts;
+  }
+
+
+  /** Carries the selected generated root and its handoff fingerprint into source evidence. */
+  private static Map<String, String> generatedRootAttributes(
+      AnalysisContext context,
+      SourceMetadataScanner.GeneratedMethod generated) {
+    Map<String, String> attributes = new HashMap<>();
+    Optional<AnalysisContext.SourceRoot> root = AnalysisContext.mostSpecificRoot(
+        generated.file().path(), context.includedSourceRoots().stream()
+            .filter(AnalysisContext.SourceRoot::generated)
+            .toList());
+    attributes.put("sourceRootRequired", root.map(item -> Boolean.toString(item.required())).orElse("true"));
+    root.ifPresent(item -> {
+      attributes.put("sourceRoot", item.declaredPath());
+      attributes.put("sourceRootIncluded", Boolean.toString(item.included()));
+      attributes.put("sourceRootScope", item.scope().id());
+      if (item.fingerprint() != null && !item.fingerprint().isBlank()) {
+        attributes.put("sourceRootFingerprint", item.fingerprint());
+      }
+    });
+    return Map.copyOf(attributes);
   }
 
   /** Filters candidates by requested framework qualifier semantics. */
@@ -1724,8 +1743,10 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
   private String springRepositoryFactId(
       SourceMetadataScanner scanner,
       List<SourceMetadataScanner.BeanCandidate> candidates,
-      SourceMetadataScanner.BeanCandidate candidate) {
-    boolean uniqueLegacyRepository = candidate.file().simpleTypeName().equals("AccountRepository")
+      SourceMetadataScanner.BeanCandidate candidate,
+      String repositoryMethod) {
+    boolean uniqueLegacyRepository = repositoryMethod.equals("findById")
+        && candidate.file().simpleTypeName().equals("AccountRepository")
         && uniqueSimpleType(scanner, candidate.file().simpleTypeName())
         && candidates.stream()
             .filter(item -> item.kind().equals("repository_interface"))
@@ -1744,9 +1765,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         candidate.candidateId(),
         candidate.candidateType(),
         candidate.kind(),
-        "findById");
+        repositoryMethod);
     return "spring-data-generated-"
-        + slug(candidate.file().typeName() + "-findById")
+        + slug(candidate.file().typeName() + "-" + repositoryMethod)
         + "-" + digest(identity).substring(0, 16);
   }
 
@@ -1801,6 +1822,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SourceMetadataScanner scanner,
       SourceMetadataScanner.SourceFile file,
       SourceMetadataScanner.MethodInfo method,
+      String declaringType,
       String kind) {
     if (file.simpleTypeName().equals("SecurityConfig")
         && method.name().equals("securityFilterChain")
@@ -1815,14 +1837,14 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     String identity = String.join("\u0000",
         framework.id(),
         kind,
-        file.typeName(),
+        declaringType,
         file.displayPath(),
         method.name(),
         method.parameters().replaceAll("\\s+", " ").trim(),
         method.returnType(),
         Integer.toString(method.start()));
     return "spring-lifecycle-" + kind + "-"
-        + slug(file.typeName() + "-" + method.name())
+        + slug(declaringType + "-" + method.name())
         + "-" + digest(identity).substring(0, 16);
   }
 

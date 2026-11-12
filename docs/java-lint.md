@@ -129,12 +129,17 @@ broad exclusion merely to make the count zero.
 
 ## CI and limitations
 
-The CI workflow keeps adapter tests, spike validation, and Java lint in
+The CI workflow keeps adapter tests, captured-evidence validation, and Java lint in
 separate jobs. The lint job uploads PMD/CPD reports even when the enforced gate
 fails, so a failure remains inspectable.
 
 The gate does not prove semantic API compatibility, runtime behavior, security
-correctness, or absence of reflective/source-text usage. Public API evolution
-should eventually be checked with a dedicated japicmp or Revapi comparison.
+correctness, or absence of reflective/source-text usage. This module is still
+`0.1.0-SNAPSHOT` with no production release, so its public Java API has no
+source or binary backwards-compatibility guarantee; see
+[`docs/flpath-5002-java-adapter.md`](flpath-5002-java-adapter.md) for the
+intentional API policy and the pre-release `SemanticCallFacts` changes. A
+japicmp or Revapi comparison becomes appropriate once a released artifact
+exists as a compatibility baseline.
 CPD and PMD metrics are evidence for review, not proof that code is defective
 or machine-generated.

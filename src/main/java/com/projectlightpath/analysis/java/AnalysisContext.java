@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -555,14 +556,32 @@ public final class AnalysisContext {
   /** Return a stable path relative to the selected source root for provenance. */
   public String displayPath(Path file) {
     Path normalized = file.toAbsolutePath().normalize();
-    for (SourceRoot root : includedSourceRoots()) {
-      if (normalized.startsWith(root.path())) {
-        Path relative = root.path().relativize(normalized);
-        String suffix = relative.toString().replace(normalized.getFileSystem().getSeparator(), "/");
-        return suffix.isEmpty() ? root.declaredPath() : root.declaredPath() + "/" + suffix;
-      }
+    Optional<SourceRoot> root = mostSpecificRoot(normalized, includedSourceRoots());
+    if (root.isPresent()) {
+      Path relative = root.get().path().relativize(normalized);
+      String suffix = relative.toString().replace(normalized.getFileSystem().getSeparator(), "/");
+      return suffix.isEmpty() ? root.get().declaredPath() : root.get().declaredPath() + "/" + suffix;
     }
     return normalized.toString();
+  }
+
+  /** Orders overlapping roots from most-specific to least-specific provenance. */
+  static List<SourceRoot> rootsBySpecificity(List<SourceRoot> roots) {
+    return roots.stream()
+        .sorted(Comparator
+            .comparingInt((SourceRoot root) -> root.path().getNameCount())
+            .reversed()
+            .thenComparing(SourceRoot::generated, Comparator.reverseOrder())
+            .thenComparing(SourceRoot::declaredPath))
+        .toList();
+  }
+
+  /** Finds the most-specific root containing one normalized source path. */
+  static Optional<SourceRoot> mostSpecificRoot(Path file, List<SourceRoot> roots) {
+    Path normalized = file.toAbsolutePath().normalize();
+    return rootsBySpecificity(roots).stream()
+        .filter(root -> normalized.startsWith(root.path()))
+        .findFirst();
   }
 
   private static String requireValue(String value, String name) {

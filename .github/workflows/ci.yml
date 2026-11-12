@@ -29,8 +29,8 @@ jobs:
       - name: Run adapter tests
         run: make adapter-test
 
-      - name: Validate spike contracts
-        run: make spike-validate
+      - name: Validate captured evidence
+        run: make evidence-validate
 
   java-lint:
     name: Java lint gate

@@ -69,8 +69,8 @@ The authoritative environment is Java 21. Maven 3.9.11 is bootstrapped into a
 cache when it is not already installed.
 
 ```sh
-# Validate contracts without downloading dependencies.
-make spike-validate
+# Validate captured contracts without downloading dependencies.
+make evidence-validate
 
 # Apply the spike-only FrameworkModel to both source fixtures and emit
 # synthetic framework facts.
