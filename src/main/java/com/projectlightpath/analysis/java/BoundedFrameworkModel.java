@@ -714,6 +714,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     for (SourceMetadataScanner.LifecycleMethod lifecycle : scanner.springLifecycleMethods()) {
       SourceMetadataScanner.SourceFile file = lifecycle.file();
       SourceMetadataScanner.MethodInfo method = lifecycle.method();
+      String declaringType = lifecycle.declaringType();
       boolean runner = lifecycle.kind().equals("runner");
       List<String> symbols = new ArrayList<>(lifecycle.annotationSymbols());
       if (!runner) {
@@ -723,11 +724,11 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
         symbols.add("run(String...)");
       }
       facts.add(SemanticCallFacts.Fact.framework(
-          lifecycleFactId(scanner, file, method, lifecycle.kind()),
+          lifecycleFactId(scanner, file, method, declaringType, lifecycle.kind()),
           context,
           new SemanticCallFacts.Fact.FrameworkInput(
               runner ? "Spring Boot application lifecycle" : "Spring ApplicationContext",
-              file.typeName() + "#" + method.name(),
+              declaringType + "#" + method.name(),
               "lifecycle_callback",
               certainty,
               "spring-lifecycle-callback",
@@ -1821,6 +1822,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SourceMetadataScanner scanner,
       SourceMetadataScanner.SourceFile file,
       SourceMetadataScanner.MethodInfo method,
+      String declaringType,
       String kind) {
     if (file.simpleTypeName().equals("SecurityConfig")
         && method.name().equals("securityFilterChain")
@@ -1835,14 +1837,14 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
     String identity = String.join("\u0000",
         framework.id(),
         kind,
-        file.typeName(),
+        declaringType,
         file.displayPath(),
         method.name(),
         method.parameters().replaceAll("\\s+", " ").trim(),
         method.returnType(),
         Integer.toString(method.start()));
     return "spring-lifecycle-" + kind + "-"
-        + slug(file.typeName() + "-" + method.name())
+        + slug(declaringType + "-" + method.name())
         + "-" + digest(identity).substring(0, 16);
   }
 

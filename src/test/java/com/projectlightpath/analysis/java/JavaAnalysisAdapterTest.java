@@ -441,7 +441,9 @@ class JavaAnalysisAdapterTest {
         import org.springframework.context.annotation.Bean;
         import org.springframework.context.annotation.Configuration;
         public class NestedConfigurationOwner {
-          @Configuration static class RegisteredNestedConfiguration {
+          @Configuration
+          @SuppressWarnings({"unused"})
+          static class RegisteredNestedConfiguration {
             @Bean public NestedConfiguredRunner nestedConfiguredRunner() {
               return new NestedConfiguredRunner();
             }
@@ -529,7 +531,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> lifecycleFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("lifecycle_callback"))
         .toList();
-    assertEquals(5, lifecycleFacts.size());
+    assertEquals(6, lifecycleFacts.size());
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.RegisteredRunner#run")
         && item.evidence().get(0).symbols().contains("@Component")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
@@ -544,6 +546,10 @@ class JavaAnalysisAdapterTest {
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.NestedConfiguredRunner#run")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfigurationOwner$RegisteredNestedConfiguration#nestedConfiguredRunner")
+        && item.evidence().get(0).symbols().contains("@Configuration")
+        && item.evidence().get(0).symbols().contains("@Bean nestedConfiguredRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredFactory")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("NestedUnregisteredRunner")));
@@ -643,6 +649,59 @@ class JavaAnalysisAdapterTest {
             || item.callee().equals("demo.LiteralProxy#ignored")));
   }
 
+  /** Excludes same-named Spring annotation lookalikes from bean metadata and bindings. */
+  @Test
+  void springBeanCandidatesRequireCanonicalAnnotationMetadata() throws IOException {
+    Path sourceRoot = temp.resolve("spring-bean-annotation-resolution/src/main/java");
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { }\n");
+    write(sourceRoot, "demo/Service.java", """
+        package demo;
+        public @interface Service { String value(); }
+        """);
+    write(sourceRoot, "demo/ShadowedService.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component @Service("shadow") public class ShadowedService implements api.Service { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(@Qualifier("shadow") api.Service service) { }
+        }
+        """);
+
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations",
+            "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScanner.BeanCandidate candidate = scanner.beanCandidates(
+            AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(item -> item.candidateType().equals("demo.ShadowedService"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals("Component", candidate.kind());
+    assertFalse(candidate.qualifiers().contains("BeanName:shadow"));
+    assertEquals(List.of("@Component"), scanner.sourceAnnotations(
+        candidate, AnalysisContext.Framework.SPRING_BOOT));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("api.Service#<unresolved-bean>")));
+    assertFalse(injections.stream().anyMatch(item -> item.callee().equals("demo.ShadowedService#<init>")));
+  }
+
   /** Requires canonical Spring Data contracts and does not invent marker or paging methods. */
   @Test
   void springRepositoryFactsRequireCanonicalContractsAndKnownMethods() throws IOException {
@@ -702,6 +761,12 @@ class JavaAnalysisAdapterTest {
           T findById(String id);
         }
         """);
+    write(sourceRoot, "demo/CombinedRepository.java", """
+        package demo;
+        public interface CombinedRepository extends
+            org.springframework.data.repository.PagingAndSortingRepository<Account, Long>,
+            org.springframework.data.repository.CrudRepository<Account, Long> { }
+        """);
 
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
         context(
@@ -724,7 +789,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
-    assertEquals(8, repositoryFacts.size());
+    assertEquals(9, repositoryFacts.size());
     SemanticCallFacts.Fact custom = repositoryFacts.stream()
         .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
         .findFirst()
@@ -774,6 +839,8 @@ class JavaAnalysisAdapterTest {
         AnalysisGraph.empty());
     assertFalse(springBoot3Facts.frameworkFacts().stream()
         .anyMatch(item -> item.callee().equals("demo.PagingRepository#findById")));
+    assertTrue(springBoot3Facts.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("demo.CombinedRepository#findById")));
   }
 
   /** Keeps fixture IDs stable only when their complete source identity is unique. */
