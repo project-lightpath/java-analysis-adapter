@@ -2,6 +2,7 @@ package org.projectlightpath.javalint;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -148,6 +149,59 @@ class JavaLintValidatorTest {
     assertEquals(100, configuration.minimumTokens());
   }
 
+  /** Maven defaults and build source directories remain visible when paths are not configured. */
+  @Test
+  void effectivePmdConfigurationUsesDefaultBuildSourceScopes() throws Exception {
+    Path effectivePom = temp.resolve("effective-pom.xml");
+    Files.writeString(effectivePom, """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <build>
+            <sourceDirectory>src/main/java</sourceDirectory>
+            <testSourceDirectory>src/test/java</testSourceDirectory>
+            <plugins><plugin>
+              <artifactId>maven-pmd-plugin</artifactId>
+              <configuration><includeTests>true</includeTests></configuration>
+            </plugin></plugins>
+          </build>
+        </project>
+        """);
+
+    JavaLintValidator.EffectivePmdConfiguration configuration =
+        JavaLintValidator.effectivePmdConfiguration(effectivePom, temp);
+
+    assertEquals(List.of(), configuration.rulesets());
+    assertEquals(5, configuration.minimumPriority());
+    assertTrue(configuration.includeTests());
+    assertEquals(List.of("src/main/java", "src/test/java"), configuration.sourceScope());
+    assertEquals(100, configuration.minimumTokens());
+  }
+
+  /** Invalid effective Maven settings fail closed rather than silently changing the policy. */
+  @Test
+  void effectivePmdConfigurationRejectsInvalidSettings() throws Exception {
+    Path effectivePom = temp.resolve("effective-pom.xml");
+    Files.writeString(effectivePom, effectivePomWithConfiguration(
+        "<minimumPriority>0</minimumPriority>"));
+    IllegalArgumentException nonPositive = assertThrows(
+        IllegalArgumentException.class,
+        () -> JavaLintValidator.effectivePmdConfiguration(effectivePom, temp));
+    assertTrue(nonPositive.getMessage().contains("must be positive"));
+
+    Files.writeString(effectivePom, effectivePomWithConfiguration(
+        "<minimumPriority>not-a-number</minimumPriority>"));
+    IllegalArgumentException nonInteger = assertThrows(
+        IllegalArgumentException.class,
+        () -> JavaLintValidator.effectivePmdConfiguration(effectivePom, temp));
+    assertTrue(nonInteger.getMessage().contains("is not an integer"));
+
+    Files.writeString(effectivePom, effectivePomWithConfiguration(
+        "<includeTests>sometimes</includeTests>"));
+    IllegalArgumentException nonBoolean = assertThrows(
+        IllegalArgumentException.class,
+        () -> JavaLintValidator.effectivePmdConfiguration(effectivePom, temp));
+    assertTrue(nonBoolean.getMessage().contains("is not boolean"));
+  }
+
   /** A configuration error prevents validate from returning a passing report. */
   @Test
   void validateFailsOnConfigurationErrors() throws Exception {
@@ -226,5 +280,16 @@ class JavaLintValidatorTest {
   private static String sha256(String value) throws Exception {
     return HexFormat.of().formatHex(
         MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private static String effectivePomWithConfiguration(String configuration) {
+    return """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <build><plugins><plugin>
+            <artifactId>maven-pmd-plugin</artifactId>
+            <configuration>%s</configuration>
+          </plugin></plugins></build>
+        </project>
+        """.formatted(configuration);
   }
 }

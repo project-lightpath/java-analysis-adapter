@@ -226,7 +226,8 @@ final class SootUpCallGraphExtractor {
   private static String sourcePath(AnalysisContext context, String owner) {
     String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
     String relative = topLevel.replace('.', '/') + ".java";
-    for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
+    for (AnalysisContext.SourceRoot root :
+        AnalysisContext.rootsBySpecificity(context.includedSourceRoots())) {
       Path candidate = root.path().resolve(relative);
       if (Files.isRegularFile(candidate)) {
         return context.displayPath(candidate);

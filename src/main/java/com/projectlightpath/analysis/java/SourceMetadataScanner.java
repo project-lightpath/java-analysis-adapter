@@ -34,6 +34,8 @@ final class SourceMetadataScanner {
   private static final Pattern NEW_EXPRESSION = Pattern.compile("\\bnew\\b");
   private static final Pattern METHOD = Pattern.compile(
       "(?m)(?:^|[;{}\\n])\\s*(?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)|(?:(?:public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\s+))*(?:<[^>{}]+>\\s+)?[\\w.?$<>\\[\\], ]+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*(?:throws [^{;]+)?(?:\\{|;)");
+  private static final Pattern METHOD_BODY_STATEMENT = Pattern.compile(
+      "^(?:return|throw|if|for|while|switch|catch|try|synchronized|new|assert|case|else|do)\\b.*");
   private static final Pattern QUOTED = Pattern.compile("\\\"([^\\\"]*)\\\"");
   private static final Pattern CLASS_FOR_NAME = Pattern.compile(
       "(?<![\\w$.])\\b([A-Za-z_$][\\w$]*|java\\.lang\\.Class)"
@@ -152,10 +154,76 @@ final class SourceMetadataScanner {
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
   private static final Set<String> CDI_PRODUCER_ANNOTATIONS = Set.of(
       "jakarta.enterprise.inject.Produces", "javax.enterprise.inject.Produces");
-  private static final Set<String> SPRING_PROXY_ANNOTATIONS = Set.of(
-      "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
-      "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
-      "TransactionalEventListener");
+  private static final Map<String, List<String>> SPRING_ROUTE_ANNOTATION_TYPES = Map.of(
+      "RequestMapping", List.of("org.springframework.web.bind.annotation.RequestMapping"),
+      "GetMapping", List.of("org.springframework.web.bind.annotation.GetMapping"),
+      "PostMapping", List.of("org.springframework.web.bind.annotation.PostMapping"),
+      "PutMapping", List.of("org.springframework.web.bind.annotation.PutMapping"),
+      "PatchMapping", List.of("org.springframework.web.bind.annotation.PatchMapping"),
+      "DeleteMapping", List.of("org.springframework.web.bind.annotation.DeleteMapping"),
+      "RestController", List.of("org.springframework.web.bind.annotation.RestController"));
+  private static final Map<String, List<String>> SPRING_PROXY_ANNOTATION_TYPES = Map.ofEntries(
+      Map.entry("Transactional", List.of(
+          "org.springframework.transaction.annotation.Transactional",
+          "jakarta.transaction.Transactional",
+          "javax.transaction.Transactional")),
+      Map.entry("Async", List.of("org.springframework.scheduling.annotation.Async")),
+      Map.entry("Cacheable", List.of("org.springframework.cache.annotation.Cacheable")),
+      Map.entry("CachePut", List.of("org.springframework.cache.annotation.CachePut")),
+      Map.entry("CacheEvict", List.of("org.springframework.cache.annotation.CacheEvict")),
+      Map.entry("PreAuthorize", List.of("org.springframework.security.access.prepost.PreAuthorize")),
+      Map.entry("PostAuthorize", List.of("org.springframework.security.access.prepost.PostAuthorize")),
+      Map.entry("Secured", List.of("org.springframework.security.access.annotation.Secured")),
+      Map.entry("RolesAllowed", List.of(
+          "jakarta.annotation.security.RolesAllowed",
+          "javax.annotation.security.RolesAllowed")),
+      Map.entry("Retryable", List.of("org.springframework.retry.annotation.Retryable")),
+      Map.entry("CircuitBreaker", List.of(
+          "io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker")),
+      Map.entry("Validated", List.of("org.springframework.validation.annotation.Validated")),
+      Map.entry("TransactionalEventListener", List.of(
+          "org.springframework.transaction.event.TransactionalEventListener")));
+  private static final Map<String, List<String>> SPRING_BEAN_ANNOTATION_TYPES = Map.ofEntries(
+      Map.entry("Service", List.of("org.springframework.stereotype.Service")),
+      Map.entry("Component", List.of("org.springframework.stereotype.Component")),
+      Map.entry("Repository", List.of("org.springframework.stereotype.Repository")),
+      Map.entry("Configuration", List.of("org.springframework.context.annotation.Configuration")),
+      Map.entry("Controller", List.of("org.springframework.stereotype.Controller")),
+      Map.entry("RestController", List.of("org.springframework.web.bind.annotation.RestController")),
+      Map.entry("Named", List.of("jakarta.inject.Named", "javax.inject.Named")),
+      Map.entry("Bean", List.of("org.springframework.context.annotation.Bean")),
+      Map.entry("Qualifier", List.of("org.springframework.beans.factory.annotation.Qualifier")),
+      Map.entry("Resource", List.of("jakarta.annotation.Resource", "javax.annotation.Resource")),
+      Map.entry("Primary", List.of("org.springframework.context.annotation.Primary")),
+      Map.entry("Profile", List.of("org.springframework.context.annotation.Profile")),
+      Map.entry("Conditional", List.of("org.springframework.context.annotation.Conditional")),
+      Map.entry("ConditionalOnBean", List.of(
+          "org.springframework.boot.autoconfigure.condition.ConditionalOnBean")),
+      Map.entry("ConditionalOnMissingBean", List.of(
+          "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean")),
+      Map.entry("ConditionalOnClass", List.of(
+          "org.springframework.boot.autoconfigure.condition.ConditionalOnClass")),
+      Map.entry("ConditionalOnMissingClass", List.of(
+          "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass")),
+      Map.entry("ConditionalOnProperty", List.of(
+          "org.springframework.boot.autoconfigure.condition.ConditionalOnProperty")),
+      Map.entry("ConditionalOnExpression", List.of(
+          "org.springframework.boot.autoconfigure.condition.ConditionalOnExpression")),
+      Map.entry("Lazy", List.of("org.springframework.context.annotation.Lazy")));
+  private static final Set<String> SPRING_PROXY_ANNOTATIONS =
+      Set.copyOf(SPRING_PROXY_ANNOTATION_TYPES.keySet());
+  private static final String SPRING_COMMAND_LINE_RUNNER =
+      "org.springframework.boot.CommandLineRunner";
+  private static final Map<String, String> SPRING_DATA_REPOSITORY_CONTRACTS = Map.of(
+      "org.springframework.data.repository.Repository", "Repository",
+      "org.springframework.data.repository.CrudRepository", "CrudRepository",
+      "org.springframework.data.jpa.repository.JpaRepository", "JpaRepository",
+      "org.springframework.data.repository.PagingAndSortingRepository", "PagingAndSortingRepository",
+      "org.springframework.data.repository.ListCrudRepository", "ListCrudRepository",
+      "org.springframework.data.repository.ListPagingAndSortingRepository", "ListPagingAndSortingRepository");
+  private static final Set<String> SPRING_DATA_FIND_BY_ID_CONTRACTS = Set.of(
+      "CrudRepository", "JpaRepository", "PagingAndSortingRepository", "ListCrudRepository",
+      "ListPagingAndSortingRepository");
   private static final List<String> SUPPORTED_HTTP_METHODS =
       List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
@@ -173,8 +241,9 @@ final class SourceMetadataScanner {
     if (files != null) {
       return files;
     }
-    List<SourceFile> result = new ArrayList<>();
-    for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
+    Map<Path, AnalysisContext.SourceRoot> selectedRoots = new LinkedHashMap<>();
+    for (AnalysisContext.SourceRoot root :
+        AnalysisContext.rootsBySpecificity(context.includedSourceRoots())) {
       if (!Files.isDirectory(root.path())) {
         continue;
       }
@@ -182,12 +251,15 @@ final class SourceMetadataScanner {
         paths.filter(Files::isRegularFile)
             .filter(path -> path.toString().endsWith(".java"))
             .sorted()
-            .map(path -> read(path, root))
-            .forEach(result::add);
+            .forEach(path -> selectedRoots.putIfAbsent(path.toAbsolutePath().normalize(), root));
       } catch (IOException error) {
         throw new IllegalStateException("cannot scan source root " + root.path(), error);
       }
     }
+    List<SourceFile> result = new ArrayList<>(selectedRoots.entrySet().stream()
+        .sorted(Map.Entry.comparingByKey())
+        .map(entry -> read(entry.getKey(), entry.getValue()))
+        .toList());
     result.sort(Comparator.comparing(SourceFile::displayPath));
     files = List.copyOf(result);
     return files;
@@ -406,6 +478,21 @@ final class SourceMetadataScanner {
         : Optional.empty();
   }
 
+  /** Resolves a source type with lexical nested-type precedence at one source offset. */
+  private Optional<String> resolveReferenceType(String type, SourceFile sourceFile, int siteOffset) {
+    String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    if (normalized.endsWith("...")) {
+      normalized = normalized.substring(0, normalized.length() - 3) + "[]";
+    }
+    if (normalized.endsWith("[]")) {
+      return resolveReferenceType(normalized.substring(0, normalized.length() - 2), sourceFile, siteOffset)
+          .map(value -> value + "[]");
+    }
+    String reference = normalized;
+    return resolveOwnerType(reference, sourceFile, siteOffset)
+        .or(() -> resolveReferenceType(reference, sourceFile));
+  }
+
   /** Resolves a contract while ignoring annotation imports that share its simple name. */
   Optional<String> resolveContractType(String type, SourceFile sourceFile) {
     String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
@@ -511,18 +598,19 @@ final class SourceMetadataScanner {
     for (SourceFile file : files()) {
       String classBlock = file.classAnnotationBlock();
       boolean quarkusClassPath = hasAnnotation(classBlock, "Path");
-      boolean springController = hasAnnotation(classBlock, "RestController");
+      boolean springController = framework == AnalysisContext.Framework.SPRING_BOOT
+          && canonicalSpringAnnotation(file, classBlock, "RestController");
       if (framework == AnalysisContext.Framework.SPRING_BOOT && !springController) {
         continue;
       }
       List<String> classPaths = framework == AnalysisContext.Framework.QUARKUS
           ? pathValues(classBlock, "Path")
-          : mappingPaths(classBlock, "RequestMapping");
+          : mappingPaths(file, classBlock, "RequestMapping");
       if (framework == AnalysisContext.Framework.QUARKUS && quarkusClassPath && classPaths.isEmpty()) {
         continue;
       }
       if (framework == AnalysisContext.Framework.SPRING_BOOT
-          && hasAnnotation(classBlock, "RequestMapping")
+          && canonicalSpringAnnotation(file, classBlock, "RequestMapping")
           && classPaths.isEmpty()) {
         continue;
       }
@@ -530,12 +618,12 @@ final class SourceMetadataScanner {
         classPaths = List.of("");
       }
       List<String> classHttpMethods = framework == AnalysisContext.Framework.SPRING_BOOT
-          ? httpMethods(classBlock, "RequestMapping")
+          ? httpMethods(file, classBlock, "RequestMapping")
           : SUPPORTED_HTTP_METHODS;
       for (MethodInfo method : methods(file)) {
-        for (String annotationName : routeAnnotations(method.annotationBlock(), framework)) {
+        for (String annotationName : routeAnnotations(file, method.annotationBlock(), framework)) {
           List<String> httpMethods = intersectHttpMethods(
-              httpMethods(method.annotationBlock(), annotationName), classHttpMethods);
+              httpMethods(file, method.annotationBlock(), annotationName), classHttpMethods);
           if (httpMethods.isEmpty()) {
             continue;
           }
@@ -543,13 +631,13 @@ final class SourceMetadataScanner {
               && hasAnnotation(method.annotationBlock(), "Path");
           List<String> methodPaths = framework == AnalysisContext.Framework.QUARKUS
               ? pathValues(method.annotationBlock(), "Path")
-              : mappingPaths(method.annotationBlock(), annotationName);
+              : mappingPaths(file, method.annotationBlock(), annotationName);
           if (framework == AnalysisContext.Framework.QUARKUS && methodPathAnnotation && methodPaths.isEmpty()) {
             continue;
           }
           if (framework == AnalysisContext.Framework.SPRING_BOOT
               && methodPaths.isEmpty()
-              && hasExplicitMappingPath(method.annotationBlock(), annotationName)) {
+              && hasExplicitMappingPath(file, method.annotationBlock(), annotationName)) {
             continue;
           }
           if (methodPaths.isEmpty()) {
@@ -561,26 +649,26 @@ final class SourceMetadataScanner {
           List<String> consumes = overrideValues(
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(classBlock, "Consumes", null)
-                  : mediaValues(classBlock, "RequestMapping", "consumes"),
+                  : mediaValues(file, classBlock, "RequestMapping", "consumes"),
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(method.annotationBlock(), "Consumes", null)
-                  : mediaValues(method.annotationBlock(), annotationName, "consumes"));
+                  : mediaValues(file, method.annotationBlock(), annotationName, "consumes"));
           List<String> produces = overrideValues(
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(classBlock, "Produces", null)
-                  : mediaValues(classBlock, "RequestMapping", "produces"),
+                  : mediaValues(file, classBlock, "RequestMapping", "produces"),
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(method.annotationBlock(), "Produces", null)
-                  : mediaValues(method.annotationBlock(), annotationName, "produces"));
+                  : mediaValues(file, method.annotationBlock(), annotationName, "produces"));
           List<String> headers = framework == AnalysisContext.Framework.SPRING_BOOT
               ? mergeValues(
-                  values(classBlock, "RequestMapping", "headers"),
-                  values(method.annotationBlock(), annotationName, "headers"))
+                  values(file, classBlock, "RequestMapping", "headers"),
+                  values(file, method.annotationBlock(), annotationName, "headers"))
               : List.of();
           List<String> parameters = framework == AnalysisContext.Framework.SPRING_BOOT
               ? mergeValues(
-                  values(classBlock, "RequestMapping", "params"),
-                  values(method.annotationBlock(), annotationName, "params"))
+                  values(file, classBlock, "RequestMapping", "params"),
+                  values(file, method.annotationBlock(), annotationName, "params"))
               : List.of();
           for (String httpMethod : httpMethods) {
             for (String classPath : classPaths) {
@@ -599,7 +687,7 @@ final class SourceMetadataScanner {
                     produces,
                     headers,
                     parameters,
-                    routeSymbols(classBlock, method.annotationBlock(), framework, annotationName)));
+                    routeSymbols(file, classBlock, method.annotationBlock(), framework, annotationName)));
               }
             }
           }
@@ -615,7 +703,7 @@ final class SourceMetadataScanner {
     for (SourceFile file : files()) {
       boolean component = framework == AnalysisContext.Framework.QUARKUS
           ? cdiBean(file.classAnnotationBlock())
-          : springComponent(file.classAnnotationBlock());
+          : springComponent(file);
       Pattern constructor = Pattern.compile(
           "(?s)((?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)*))"
               + "(?:public|protected|private)?\\s*"
@@ -640,7 +728,8 @@ final class SourceMetadataScanner {
         if (!selected) {
           continue;
         }
-        List<Parameter> parsedParameters = parameters(constructorInfo.parameters());
+        List<Parameter> parsedParameters = parameters(
+            framework, file, constructorInfo.parameters());
         if (!parsedParameters.isEmpty()) {
           result.add(new InjectionPoint(
               file,
@@ -681,7 +770,7 @@ final class SourceMetadataScanner {
               || !hasInjectionAnnotation(method.annotationBlock())) {
             continue;
           }
-          List<Parameter> parsedParameters = parameters(method.parameters());
+          List<Parameter> parsedParameters = parameters(framework, file, method.parameters());
           if (!parsedParameters.isEmpty()) {
             List<String> methodQualifiers = injectionQualifiers(
                 method.annotationBlock(), method.name(), framework == AnalysisContext.Framework.QUARKUS);
@@ -706,23 +795,28 @@ final class SourceMetadataScanner {
     List<BeanCandidate> result = new ArrayList<>();
     for (SourceFile file : files()) {
       String block = file.classAnnotationBlock();
+      boolean repositoryInterface = framework == AnalysisContext.Framework.SPRING_BOOT
+          && springRepositoryContract(file).isPresent();
       boolean bean = framework == AnalysisContext.Framework.QUARKUS
           ? cdiBean(block)
-          : springComponent(block) || file.structuralSource().matches(
-              "(?s).*\\binterface\\s+\\w+\\s+extends\\s+[^;]*\\b(?:JpaRepository|Repository)\\b.*");
+          : springComponent(file) || repositoryInterface;
       if (bean) {
         Set<String> contracts = contracts(file);
         result.add(new BeanCandidate(
             file,
             contracts,
-            beanKind(block, framework),
+            repositoryInterface ? "repository_interface" : beanKind(file, block, framework),
             file.typeName(),
             file.typeName(),
-            qualifierNames(block),
-            profileValues(block),
-            conditionAnnotations(block),
+            framework == AnalysisContext.Framework.QUARKUS
+                ? qualifierNames(block) : qualifierNames(file, block),
+            framework == AnalysisContext.Framework.QUARKUS
+                ? profileValues(block) : profileValues(file, block),
+            framework == AnalysisContext.Framework.QUARKUS
+                ? conditionAnnotations(block) : conditionAnnotations(file, block),
             hasAnnotation(block, "Alternative"),
-            hasAnnotation(block, "Primary"),
+            framework == AnalysisContext.Framework.QUARKUS
+                ? hasAnnotation(block, "Primary") : canonicalSpringAnnotation(file, block, "Primary"),
             null,
             null,
             null));
@@ -731,7 +825,7 @@ final class SourceMetadataScanner {
       for (MethodInfo method : methods(file)) {
         boolean producer = framework == AnalysisContext.Framework.QUARKUS
             ? cdiProducerAnnotation(file, method.annotationBlock())
-            : method.hasAnnotation("Bean");
+            : springBeanAnnotation(file, method.annotationBlock());
         if (!producer || method.returnType().isBlank()) {
           continue;
         }
@@ -744,17 +838,289 @@ final class SourceMetadataScanner {
             "producer",
             candidateId,
             producerType,
-            mergeValues(qualifierNames(block), qualifierNames(method.annotationBlock())),
-            mergeValues(profileValues(block), profileValues(method.annotationBlock())),
-            mergeValues(conditionAnnotations(block), conditionAnnotations(method.annotationBlock())),
+            mergeValues(
+                framework == AnalysisContext.Framework.QUARKUS
+                    ? qualifierNames(block) : qualifierNames(file, block),
+                framework == AnalysisContext.Framework.QUARKUS
+                    ? qualifierNames(method.annotationBlock()) : qualifierNames(file, method.annotationBlock())),
+            mergeValues(
+                framework == AnalysisContext.Framework.QUARKUS
+                    ? profileValues(block) : profileValues(file, block),
+                framework == AnalysisContext.Framework.QUARKUS
+                    ? profileValues(method.annotationBlock()) : profileValues(file, method.annotationBlock())),
+            mergeValues(
+                framework == AnalysisContext.Framework.QUARKUS
+                    ? conditionAnnotations(block) : conditionAnnotations(file, block),
+                framework == AnalysisContext.Framework.QUARKUS
+                    ? conditionAnnotations(method.annotationBlock())
+                    : conditionAnnotations(file, method.annotationBlock())),
             hasAnnotation(block, "Alternative") || hasAnnotation(method.annotationBlock(), "Alternative"),
-            hasAnnotation(block, "Primary") || hasAnnotation(method.annotationBlock(), "Primary"),
+            framework == AnalysisContext.Framework.QUARKUS
+                ? hasAnnotation(block, "Primary") || hasAnnotation(method.annotationBlock(), "Primary")
+                : canonicalSpringAnnotation(file, block, "Primary")
+                    || canonicalSpringAnnotation(file, method.annotationBlock(), "Primary"),
             method.name(),
             method.returnType(),
             method.parameters()));
       }
     }
     return List.copyOf(result);
+  }
+
+  /** Finds bounded Spring Data repository interfaces, including annotated repositories. */
+  Optional<String> springRepositoryContract(SourceFile file) {
+    return springRepositoryContracts(file).stream().findFirst();
+  }
+
+  /** Returns all directly inherited supported Spring Data repository contracts. */
+  private List<String> springRepositoryContracts(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    if (!header.matches("(?s).*\\binterface\\s+\\w+\\b.*")) {
+      return List.of();
+    }
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return List.of();
+    }
+    int permitsIndex = topLevelKeywordIndex(header, "permits");
+    String extended = header.substring(
+        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
+    return typeNames(extended).stream()
+        .map(type -> resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet()))
+        .flatMap(Optional::stream)
+        .map(SPRING_DATA_REPOSITORY_CONTRACTS::get)
+        .distinct()
+        .toList();
+  }
+
+  /** Returns repository methods guaranteed by the contract or declared by the source interface. */
+  List<RepositoryMethod> springRepositoryMethods(SourceFile file) {
+    List<String> contracts = springRepositoryContracts(file);
+    if (contracts.isEmpty()) {
+      return List.of();
+    }
+    Map<String, RepositoryMethod> result = new LinkedHashMap<>();
+    if (contracts.stream().anyMatch(this::guaranteedFindByIdContract)) {
+      result.put("findById", new RepositoryMethod("findById", "findById", true));
+    }
+    for (MethodInfo method : methods(file)) {
+      if (typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
+          && abstractInstanceRepositoryMethod(method)
+          && (!redeclaresInheritedFindById(file, method) || !result.containsKey("findById"))) {
+        RepositoryMethod repositoryMethod = new RepositoryMethod(
+            method.name(), repositoryMethodSignature(method), false);
+        result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
+      }
+    }
+    return List.copyOf(result.values());
+  }
+
+  /** Returns whether the selected Spring Data contract guarantees findById. */
+  private boolean guaranteedFindByIdContract(String contract) {
+    if (!SPRING_DATA_FIND_BY_ID_CONTRACTS.contains(contract)) {
+      return false;
+    }
+    boolean pagingContract = contract.equals("PagingAndSortingRepository")
+        || contract.equals("ListPagingAndSortingRepository");
+    return !pagingContract || springBootMajorVersion().map(major -> major < 3).orElse(false);
+  }
+
+  /** Reads the Spring Boot major version carried by AnalysisContext.frameworkVersion. */
+  private Optional<Integer> springBootMajorVersion() {
+    Matcher matcher = Pattern.compile("^\\D*(\\d+)").matcher(context.frameworkVersion());
+    return matcher.find() ? Optional.of(Integer.parseInt(matcher.group(1))) : Optional.empty();
+  }
+
+  /** Detects a source declaration that exactly redeclares the repository ID contract. */
+  private boolean redeclaresInheritedFindById(SourceFile file, MethodInfo method) {
+    if (!method.name().equals("findById")) {
+      return false;
+    }
+    Optional<String> repositoryIdType = springRepositoryIdType(file);
+    List<Parameter> methodParameters = parameters(method.parameters());
+    if (repositoryIdType.isEmpty() || methodParameters.size() != 1) {
+      return false;
+    }
+    return repositoryTypeToken(methodParameters.get(0).type(), file)
+        .filter(repositoryIdType.get()::equals)
+        .isPresent();
+  }
+
+  /** Resolves the ID type from the first supported Spring Data contract declaration. */
+  private Optional<String> springRepositoryIdType(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return Optional.empty();
+    }
+    int permitsIndex = topLevelKeywordIndex(header, "permits");
+    String extended = header.substring(
+        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
+    for (String type : splitArguments(extended)) {
+      if (resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet()).isEmpty()) {
+        continue;
+      }
+      String arguments = genericArguments(type);
+      List<String> parameters = splitArguments(arguments);
+      if (parameters.size() >= 2) {
+        Optional<String> resolved = repositoryTypeToken(parameters.get(1), file);
+        if (resolved.isPresent()) {
+          return resolved;
+        }
+      }
+    }
+    return Optional.empty();
+  }
+
+  /** Resolves a repository type argument, retaining declared type variables for identity checks. */
+  private Optional<String> repositoryTypeToken(String type, SourceFile file) {
+    String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    Optional<String> resolved = resolveReferenceType(normalized, file);
+    if (resolved.isPresent()) {
+      return resolved;
+    }
+    if (normalized.matches("[A-Za-z_$][\\w$]*")
+        && typeVariableBounds(file, normalized, file.typeDeclarationStart()).isPresent()) {
+      return Optional.of(normalized);
+    }
+    return Optional.empty();
+  }
+
+  /** Keeps only abstract instance methods that Spring Data can implement from an interface. */
+  private static boolean abstractInstanceRepositoryMethod(MethodInfo method) {
+    String declaration = maskAnnotationArguments(stripComments(method.annotationBlock()))
+        .trim()
+        .replaceFirst("^[;}\\s]+", "");
+    return !Pattern.compile("(?<![\\w$])(?:default|static|private)(?![\\w$])")
+            .matcher(declaration)
+            .find()
+        && !METHOD_BODY_STATEMENT.matcher(declaration).matches();
+  }
+
+  /** Creates a stable source-level signature without parameter names for overload identity. */
+  private static String repositoryMethodSignature(MethodInfo method) {
+    List<String> parameterTypes = parameters(method.parameters()).stream()
+        .map(Parameter::type)
+        .map(type -> type.replaceAll("\\s+", " ").trim())
+        .toList();
+    return method.name() + "(" + String.join(",", parameterTypes) + ")";
+  }
+
+  /** Resolves only known framework types, abstaining on ambiguous or unknown imports. */
+  private Optional<String> resolveKnownFrameworkType(
+      String type, SourceFile sourceFile, Set<String> canonicalTypes) {
+    String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    if (canonicalTypes.contains(normalized)) {
+      return Optional.of(normalized);
+    }
+    List<String> imported = importedTypes(normalized, sourceFile);
+    if (imported.size() > 1) {
+      return Optional.empty();
+    }
+    if (imported.size() == 1 && canonicalTypes.contains(imported.get(0))) {
+      return Optional.of(imported.get(0));
+    }
+    return resolveContractType(normalized, sourceFile).filter(canonicalTypes::contains);
+  }
+
+  /** Scans Spring @Bean and bounded CommandLineRunner lifecycle callbacks. */
+  List<LifecycleMethod> springLifecycleMethods() {
+    List<LifecycleMethod> result = new ArrayList<>();
+    Set<String> registeredBeanTypes = registeredSpringBeanTypes();
+    for (SourceFile file : files()) {
+      for (MethodInfo method : methods(file)) {
+        String declaringType = typeContaining(file, declarationStart(file, method.start()));
+        boolean springBean = springComponent(file, declaringType);
+        boolean commandLineRunner = (springBean || registeredBeanTypes.contains(declaringType))
+            && implementsNamedInterface(file, declaringType, SPRING_COMMAND_LINE_RUNNER);
+        if (springBeanAnnotation(file, method.annotationBlock())) {
+          if (!springBean) {
+            continue;
+          }
+          result.add(new LifecycleMethod(
+              file,
+              method,
+              declaringType,
+              "bean",
+              lifecycleAnnotationSymbols(file, method, declaringType)));
+        }
+        if (commandLineRunner
+            && method.name().equals("run")
+            && commandLineRunnerParameters(method.parameters())) {
+          result.add(new LifecycleMethod(
+              file,
+              method,
+              declaringType,
+              "runner",
+              lifecycleAnnotationSymbols(file, method, declaringType)));
+        }
+      }
+    }
+    return List.copyOf(result);
+  }
+
+  /** Returns source types registered by canonical Spring component bean methods. */
+  private Set<String> registeredSpringBeanTypes() {
+    Set<String> result = new LinkedHashSet<>();
+    for (SourceFile file : files()) {
+      for (MethodInfo method : methods(file)) {
+        if (!springBeanAnnotation(file, method.annotationBlock()) || method.returnType().isBlank()) {
+          continue;
+        }
+        String declaringType = typeContaining(file, declarationStart(file, method.start()));
+        if (!springComponent(file, declaringType)) {
+          continue;
+        }
+        resolveReferenceType(
+            method.returnType(), file, declarationStart(file, method.start()))
+            .filter(type -> !type.isBlank())
+            .ifPresent(result::add);
+      }
+    }
+    return Set.copyOf(result);
+  }
+
+  /** Returns whether a source type header implements the named interface. */
+  private boolean implementsNamedInterface(
+      SourceFile file, String typeName, String interfaceName) {
+    String header = maskStringLiterals(typeHeader(file, typeName));
+    int implementsIndex = keywordIndex(header, "implements");
+    if (implementsIndex < 0) {
+      return false;
+    }
+    int end = keywordIndexAfter(header, "permits", implementsIndex + "implements".length());
+    String implemented = header.substring(
+        implementsIndex + "implements".length(), end >= 0 ? end : header.length());
+    return typeNames(implemented).stream()
+        .map(type -> resolveKnownFrameworkType(type, file, Set.of(interfaceName)))
+        .flatMap(Optional::stream)
+        .anyMatch(interfaceName::equals);
+  }
+
+  /** Accepts both String... and the equivalent String[] CommandLineRunner signature. */
+  private static boolean commandLineRunnerParameters(String source) {
+    List<Parameter> parameters = parameters(source);
+    if (parameters.size() != 1) {
+      return false;
+    }
+    String type = parameters.get(0).type().replaceAll("\\s+", "");
+    return type.equals("String[]") || type.equals("java.lang.String[]");
+  }
+
+  /** Preserves the exact source annotations used to establish a lifecycle candidate. */
+  private static List<String> lifecycleAnnotationSymbols(
+      SourceFile file, MethodInfo method, String declaringType) {
+    List<String> result = new ArrayList<>();
+    result.addAll(canonicalAnnotationSources(file, typeAnnotationBlock(file, declaringType), List.of(
+        "Component", "Service", "Repository", "Configuration", "Controller",
+        "RestController", "Named")));
+    result.addAll(canonicalAnnotationSources(file, method.annotationBlock(), List.of("Bean")));
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  /** Recognizes only the canonical Spring {@code @Bean} annotation. */
+  private static boolean springBeanAnnotation(SourceFile file, String block) {
+    return canonicalAnnotation(file, block, "Bean", "org.springframework.context.annotation.Bean");
   }
 
   /** Scans framework proxy targets and records CDI scope eligibility. */
@@ -764,7 +1130,7 @@ final class SourceMetadataScanner {
       String classBlock = file.classAnnotationBlock();
       boolean bean = framework == AnalysisContext.Framework.QUARKUS
           ? cdiBean(classBlock)
-          : springComponent(classBlock);
+          : springComponent(file);
       if (!bean) {
         continue;
       }
@@ -772,8 +1138,10 @@ final class SourceMetadataScanner {
       for (MethodInfo method : methods(file)) {
         boolean selected = framework == AnalysisContext.Framework.QUARKUS
             ? !method.name().equals(file.simpleTypeName())
-            : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
-                || SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(classBlock, name));
+            : SPRING_PROXY_ANNOTATIONS.stream()
+                .anyMatch(name -> canonicalSpringAnnotation(file, method.annotationBlock(), name))
+                || SPRING_PROXY_ANNOTATIONS.stream()
+                    .anyMatch(name -> canonicalSpringAnnotation(file, classBlock, name));
         if (selected && springProxyMethod(file, method)) {
           result.add(new ProxyTarget(
               file,
@@ -3204,6 +3572,20 @@ final class SourceMetadataScanner {
     return List.copyOf(result);
   }
 
+  /** Skips closing braces captured by METHOD before resolving declaration ownership. */
+  private static int declarationStart(SourceFile file, int start) {
+    String source = file.structuralSource();
+    int position = Math.max(0, start);
+    while (position < source.length()) {
+      char current = source.charAt(position);
+      if (current != '}' && !Character.isWhitespace(current)) {
+        break;
+      }
+      position++;
+    }
+    return position;
+  }
+
   private static boolean isControlFlowKeyword(String name) {
     return switch (name) {
       case "if", "for", "while", "switch", "catch", "try", "synchronized" -> true;
@@ -3717,13 +4099,16 @@ final class SourceMetadataScanner {
     return List.copyOf(result);
   }
 
-  private static List<String> routeAnnotations(String block, AnalysisContext.Framework framework) {
+  private static List<String> routeAnnotations(
+      SourceFile file, String block, AnalysisContext.Framework framework) {
     List<String> candidates = framework == AnalysisContext.Framework.QUARKUS
         ? List.of("POST", "GET", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
         : List.of("PostMapping", "GetMapping", "PutMapping", "PatchMapping", "DeleteMapping", "RequestMapping");
     List<String> result = new ArrayList<>();
     for (String name : candidates) {
-      if (hasAnnotation(block, name)) {
+      if (framework == AnalysisContext.Framework.QUARKUS
+          ? hasAnnotation(block, name)
+          : canonicalSpringAnnotation(file, block, name)) {
         result.add(name);
       }
     }
@@ -3731,7 +4116,7 @@ final class SourceMetadataScanner {
   }
 
   /** Expands supported HTTP method annotation values. */
-  private static List<String> httpMethods(String block, String annotationName) {
+  private static List<String> httpMethods(SourceFile file, String block, String annotationName) {
     List<String> result = new ArrayList<>();
     switch (annotationName) {
       case "POST", "PostMapping" -> result.add("POST");
@@ -3742,8 +4127,9 @@ final class SourceMetadataScanner {
       case "HEAD" -> result.add("HEAD");
       case "OPTIONS" -> result.add("OPTIONS");
       case "RequestMapping" -> {
-        boolean wildcard = annotationArguments(block, annotationName).isEmpty();
-        for (String args : annotationArguments(block, annotationName)) {
+        List<String> arguments = annotationArguments(file, block, annotationName);
+        boolean wildcard = arguments.isEmpty();
+        for (String args : arguments) {
           String selected = attributeValue(args, "method");
           if (selected == null) {
             wildcard = true;
@@ -3789,12 +4175,13 @@ final class SourceMetadataScanner {
   }
 
   /** Extracts literal Spring mapping paths from value and path attributes. */
-  private static List<String> mappingPaths(String block, String annotation) {
-    if (!hasAnnotation(block, annotation)) {
+  private static List<String> mappingPaths(SourceFile file, String block, String annotation) {
+    List<String> arguments = annotationArguments(file, block, annotation);
+    if (arguments.isEmpty()) {
       return List.of();
     }
     LinkedHashSet<String> result = new LinkedHashSet<>();
-    for (String args : annotationArguments(block, annotation)) {
+    for (String args : arguments) {
       for (String attribute : List.of("value", "path")) {
         String selected = attributeValue(args, attribute);
         if (selected == null) {
@@ -3810,11 +4197,11 @@ final class SourceMetadataScanner {
     if (!result.isEmpty()) {
       return List.copyOf(result);
     }
-    return hasExplicitMappingPath(block, annotation) ? List.of() : List.of("");
+    return hasExplicitMappingPath(file, block, annotation) ? List.of() : List.of("");
   }
 
-  private static boolean hasExplicitMappingPath(String block, String annotation) {
-    return annotationArguments(block, annotation).stream()
+  private static boolean hasExplicitMappingPath(SourceFile file, String block, String annotation) {
+    return annotationArguments(file, block, annotation).stream()
         .anyMatch(args -> attributeValue(args, "value") != null || attributeValue(args, "path") != null);
   }
 
@@ -3885,15 +4272,23 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> routeSymbols(
-      String classBlock, String methodBlock, AnalysisContext.Framework framework, String annotationName) {
+      SourceFile file,
+      String classBlock,
+      String methodBlock,
+      AnalysisContext.Framework framework,
+      String annotationName) {
     List<String> symbols = new ArrayList<>();
     if (framework == AnalysisContext.Framework.QUARKUS) {
       addSymbols(symbols, classBlock, "Path", "Consumes", "Produces");
       addSymbols(symbols, methodBlock, "Path", "Consumes", "Produces");
     } else {
-      addSymbols(symbols, classBlock, "RequestMapping", "RestController");
+      addCanonicalSymbols(symbols, file, classBlock, "RequestMapping", "RestController");
     }
-    addSymbols(symbols, methodBlock, annotationName);
+    if (framework == AnalysisContext.Framework.QUARKUS) {
+      addSymbols(symbols, methodBlock, annotationName);
+    } else {
+      addCanonicalSymbols(symbols, file, methodBlock, annotationName);
+    }
     return List.copyOf(symbols);
   }
 
@@ -3906,15 +4301,71 @@ final class SourceMetadataScanner {
     }
   }
 
+  /** Adds only canonically resolved Spring annotation spellings to evidence. */
+  private static void addCanonicalSymbols(
+      List<String> symbols, SourceFile file, String block, String... names) {
+    for (String name : names) {
+      for (AnnotationOccurrence occurrence : canonicalSpringAnnotationOccurrences(file, block, name)) {
+        symbols.add(occurrence.source());
+      }
+    }
+  }
+
   /** Recognizes the bounded Spring component stereotype subset. */
-  private static boolean springComponent(String block) {
-    return hasAnnotation(block, "Service")
-        || hasAnnotation(block, "Component")
-        || hasAnnotation(block, "Repository")
-        || hasAnnotation(block, "Configuration")
-        || hasAnnotation(block, "Controller")
-        || hasAnnotation(block, "RestController")
-        || hasAnnotation(block, "Named");
+  private static boolean springComponent(SourceFile file) {
+    return springComponentAnnotations(file, file.classAnnotationBlock());
+  }
+
+  /** Recognizes a canonical Spring component stereotype on one source type. */
+  private static boolean springComponent(SourceFile file, String typeName) {
+    if (file.typeName().equals(typeName)) {
+      return springComponent(file);
+    }
+    return typeDeclaration(file, typeName)
+        .filter(type -> !isLocalType(file, type))
+        .map(type -> typeAnnotationBlock(file, type.start()))
+        .map(block -> springComponentAnnotations(file, block))
+        .orElse(false);
+  }
+
+  /** Finds the declared source type matching one source-level owner name. */
+  private static Optional<TypeInfo> typeDeclaration(SourceFile file, String typeName) {
+    return typeDeclarations(file).stream()
+        .filter(type -> typeContaining(file, type.start()).equals(typeName))
+        .findFirst();
+  }
+
+  /** Recognizes the bounded Spring component stereotype subset in an annotation block. */
+  private static boolean springComponentAnnotations(SourceFile file, String block) {
+    return canonicalAnnotation(file, block, "Service", "org.springframework.stereotype.Service")
+        || canonicalAnnotation(file, block, "Component", "org.springframework.stereotype.Component")
+        || canonicalAnnotation(file, block, "Repository", "org.springframework.stereotype.Repository")
+        || canonicalAnnotation(
+            file, block, "Configuration", "org.springframework.context.annotation.Configuration")
+        || canonicalAnnotation(file, block, "Controller", "org.springframework.stereotype.Controller")
+        || canonicalAnnotation(
+            file, block, "RestController", "org.springframework.web.bind.annotation.RestController")
+        || canonicalAnnotation(file, block, "Named", "jakarta.inject.Named", "javax.inject.Named");
+  }
+
+  /** Returns the annotation-bearing declaration prefix for one nested source type. */
+  private static String typeAnnotationBlock(SourceFile file, int typeStart) {
+    String maskedSource = maskAnnotationArguments(file.structuralSource());
+    int boundary = typeStart - 1;
+    while (boundary >= 0 && "{};".indexOf(maskedSource.charAt(boundary)) < 0) {
+      boundary--;
+    }
+    return file.source().substring(boundary + 1, typeStart);
+  }
+
+  /** Returns the annotation-bearing declaration prefix for one source-level owner name. */
+  private static String typeAnnotationBlock(SourceFile file, String typeName) {
+    if (file.typeName().equals(typeName)) {
+      return file.classAnnotationBlock();
+    }
+    return typeDeclaration(file, typeName)
+        .map(type -> typeAnnotationBlock(file, type.start()))
+        .orElse("");
   }
 
   /** Recognizes CDI scopes, stereotypes, and named beans. */
@@ -3968,11 +4419,23 @@ final class SourceMetadataScanner {
 
   /** Returns the declaration header before its top-level body. */
   private static String typeHeader(SourceFile file) {
+    return typeHeader(file, file.typeName());
+  }
+
+  /** Returns the declaration header before one source type's body. */
+  private static String typeHeader(SourceFile file, String typeName) {
     String source = file.structuralSource();
+    int declarationStart = file.typeDeclarationStart();
+    if (!file.typeName().equals(typeName)) {
+      declarationStart = typeDeclaration(file, typeName).map(TypeInfo::start).orElse(-1);
+    }
+    if (declarationStart < 0) {
+      return "";
+    }
     int angleDepth = 0;
     int parenthesisDepth = 0;
     int bracketDepth = 0;
-    for (int index = file.typeDeclarationStart(); index < source.length(); index++) {
+    for (int index = declarationStart; index < source.length(); index++) {
       char character = source.charAt(index);
       if (character == '<') {
         angleDepth++;
@@ -3987,10 +4450,10 @@ final class SourceMetadataScanner {
       } else if (character == ']' && bracketDepth > 0) {
         bracketDepth--;
       } else if (character == '{' && angleDepth == 0 && parenthesisDepth == 0 && bracketDepth == 0) {
-        return source.substring(file.typeDeclarationStart(), index);
+        return source.substring(declarationStart, index);
       }
     }
-    return source.substring(file.typeDeclarationStart());
+    return source.substring(declarationStart);
   }
 
   /** Finds a word boundary keyword in a declaration header. */
@@ -4041,6 +4504,11 @@ final class SourceMetadataScanner {
     return values(block, "Profile", null);
   }
 
+  /** Extracts profile values only from the canonical Spring annotation. */
+  private static List<String> profileValues(SourceFile file, String block) {
+    return values(file, block, "Profile", null);
+  }
+
   /** Extracts supported conditional registration annotations. */
   private static List<String> conditionAnnotations(String block) {
     List<String> result = new ArrayList<>();
@@ -4054,11 +4522,23 @@ final class SourceMetadataScanner {
     return List.copyOf(result);
   }
 
+  /** Extracts conditions only from canonical Spring registration annotations. */
+  private static List<String> conditionAnnotations(SourceFile file, String block) {
+    return canonicalAnnotationSources(file, block, List.of(
+        "Conditional", "ConditionalOnBean", "ConditionalOnMissingBean", "ConditionalOnClass",
+        "ConditionalOnMissingClass", "ConditionalOnProperty", "ConditionalOnExpression"));
+  }
+
   /** Extracts normalized qualifiers after removing comments and ordinary annotations. */
   private static List<String> qualifierNames(String block) {
+    return qualifierNames(null, block);
+  }
+
+  /** Extracts qualifiers while resolving recognized Spring annotations canonically. */
+  private static List<String> qualifierNames(SourceFile file, String block) {
     String source = stripComments(block == null ? "" : block);
     List<String> result = new ArrayList<>();
-    Matcher matcher = Pattern.compile("@([A-Za-z_][\\w.]*)").matcher(source);
+    Matcher matcher = Pattern.compile("@([A-Za-z_][\\w.]*)").matcher(maskStringLiterals(source));
     while (matcher.find()) {
       String name = simpleName(matcher.group(1));
       int end = matcher.end();
@@ -4066,11 +4546,18 @@ final class SourceMetadataScanner {
         end++;
       }
       String arguments = "";
+      int annotationEnd = matcher.end();
       if (end < source.length() && source.charAt(end) == '(') {
         int closing = matchingDelimiter(source, end, '(', ')');
         if (closing >= 0) {
           arguments = source.substring(end + 1, closing).trim();
+          annotationEnd = closing + 1;
         }
+      }
+      if (file != null && SPRING_BEAN_ANNOTATION_TYPES.containsKey(name)
+          && !canonicalSpringAnnotation(
+              file, source.substring(matcher.start(), annotationEnd), name)) {
+        continue;
       }
       if (name.equals("Resource")) {
         String value = attributeValue(arguments, "name");
@@ -4178,7 +4665,8 @@ final class SourceMetadataScanner {
   }
 
   /** Classifies a source bean using the bounded framework stereotype subset. */
-  private static String beanKind(String block, AnalysisContext.Framework framework) {
+  private static String beanKind(
+      SourceFile file, String block, AnalysisContext.Framework framework) {
     if (framework == AnalysisContext.Framework.QUARKUS) {
       for (String annotation : List.of(
           "ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped",
@@ -4190,7 +4678,7 @@ final class SourceMetadataScanner {
     }
     for (String annotation : List.of(
         "Service", "Component", "Repository", "Configuration", "Controller", "RestController", "Named")) {
-      if (hasAnnotation(block, annotation)) {
+      if (canonicalSpringAnnotation(file, block, annotation)) {
         return annotation;
       }
     }
@@ -4205,16 +4693,18 @@ final class SourceMetadataScanner {
           .map(MethodInfo::annotationBlock)
           .findFirst()
           .orElse("");
-      return annotationSources(block, framework == AnalysisContext.Framework.QUARKUS
-          ? List.of("Produces")
-          : List.of("Bean"));
+      return framework == AnalysisContext.Framework.QUARKUS
+          ? annotationSources(block, List.of("Produces"))
+          : canonicalAnnotationSources(candidate.file(), block, List.of("Bean"));
     }
     List<String> names = framework == AnalysisContext.Framework.QUARKUS
         ? List.of("ApplicationScoped", "RequestScoped", "SessionScoped", "ConversationScoped",
             "Dependent", "Singleton", "Named", "Stereotype")
         : List.of("Service", "Component", "Repository", "Configuration", "Controller",
             "RestController", "Named");
-    return annotationSources(candidate.file().classAnnotationBlock(), names);
+    return framework == AnalysisContext.Framework.QUARKUS
+        ? annotationSources(candidate.file().classAnnotationBlock(), names)
+        : canonicalAnnotationSources(candidate.file(), candidate.file().classAnnotationBlock(), names);
   }
 
   /** Returns source advisor or scope annotations that establish one proxy target. */
@@ -4225,9 +4715,16 @@ final class SourceMetadataScanner {
         : List.of("Transactional", "Async", "Cacheable", "CachePut", "CacheEvict",
             "PreAuthorize", "PostAuthorize", "Secured", "RolesAllowed", "Retryable",
             "CircuitBreaker", "Validated", "TransactionalEventListener");
-    List<String> result = new ArrayList<>(annotationSources(
-        target.file().classAnnotationBlock(), names));
-    result.addAll(annotationSources(target.method().annotationBlock(), names));
+    List<String> result = framework == AnalysisContext.Framework.QUARKUS
+        ? new ArrayList<>(annotationSources(target.file().classAnnotationBlock(), names))
+        : new ArrayList<>(canonicalAnnotationSources(
+            target.file(), target.file().classAnnotationBlock(), names));
+    if (framework == AnalysisContext.Framework.QUARKUS) {
+      result.addAll(annotationSources(target.method().annotationBlock(), names));
+    } else {
+      result.addAll(canonicalAnnotationSources(
+          target.file(), target.method().annotationBlock(), names));
+    }
     return List.copyOf(new LinkedHashSet<>(result));
   }
 
@@ -4242,12 +4739,37 @@ final class SourceMetadataScanner {
     return List.copyOf(new LinkedHashSet<>(result));
   }
 
+  /** Extracts source spellings for canonically resolved Spring annotations. */
+  private static List<String> canonicalAnnotationSources(
+      SourceFile file, String block, List<String> names) {
+    List<String> result = new ArrayList<>();
+    for (String name : names) {
+      result.addAll(canonicalSpringAnnotationOccurrences(file, block, name).stream()
+          .map(AnnotationOccurrence::source)
+          .toList());
+    }
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
   /** Parses method or constructor parameters and their qualifier annotations. */
   static List<Parameter> parameters(String source) {
+    return parameters(null, source);
+  }
+
+  /** Parses injection parameters with framework-specific qualifier resolution. */
+  private static List<Parameter> parameters(
+      AnalysisContext.Framework framework, SourceFile file, String source) {
+    return framework == AnalysisContext.Framework.SPRING_BOOT
+        ? parameters(file, source)
+        : parameters(source);
+  }
+
+  private static List<Parameter> parameters(SourceFile file, String source) {
     List<Parameter> result = new ArrayList<>();
     for (String raw : splitArguments(source)) {
-      List<String> qualifiers = qualifierNames(raw);
-      String cleaned = raw.replaceAll("@[A-Za-z_][\\w.]*(?:\\s*\\([^)]*\\))?", " ").trim();
+      List<String> qualifiers = qualifierNames(file, raw);
+      String cleaned = maskAnnotationArguments(stripComments(raw))
+          .replaceAll("@[A-Za-z_][\\w.]*", " ").trim();
       cleaned = cleaned.replaceAll("\\b(final|volatile|transient)\\b", "").trim();
       if (cleaned.isBlank()) {
         continue;
@@ -4309,6 +4831,46 @@ final class SourceMetadataScanner {
 
   private static boolean hasAnnotation(String block, String name) {
     return !annotationOccurrences(block, name).isEmpty();
+  }
+
+  /** Recognizes an annotation only when its source spelling resolves canonically. */
+  private static boolean canonicalAnnotation(
+      SourceFile file, String block, String simpleName, String... canonicalNames) {
+    return !canonicalAnnotationOccurrences(file, block, simpleName, Set.of(canonicalNames)).isEmpty();
+  }
+
+  /** Resolves a supported Spring annotation without accepting lookalike or wildcard imports. */
+  private static boolean canonicalSpringAnnotation(SourceFile file, String block, String simpleName) {
+    return !canonicalSpringAnnotationOccurrences(file, block, simpleName).isEmpty();
+  }
+
+  /** Returns only annotation occurrences whose source spelling resolves canonically. */
+  private static List<AnnotationOccurrence> canonicalSpringAnnotationOccurrences(
+      SourceFile file, String block, String simpleName) {
+    return canonicalAnnotationOccurrences(
+        file,
+        block,
+        simpleName,
+        canonicalSpringAnnotationTypes(simpleName));
+  }
+
+  /** Returns canonical names for every supported Spring annotation family. */
+  private static Set<String> canonicalSpringAnnotationTypes(String simpleName) {
+    Set<String> result = new LinkedHashSet<>();
+    result.addAll(SPRING_ROUTE_ANNOTATION_TYPES.getOrDefault(simpleName, List.of()));
+    result.addAll(SPRING_PROXY_ANNOTATION_TYPES.getOrDefault(simpleName, List.of()));
+    result.addAll(SPRING_BEAN_ANNOTATION_TYPES.getOrDefault(simpleName, List.of()));
+    return Set.copyOf(result);
+  }
+
+  private static List<AnnotationOccurrence> canonicalAnnotationOccurrences(
+      SourceFile file, String block, String simpleName, Set<String> canonical) {
+    List<String> explicitImports = importedTypes(simpleName, file);
+    boolean canonicalImport = explicitImports.stream().anyMatch(canonical::contains);
+    return annotationOccurrences(block, simpleName).stream()
+        .filter(occurrence -> canonical.contains(annotationType(occurrence.source()))
+            || annotationType(occurrence.source()).equals(simpleName) && canonicalImport)
+        .toList();
   }
 
   /** Checks a method declaration modifier without reading annotation arguments as modifiers. */
@@ -4376,8 +4938,18 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> values(String block, String annotation, String attribute) {
+    return values(annotationArguments(block, annotation), attribute);
+  }
+
+  /** Extracts values only from canonically resolved Spring route annotations. */
+  private static List<String> values(
+      SourceFile file, String block, String annotation, String attribute) {
+    return values(annotationArguments(file, block, annotation), attribute);
+  }
+
+  private static List<String> values(List<String> arguments, String attribute) {
     LinkedHashSet<String> result = new LinkedHashSet<>();
-    for (String args : annotationArguments(block, annotation)) {
+    for (String args : arguments) {
       String selected = selectedValue(args, attribute);
       if (selected.isBlank()) {
         continue;
@@ -4402,8 +4974,18 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> mediaValues(String block, String annotation, String attribute) {
+    return mediaValues(values(block, annotation, attribute));
+  }
+
+  /** Extracts media values only from canonically resolved Spring route annotations. */
+  private static List<String> mediaValues(
+      SourceFile file, String block, String annotation, String attribute) {
+    return mediaValues(values(file, block, annotation, attribute));
+  }
+
+  private static List<String> mediaValues(List<String> values) {
     LinkedHashSet<String> result = new LinkedHashSet<>();
-    for (String value : values(block, annotation, attribute)) {
+    for (String value : values) {
       String normalized = mediaType(value);
       if (!normalized.isBlank()) {
         result.add(normalized);
@@ -4440,12 +5022,20 @@ final class SourceMetadataScanner {
     return annotationOccurrences(block, name).stream().map(AnnotationOccurrence::arguments).toList();
   }
 
+  /** Extracts arguments only from canonically resolved Spring route annotations. */
+  private static List<String> annotationArguments(SourceFile file, String block, String name) {
+    return canonicalSpringAnnotationOccurrences(file, block, name).stream()
+        .map(AnnotationOccurrence::arguments)
+        .toList();
+  }
+
   /** Finds annotation occurrences with balanced argument extraction. */
   private static List<AnnotationOccurrence> annotationOccurrences(String block, String name) {
     List<AnnotationOccurrence> result = new ArrayList<>();
     String source = stripComments(block == null ? "" : block);
+    String searchSource = maskStringLiterals(source);
     Matcher matcher = Pattern.compile(
-        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(source);
+        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(searchSource);
     while (matcher.find()) {
       int end = matcher.end();
       while (end < source.length() && Character.isWhitespace(source.charAt(end))) {
@@ -4627,6 +5217,16 @@ final class SourceMetadataScanner {
       }
     }
     return result.toString();
+  }
+
+  /** Returns the outermost generic argument text from one declared type. */
+  private static String genericArguments(String source) {
+    int opening = source.indexOf('<');
+    if (opening < 0) {
+      return "";
+    }
+    int closing = matchingDelimiter(source, opening, '<', '>');
+    return closing > opening ? source.substring(opening + 1, closing) : "";
   }
 
   /** Finds the matching delimiter while ignoring quoted strings. */
@@ -4918,6 +5518,19 @@ final class SourceMetadataScanner {
   private record ConstructorInfo(String annotations, String parameters, int start) {}
 
   record GeneratedMethod(SourceFile file, MethodInfo method) {}
+
+  record LifecycleMethod(
+      SourceFile file,
+      MethodInfo method,
+      String declaringType,
+      String kind,
+      List<String> annotationSymbols) {}
+
+  record RepositoryMethod(String name, String signature, boolean guaranteed) {
+    String identity() {
+      return guaranteed ? name : signature;
+    }
+  }
 
   private record AnnotationOccurrence(String arguments, String source) {}
 }
