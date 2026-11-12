@@ -438,6 +438,7 @@ class JavaAnalysisAdapterTest {
         """);
     write(sourceRoot, "demo/NestedConfigurationOwner.java", """
         package demo;
+        import org.springframework.boot.CommandLineRunner;
         import org.springframework.context.annotation.Bean;
         import org.springframework.context.annotation.Configuration;
         public class NestedConfigurationOwner {
@@ -446,6 +447,12 @@ class JavaAnalysisAdapterTest {
           static class RegisteredNestedConfiguration {
             @Bean public NestedConfiguredRunner nestedConfiguredRunner() {
               return new NestedConfiguredRunner();
+            }
+            @Bean public NestedRunner nestedRunner() {
+              return new NestedRunner();
+            }
+            static class NestedRunner implements CommandLineRunner {
+              @Override public void run(String... args) { }
             }
           }
         }
@@ -461,9 +468,11 @@ class JavaAnalysisAdapterTest {
         package demo;
         import org.springframework.context.annotation.Bean;
         import org.springframework.context.annotation.Configuration;
-        @Configuration public class RunnerConfiguration {
+        @Configuration @demo.Configuration public class RunnerConfiguration {
           static class NestedConfiguration { }
-          @Bean public ConfiguredRunner configuredRunner() { return new ConfiguredRunner(); }
+          @Bean @demo.Bean public ConfiguredRunner configuredRunner() {
+            return new ConfiguredRunner();
+          }
         }
         """);
     write(sourceRoot, "demo/Bean.java", "package demo; public @interface Bean {}\n");
@@ -531,7 +540,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> lifecycleFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("lifecycle_callback"))
         .toList();
-    assertEquals(6, lifecycleFacts.size());
+    assertEquals(8, lifecycleFacts.size());
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.RegisteredRunner#run")
         && item.evidence().get(0).symbols().contains("@Component")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
@@ -541,6 +550,12 @@ class JavaAnalysisAdapterTest {
         "demo.RunnerConfiguration#configuredRunner")
         && item.evidence().get(0).symbols().contains("@Configuration")
         && item.evidence().get(0).symbols().contains("@Bean configuredRunner")));
+    SemanticCallFacts.Fact configuredRunnerFactory = lifecycleFacts.stream()
+        .filter(item -> item.callee().equals("demo.RunnerConfiguration#configuredRunner"))
+        .findFirst()
+        .orElseThrow();
+    assertFalse(configuredRunnerFactory.evidence().get(0).symbols().contains("@demo.Configuration"));
+    assertFalse(configuredRunnerFactory.evidence().get(0).symbols().contains("@demo.Bean"));
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.ConfiguredRunner#run")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
@@ -550,6 +565,12 @@ class JavaAnalysisAdapterTest {
         "demo.NestedConfigurationOwner$RegisteredNestedConfiguration#nestedConfiguredRunner")
         && item.evidence().get(0).symbols().contains("@Configuration")
         && item.evidence().get(0).symbols().contains("@Bean nestedConfiguredRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfigurationOwner$RegisteredNestedConfiguration#nestedRunner")
+        && item.evidence().get(0).symbols().contains("@Bean nestedRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfigurationOwner$RegisteredNestedConfiguration$NestedRunner#run")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredFactory")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("NestedUnregisteredRunner")));
@@ -2087,6 +2108,42 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, namedResource.certainty());
     assertTrue(namedResource.callee().contains("OtherService#<unresolved-bean>"));
+  }
+
+  /** Excludes qualifier lookalikes and annotation-shaped text from injection parameters. */
+  @Test
+  void springInjectionParametersRequireCanonicalQualifiers() throws IOException {
+    Path sourceRoot = temp.resolve("spring-parameter-qualifiers/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(
+              @Qualifier("fast")
+              @demo.Qualifier("custom")
+              @org.springframework.beans.factory.annotation.Value("@Qualifier(literal)")
+              Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Qualifier.java", "package demo; public @interface Qualifier { String value(); }\n");
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SourceMetadataScanner.InjectionPoint injection = new SourceMetadataScanner(context)
+        .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(item -> item.file().typeName().equals("demo.Consumer"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(List.of("Qualifier:fast"), injection.parameters().get(0).qualifiers());
   }
 
   /** Requires active alternative metadata and normal-scope proxy eligibility. */

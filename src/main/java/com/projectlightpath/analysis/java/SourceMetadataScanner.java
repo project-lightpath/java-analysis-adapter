@@ -478,6 +478,21 @@ final class SourceMetadataScanner {
         : Optional.empty();
   }
 
+  /** Resolves a source type with lexical nested-type precedence at one source offset. */
+  private Optional<String> resolveReferenceType(String type, SourceFile sourceFile, int siteOffset) {
+    String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
+    if (normalized.endsWith("...")) {
+      normalized = normalized.substring(0, normalized.length() - 3) + "[]";
+    }
+    if (normalized.endsWith("[]")) {
+      return resolveReferenceType(normalized.substring(0, normalized.length() - 2), sourceFile, siteOffset)
+          .map(value -> value + "[]");
+    }
+    String reference = normalized;
+    return resolveOwnerType(reference, sourceFile, siteOffset)
+        .or(() -> resolveReferenceType(reference, sourceFile));
+  }
+
   /** Resolves a contract while ignoring annotation imports that share its simple name. */
   Optional<String> resolveContractType(String type, SourceFile sourceFile) {
     String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
@@ -713,7 +728,7 @@ final class SourceMetadataScanner {
         if (!selected) {
           continue;
         }
-        List<Parameter> parsedParameters = parameters(constructorInfo.parameters());
+        List<Parameter> parsedParameters = parameters(file, constructorInfo.parameters());
         if (!parsedParameters.isEmpty()) {
           result.add(new InjectionPoint(
               file,
@@ -754,7 +769,7 @@ final class SourceMetadataScanner {
               || !hasInjectionAnnotation(method.annotationBlock())) {
             continue;
           }
-          List<Parameter> parsedParameters = parameters(method.parameters());
+          List<Parameter> parsedParameters = parameters(file, method.parameters());
           if (!parsedParameters.isEmpty()) {
             List<String> methodQualifiers = injectionQualifiers(
                 method.annotationBlock(), method.name(), framework == AnalysisContext.Framework.QUARKUS);
@@ -1055,7 +1070,8 @@ final class SourceMetadataScanner {
         if (!springComponent(file, declaringType)) {
           continue;
         }
-        resolveReferenceType(method.returnType(), file)
+        resolveReferenceType(
+            method.returnType(), file, declarationStart(file, method.start()))
             .filter(type -> !type.isBlank())
             .ifPresent(result::add);
       }
@@ -1094,10 +1110,10 @@ final class SourceMetadataScanner {
   private static List<String> lifecycleAnnotationSymbols(
       SourceFile file, MethodInfo method, String declaringType) {
     List<String> result = new ArrayList<>();
-    result.addAll(annotationSources(typeAnnotationBlock(file, declaringType), List.of(
+    result.addAll(canonicalAnnotationSources(file, typeAnnotationBlock(file, declaringType), List.of(
         "Component", "Service", "Repository", "Configuration", "Controller",
         "RestController", "Named")));
-    result.addAll(annotationSources(method.annotationBlock(), List.of("Bean")));
+    result.addAll(canonicalAnnotationSources(file, method.annotationBlock(), List.of("Bean")));
     return List.copyOf(new LinkedHashSet<>(result));
   }
 
@@ -4521,7 +4537,7 @@ final class SourceMetadataScanner {
   private static List<String> qualifierNames(SourceFile file, String block) {
     String source = stripComments(block == null ? "" : block);
     List<String> result = new ArrayList<>();
-    Matcher matcher = Pattern.compile("@([A-Za-z_][\\w.]*)").matcher(source);
+    Matcher matcher = Pattern.compile("@([A-Za-z_][\\w.]*)").matcher(maskStringLiterals(source));
     while (matcher.find()) {
       String name = simpleName(matcher.group(1));
       int end = matcher.end();
@@ -4736,9 +4752,13 @@ final class SourceMetadataScanner {
 
   /** Parses method or constructor parameters and their qualifier annotations. */
   static List<Parameter> parameters(String source) {
+    return parameters(null, source);
+  }
+
+  private static List<Parameter> parameters(SourceFile file, String source) {
     List<Parameter> result = new ArrayList<>();
     for (String raw : splitArguments(source)) {
-      List<String> qualifiers = qualifierNames(raw);
+      List<String> qualifiers = qualifierNames(file, raw);
       String cleaned = raw.replaceAll("@[A-Za-z_][\\w.]*(?:\\s*\\([^)]*\\))?", " ").trim();
       cleaned = cleaned.replaceAll("\\b(final|volatile|transient)\\b", "").trim();
       if (cleaned.isBlank()) {
