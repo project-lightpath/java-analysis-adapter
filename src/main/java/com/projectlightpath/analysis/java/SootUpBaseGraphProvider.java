@@ -68,19 +68,18 @@ public final class SootUpBaseGraphProvider {
     Map<AnalysisInputLocation, Path> dependencyEntries = new IdentityHashMap<>();
     Set<Path> dependencyPaths = new LinkedHashSet<>();
     for (Path dependency : context.dependencyClasspath()) {
-      Path normalized = dependency.toAbsolutePath().normalize();
-      if (!isValidInputLocation(normalized)) {
-        continue;
+      for (Path expanded : expandDependencyPath(dependency)) {
+        Path normalized = expanded.toAbsolutePath().normalize();
+        if (!isValidInputLocation(normalized) || !dependencyPaths.add(normalized)) {
+          continue;
+        }
+        AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
+            normalized,
+            SourceType.Library,
+            BytecodeBodyInterceptors.Default.getBodyInterceptors());
+        locations.add(location);
+        dependencyEntries.put(location, normalized);
       }
-      if (!dependencyPaths.add(normalized)) {
-        continue;
-      }
-      AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
-          normalized,
-          SourceType.Library,
-          BytecodeBodyInterceptors.Default.getBodyInterceptors());
-      locations.add(location);
-      dependencyEntries.put(location, normalized);
     }
     if (!context.dependencyClasspath().isEmpty() && dependencyEntries.isEmpty()) {
       throw new IllegalArgumentException(
@@ -92,6 +91,36 @@ public final class SootUpBaseGraphProvider {
 
   private static boolean isValidInputLocation(Path path) {
     return Files.exists(path) && (Files.isDirectory(path) || PathUtils.isArchive(path));
+  }
+
+  /** Expands SootUp-compatible trailing wildcards into concrete JAR entries. */
+  private static List<Path> expandDependencyPath(Path dependency) {
+    Path normalized = dependency.toAbsolutePath().normalize();
+    String value = normalized.toString();
+    if (!value.endsWith("*")) {
+      return List.of(normalized);
+    }
+
+    int wildcardIndex = value.indexOf('*');
+    Path directory = normalized.getFileSystem().getPath(value.substring(0, wildcardIndex));
+    if (!Files.isDirectory(directory)) {
+      return List.of();
+    }
+    List<Path> entries = new ArrayList<>();
+    try (var paths = Files.newDirectoryStream(directory)) {
+      for (Path path : paths) {
+        String fileName = path.getFileName().toString();
+        if (Files.isRegularFile(path)
+            && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
+          entries.add(path.toAbsolutePath().normalize());
+        }
+      }
+    } catch (IOException error) {
+      throw new IllegalArgumentException(
+          "cannot expand dependency classpath wildcard: " + dependency, error);
+    }
+    entries.sort(Comparator.comparing(Path::toString));
+    return List.copyOf(entries);
   }
 
   private static Set<String> discoverApplicationClasses(Path applicationRoot) {

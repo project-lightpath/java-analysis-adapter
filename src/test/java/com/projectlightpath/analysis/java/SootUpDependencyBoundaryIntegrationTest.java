@@ -156,6 +156,28 @@ class SootUpDependencyBoundaryIntegrationTest {
   }
 
   @Test
+  void expandsTrailingDependencyClasspathWildcards() throws IOException {
+    Fixture fixture = fixture();
+    Path wildcardDirectory = temp.resolve("wildcard-dependencies");
+    Files.createDirectories(wildcardDirectory);
+    Path vulnerableJar = wildcardDirectory.resolve("01-vulnerable.jar");
+    Path peerJar = wildcardDirectory.resolve("02-peer.JAR");
+    Files.copy(fixture.vulnerableJar(), vulnerableJar);
+    Files.copy(fixture.peerJar(), peerJar);
+
+    AnalysisContext context = contextWithDependencies(
+        fixture, List.of(wildcardDirectory.resolve("*")));
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    SemanticCallFacts.Fact vulnerable = fact(facts, "app.Application#dependencyCall");
+    assertEquals(vulnerableJar.toAbsolutePath().normalize().toString(),
+        vulnerable.evidence().get(0).attributes().get("dependencyClasspathEntry"));
+    SemanticCallFacts.Fact peer = fact(facts, "app.Application#peerCall");
+    assertEquals(peerJar.toAbsolutePath().normalize().toString(),
+        peer.evidence().get(0).attributes().get("dependencyClasspathEntry"));
+  }
+
+  @Test
   void skipsDependencyMethodsMissingFromTheResolvedArtifact() throws IOException {
     Path originalDependencySource = temp.resolve("phantom/original/src/main/java");
     Path originalDependencyClasses = temp.resolve("phantom/original/target/classes");
