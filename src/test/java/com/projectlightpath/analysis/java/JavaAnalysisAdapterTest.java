@@ -2143,7 +2143,54 @@ class JavaAnalysisAdapterTest {
         .findFirst()
         .orElseThrow();
 
-    assertEquals(List.of("Qualifier:fast"), injection.parameters().get(0).qualifiers());
+    SourceMetadataScanner.Parameter parameter = injection.parameters().get(0);
+    assertEquals("Service", parameter.type());
+    assertEquals("service", parameter.name());
+    assertEquals(List.of("Qualifier:fast"), parameter.qualifiers());
+  }
+
+  /** Preserves CDI parameter qualifiers without Spring annotation resolution. */
+  @Test
+  void quarkusInjectionParametersPreserveNamedQualifier() throws IOException {
+    Path sourceRoot = temp.resolve("quarkus-parameter-qualifiers/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.*;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject public Consumer(@Named("fast") Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/FastService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @jakarta.enterprise.context.ApplicationScoped @Named("fast")
+        public class FastService implements Service { }
+        """);
+    write(sourceRoot, "demo/OtherService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class OtherService implements Service { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SourceMetadataScanner.InjectionPoint injection = new SourceMetadataScanner(context)
+        .injectionPoints(AnalysisContext.Framework.QUARKUS).stream()
+        .findFirst()
+        .orElseThrow();
+    assertEquals(List.of("Named:fast"), injection.parameters().get(0).qualifiers());
+
+    SemanticCallFacts.Fact fact = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.FastService#<init>", fact.callee());
   }
 
   /** Requires active alternative metadata and normal-scope proxy eligibility. */

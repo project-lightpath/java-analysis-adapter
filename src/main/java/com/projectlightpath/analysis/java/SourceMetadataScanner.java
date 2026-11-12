@@ -728,7 +728,8 @@ final class SourceMetadataScanner {
         if (!selected) {
           continue;
         }
-        List<Parameter> parsedParameters = parameters(file, constructorInfo.parameters());
+        List<Parameter> parsedParameters = parameters(
+            framework, file, constructorInfo.parameters());
         if (!parsedParameters.isEmpty()) {
           result.add(new InjectionPoint(
               file,
@@ -769,7 +770,7 @@ final class SourceMetadataScanner {
               || !hasInjectionAnnotation(method.annotationBlock())) {
             continue;
           }
-          List<Parameter> parsedParameters = parameters(file, method.parameters());
+          List<Parameter> parsedParameters = parameters(framework, file, method.parameters());
           if (!parsedParameters.isEmpty()) {
             List<String> methodQualifiers = injectionQualifiers(
                 method.annotationBlock(), method.name(), framework == AnalysisContext.Framework.QUARKUS);
@@ -4755,11 +4756,20 @@ final class SourceMetadataScanner {
     return parameters(null, source);
   }
 
+  /** Parses injection parameters with framework-specific qualifier resolution. */
+  private static List<Parameter> parameters(
+      AnalysisContext.Framework framework, SourceFile file, String source) {
+    return framework == AnalysisContext.Framework.SPRING_BOOT
+        ? parameters(file, source)
+        : parameters(source);
+  }
+
   private static List<Parameter> parameters(SourceFile file, String source) {
     List<Parameter> result = new ArrayList<>();
     for (String raw : splitArguments(source)) {
       List<String> qualifiers = qualifierNames(file, raw);
-      String cleaned = raw.replaceAll("@[A-Za-z_][\\w.]*(?:\\s*\\([^)]*\\))?", " ").trim();
+      String cleaned = maskAnnotationArguments(stripComments(raw))
+          .replaceAll("@[A-Za-z_][\\w.]*", " ").trim();
       cleaned = cleaned.replaceAll("\\b(final|volatile|transient)\\b", "").trim();
       if (cleaned.isBlank()) {
         continue;
