@@ -34,6 +34,8 @@ final class SourceMetadataScanner {
   private static final Pattern NEW_EXPRESSION = Pattern.compile("\\bnew\\b");
   private static final Pattern METHOD = Pattern.compile(
       "(?m)(?:^|[;{}\\n])\\s*(?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)|(?:(?:public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\s+))*(?:<[^>{}]+>\\s+)?[\\w.?$<>\\[\\], ]+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*(?:throws [^{;]+)?(?:\\{|;)");
+  private static final Pattern METHOD_BODY_STATEMENT = Pattern.compile(
+      "^(?:return|throw|if|for|while|switch|catch|try|synchronized|new|assert|case|else|do)\\b.*");
   private static final Pattern QUOTED = Pattern.compile("\\\"([^\\\"]*)\\\"");
   private static final Pattern CLASS_FOR_NAME = Pattern.compile(
       "(?<![\\w$.])\\b([A-Za-z_$][\\w$]*|java\\.lang\\.Class)"
@@ -829,19 +831,35 @@ final class SourceMetadataScanner {
       return List.of();
     }
     Map<String, RepositoryMethod> result = new LinkedHashMap<>();
-    if (SPRING_DATA_FIND_BY_ID_CONTRACTS.contains(contract.get())) {
+    if (guaranteedFindByIdContract(contract.get())) {
       result.put("findById", new RepositoryMethod("findById", "findById", true));
     }
     for (MethodInfo method : methods(file)) {
-      if (typeContaining(file, method.start()).equals(file.typeName())
+      if (typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
           && abstractInstanceRepositoryMethod(method)
-          && !redeclaresInheritedFindById(file, method)) {
+          && (!redeclaresInheritedFindById(file, method) || !result.containsKey("findById"))) {
         RepositoryMethod repositoryMethod = new RepositoryMethod(
             method.name(), repositoryMethodSignature(method), false);
         result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
       }
     }
     return List.copyOf(result.values());
+  }
+
+  /** Returns whether the selected Spring Data contract guarantees findById. */
+  private boolean guaranteedFindByIdContract(String contract) {
+    if (!SPRING_DATA_FIND_BY_ID_CONTRACTS.contains(contract)) {
+      return false;
+    }
+    boolean pagingContract = contract.equals("PagingAndSortingRepository")
+        || contract.equals("ListPagingAndSortingRepository");
+    return !pagingContract || springBootMajorVersion().map(major -> major < 3).orElse(false);
+  }
+
+  /** Reads the Spring Boot major version carried by AnalysisContext.frameworkVersion. */
+  private Optional<Integer> springBootMajorVersion() {
+    Matcher matcher = Pattern.compile("^\\D*(\\d+)").matcher(context.frameworkVersion());
+    return matcher.find() ? Optional.of(Integer.parseInt(matcher.group(1))) : Optional.empty();
   }
 
   /** Detects a source declaration that exactly redeclares the repository ID contract. */
@@ -901,10 +919,13 @@ final class SourceMetadataScanner {
 
   /** Keeps only abstract instance methods that Spring Data can implement from an interface. */
   private static boolean abstractInstanceRepositoryMethod(MethodInfo method) {
-    String declaration = maskAnnotationArguments(method.annotationBlock());
+    String declaration = maskAnnotationArguments(stripComments(method.annotationBlock()))
+        .trim()
+        .replaceFirst("^[;}\\s]+", "");
     return !Pattern.compile("(?<![\\w$])(?:default|static|private)(?![\\w$])")
-        .matcher(declaration)
-        .find();
+            .matcher(declaration)
+            .find()
+        && !METHOD_BODY_STATEMENT.matcher(declaration).matches();
   }
 
   /** Creates a stable source-level signature without parameter names for overload identity. */
@@ -936,12 +957,13 @@ final class SourceMetadataScanner {
   /** Scans Spring @Bean and bounded CommandLineRunner lifecycle callbacks. */
   List<LifecycleMethod> springLifecycleMethods() {
     List<LifecycleMethod> result = new ArrayList<>();
+    Set<String> registeredBeanTypes = registeredSpringBeanTypes();
     for (SourceFile file : files()) {
       boolean springBean = springComponent(file);
-      boolean commandLineRunner = springBean
+      boolean commandLineRunner = (springBean || registeredBeanTypes.contains(file.typeName()))
           && implementsNamedInterface(file, SPRING_COMMAND_LINE_RUNNER);
       for (MethodInfo method : methods(file)) {
-        if (!typeContaining(file, method.start()).equals(file.typeName())) {
+        if (!typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())) {
           continue;
         }
         if (springBeanAnnotation(file, method.annotationBlock())) {
@@ -966,6 +988,19 @@ final class SourceMetadataScanner {
       }
     }
     return List.copyOf(result);
+  }
+
+  /** Returns source types registered by canonical Spring component bean methods. */
+  private Set<String> registeredSpringBeanTypes() {
+    Set<String> result = new LinkedHashSet<>();
+    for (BeanCandidate candidate : beanCandidates(AnalysisContext.Framework.SPRING_BOOT)) {
+      if (candidate.producer()
+          && springComponent(candidate.file())
+          && !candidate.candidateType().isBlank()) {
+        result.add(candidate.candidateType());
+      }
+    }
+    return Set.copyOf(result);
   }
 
   /** Returns whether a class header implements the named interface. */
@@ -3456,6 +3491,20 @@ final class SourceMetadataScanner {
           returnType(annotationBlock)));
     }
     return List.copyOf(result);
+  }
+
+  /** Skips closing braces captured by METHOD before resolving declaration ownership. */
+  private static int declarationStart(SourceFile file, int start) {
+    String source = file.structuralSource();
+    int position = Math.max(0, start);
+    while (position < source.length()) {
+      char current = source.charAt(position);
+      if (current != '}' && !Character.isWhitespace(current)) {
+        break;
+      }
+      position++;
+    }
+    return position;
   }
 
   private static boolean isControlFlowKeyword(String name) {

@@ -420,6 +420,22 @@ class JavaAnalysisAdapterTest {
           }
         }
         """);
+    write(sourceRoot, "demo/ConfiguredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class ConfiguredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/RunnerConfiguration.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration public class RunnerConfiguration {
+          static class NestedConfiguration { }
+          @Bean public ConfiguredRunner configuredRunner() { return new ConfiguredRunner(); }
+        }
+        """);
     write(sourceRoot, "demo/Bean.java", "package demo; public @interface Bean {}\n");
     write(sourceRoot, "demo/CustomBeanFactory.java", """
         package demo;
@@ -485,12 +501,18 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> lifecycleFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("lifecycle_callback"))
         .toList();
-    assertEquals(2, lifecycleFacts.size());
+    assertEquals(4, lifecycleFacts.size());
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.RegisteredRunner#run")
         && item.evidence().get(0).symbols().contains("@Component")
         && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.BeanFactory#suppliedBean")
         && item.evidence().get(0).symbols().contains("@Bean suppliedBean")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.RunnerConfiguration#configuredRunner")
+        && item.evidence().get(0).symbols().contains("@Configuration")
+        && item.evidence().get(0).symbols().contains("@Bean configuredRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.ConfiguredRunner#run")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredFactory")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("Lookalike")));
@@ -616,7 +638,10 @@ class JavaAnalysisAdapterTest {
         package demo;
         public interface CustomRepository
             extends org.springframework.data.repository.Repository<Account, Long> {
+          static class Helper { }
+          /** Returns the default account lookup. */
           String findByEmail(String email);
+          default String delegated(String email) { return findByEmail(email); }
         }
         """);
     write(sourceRoot, "demo/OverloadedRepository.java", """
@@ -667,7 +692,7 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
-    assertEquals(7, repositoryFacts.size());
+    assertEquals(8, repositoryFacts.size());
     SemanticCallFacts.Fact custom = repositoryFacts.stream()
         .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
         .findFirst()
@@ -681,8 +706,11 @@ class JavaAnalysisAdapterTest {
         "demo.OverloadedRepository#findByEmail(int)")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.OverloadedRepository#findById(String)")));
-    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.OverloadedRepository#findById(Long)")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.CustomRepository#findByEmail()")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#delegated")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#helper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#staticHelper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#privateHelper")));
@@ -693,6 +721,27 @@ class JavaAnalysisAdapterTest {
         "demo.GenericRepository#findById(String)")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.GenericRepository#findById(ID)")));
+
+    SemanticCallFacts springBoot3Facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            sourceRoot,
+            null,
+            List.of(
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-bean-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-data-repository-contract",
+                    "source_interface_metadata",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java")),
+            "3.2.0"),
+        AnalysisGraph.empty());
+    assertFalse(springBoot3Facts.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("demo.PagingRepository#findById")));
   }
 
   /** Keeps fixture IDs stable only when their complete source identity is unique. */
@@ -5732,6 +5781,17 @@ class JavaAnalysisAdapterTest {
         AnalysisContext.FrameworkBindingMetadata.empty());
   }
 
+  /** Builds a production context with an explicit framework version. */
+  private AnalysisContext context(
+      AnalysisContext.Framework framework,
+      Path sourceRoot,
+      Path generatedRoot,
+      List<AnalysisContext.FrameworkMetadata> metadata,
+      String frameworkVersion) {
+    return context(framework, sourceRoot, generatedRoot, metadata,
+        AnalysisContext.FrameworkBindingMetadata.empty(), frameworkVersion);
+  }
+
   /** Builds a production context with optional binding metadata. */
   private AnalysisContext context(
       AnalysisContext.Framework framework,
@@ -5739,10 +5799,22 @@ class JavaAnalysisAdapterTest {
       Path generatedRoot,
       List<AnalysisContext.FrameworkMetadata> metadata,
       AnalysisContext.FrameworkBindingMetadata bindingMetadata) {
+    return context(framework, sourceRoot, generatedRoot, metadata, bindingMetadata,
+        framework == AnalysisContext.Framework.QUARKUS ? "3.40.1" : "2.7.18");
+  }
+
+  /** Builds a production context with optional binding metadata and framework version. */
+  private AnalysisContext context(
+      AnalysisContext.Framework framework,
+      Path sourceRoot,
+      Path generatedRoot,
+      List<AnalysisContext.FrameworkMetadata> metadata,
+      AnalysisContext.FrameworkBindingMetadata bindingMetadata,
+      String frameworkVersion) {
     AnalysisContext.Builder builder = AnalysisContext.builder()
         .id(framework == AnalysisContext.Framework.QUARKUS ? "quarkus-production" : "spring-boot-production")
         .framework(framework)
-        .frameworkVersion(framework == AnalysisContext.Framework.QUARKUS ? "3.40.1" : "2.7.18")
+        .frameworkVersion(frameworkVersion)
         .fixtureId(framework == AnalysisContext.Framework.QUARKUS ? "java21-quarkus" : "fsi-spring-boot")
         .javaRelease(framework == AnalysisContext.Framework.QUARKUS ? 21 : 17)
         .repositoryRoot(temp)
