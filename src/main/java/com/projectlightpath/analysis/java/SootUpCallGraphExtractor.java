@@ -170,13 +170,34 @@ final class SootUpCallGraphExtractor {
     MethodSignature declared = call.invokableStmt().getInvokeExpr()
         .map(expression -> expression.getMethodSignature())
         .orElseThrow();
-    boolean finalMethod = view.getMethod(declared)
+    boolean finalMethod = resolveMethod(view, declared)
         .map(SootMethod::isFinal)
         .orElse(false);
     boolean finalClass = view.getClass(declared.getDeclClassType())
         .map(SootClass::isFinal)
         .orElse(false);
     return !finalMethod && !finalClass;
+  }
+
+  private static Optional<? extends SootMethod> resolveMethod(
+      JavaView view, MethodSignature signature) {
+    MethodSignature current = signature;
+    while (true) {
+      Optional<? extends SootClass> declaringClass = view.getClass(current.getDeclClassType());
+      if (declaringClass.isEmpty()) {
+        return Optional.empty();
+      }
+      Optional<? extends SootMethod> method = declaringClass.get()
+          .getMethod(current.getSubSignature());
+      if (method.isPresent()) {
+        return method;
+      }
+      var superclass = declaringClass.get().getSuperclass();
+      if (superclass.isEmpty()) {
+        return Optional.empty();
+      }
+      current = new MethodSignature(superclass.get(), current.getSubSignature());
+    }
   }
 
   private static CallEdge.TargetContext dependencyTarget(

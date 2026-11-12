@@ -131,7 +131,7 @@ class SootUpDependencyBoundaryIntegrationTest {
 
     List<SemanticCallFacts.Fact> dispatches = facts.providerFacts().stream()
         .filter(item -> item.caller().equals("app.Application#dependencyVirtualCall"))
-        .filter(item -> item.callee().startsWith("vulnerable.api.VirtualApi"))
+        .filter(item -> item.callee().endsWith("#value"))
         .filter(item -> item.relationshipType().equals("invokes"))
         .toList();
     assertFalse(dispatches.isEmpty(), facts.providerFacts().toString());
@@ -149,6 +149,7 @@ class SootUpDependencyBoundaryIntegrationTest {
 
     assertFinalVirtualCallIsDefinite(facts, "dependencyFinalSubclassCall");
     assertFinalVirtualCallIsDefinite(facts, "dependencyFinalOverrideCall");
+    assertFinalVirtualCallIsDefinite(facts, "dependencyInheritedFinalCall");
   }
 
   @Test
@@ -349,6 +350,16 @@ class SootUpDependencyBoundaryIntegrationTest {
           @Override public final String value() { return "final-override"; }
         }
         """);
+    write(dependencySource, "vulnerable/api/FinalMethodVirtualApi.java", """
+        package vulnerable.api;
+        public class FinalMethodVirtualApi extends VirtualApi {
+          @Override public final String value() { return "final-method"; }
+        }
+        """);
+    write(dependencySource, "vulnerable/api/InheritedFinalVirtualApi.java", """
+        package vulnerable.api;
+        public class InheritedFinalVirtualApi extends FinalMethodVirtualApi { }
+        """);
     write(dependencySource, "vulnerable/api/Duplicate.java", """
         package vulnerable.api;
         public final class Duplicate {
@@ -384,6 +395,7 @@ class SootUpDependencyBoundaryIntegrationTest {
         import vulnerable.api.Duplicate;
         import vulnerable.api.FinalOverrideVirtualApi;
         import vulnerable.api.FinalVirtualApi;
+        import vulnerable.api.InheritedFinalVirtualApi;
         import vulnerable.api.VulnerableApi;
         import vulnerable.api.VirtualApi;
         public class Application {
@@ -400,6 +412,9 @@ class SootUpDependencyBoundaryIntegrationTest {
             return value.value();
           }
           public String dependencyFinalOverrideCall(FinalOverrideVirtualApi value) {
+            return value.value();
+          }
+          public String dependencyInheritedFinalCall(InheritedFinalVirtualApi value) {
             return value.value();
           }
           public String dependencyInterfaceCall(BoundaryService service) {
