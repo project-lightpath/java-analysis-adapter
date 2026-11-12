@@ -744,7 +744,7 @@ final class SourceMetadataScanner {
       for (MethodInfo method : methods(file)) {
         boolean producer = framework == AnalysisContext.Framework.QUARKUS
             ? cdiProducerAnnotation(file, method.annotationBlock())
-            : method.hasAnnotation("Bean");
+            : springBeanAnnotation(file, method.annotationBlock());
         if (!producer || method.returnType().isBlank()) {
           continue;
         }
@@ -802,13 +802,55 @@ final class SourceMetadataScanner {
     }
     for (MethodInfo method : methods(file)) {
       if (typeContaining(file, method.start()).equals(file.typeName())
-          && abstractInstanceRepositoryMethod(method)) {
+          && abstractInstanceRepositoryMethod(method)
+          && !redeclaresInheritedFindById(file, method)) {
         RepositoryMethod repositoryMethod = new RepositoryMethod(
             method.name(), repositoryMethodSignature(method), false);
         result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
       }
     }
     return List.copyOf(result.values());
+  }
+
+  /** Detects a source declaration that exactly redeclares the repository ID contract. */
+  private boolean redeclaresInheritedFindById(SourceFile file, MethodInfo method) {
+    if (!method.name().equals("findById")) {
+      return false;
+    }
+    Optional<String> repositoryIdType = springRepositoryIdType(file);
+    List<Parameter> methodParameters = parameters(method.parameters());
+    if (repositoryIdType.isEmpty() || methodParameters.size() != 1) {
+      return false;
+    }
+    return resolveReferenceType(methodParameters.get(0).type(), file)
+        .filter(repositoryIdType.get()::equals)
+        .isPresent();
+  }
+
+  /** Resolves the ID type from the first supported Spring Data contract declaration. */
+  private Optional<String> springRepositoryIdType(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return Optional.empty();
+    }
+    int permitsIndex = topLevelKeywordIndex(header, "permits");
+    String extended = header.substring(
+        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
+    for (String type : splitArguments(extended)) {
+      if (resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet()).isEmpty()) {
+        continue;
+      }
+      String arguments = genericArguments(type);
+      List<String> parameters = splitArguments(arguments);
+      if (parameters.size() >= 2) {
+        Optional<String> resolved = resolveReferenceType(parameters.get(1), file);
+        if (resolved.isPresent()) {
+          return resolved;
+        }
+      }
+    }
+    return Optional.empty();
   }
 
   /** Keeps only abstract instance methods that Spring Data can implement from an interface. */
@@ -853,7 +895,10 @@ final class SourceMetadataScanner {
       boolean commandLineRunner = springBean
           && implementsNamedInterface(file, SPRING_COMMAND_LINE_RUNNER);
       for (MethodInfo method : methods(file)) {
-        if (method.hasAnnotation("Bean")) {
+        if (!typeContaining(file, method.start()).equals(file.typeName())) {
+          continue;
+        }
+        if (springBeanAnnotation(file, method.annotationBlock())) {
           if (!springBean) {
             continue;
           }
@@ -911,6 +956,20 @@ final class SourceMetadataScanner {
         "RestController", "Named")));
     result.addAll(annotationSources(method.annotationBlock(), List.of("Bean")));
     return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  /** Recognizes only the canonical Spring {@code @Bean} annotation. */
+  private static boolean springBeanAnnotation(SourceFile file, String block) {
+    List<String> explicitImports = importedTypes("Bean", file);
+    boolean canonicalImport = explicitImports.size() == 1
+        && explicitImports.get(0).equals("org.springframework.context.annotation.Bean");
+    return annotationOccurrences(block, "Bean").stream().anyMatch(annotation -> {
+      String source = annotation.source();
+      int arguments = source.indexOf('(');
+      String name = arguments < 0 ? source : source.substring(0, arguments);
+      return name.equals("@org.springframework.context.annotation.Bean")
+          || (name.equals("@Bean") && canonicalImport);
+    });
   }
 
   /** Scans framework proxy targets and records CDI scope eligibility. */
@@ -4783,6 +4842,16 @@ final class SourceMetadataScanner {
       }
     }
     return result.toString();
+  }
+
+  /** Returns the outermost generic argument text from one declared type. */
+  private static String genericArguments(String source) {
+    int opening = source.indexOf('<');
+    if (opening < 0) {
+      return "";
+    }
+    int closing = matchingDelimiter(source, opening, '<', '>');
+    return closing > opening ? source.substring(opening + 1, closing) : "";
   }
 
   /** Finds the matching delimiter while ignoring quoted strings. */

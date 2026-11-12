@@ -261,6 +261,9 @@ class JavaAnalysisAdapterTest {
         @Component public class RegisteredRunner implements CommandLineRunner {
           @Override public void run(String... args) { }
           public void run(String value) { }
+          static class NestedRunner implements CommandLineRunner {
+            public void run(String... args) { }
+          }
         }
         """);
     write(sourceRoot, "demo/UnregisteredRunner.java", """
@@ -283,6 +286,17 @@ class JavaAnalysisAdapterTest {
         import org.springframework.stereotype.Component;
         @Component public class BeanFactory {
           @Bean public Object suppliedBean() { return new Object(); }
+          static class NestedFactory {
+            @Bean public Object nestedBean() { return new Object(); }
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Bean.java", "package demo; public @interface Bean {}\n");
+    write(sourceRoot, "demo/CustomBeanFactory.java", """
+        package demo;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration public class CustomBeanFactory {
+          @demo.Bean public Object customBean() { return new Object(); }
         }
         """);
     write(sourceRoot, "demo/Lookalike.java", """
@@ -378,9 +392,11 @@ class JavaAnalysisAdapterTest {
         extends org.springframework.data.repository.Repository<Account, Long> {
           String findByEmail(String email);
           String findByEmail(int email);
+          Account findById(Long id);
           Account findById(String id);
           default String helper() { return "default"; }
           static String staticHelper() { return "static"; }
+          private String privateHelper() { return "private"; }
         }
         """);
     write(sourceRoot, "wildcard/WildcardRepository.java", """
@@ -424,8 +440,11 @@ class JavaAnalysisAdapterTest {
         "demo.OverloadedRepository#findByEmail(int)")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.OverloadedRepository#findById(String)")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findById(Long)")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#helper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#staticHelper")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#privateHelper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRepository")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("MarkerRepository")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("WildcardRepository")));
