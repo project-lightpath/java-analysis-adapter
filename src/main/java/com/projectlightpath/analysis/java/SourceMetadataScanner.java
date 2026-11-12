@@ -152,10 +152,37 @@ final class SourceMetadataScanner {
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
   private static final Set<String> CDI_PRODUCER_ANNOTATIONS = Set.of(
       "jakarta.enterprise.inject.Produces", "javax.enterprise.inject.Produces");
-  private static final Set<String> SPRING_PROXY_ANNOTATIONS = Set.of(
-      "Transactional", "Async", "Cacheable", "CachePut", "CacheEvict", "PreAuthorize",
-      "PostAuthorize", "Secured", "RolesAllowed", "Retryable", "CircuitBreaker", "Validated",
-      "TransactionalEventListener");
+  private static final Map<String, List<String>> SPRING_ROUTE_ANNOTATION_TYPES = Map.of(
+      "RequestMapping", List.of("org.springframework.web.bind.annotation.RequestMapping"),
+      "GetMapping", List.of("org.springframework.web.bind.annotation.GetMapping"),
+      "PostMapping", List.of("org.springframework.web.bind.annotation.PostMapping"),
+      "PutMapping", List.of("org.springframework.web.bind.annotation.PutMapping"),
+      "PatchMapping", List.of("org.springframework.web.bind.annotation.PatchMapping"),
+      "DeleteMapping", List.of("org.springframework.web.bind.annotation.DeleteMapping"),
+      "RestController", List.of("org.springframework.web.bind.annotation.RestController"));
+  private static final Map<String, List<String>> SPRING_PROXY_ANNOTATION_TYPES = Map.ofEntries(
+      Map.entry("Transactional", List.of(
+          "org.springframework.transaction.annotation.Transactional",
+          "jakarta.transaction.Transactional",
+          "javax.transaction.Transactional")),
+      Map.entry("Async", List.of("org.springframework.scheduling.annotation.Async")),
+      Map.entry("Cacheable", List.of("org.springframework.cache.annotation.Cacheable")),
+      Map.entry("CachePut", List.of("org.springframework.cache.annotation.CachePut")),
+      Map.entry("CacheEvict", List.of("org.springframework.cache.annotation.CacheEvict")),
+      Map.entry("PreAuthorize", List.of("org.springframework.security.access.prepost.PreAuthorize")),
+      Map.entry("PostAuthorize", List.of("org.springframework.security.access.prepost.PostAuthorize")),
+      Map.entry("Secured", List.of("org.springframework.security.access.annotation.Secured")),
+      Map.entry("RolesAllowed", List.of(
+          "jakarta.annotation.security.RolesAllowed",
+          "javax.annotation.security.RolesAllowed")),
+      Map.entry("Retryable", List.of("org.springframework.retry.annotation.Retryable")),
+      Map.entry("CircuitBreaker", List.of(
+          "io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker")),
+      Map.entry("Validated", List.of("org.springframework.validation.annotation.Validated")),
+      Map.entry("TransactionalEventListener", List.of(
+          "org.springframework.transaction.event.TransactionalEventListener")));
+  private static final Set<String> SPRING_PROXY_ANNOTATIONS =
+      Set.copyOf(SPRING_PROXY_ANNOTATION_TYPES.keySet());
   private static final String SPRING_COMMAND_LINE_RUNNER =
       "org.springframework.boot.CommandLineRunner";
   private static final Map<String, String> SPRING_DATA_REPOSITORY_CONTRACTS = Map.of(
@@ -527,18 +554,19 @@ final class SourceMetadataScanner {
     for (SourceFile file : files()) {
       String classBlock = file.classAnnotationBlock();
       boolean quarkusClassPath = hasAnnotation(classBlock, "Path");
-      boolean springController = hasAnnotation(classBlock, "RestController");
+      boolean springController = framework == AnalysisContext.Framework.SPRING_BOOT
+          && canonicalSpringAnnotation(file, classBlock, "RestController");
       if (framework == AnalysisContext.Framework.SPRING_BOOT && !springController) {
         continue;
       }
       List<String> classPaths = framework == AnalysisContext.Framework.QUARKUS
           ? pathValues(classBlock, "Path")
-          : mappingPaths(classBlock, "RequestMapping");
+          : mappingPaths(file, classBlock, "RequestMapping");
       if (framework == AnalysisContext.Framework.QUARKUS && quarkusClassPath && classPaths.isEmpty()) {
         continue;
       }
       if (framework == AnalysisContext.Framework.SPRING_BOOT
-          && hasAnnotation(classBlock, "RequestMapping")
+          && canonicalSpringAnnotation(file, classBlock, "RequestMapping")
           && classPaths.isEmpty()) {
         continue;
       }
@@ -546,12 +574,12 @@ final class SourceMetadataScanner {
         classPaths = List.of("");
       }
       List<String> classHttpMethods = framework == AnalysisContext.Framework.SPRING_BOOT
-          ? httpMethods(classBlock, "RequestMapping")
+          ? httpMethods(file, classBlock, "RequestMapping")
           : SUPPORTED_HTTP_METHODS;
       for (MethodInfo method : methods(file)) {
-        for (String annotationName : routeAnnotations(method.annotationBlock(), framework)) {
+        for (String annotationName : routeAnnotations(file, method.annotationBlock(), framework)) {
           List<String> httpMethods = intersectHttpMethods(
-              httpMethods(method.annotationBlock(), annotationName), classHttpMethods);
+              httpMethods(file, method.annotationBlock(), annotationName), classHttpMethods);
           if (httpMethods.isEmpty()) {
             continue;
           }
@@ -559,13 +587,13 @@ final class SourceMetadataScanner {
               && hasAnnotation(method.annotationBlock(), "Path");
           List<String> methodPaths = framework == AnalysisContext.Framework.QUARKUS
               ? pathValues(method.annotationBlock(), "Path")
-              : mappingPaths(method.annotationBlock(), annotationName);
+              : mappingPaths(file, method.annotationBlock(), annotationName);
           if (framework == AnalysisContext.Framework.QUARKUS && methodPathAnnotation && methodPaths.isEmpty()) {
             continue;
           }
           if (framework == AnalysisContext.Framework.SPRING_BOOT
               && methodPaths.isEmpty()
-              && hasExplicitMappingPath(method.annotationBlock(), annotationName)) {
+              && hasExplicitMappingPath(file, method.annotationBlock(), annotationName)) {
             continue;
           }
           if (methodPaths.isEmpty()) {
@@ -577,26 +605,26 @@ final class SourceMetadataScanner {
           List<String> consumes = overrideValues(
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(classBlock, "Consumes", null)
-                  : mediaValues(classBlock, "RequestMapping", "consumes"),
+                  : mediaValues(file, classBlock, "RequestMapping", "consumes"),
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(method.annotationBlock(), "Consumes", null)
-                  : mediaValues(method.annotationBlock(), annotationName, "consumes"));
+                  : mediaValues(file, method.annotationBlock(), annotationName, "consumes"));
           List<String> produces = overrideValues(
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(classBlock, "Produces", null)
-                  : mediaValues(classBlock, "RequestMapping", "produces"),
+                  : mediaValues(file, classBlock, "RequestMapping", "produces"),
               framework == AnalysisContext.Framework.QUARKUS
                   ? mediaValues(method.annotationBlock(), "Produces", null)
-                  : mediaValues(method.annotationBlock(), annotationName, "produces"));
+                  : mediaValues(file, method.annotationBlock(), annotationName, "produces"));
           List<String> headers = framework == AnalysisContext.Framework.SPRING_BOOT
               ? mergeValues(
-                  values(classBlock, "RequestMapping", "headers"),
-                  values(method.annotationBlock(), annotationName, "headers"))
+                  values(file, classBlock, "RequestMapping", "headers"),
+                  values(file, method.annotationBlock(), annotationName, "headers"))
               : List.of();
           List<String> parameters = framework == AnalysisContext.Framework.SPRING_BOOT
               ? mergeValues(
-                  values(classBlock, "RequestMapping", "params"),
-                  values(method.annotationBlock(), annotationName, "params"))
+                  values(file, classBlock, "RequestMapping", "params"),
+                  values(file, method.annotationBlock(), annotationName, "params"))
               : List.of();
           for (String httpMethod : httpMethods) {
             for (String classPath : classPaths) {
@@ -615,7 +643,7 @@ final class SourceMetadataScanner {
                     produces,
                     headers,
                     parameters,
-                    routeSymbols(classBlock, method.annotationBlock(), framework, annotationName)));
+                    routeSymbols(file, classBlock, method.annotationBlock(), framework, annotationName)));
               }
             }
           }
@@ -996,8 +1024,10 @@ final class SourceMetadataScanner {
       for (MethodInfo method : methods(file)) {
         boolean selected = framework == AnalysisContext.Framework.QUARKUS
             ? !method.name().equals(file.simpleTypeName())
-            : SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(method.annotationBlock(), name))
-                || SPRING_PROXY_ANNOTATIONS.stream().anyMatch(name -> hasAnnotation(classBlock, name));
+            : SPRING_PROXY_ANNOTATIONS.stream()
+                .anyMatch(name -> canonicalSpringAnnotation(file, method.annotationBlock(), name))
+                || SPRING_PROXY_ANNOTATIONS.stream()
+                    .anyMatch(name -> canonicalSpringAnnotation(file, classBlock, name));
         if (selected && springProxyMethod(file, method)) {
           result.add(new ProxyTarget(
               file,
@@ -3941,13 +3971,16 @@ final class SourceMetadataScanner {
     return List.copyOf(result);
   }
 
-  private static List<String> routeAnnotations(String block, AnalysisContext.Framework framework) {
+  private static List<String> routeAnnotations(
+      SourceFile file, String block, AnalysisContext.Framework framework) {
     List<String> candidates = framework == AnalysisContext.Framework.QUARKUS
         ? List.of("POST", "GET", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
         : List.of("PostMapping", "GetMapping", "PutMapping", "PatchMapping", "DeleteMapping", "RequestMapping");
     List<String> result = new ArrayList<>();
     for (String name : candidates) {
-      if (hasAnnotation(block, name)) {
+      if (framework == AnalysisContext.Framework.QUARKUS
+          ? hasAnnotation(block, name)
+          : canonicalSpringAnnotation(file, block, name)) {
         result.add(name);
       }
     }
@@ -3955,7 +3988,7 @@ final class SourceMetadataScanner {
   }
 
   /** Expands supported HTTP method annotation values. */
-  private static List<String> httpMethods(String block, String annotationName) {
+  private static List<String> httpMethods(SourceFile file, String block, String annotationName) {
     List<String> result = new ArrayList<>();
     switch (annotationName) {
       case "POST", "PostMapping" -> result.add("POST");
@@ -3966,8 +3999,9 @@ final class SourceMetadataScanner {
       case "HEAD" -> result.add("HEAD");
       case "OPTIONS" -> result.add("OPTIONS");
       case "RequestMapping" -> {
-        boolean wildcard = annotationArguments(block, annotationName).isEmpty();
-        for (String args : annotationArguments(block, annotationName)) {
+        List<String> arguments = annotationArguments(file, block, annotationName);
+        boolean wildcard = arguments.isEmpty();
+        for (String args : arguments) {
           String selected = attributeValue(args, "method");
           if (selected == null) {
             wildcard = true;
@@ -4013,12 +4047,13 @@ final class SourceMetadataScanner {
   }
 
   /** Extracts literal Spring mapping paths from value and path attributes. */
-  private static List<String> mappingPaths(String block, String annotation) {
-    if (!hasAnnotation(block, annotation)) {
+  private static List<String> mappingPaths(SourceFile file, String block, String annotation) {
+    List<String> arguments = annotationArguments(file, block, annotation);
+    if (arguments.isEmpty()) {
       return List.of();
     }
     LinkedHashSet<String> result = new LinkedHashSet<>();
-    for (String args : annotationArguments(block, annotation)) {
+    for (String args : arguments) {
       for (String attribute : List.of("value", "path")) {
         String selected = attributeValue(args, attribute);
         if (selected == null) {
@@ -4034,11 +4069,11 @@ final class SourceMetadataScanner {
     if (!result.isEmpty()) {
       return List.copyOf(result);
     }
-    return hasExplicitMappingPath(block, annotation) ? List.of() : List.of("");
+    return hasExplicitMappingPath(file, block, annotation) ? List.of() : List.of("");
   }
 
-  private static boolean hasExplicitMappingPath(String block, String annotation) {
-    return annotationArguments(block, annotation).stream()
+  private static boolean hasExplicitMappingPath(SourceFile file, String block, String annotation) {
+    return annotationArguments(file, block, annotation).stream()
         .anyMatch(args -> attributeValue(args, "value") != null || attributeValue(args, "path") != null);
   }
 
@@ -4109,15 +4144,23 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> routeSymbols(
-      String classBlock, String methodBlock, AnalysisContext.Framework framework, String annotationName) {
+      SourceFile file,
+      String classBlock,
+      String methodBlock,
+      AnalysisContext.Framework framework,
+      String annotationName) {
     List<String> symbols = new ArrayList<>();
     if (framework == AnalysisContext.Framework.QUARKUS) {
       addSymbols(symbols, classBlock, "Path", "Consumes", "Produces");
       addSymbols(symbols, methodBlock, "Path", "Consumes", "Produces");
     } else {
-      addSymbols(symbols, classBlock, "RequestMapping", "RestController");
+      addCanonicalSymbols(symbols, file, classBlock, "RequestMapping", "RestController");
     }
-    addSymbols(symbols, methodBlock, annotationName);
+    if (framework == AnalysisContext.Framework.QUARKUS) {
+      addSymbols(symbols, methodBlock, annotationName);
+    } else {
+      addCanonicalSymbols(symbols, file, methodBlock, annotationName);
+    }
     return List.copyOf(symbols);
   }
 
@@ -4125,6 +4168,16 @@ final class SourceMetadataScanner {
   private static void addSymbols(List<String> symbols, String block, String... names) {
     for (String name : names) {
       for (AnnotationOccurrence occurrence : annotationOccurrences(block, name)) {
+        symbols.add(occurrence.source());
+      }
+    }
+  }
+
+  /** Adds only canonically resolved Spring annotation spellings to evidence. */
+  private static void addCanonicalSymbols(
+      List<String> symbols, SourceFile file, String block, String... names) {
+    for (String name : names) {
+      for (AnnotationOccurrence occurrence : canonicalSpringAnnotationOccurrences(file, block, name)) {
         symbols.add(occurrence.source());
       }
     }
@@ -4452,9 +4505,16 @@ final class SourceMetadataScanner {
         : List.of("Transactional", "Async", "Cacheable", "CachePut", "CacheEvict",
             "PreAuthorize", "PostAuthorize", "Secured", "RolesAllowed", "Retryable",
             "CircuitBreaker", "Validated", "TransactionalEventListener");
-    List<String> result = new ArrayList<>(annotationSources(
-        target.file().classAnnotationBlock(), names));
-    result.addAll(annotationSources(target.method().annotationBlock(), names));
+    List<String> result = framework == AnalysisContext.Framework.QUARKUS
+        ? new ArrayList<>(annotationSources(target.file().classAnnotationBlock(), names))
+        : new ArrayList<>(canonicalAnnotationSources(
+            target.file(), target.file().classAnnotationBlock(), names));
+    if (framework == AnalysisContext.Framework.QUARKUS) {
+      result.addAll(annotationSources(target.method().annotationBlock(), names));
+    } else {
+      result.addAll(canonicalAnnotationSources(
+          target.file(), target.method().annotationBlock(), names));
+    }
     return List.copyOf(new LinkedHashSet<>(result));
   }
 
@@ -4463,6 +4523,18 @@ final class SourceMetadataScanner {
     List<String> result = new ArrayList<>();
     for (String name : names) {
       result.addAll(annotationOccurrences(block, name).stream()
+          .map(AnnotationOccurrence::source)
+          .toList());
+    }
+    return List.copyOf(new LinkedHashSet<>(result));
+  }
+
+  /** Extracts source spellings for canonically resolved Spring annotations. */
+  private static List<String> canonicalAnnotationSources(
+      SourceFile file, String block, List<String> names) {
+    List<String> result = new ArrayList<>();
+    for (String name : names) {
+      result.addAll(canonicalSpringAnnotationOccurrences(file, block, name).stream()
           .map(AnnotationOccurrence::source)
           .toList());
     }
@@ -4541,14 +4613,34 @@ final class SourceMetadataScanner {
   /** Recognizes an annotation only when its source spelling resolves canonically. */
   private static boolean canonicalAnnotation(
       SourceFile file, String block, String simpleName, String... canonicalNames) {
-    Set<String> canonical = Set.of(canonicalNames);
+    return !canonicalAnnotationOccurrences(file, block, simpleName, Set.of(canonicalNames)).isEmpty();
+  }
+
+  /** Resolves a supported Spring annotation without accepting lookalike or wildcard imports. */
+  private static boolean canonicalSpringAnnotation(SourceFile file, String block, String simpleName) {
+    return !canonicalSpringAnnotationOccurrences(file, block, simpleName).isEmpty();
+  }
+
+  /** Returns only annotation occurrences whose source spelling resolves canonically. */
+  private static List<AnnotationOccurrence> canonicalSpringAnnotationOccurrences(
+      SourceFile file, String block, String simpleName) {
+    return canonicalAnnotationOccurrences(
+        file,
+        block,
+        simpleName,
+        Set.copyOf(SPRING_ROUTE_ANNOTATION_TYPES.getOrDefault(
+            simpleName,
+            SPRING_PROXY_ANNOTATION_TYPES.getOrDefault(simpleName, List.of()))));
+  }
+
+  private static List<AnnotationOccurrence> canonicalAnnotationOccurrences(
+      SourceFile file, String block, String simpleName, Set<String> canonical) {
     List<String> explicitImports = importedTypes(simpleName, file);
     boolean canonicalImport = explicitImports.stream().anyMatch(canonical::contains);
     return annotationOccurrences(block, simpleName).stream()
-        .map(AnnotationOccurrence::source)
-        .map(SourceMetadataScanner::annotationType)
-        .anyMatch(type -> canonical.contains(type)
-            || type.equals(simpleName) && canonicalImport);
+        .filter(occurrence -> canonical.contains(annotationType(occurrence.source()))
+            || annotationType(occurrence.source()).equals(simpleName) && canonicalImport)
+        .toList();
   }
 
   /** Checks a method declaration modifier without reading annotation arguments as modifiers. */
@@ -4616,8 +4708,18 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> values(String block, String annotation, String attribute) {
+    return values(annotationArguments(block, annotation), attribute);
+  }
+
+  /** Extracts values only from canonically resolved Spring route annotations. */
+  private static List<String> values(
+      SourceFile file, String block, String annotation, String attribute) {
+    return values(annotationArguments(file, block, annotation), attribute);
+  }
+
+  private static List<String> values(List<String> arguments, String attribute) {
     LinkedHashSet<String> result = new LinkedHashSet<>();
-    for (String args : annotationArguments(block, annotation)) {
+    for (String args : arguments) {
       String selected = selectedValue(args, attribute);
       if (selected.isBlank()) {
         continue;
@@ -4642,8 +4744,18 @@ final class SourceMetadataScanner {
   }
 
   private static List<String> mediaValues(String block, String annotation, String attribute) {
+    return mediaValues(values(block, annotation, attribute));
+  }
+
+  /** Extracts media values only from canonically resolved Spring route annotations. */
+  private static List<String> mediaValues(
+      SourceFile file, String block, String annotation, String attribute) {
+    return mediaValues(values(file, block, annotation, attribute));
+  }
+
+  private static List<String> mediaValues(List<String> values) {
     LinkedHashSet<String> result = new LinkedHashSet<>();
-    for (String value : values(block, annotation, attribute)) {
+    for (String value : values) {
       String normalized = mediaType(value);
       if (!normalized.isBlank()) {
         result.add(normalized);
@@ -4680,12 +4792,20 @@ final class SourceMetadataScanner {
     return annotationOccurrences(block, name).stream().map(AnnotationOccurrence::arguments).toList();
   }
 
+  /** Extracts arguments only from canonically resolved Spring route annotations. */
+  private static List<String> annotationArguments(SourceFile file, String block, String name) {
+    return canonicalSpringAnnotationOccurrences(file, block, name).stream()
+        .map(AnnotationOccurrence::arguments)
+        .toList();
+  }
+
   /** Finds annotation occurrences with balanced argument extraction. */
   private static List<AnnotationOccurrence> annotationOccurrences(String block, String name) {
     List<AnnotationOccurrence> result = new ArrayList<>();
     String source = stripComments(block == null ? "" : block);
+    String searchSource = maskStringLiterals(source);
     Matcher matcher = Pattern.compile(
-        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(source);
+        "@(?:[A-Za-z_][\\w.]*\\.)?" + Pattern.quote(name) + "\\b").matcher(searchSource);
     while (matcher.find()) {
       int end = matcher.end();
       while (end < source.length() && Character.isWhitespace(source.charAt(end))) {

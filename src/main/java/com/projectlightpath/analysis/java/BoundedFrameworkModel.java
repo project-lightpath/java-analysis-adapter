@@ -751,7 +751,9 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       SourceMetadataScanner.GeneratedMethod generated) {
     Map<String, String> attributes = new HashMap<>();
     Optional<AnalysisContext.SourceRoot> root = AnalysisContext.mostSpecificRoot(
-        generated.file().path(), context.generatedSourceRoots());
+        generated.file().path(), context.includedSourceRoots().stream()
+            .filter(AnalysisContext.SourceRoot::generated)
+            .toList());
     attributes.put("sourceRootRequired", root.map(item -> Boolean.toString(item.required())).orElse("true"));
     root.ifPresent(item -> {
       attributes.put("sourceRoot", item.declaredPath());

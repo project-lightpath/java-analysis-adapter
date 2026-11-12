@@ -221,6 +221,84 @@ class JavaAnalysisAdapterTest {
         generatedFacts.get(0).evidence().get(0).attributes().get("sourceRootFingerprint"));
   }
 
+  /** Keeps excluded and wrong-scope nested roots out of generated provenance. */
+  @Test
+  void generatedProvenanceUsesOnlyIncludedActiveScopeNestedRoots() throws IOException {
+    Path sourceRoot = temp.resolve("generated-scope/src/main/java");
+    Path generatedRoot = temp.resolve("generated-scope/generated-src/main/java");
+    Path excludedNestedRoot = generatedRoot.resolve("excluded");
+    Path testNestedRoot = generatedRoot.resolve("test");
+    write(excludedNestedRoot, "demo/generated/ExcludedMapper.java", """
+        package demo.generated;
+        public class ExcludedMapper {
+          public String map(String value) { return value; }
+        }
+        """);
+    write(testNestedRoot, "demo/generated/TestMapper.java", """
+        package demo.generated;
+        public class TestMapper {
+          public String map(String value) { return value; }
+        }
+        """);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .generatedSourceRoot(
+            "generated-src/main/java",
+            generatedRoot,
+            AnalysisContext.Scope.PRODUCTION,
+            true,
+            true,
+            "included-fingerprint")
+        .generatedSourceRoot(
+            "generated-src/excluded",
+            excludedNestedRoot,
+            AnalysisContext.Scope.PRODUCTION,
+            false,
+            false,
+            "excluded-fingerprint")
+        .generatedSourceRoot(
+            "generated-src/test",
+            testNestedRoot,
+            AnalysisContext.Scope.TEST,
+            true,
+            false,
+            "test-fingerprint")
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "quarkus-generated-source-root",
+            "generated_source_root",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "generated-src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> generatedFacts = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty())
+        .frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("generated_implementation"))
+        .toList();
+
+    assertEquals(2, generatedFacts.size());
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRoot").equals("generated-src/main/java")));
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRootIncluded").equals("true")));
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRootScope").equals("production")));
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRootFingerprint").equals("included-fingerprint")));
+  }
+
   /** Covers Spring MVC, injection, proxy, repository, and lifecycle facts. */
   @Test
   void springFactsCoverMvcInjectionProxyRepositoryAndLifecycle() throws IOException {
@@ -426,6 +504,89 @@ class JavaAnalysisAdapterTest {
         || item.callee().contains("FakeConfiguration")));
     assertTrue(lifecycleFacts.stream().allMatch(item -> item.factSet() == SemanticCallFacts.FactSet.FRAMEWORK));
     assertTrue(facts.providerFacts().isEmpty());
+  }
+
+  /** Rejects Spring route and advisor lookalikes while retaining canonical resolution. */
+  @Test
+  void springRoutesAndProxiesRequireCanonicalAnnotationResolution() throws IOException {
+    Path sourceRoot = temp.resolve("spring-annotation-resolution/src/main/java");
+    write(sourceRoot, "demo/FakeRestController.java", """
+        package demo;
+        import org.springframework.web.bind.annotation.GetMapping;
+        @demo.RestController public class FakeRestController {
+          @GetMapping("/ignored-controller") public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/FakeGetMapping.java", """
+        package demo;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController public class FakeGetMapping {
+          @demo.GetMapping("/ignored-method") public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/FakeTransactional.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class FakeTransactional {
+          @demo.Transactional public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/LiteralRouteController.java", String.join("\n",
+        "package demo;",
+        "import org.springframework.web.bind.annotation.GetMapping;",
+        "import org.springframework.web.bind.annotation.RestController;",
+        "@RestController public class LiteralRouteController {",
+        "  @Marker(\"@GetMapping\") public String stringIgnored() { return \"ignored\"; }",
+        "  @Marker(\"\"\"",
+        "      @GetMapping",
+        "      \"\"\") public String textBlockIgnored() { return \"ignored\"; }",
+        "}",
+        ""));
+    write(sourceRoot, "demo/LiteralProxy.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class LiteralProxy {
+          @Marker("@Transactional") public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/Marker.java", "package demo; public @interface Marker { String value(); }\n");
+    write(sourceRoot, "demo/RestController.java", "package demo; public @interface RestController {}\n");
+    write(sourceRoot, "demo/GetMapping.java", "package demo; public @interface GetMapping {}\n");
+    write(sourceRoot, "demo/Transactional.java", "package demo; public @interface Transactional {}\n");
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            sourceRoot,
+            null,
+            List.of(
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-web-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-bean-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-aop-advisor-metadata",
+                    "runtime_or_build_metadata",
+                    AnalysisContext.MetadataStatus.NOT_CAPTURED,
+                    null))),
+        AnalysisGraph.empty());
+
+    assertFalse(facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("framework_entrypoint"))
+        .anyMatch(item -> item.callee().contains("FakeRestController")
+            || item.callee().contains("FakeGetMapping")
+            || item.callee().contains("LiteralRouteController")));
+    assertFalse(facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .anyMatch(item -> item.callee().equals("demo.FakeTransactional#ignored")
+            || item.callee().equals("demo.LiteralProxy#ignored")));
   }
 
   /** Requires canonical Spring Data contracts and does not invent marker or paging methods. */
