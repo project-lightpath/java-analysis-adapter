@@ -270,6 +270,13 @@ class JavaAnalysisAdapterTest {
           @Override public void run(String... args) { }
         }
         """);
+    write(sourceRoot, "demo/UnregisteredFactory.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        public class UnregisteredFactory {
+          @Bean public Object ignoredBean() { return new Object(); }
+        }
+        """);
     write(sourceRoot, "demo/BeanFactory.java", """
         package demo;
         import org.springframework.context.annotation.Bean;
@@ -296,6 +303,14 @@ class JavaAnalysisAdapterTest {
           public void run(String... args) { }
         }
         """);
+    write(sourceRoot, "wildcard/WildcardRunner.java", """
+        package wildcard;
+        import org.springframework.boot.*;
+        import org.springframework.stereotype.Component;
+        @Component public class WildcardRunner implements CommandLineRunner {
+          public void run(String... args) { }
+        }
+        """);
 
     AnalysisContext context = context(
         AnalysisContext.Framework.SPRING_BOOT,
@@ -319,8 +334,10 @@ class JavaAnalysisAdapterTest {
     assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.BeanFactory#suppliedBean")
         && item.evidence().get(0).symbols().contains("@Bean suppliedBean")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredFactory")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("Lookalike")));
     assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("WildcardRunner")));
     assertTrue(lifecycleFacts.stream().allMatch(item -> item.factSet() == SemanticCallFacts.FactSet.FRAMEWORK));
     assertTrue(facts.providerFacts().isEmpty());
   }
@@ -355,6 +372,21 @@ class JavaAnalysisAdapterTest {
           String findByEmail(String email);
         }
         """);
+    write(sourceRoot, "demo/OverloadedRepository.java", """
+        package demo;
+        public interface OverloadedRepository
+            extends org.springframework.data.repository.Repository<Account, Long> {
+          String findByEmail(String email);
+          String findByEmail(int email);
+          default String helper() { return "default"; }
+          static String staticHelper() { return "static"; }
+        }
+        """);
+    write(sourceRoot, "wildcard/WildcardRepository.java", """
+        package wildcard;
+        import org.springframework.data.repository.*;
+        public interface WildcardRepository extends Repository<Account, Long> { }
+        """);
 
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
         context(
@@ -377,14 +409,23 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
-    assertEquals(1, repositoryFacts.size());
-    SemanticCallFacts.Fact custom = repositoryFacts.get(0);
-    assertEquals("demo.CustomRepository#findByEmail", custom.callee());
-    assertTrue(custom.evidence().get(0).symbols().contains("declared findByEmail"));
-    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("findById")));
+    assertEquals(4, repositoryFacts.size());
+    SemanticCallFacts.Fact custom = repositoryFacts.stream()
+        .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.CustomRepository#findByEmail(String)", custom.callee());
+    assertTrue(custom.evidence().get(0).symbols().contains("declared findByEmail(String)"));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals("demo.PagingRepository#findById")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findByEmail(String)")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findByEmail(int)")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#helper")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#staticHelper")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRepository")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("MarkerRepository")));
-    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("PagingRepository")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("WildcardRepository")));
   }
 
   /** Keeps fixture IDs stable only when their complete source identity is unique. */

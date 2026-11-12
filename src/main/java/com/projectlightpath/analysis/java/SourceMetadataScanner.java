@@ -166,7 +166,8 @@ final class SourceMetadataScanner {
       "org.springframework.data.repository.ListCrudRepository", "ListCrudRepository",
       "org.springframework.data.repository.ListPagingAndSortingRepository", "ListPagingAndSortingRepository");
   private static final Set<String> SPRING_DATA_FIND_BY_ID_CONTRACTS = Set.of(
-      "CrudRepository", "JpaRepository", "ListCrudRepository");
+      "CrudRepository", "JpaRepository", "PagingAndSortingRepository", "ListCrudRepository",
+      "ListPagingAndSortingRepository");
   private static final List<String> SUPPORTED_HTTP_METHODS =
       List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
@@ -797,14 +798,35 @@ final class SourceMetadataScanner {
     }
     Map<String, RepositoryMethod> result = new LinkedHashMap<>();
     if (SPRING_DATA_FIND_BY_ID_CONTRACTS.contains(contract.get())) {
-      result.put("findById", new RepositoryMethod("findById", true));
+      result.put("findById", new RepositoryMethod("findById", "findById", true));
     }
     for (MethodInfo method : methods(file)) {
-      if (typeContaining(file, method.start()).equals(file.typeName())) {
-        result.putIfAbsent(method.name(), new RepositoryMethod(method.name(), false));
+      if (typeContaining(file, method.start()).equals(file.typeName())
+          && abstractInstanceRepositoryMethod(method)
+          && !method.name().equals("findById")) {
+        RepositoryMethod repositoryMethod = new RepositoryMethod(
+            method.name(), repositoryMethodSignature(method), false);
+        result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
       }
     }
     return List.copyOf(result.values());
+  }
+
+  /** Keeps only abstract instance methods that Spring Data can implement from an interface. */
+  private static boolean abstractInstanceRepositoryMethod(MethodInfo method) {
+    String declaration = maskAnnotationArguments(method.annotationBlock());
+    return !Pattern.compile("(?<![\\w$])(?:default|static|private)(?![\\w$])")
+        .matcher(declaration)
+        .find();
+  }
+
+  /** Creates a stable source-level signature without parameter names for overload identity. */
+  private static String repositoryMethodSignature(MethodInfo method) {
+    List<String> parameterTypes = parameters(method.parameters()).stream()
+        .map(Parameter::type)
+        .map(type -> type.replaceAll("\\s+", " ").trim())
+        .toList();
+    return method.name() + "(" + String.join(",", parameterTypes) + ")";
   }
 
   /** Resolves only known framework types, abstaining on ambiguous or unknown imports. */
@@ -833,6 +855,9 @@ final class SourceMetadataScanner {
           && implementsNamedInterface(file, SPRING_COMMAND_LINE_RUNNER);
       for (MethodInfo method : methods(file)) {
         if (method.hasAnnotation("Bean")) {
+          if (!springBean) {
+            continue;
+          }
           result.add(new LifecycleMethod(
               file,
               method,
@@ -5057,7 +5082,11 @@ final class SourceMetadataScanner {
       String kind,
       List<String> annotationSymbols) {}
 
-  record RepositoryMethod(String name, boolean guaranteed) {}
+  record RepositoryMethod(String name, String signature, boolean guaranteed) {
+    String identity() {
+      return guaranteed ? name : signature;
+    }
+  }
 
   private record AnnotationOccurrence(String arguments, String source) {}
 }

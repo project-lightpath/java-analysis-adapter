@@ -672,18 +672,19 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
       for (SourceMetadataScanner.RepositoryMethod repositoryMethod
           : scanner.springRepositoryMethods(candidate.file())) {
         String methodName = repositoryMethod.name();
-        String id = springRepositoryFactId(scanner, candidates, candidate, methodName);
+        String methodIdentity = repositoryMethod.identity();
+        String id = springRepositoryFactId(scanner, candidates, candidate, methodIdentity);
         List<String> symbols = new ArrayList<>(List.of("extends " + repositoryContract));
         symbols.add(repositoryMethod.guaranteed()
             ? "CrudRepository#" + methodName
-            : "declared " + methodName);
+            : "declared " + methodIdentity);
         symbols.add(methodName);
         facts.add(SemanticCallFacts.Fact.framework(
             id,
             context,
             new SemanticCallFacts.Fact.FrameworkInput(
-                "spring-data-proxy:" + candidate.file().typeName(),
-                candidate.file().typeName() + "#" + methodName,
+              "spring-data-proxy:" + candidate.file().typeName(),
+              candidate.file().typeName() + "#" + methodIdentity,
                 "generated_implementation",
                 certainty,
                 "spring-data-generated-repository",
@@ -695,7 +696,7 @@ abstract class BoundedFrameworkModel implements FrameworkModel {
                     Map.of(
                         "generatedImplementation", "outside application source",
                         "repositoryContract", repositoryContract,
-                        "repositoryMethod", methodName))),
+                        "repositoryMethod", methodIdentity))),
                 "Spring Data implementation and proxy identity are generated outside application source.")));
       }
     }
