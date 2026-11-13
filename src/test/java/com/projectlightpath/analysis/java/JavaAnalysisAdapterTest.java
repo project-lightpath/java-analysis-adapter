@@ -5881,6 +5881,96 @@ class JavaAnalysisAdapterTest {
         .collect(java.util.stream.Collectors.toMap(
             fact -> fact.evidence().get(0).path(), SemanticCallFacts.Fact::id));
     assertEquals(idsByPath, reversedIdsByPath);
+    assertEquals(
+        "sootup-call-88a10203-afba60f10fc1e513906fc938a01324c403094e2e0cbae4df7e5d44009531b8e8",
+        idsByPath.get("src/main/java/demo/First.java"));
+    assertEquals(
+        "sootup-call-88a10203-cca4a53a4171b2d7c08f66caec27d67f17d14db4caa8d8b2a71a744edd30459b",
+        idsByPath.get("src/main/java/demo/Second.java"));
+  }
+
+  /** Keeps an application legacy ID stable when a dependency edge shares its old base. */
+  @Test
+  void dependencyEdgesDoNotStealApplicationLegacyIds() throws IOException {
+    Path sourceRoot = temp.resolve("dependency-identities/src/main/java");
+    write(sourceRoot, "demo/DependencyIdentities.java", "package demo; class DependencyIdentities {}\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of());
+    MethodSymbol caller = new MethodSymbol("demo.DependencyIdentities", "run", "()V");
+    MethodSymbol callee = new MethodSymbol("demo.Target", "call", "()V");
+    CallEdge application = new CallEdge(
+        caller, callee, 4, "src/main/java/demo/Application.java",
+        SemanticCallFacts.Certainty.DEFINITE, "invokes");
+    CallEdge dependency = new CallEdge(
+        caller, callee, 4, "src/main/java/demo/Application.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "invokes",
+        new CallEdge.TargetContext(
+            CallEdge.TargetOrigin.DEPENDENCY,
+            temp.resolve("vulnerable-dependency-1.0.jar").toAbsolutePath().normalize().toString(),
+            "vulnerable/demo/Target.class",
+            ""));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(application, dependency), List.of(), Set.of(), "SootUp", "3.0.1", 1, 2));
+    SemanticCallFacts reversedFacts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(dependency, application), List.of(), Set.of(), "SootUp", "3.0.1", 1, 2));
+    String legacyId = "sootup-call-" + Integer.toHexString(
+        (caller.descriptor() + "->" + callee.descriptor() + "@4").hashCode());
+
+    Map<String, String> idsByOrigin = facts.providerFacts().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            fact -> fact.evidence().get(0).attributes().getOrDefault("targetOrigin", "application"),
+            SemanticCallFacts.Fact::id));
+    Map<String, String> reversedIdsByOrigin = reversedFacts.providerFacts().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            fact -> fact.evidence().get(0).attributes().getOrDefault("targetOrigin", "application"),
+            SemanticCallFacts.Fact::id));
+    assertEquals(legacyId, idsByOrigin.get("application"));
+    assertNotEquals(idsByOrigin.get("application"), idsByOrigin.get("dependency"));
+    assertEquals(idsByOrigin, reversedIdsByOrigin);
+    assertEquals(
+        temp.resolve("vulnerable-dependency-1.0.jar").toAbsolutePath().normalize().toString(),
+        facts.providerFacts().stream()
+            .filter(fact -> fact.evidence().get(0).attributes().containsKey("targetOrigin"))
+            .findFirst()
+            .orElseThrow()
+            .evidence().get(0).attributes().get("dependencyClasspathEntry"));
+  }
+
+  /** Keeps open-world dynamic certainty abstained for dependency-origin graph edges. */
+  @Test
+  void dependencyDynamicEdgesRemainUnresolvedAndAbstained() throws IOException {
+    Path sourceRoot = temp.resolve("dependency-dynamic/src/main/java");
+    write(sourceRoot, "demo/DependencyDynamic.java", "package demo; class DependencyDynamic {}\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of());
+    CallEdge dynamicDependency = new CallEdge(
+        new MethodSymbol("demo.DependencyDynamic", "invoke", "()V"),
+        new MethodSymbol("dependency.Target", "run", "()V"),
+        7,
+        "src/main/java/demo/DependencyDynamic.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "proxy_dispatch",
+        new CallEdge.TargetContext(
+            CallEdge.TargetOrigin.DEPENDENCY,
+            temp.resolve("dependency.jar").toAbsolutePath().normalize().toString(),
+            "dependency/Target.class",
+            ""));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(dynamicDependency), List.of(), Set.of(), "SootUp", "3.0.1", 1, 1));
+
+    SemanticCallFacts.Fact fact = facts.providerFacts().get(0);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, fact.certainty());
+    assertEquals(SemanticCallFacts.Status.ABSTAINED, fact.status());
+    assertEquals("dependency", fact.evidence().get(0).attributes().get("targetOrigin"));
   }
 
   /** Preserves selected build context and generated roots in the serialized run metadata. */
