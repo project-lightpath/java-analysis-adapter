@@ -29,11 +29,11 @@ final class SootUpInputLocationFactory {
     locations.add(new JavaClassPathAnalysisInputLocation(
         context.applicationClasses().toString(), SourceType.Application));
     Map<AnalysisInputLocation, Path> dependencyEntries = new IdentityHashMap<>();
-    Set<Path> dependencyPaths = new LinkedHashSet<>();
-    for (Path dependency : context.dependencyClasspath()) {
-      addDependencyLocations(dependency, locations, dependencyEntries, dependencyPaths);
+    List<Path> resolvedDependencies = resolvedDependencyEntries(context);
+    for (Path dependency : resolvedDependencies) {
+      addDependencyLocation(dependency, locations, dependencyEntries);
     }
-    if (!context.dependencyClasspath().isEmpty() && dependencyEntries.isEmpty()) {
+    if (!context.dependencyClasspath().isEmpty() && resolvedDependencies.isEmpty()) {
       throw new IllegalArgumentException(
           "dependency classpath contains no valid entries for AnalysisContext " + context.id());
     }
@@ -43,23 +43,30 @@ final class SootUpInputLocationFactory {
     return new Inputs(view, dependencyEntries);
   }
 
-  private static void addDependencyLocations(
+  /** Returns the concrete, validated dependency inputs selected by SootUp. */
+  static List<Path> resolvedDependencyEntries(AnalysisContext context) {
+    Set<Path> resolved = new LinkedHashSet<>();
+    for (Path dependency : context.dependencyClasspath()) {
+      for (Path expanded : expandDependencyPath(dependency)) {
+        Path normalized = expanded.toAbsolutePath().normalize();
+        if (isValidInputLocation(normalized)) {
+          resolved.add(normalized);
+        }
+      }
+    }
+    return List.copyOf(resolved);
+  }
+
+  private static void addDependencyLocation(
       Path dependency,
       List<AnalysisInputLocation> locations,
-      Map<AnalysisInputLocation, Path> dependencyEntries,
-      Set<Path> dependencyPaths) {
-    for (Path expanded : expandDependencyPath(dependency)) {
-      Path normalized = expanded.toAbsolutePath().normalize();
-      if (!isValidInputLocation(normalized) || !dependencyPaths.add(normalized)) {
-        continue;
-      }
-      AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
-          normalized,
-          SourceType.Library,
-          BytecodeBodyInterceptors.Default.getBodyInterceptors());
-      locations.add(location);
-      dependencyEntries.put(location, normalized);
-    }
+      Map<AnalysisInputLocation, Path> dependencyEntries) {
+    AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
+        dependency,
+        SourceType.Library,
+        BytecodeBodyInterceptors.Default.getBodyInterceptors());
+    locations.add(location);
+    dependencyEntries.put(location, dependency);
   }
 
   private static boolean isValidInputLocation(Path path) {
