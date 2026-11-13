@@ -149,7 +149,8 @@ final class SourceMetadataScanner {
       "java.lang.reflect.InvocationHandler",
       "java.lang.reflect.Proxy",
       "java.net.URLClassLoader",
-      "java.security.SecureClassLoader");
+      "java.security.SecureClassLoader",
+      "java.util.ServiceLoader");
   private static final Set<String> JAVA_PRIMITIVE_TYPES = Set.of(
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
   private static final Set<String> CDI_PRODUCER_ANNOTATIONS = Set.of(
@@ -369,7 +370,7 @@ final class SourceMetadataScanner {
         .findFirst());
   }
 
-  private Optional<SourceFile> sourceFile(String owner) {
+  Optional<SourceFile> sourceFile(String owner) {
     String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
     return files().stream().filter(file -> file.typeName().equals(topLevel)).findFirst();
   }
@@ -479,7 +480,7 @@ final class SourceMetadataScanner {
   }
 
   /** Resolves a source type with lexical nested-type precedence at one source offset. */
-  private Optional<String> resolveReferenceType(String type, SourceFile sourceFile, int siteOffset) {
+  Optional<String> resolveReferenceType(String type, SourceFile sourceFile, int siteOffset) {
     String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
     if (normalized.endsWith("...")) {
       normalized = normalized.substring(0, normalized.length() - 3) + "[]";
@@ -1530,7 +1531,7 @@ final class SourceMetadataScanner {
     };
   }
 
-  private boolean hasVisibleValueNamed(SourceFile file, String variable, int offset) {
+  boolean hasVisibleValueNamed(SourceFile file, String variable, int offset) {
     MethodInfo owner = methodContaining(file, offset);
     return (!owner.name().equals("<unknown>") && hasParameter(owner, variable))
         || (!owner.name().equals("<unknown>")
@@ -5058,7 +5059,7 @@ final class SourceMetadataScanner {
   }
 
   /** Replaces comments with whitespace without changing source offsets or literals. */
-  private static String stripComments(String source) {
+  static String stripComments(String source) {
     StringBuilder result = new StringBuilder(source.length());
     boolean lineComment = false;
     boolean blockComment = false;
@@ -5140,7 +5141,7 @@ final class SourceMetadataScanner {
   }
 
   /** Masks string and character literal contents while preserving source offsets. */
-  private static String maskStringLiterals(String source) {
+  static String maskStringLiterals(String source) {
     char[] masked = source.toCharArray();
     boolean stringLiteral = false;
     boolean textBlock = false;

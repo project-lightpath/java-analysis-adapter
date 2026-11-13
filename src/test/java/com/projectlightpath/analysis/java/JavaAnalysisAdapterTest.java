@@ -13,6 +13,10 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -5973,6 +5977,711 @@ class JavaAnalysisAdapterTest {
     assertEquals("dependency", fact.evidence().get(0).attributes().get("targetOrigin"));
   }
 
+  /** Preserves concrete callback implementations as bounded provider candidates. */
+  @Test
+  void callbackImplementationEdgesRemainConcretePossibleCandidates() throws IOException {
+    Path sourceRoot = temp.resolve("callback/src/main/java");
+    write(sourceRoot, "demo/CallbackDispatcher.java", """
+        package demo;
+        import java.util.concurrent.CompletableFuture;
+        class CallbackDispatcher {
+          void dispatch(AuthCallback callback) {
+            CompletableFuture.runAsync(() -> callback.onAuthenticated());
+          }
+        }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of());
+    AnalysisGraph graph = new AnalysisGraph(
+        List.of(
+            new CallEdge(
+                new MethodSymbol("demo.CallbackDispatcher", "lambda$dispatch$0", "()V"),
+                new MethodSymbol("demo.FirstCallback", "onAuthenticated", "()V"),
+                5,
+                "src/main/java/demo/CallbackDispatcher.java",
+                SemanticCallFacts.Certainty.POSSIBLE,
+                "callback"),
+            new CallEdge(
+                new MethodSymbol("demo.CallbackDispatcher", "lambda$dispatch$0", "()V"),
+                new MethodSymbol("demo.SecondCallback", "onAuthenticated", "()V"),
+                5,
+                "src/main/java/demo/CallbackDispatcher.java",
+                SemanticCallFacts.Certainty.POSSIBLE,
+                "callback")),
+        List.of(),
+        Set.of("demo.CallbackDispatcher", "demo.FirstCallback", "demo.SecondCallback"),
+        "SootUp",
+        "3.0.1",
+        3,
+        2);
+
+    List<SemanticCallFacts.Fact> callbackFacts = new JavaAnalysisAdapter().analyze(context, graph)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("callback"))
+        .toList();
+
+    assertEquals(2, callbackFacts.size());
+    assertTrue(callbackFacts.stream().anyMatch(item -> item.callee().equals("demo.FirstCallback#onAuthenticated")));
+    assertTrue(callbackFacts.stream().anyMatch(item -> item.callee().equals("demo.SecondCallback#onAuthenticated")));
+    assertTrue(callbackFacts.stream().allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
+    assertTrue(callbackFacts.stream().allMatch(item -> item.evidence().get(0).attributes().get("basis")
+        .equals("SootUp CHA concrete callback implementation edge")));
+  }
+
+  /** Promotes a concrete ServiceLoader edge only when one selected descriptor provider remains. */
+  @Test
+  void uniqueServiceLoaderDescriptorAddsFingerprintAndDefiniteSelection() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-unique/src/main/java");
+    Path resources = sourceRoot.getParent().resolve("resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            String note = "ServiceLoader.load(NotAService.class)";
+            // ServiceLoader.load(CommentOnly.class)
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    write(resources, "META-INF/services/demo.NotAService", "demo.NotProvider\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-unique/resources/META-INF/services")));
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.DefaultAuditProvider", "record", "()V"),
+        7,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.DefaultAuditProvider"),
+            "SootUp", "3.0.1", 2, 1));
+    SemanticCallFacts.Fact serviceFact = facts.providerFacts().get(0);
+    SemanticCallFacts.Evidence descriptor = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, serviceFact.certainty());
+    assertEquals("demo.AuditProvider", descriptor.attributes().get("serviceType"));
+    assertEquals("1", descriptor.attributes().get("providerCount"));
+    assertEquals("unique", descriptor.attributes().get("selection"));
+    assertEquals("31a4cdef3d1e5cdf892ca0dd390a92a8af1e1df891bd420363e48e9c59f13745",
+        descriptor.attributes().get("descriptorFingerprint"));
+    Path output = temp.resolve("service-loader-unique/facts.json");
+    SemanticCallFactsJsonWriter.write(facts, output);
+    assertTrue(Files.readString(output).contains("descriptorFingerprint"));
+    assertTrue(Files.readString(output).contains("31a4cdef3d1e5cdf892ca0dd390a92a8af1e1df891bd420363e48e9c59f13745"));
+
+    SemanticCallFacts unresolvedFacts = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(new CallEdge(
+            new MethodSymbol("demo.Bridge", "lambda$uncertain$0", "()V"),
+            new MethodSymbol("demo.DefaultAuditProvider", "record", "()V"),
+            6,
+            "src/main/java/demo/Bridge.java",
+            SemanticCallFacts.Certainty.UNRESOLVED,
+            "service_loader")),
+            List.of(), Set.of("demo.Bridge", "demo.DefaultAuditProvider"), "SootUp", "3.0.1", 2, 1));
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        unresolvedFacts.providerFacts().get(0).certainty());
+    assertEquals(DynamicCertaintyPolicy.LIMITATION,
+        unresolvedFacts.providerFacts().get(0).limitation());
+  }
+
+  /** Binds descriptor evidence to the owning call site and keeps explicit loaders possible. */
+  @Test
+  void serviceLoaderCallSitesAreExactAndExplicitLoadersRemainPossible() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-call-sites/src/main/java");
+    Path resources = sourceRoot.getParent().resolve("resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void auditDemo() {
+            ServiceLoader.load(demo.AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+          void auditOther() {
+            ServiceLoader.load(other.AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+          void auditWithLoader(ClassLoader loader) {
+            ServiceLoader.load(demo.AuditProvider.class , loader).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultProvider\n");
+    write(resources, "META-INF/services/other.AuditProvider", "other.DefaultProvider\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-call-sites/resources/META-INF/services")));
+
+    CallEdge demoEdge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$auditDemo$0", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        6,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+    CallEdge otherEdge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$auditOther$0", "()V"),
+        new MethodSymbol("other.DefaultProvider", "record", "()V"),
+        10,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+    CallEdge explicitLoaderEdge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$auditWithLoader$0", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        14,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(demoEdge, otherEdge, explicitLoaderEdge),
+        List.of(),
+        Set.of("demo.Bridge", "demo.DefaultProvider", "other.DefaultProvider"),
+        "SootUp",
+        "3.0.1",
+        3,
+        3));
+
+    SemanticCallFacts.Fact demoFact = facts.providerFacts().stream()
+        .filter(item -> item.caller().equals("demo.Bridge#lambda$auditDemo$0"))
+        .findFirst()
+        .orElseThrow();
+    SemanticCallFacts.Fact otherFact = facts.providerFacts().stream()
+        .filter(item -> item.caller().equals("demo.Bridge#lambda$auditOther$0"))
+        .findFirst()
+        .orElseThrow();
+    SemanticCallFacts.Fact explicitLoaderFact = facts.providerFacts().stream()
+        .filter(item -> item.caller().equals("demo.Bridge#lambda$auditWithLoader$0"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, demoFact.certainty());
+    assertEquals("demo.AuditProvider", descriptorServiceType(demoFact));
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, otherFact.certainty());
+    assertEquals("other.AuditProvider", descriptorServiceType(otherFact));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, explicitLoaderFact.certainty());
+    SemanticCallFacts.Evidence explicitResolution = explicitLoaderFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_resolution"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("explicit", explicitResolution.attributes().get("classLoaderSelection"));
+    assertEquals("true", explicitResolution.attributes().get("callSiteBound"));
+    assertTrue(explicitLoaderFact.limitation().contains("explicit classloader"));
+  }
+
+  /** Resolves a simple service type through an unambiguous wildcard import. */
+  @Test
+  void serviceLoaderServiceTypeUsesWildcardImportResolution() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-scope/src/main/java");
+    Path resources = sourceRoot.getParent().resolve("resources");
+    write(sourceRoot, "app/Bridge.java", """
+        package app;
+        import java.util.ServiceLoader;
+        import contracts.*;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(sourceRoot, "contracts/AuditProvider.java", """
+        package contracts;
+        interface AuditProvider { void record(); }
+        """);
+    write(resources, "META-INF/services/contracts.AuditProvider", "app.DefaultProvider\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-scope/resources/META-INF/services")));
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("app.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("app.DefaultProvider", "record", "()V"),
+        7,
+        "src/main/java/app/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact fact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("app.Bridge", "app.DefaultProvider"),
+            "SootUp", "3.0.1", 1, 1)).providerFacts().get(0);
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty());
+    assertEquals("contracts.AuditProvider", descriptorServiceType(fact));
+  }
+
+  /** Abstains when wildcard imports leave the ServiceLoader receiver ambiguous. */
+  @Test
+  void ambiguousWildcardServiceLoaderImportsRemainUnbound() {
+    String source = """
+        package demo;
+        import java.util.*;
+        import other.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(AuditProvider.class); }
+        }
+        """;
+
+    assertTrue(ServiceLoaderCallSiteParser.parse(source).isEmpty());
+  }
+
+  /** Keeps ServiceLoader certainty possible when selected descriptors expose multiple providers. */
+  @Test
+  void ambiguousServiceLoaderDescriptorsRemainPossibleWithAllProviderEvidence() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-ambiguous/src/main/java");
+    Path first = temp.resolve("service-loader-ambiguous/first");
+    Path second = temp.resolve("service-loader-ambiguous/second");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import demo.AuditProvider;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(first, "META-INF/services/demo.AuditProvider", "demo.FirstProvider\n");
+    write(second, "META-INF/services/demo.AuditProvider", "demo.SecondProvider\n");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("service-loader-ambiguous/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(first, second))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.FirstProvider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.FirstProvider"),
+            "SootUp", "3.0.1", 2, 1)).providerFacts().get(0);
+    List<SemanticCallFacts.Evidence> descriptors = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .toList();
+    SemanticCallFacts.Evidence resolution = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_resolution"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, serviceFact.certainty());
+    assertEquals(2, descriptors.size());
+    assertEquals("2", resolution.attributes().get("providerCount"));
+    assertEquals("ambiguous", resolution.attributes().get("selection"));
+    assertTrue(descriptors.stream().allMatch(item -> item.attributes().get("serviceType").equals("demo.AuditProvider")));
+  }
+
+  /** Does not promote duplicate descriptor sources when they name the same provider. */
+  @Test
+  void duplicateServiceLoaderDescriptorsRemainPossibleWithSameProvider() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-duplicate/src/main/java");
+    Path first = temp.resolve("service-loader-duplicate/first");
+    Path second = temp.resolve("service-loader-duplicate/second");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(first, "META-INF/services/demo.AuditProvider", "demo.FirstProvider\n");
+    write(second, "META-INF/services/demo.AuditProvider", "demo.FirstProvider\n");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("service-loader-duplicate/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(first, second))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.FirstProvider", "record", "()V"),
+        6,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.FirstProvider"),
+            "SootUp", "3.0.1", 2, 1)).providerFacts().get(0);
+    List<SemanticCallFacts.Evidence> descriptors = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .toList();
+    SemanticCallFacts.Evidence resolution = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_resolution"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, serviceFact.certainty());
+    assertEquals(2, descriptors.size());
+    assertEquals("1", resolution.attributes().get("providerCount"));
+    assertEquals("2", resolution.attributes().get("descriptorCount"));
+    assertEquals("ambiguous", resolution.attributes().get("selection"));
+    assertEquals(2, descriptors.stream().map(SemanticCallFacts.Evidence::path).distinct().count());
+  }
+
+  /** Does not use descriptor evidence from an unselected classpath entry. */
+  @Test
+  void serviceLoaderWithoutSelectedDescriptorRemainsPossibleAndReportsMissingEvidence() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-filtered/src/main/java");
+    Path unselected = temp.resolve("service-loader-filtered/unselected");
+    Path selected = temp.resolve("service-loader-filtered/selected");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(demo.AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(unselected, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    Files.createDirectories(selected);
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("service-loader-filtered/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(selected))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.DefaultAuditProvider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.DefaultAuditProvider"),
+            "SootUp", "3.0.1", 2, 1)).providerFacts().get(0);
+    SemanticCallFacts.Evidence resolution = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_resolution"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, serviceFact.certainty());
+    assertEquals("not_observed", resolution.attributes().get("descriptorStatus"));
+    assertTrue(serviceFact.evidence().stream()
+        .noneMatch(item -> item.kind().equals("service_loader_descriptor")));
+  }
+
+  /** Reads ServiceLoader descriptors from selected dependency archives. */
+  @Test
+  void selectedJarServiceDescriptorPreservesArchiveEvidence() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-jar/src/main/java");
+    Path jar = temp.resolve("service-loader-jar/provider.jar");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    Files.createDirectories(jar.getParent());
+    try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar))) {
+      output.putNextEntry(new JarEntry("META-INF/services/demo.AuditProvider"));
+      output.write("demo.JarProvider\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("service-loader-jar/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(jar))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.JarProvider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.JarProvider"),
+            "SootUp", "3.0.1", 2, 1)).providerFacts().get(0);
+    SemanticCallFacts.Evidence descriptor = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, serviceFact.certainty());
+    assertTrue(descriptor.path().contains("provider.jar!/META-INF/services/demo.AuditProvider"));
+    assertEquals("meta_inf_services", descriptor.attributes().get("descriptorKind"));
+    assertEquals("7b370796c5f2923794845eea2bd395e8bec8995699d7432662ec4c346f053af3",
+        descriptor.attributes().get("descriptorFingerprint"));
+  }
+
+  /** Downgrades oversized descriptors instead of reading unbounded metadata into memory. */
+  @Test
+  void oversizedServiceLoaderMetadataRemainsPossibleWithDiagnostics() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-oversized/src/main/java");
+    Path resources = sourceRoot.getParent().resolve("resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider",
+        "demo.Provider\n" + "x".repeat(ServiceLoaderDescriptorSource.MAX_DESCRIPTOR_BYTES));
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS, sourceRoot, null, List.of());
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.Provider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact fact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.Provider"),
+            "SootUp", "3.0.1", 1, 1)).providerFacts().get(0);
+    SemanticCallFacts.Evidence resolution = fact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_resolution"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty());
+    assertEquals("incomplete", resolution.attributes().get("scanStatus"));
+    assertTrue(resolution.attributes().get("scanDiagnostics").contains("descriptor_too_large"));
+    assertTrue(fact.evidence().stream()
+        .anyMatch(item -> item.kind().equals("service_loader_scan_diagnostic")
+            && item.attributes().get("diagnosticCode").equals("descriptor_too_large")));
+    assertTrue(fact.limitation().contains("descriptor_too_large"));
+  }
+
+  /** Rejects oversized archive entries before decompression can allocate them. */
+  @Test
+  void oversizedArchiveServiceDescriptorRemainsPossibleWithDiagnostics() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-oversized-jar/src/main/java");
+    Path classes = temp.resolve("service-loader-oversized-jar/classes");
+    Path jar = temp.resolve("service-loader-oversized-jar/provider.jar");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    Files.createDirectories(classes);
+    Files.createDirectories(jar.getParent());
+    try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar))) {
+      output.putNextEntry(new JarEntry("META-INF/services/demo.AuditProvider"));
+      output.write(("demo.Provider\n"
+          + "x".repeat((int) ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRY_BYTES))
+          .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("service-loader-oversized-jar/application-classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(jar))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.Provider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact fact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.Provider"),
+            "SootUp", "3.0.1", 1, 1)).providerFacts().get(0);
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty());
+    assertTrue(fact.evidence().stream()
+        .anyMatch(item -> item.kind().equals("service_loader_scan_diagnostic")
+            && item.attributes().get("diagnosticCode").equals("archive_entry_too_large")));
+  }
+
+  /** Reads module-info provides declarations as bounded ServiceLoader evidence. */
+  @Test
+  void moduleInfoServiceProviderIsFingerprintAndSelected() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-module/src/main/java");
+    Path moduleSource = temp.resolve("service-loader-module/module-src");
+    Path classes = temp.resolve("service-loader-module/classes");
+    Path applicationClasses = temp.resolve("service-loader-module/application-classes");
+    Path jar = temp.resolve("service-loader-module/provider.jar");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(moduleSource, "module-info.java", """
+        module demo.module {
+          provides demo.AuditProvider with demo.ModuleProvider;
+        }
+        """);
+    write(moduleSource, "demo/AuditProvider.java", """
+        package demo;
+        public interface AuditProvider { void record(); }
+        """);
+    write(moduleSource, "demo/ModuleProvider.java", """
+        package demo;
+        public class ModuleProvider implements AuditProvider {
+          public ModuleProvider() { }
+          public void record() { }
+        }
+        """);
+    Files.createDirectories(classes);
+    Files.createDirectories(applicationClasses);
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assertNotNull(compiler);
+    assertEquals(0, compiler.run(
+        null,
+        null,
+        null,
+        "-d",
+        classes.toString(),
+        moduleSource.resolve("module-info.java").toString(),
+        moduleSource.resolve("demo/AuditProvider.java").toString(),
+        moduleSource.resolve("demo/ModuleProvider.java").toString()));
+    Files.createDirectories(jar.getParent());
+    try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar))) {
+      for (String entryName : List.of("module-info.class", "demo/AuditProvider.class", "demo/ModuleProvider.class")) {
+        output.putNextEntry(new JarEntry(entryName));
+        output.write(Files.readAllBytes(classes.resolve(entryName)));
+        output.closeEntry();
+      }
+    }
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(applicationClasses)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(jar))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.ModuleProvider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.ModuleProvider"),
+            "SootUp", "3.0.1", 2, 1)).providerFacts().get(0);
+    SemanticCallFacts.Evidence descriptor = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, serviceFact.certainty());
+    assertEquals("module_info", descriptor.attributes().get("descriptorKind"));
+    assertEquals("module-info provides declaration", descriptor.attributes().get("basis"));
+    assertTrue(descriptor.attributes().get("descriptorFingerprint").matches("[0-9a-f]{64}"));
+  }
+
   /** Preserves selected build context and generated roots in the serialized run metadata. */
   @Test
   void runMetadataFactoryPreservesProfileScopeRootsFingerprintsAndLimitations() throws IOException {
@@ -6134,6 +6843,15 @@ class JavaAnalysisAdapterTest {
   /** Finds a framework fact by stable ID. */
   private static SemanticCallFacts.Fact fact(List<SemanticCallFacts.Fact> facts, String id) {
     return facts.stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
+  }
+
+  private static String descriptorServiceType(SemanticCallFacts.Fact fact) {
+    return fact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow()
+        .attributes()
+        .get("serviceType");
   }
 
   /** Finds a route fact by callee identity. */
