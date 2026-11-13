@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -55,6 +56,90 @@ class ServiceLoaderDescriptorSourceTest {
     assertTrue(state.diagnostics().stream()
         .anyMatch(item -> item.code().equals("service_directory_entry_limit")));
     assertTrue(descriptors.size() <= ServiceLoaderDescriptorSource.MAX_SERVICE_DIRECTORY_ENTRIES);
+  }
+
+  @Test
+  void descriptorPathsOutsideInputsAndSymlinksAreRejected() throws IOException {
+    Path trusted = temp.resolve("trusted");
+    Path external = temp.resolve("external");
+    Path externalDescriptor = external.resolve("demo.AuditProvider");
+    Path directory = trusted.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
+    Files.createDirectories(directory);
+    Files.createDirectories(external);
+    Files.writeString(externalDescriptor, "secret.Provider\n");
+
+    Path externalDirectory = external.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
+    Files.createDirectories(externalDirectory);
+    Files.writeString(externalDirectory.resolve("demo.OtherProvider"), "other.Provider\n");
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState(List.of(trusted));
+
+    ServiceLoaderDescriptorSource.scanServiceDirectory(
+        externalDirectory, "external", descriptors, new HashSet<>(), state);
+    assertTrue(descriptors.isEmpty());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_path_outside_inputs")));
+
+    Path symlink = directory.resolve("demo.AuditProvider");
+    try {
+      Files.createSymbolicLink(symlink, externalDescriptor);
+    } catch (UnsupportedOperationException error) {
+      Assumptions.assumeTrue(false, "symbolic links are not supported");
+    }
+    ServiceLoaderDescriptorSource.scanServiceDirectory(
+        directory, "trusted", descriptors, new HashSet<>(), state);
+    assertTrue(descriptors.isEmpty());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_symlink_rejected")));
+  }
+
+  @Test
+  void descriptorReaderRestrictsMetadataAndResourcePaths() throws IOException {
+    Path repository = temp.resolve("repository");
+    Path sourceRoot = repository.resolve("src/main/java");
+    Path resources = repository.resolve("src/main/resources")
+        .resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
+    Path externalServices = temp.resolve("external/META-INF/services");
+    Path externalDescriptor = temp.resolve("external/secret-provider");
+    Files.createDirectories(sourceRoot);
+    Files.createDirectories(repository.resolve("classes"));
+    Files.createDirectories(resources);
+    Files.createDirectories(externalServices);
+    Files.writeString(externalDescriptor, "secret.Provider\n");
+    Files.writeString(externalServices.resolve("demo.ExternalProvider"), "external.Provider\n");
+    try {
+      Files.createSymbolicLink(resources.resolve("demo.InternalProvider"), externalDescriptor);
+    } catch (UnsupportedOperationException error) {
+      Assumptions.assumeTrue(false, "symbolic links are not supported");
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(repository)
+        .applicationClasses(repository.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "external-service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            externalServices.toString()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+    assertTrue(scan.descriptors().isEmpty());
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_path_outside_inputs")));
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_symlink_rejected")));
   }
 
   @Test
@@ -154,5 +239,28 @@ class ServiceLoaderDescriptorSourceTest {
 
     assertEquals(1, descriptors.size());
     assertEquals(List.of("demo.Provider"), descriptors.get(0).providers());
+  }
+
+  @Test
+  void archiveDecompressionBudgetStopsBeforeReadingLaterEntries() throws IOException {
+    Path archive = temp.resolve("bounded-work.jar");
+    String contents = "demo.Provider\n";
+    try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 2; index++) {
+        output.putNextEntry(new JarEntry("META-INF/services/demo.Service" + index));
+        output.write(contents.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        output.closeEntry();
+      }
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState(List.of(), contents.length());
+
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        archive, descriptors, new HashSet<>(), state);
+
+    assertEquals(1, descriptors.size());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")));
   }
 }

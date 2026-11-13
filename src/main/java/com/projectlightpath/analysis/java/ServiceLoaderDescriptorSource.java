@@ -1,26 +1,18 @@
 package com.projectlightpath.analysis.java;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.module.InvalidModuleDescriptorException;
 import java.lang.module.ModuleDescriptor;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Stream;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
-import java.util.zip.ZipFile;
 
 /** Reads descriptor files, archives, and module provider declarations. */
 final class ServiceLoaderDescriptorSource {
@@ -51,10 +43,12 @@ final class ServiceLoaderDescriptorSource {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ScanState state) {
-    if (Files.isDirectory(entry)) {
-      scanClassDirectory(entry, entry.toString(), descriptors, visited, state);
-    } else if (Files.isRegularFile(entry)) {
-      ServiceLoaderDescriptorArchiveSource.scan(entry, descriptors, state);
+    if (state.acceptPath(entry)) {
+      if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
+        scanClassDirectory(entry, entry.toString(), descriptors, visited, state);
+      } else if (Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) {
+        ServiceLoaderDescriptorArchiveSource.scan(entry, descriptors, state);
+      }
     }
   }
 
@@ -72,11 +66,13 @@ final class ServiceLoaderDescriptorSource {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ScanState state) {
-    if (!Files.isDirectory(root)) {
+    Path normalized = root.toAbsolutePath().normalize();
+    if (!state.acceptPath(normalized)
+        || !Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
-    scanServiceDirectory(root.resolve(SERVICES_DIRECTORY), label, descriptors, visited, state);
-    scanModuleFile(root.resolve(MODULE_INFO), label, descriptors, visited, state);
+    scanServiceDirectory(normalized.resolve(SERVICES_DIRECTORY), label, descriptors, visited, state);
+    scanModuleFile(normalized.resolve(MODULE_INFO), label, descriptors, visited, state);
   }
 
   static void scanServiceDirectory(
@@ -94,12 +90,16 @@ final class ServiceLoaderDescriptorSource {
       Set<String> visited,
       ScanState state) {
     Path normalized = directory.toAbsolutePath().normalize();
-    if (!Files.isDirectory(normalized) || !visited.add("services:" + normalized)) {
+    if (!state.acceptPath(normalized)
+        || !Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)
+        || !visited.add("services:" + normalized)) {
       return;
     }
     List<Path> paths;
     try (var directoryPaths = Files.list(normalized)) {
-      List<Path> bounded = directoryPaths.filter(Files::isRegularFile)
+      List<Path> bounded = directoryPaths.filter(path ->
+              Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                  || Files.isSymbolicLink(path))
           .limit(MAX_SERVICE_DIRECTORY_ENTRIES + 1L)
           .toList();
       if (bounded.size() > MAX_SERVICE_DIRECTORY_ENTRIES) {
@@ -132,7 +132,7 @@ final class ServiceLoaderDescriptorSource {
       ScanState state,
       Set<String> visited) {
     Path normalized = path.toAbsolutePath().normalize();
-    if (!visited.add("descriptor:" + normalized)) {
+    if (!state.acceptPath(normalized) || !visited.add("descriptor:" + normalized)) {
       return;
     }
     byte[] bytes = ServiceLoaderDescriptorArchiveSource.readFile(
@@ -157,7 +157,9 @@ final class ServiceLoaderDescriptorSource {
       Set<String> visited,
       ScanState state) {
     Path normalized = path.toAbsolutePath().normalize();
-    if (!Files.isRegularFile(normalized) || !visited.add("module:" + normalized)) {
+    if (!state.acceptPath(normalized)
+        || !Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)
+        || !visited.add("module:" + normalized)) {
       return;
     }
     byte[] bytes = ServiceLoaderDescriptorArchiveSource.readFile(
@@ -219,9 +221,71 @@ final class ServiceLoaderDescriptorSource {
   record ProviderEntries(List<String> providers, List<String> malformedEntries) {}
 
   static final class ScanState {
+    private final List<Path> authorizedRoots;
+    private final long maxDecompressedBytes;
     private final List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics = new ArrayList<>();
     private int archives;
     private long decompressedBytes;
+
+    ScanState() {
+      this(List.of());
+    }
+
+    ScanState(List<Path> authorizedRoots) {
+      this(authorizedRoots, MAX_ARCHIVE_DECOMPRESSED_BYTES);
+    }
+
+    ScanState(List<Path> authorizedRoots, long maxDecompressedBytes) {
+      if (maxDecompressedBytes <= 0) {
+        throw new IllegalArgumentException("maximum decompressed bytes must be positive");
+      }
+      this.authorizedRoots = authorizedRoots.stream()
+          .map(path -> path.toAbsolutePath().normalize())
+          .distinct()
+          .toList();
+      this.maxDecompressedBytes = maxDecompressedBytes;
+    }
+
+    boolean acceptPath(Path path) {
+      Path normalized = path.toAbsolutePath().normalize();
+      if (!authorizedRoots.isEmpty()
+          && authorizedRoots.stream().noneMatch(normalized::startsWith)) {
+        diagnostic(
+            "descriptor_path_outside_inputs", normalized.toString(),
+            "descriptor path is outside selected analysis inputs");
+        return false;
+      }
+      if (containsSymbolicLink(normalized)) {
+        diagnostic(
+            "descriptor_symlink_rejected", normalized.toString(),
+            "descriptor path contains a symbolic link");
+        return false;
+      }
+      return true;
+    }
+
+    private boolean containsSymbolicLink(Path path) {
+      if (authorizedRoots.isEmpty()) {
+        return Files.isSymbolicLink(path);
+      }
+      return authorizedRoots.stream()
+          .filter(path::startsWith)
+          .anyMatch(root -> containsSymbolicLinkBelow(root, path));
+    }
+
+    private static boolean containsSymbolicLinkBelow(Path root, Path path) {
+      Path current = root;
+      if (Files.isSymbolicLink(current)) {
+        return true;
+      }
+      for (Path component : root.relativize(path)) {
+        current = current.resolve(component);
+        if (Files.isSymbolicLink(current)) {
+          return true;
+        }
+      }
+      return false;
+    }
 
     boolean reserveArchive(Path archive) {
       if (archives >= MAX_ARCHIVES) {
@@ -234,14 +298,26 @@ final class ServiceLoaderDescriptorSource {
     }
 
     boolean reserveDecompressed(long bytes, String path) {
-      if (bytes > MAX_ARCHIVE_DECOMPRESSED_BYTES - decompressedBytes) {
+      return consumeDecompressed(bytes, path);
+    }
+
+    boolean consumeDecompressed(long bytes, String path) {
+      if (bytes < 0 || bytes > maxDecompressedBytes - decompressedBytes) {
         diagnostic(
             "archive_decompression_limit", path,
-            "archive decompression exceeds " + MAX_ARCHIVE_DECOMPRESSED_BYTES + " bytes");
+            "archive decompression exceeds " + maxDecompressedBytes + " bytes");
         return false;
       }
       decompressedBytes += bytes;
       return true;
+    }
+
+    long remainingDecompressed() {
+      return maxDecompressedBytes - decompressedBytes;
+    }
+
+    boolean hasDecompressedBudget() {
+      return remainingDecompressed() > 0;
     }
 
     void diagnostic(String code, String path, String detail) {

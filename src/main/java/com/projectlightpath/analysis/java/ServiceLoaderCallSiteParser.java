@@ -30,13 +30,14 @@ final class ServiceLoaderCallSiteParser {
       if (!isJavaServiceLoader(matcher.group(1), imports)) {
         continue;
       }
+      String rawServiceType = matcher.group(2);
       result.add(new ServiceLoaderCallSite(
-          matcher.group(1),
-          resolveServiceType(matcher.group(2), packageName, imports),
-          requiresServiceTypeResolution(matcher.group(2), imports),
-          hasExplicitClassLoader(sourceText, matcher.end()),
-          matcher.start(),
-          lineAt(sourceText, matcher.start())));
+           matcher.group(1),
+           rawServiceType,
+           fallbackServiceType(rawServiceType, packageName, imports),
+           hasExplicitClassLoader(sourceText, matcher.end()),
+           matcher.start(),
+           lineAt(sourceText, matcher.start())));
     }
     return List.copyOf(result);
   }
@@ -88,7 +89,7 @@ final class ServiceLoaderCallSiteParser {
     return new Imports(Map.copyOf(exact), Set.copyOf(wildcards));
   }
 
-  private static String resolveServiceType(
+  private static String fallbackServiceType(
       String raw, String packageName, Imports imports) {
     if (raw.contains(".")) {
       return raw;
@@ -100,12 +101,6 @@ final class ServiceLoaderCallSiteParser {
       return raw;
     }
     return packageName.isBlank() ? raw : packageName + "." + raw;
-  }
-
-  private static boolean requiresServiceTypeResolution(String raw, Imports imports) {
-    return !raw.contains(".")
-        && !imports.exact().containsKey(raw)
-        && imports.wildcards().stream().anyMatch(item -> !item.equals("java.util"));
   }
 
   private static String match(Pattern pattern, String value) {

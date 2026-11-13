@@ -1,7 +1,7 @@
 package com.projectlightpath.analysis.java;
 
-import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,11 +17,13 @@ final class ServiceLoaderDescriptorReader {
   static ServiceLoaderDescriptorScanner.Scan scan(AnalysisContext context) {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
-    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    List<Path> dependencyEntries = SootUpInputLocationFactory.resolvedDependencyEntries(context);
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState(authorizedRoots(context, dependencyEntries));
     scanApplicationOutput(context, descriptors, visited, state);
     scanSourceResources(context, descriptors, visited, state);
     scanFrameworkMetadata(context, descriptors, visited, state);
-    scanDependencies(context, descriptors, visited, state);
+    scanDependencies(dependencyEntries, descriptors, visited, state);
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path)
         .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::kind)
         .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::serviceType));
@@ -81,7 +83,7 @@ final class ServiceLoaderDescriptorReader {
     Path resolved = declared.isAbsolute()
         ? declared.normalize()
         : context.repositoryRoot().resolve(declared).normalize();
-    if (Files.isRegularFile(resolved)) {
+    if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
       scanMetadataFile(context, resolved, descriptors, visited, state);
       return;
     }
@@ -122,13 +124,29 @@ final class ServiceLoaderDescriptorReader {
   }
 
   private static void scanDependencies(
-      AnalysisContext context,
+      List<Path> dependencyEntries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ServiceLoaderDescriptorSource.ScanState state) {
-    for (Path entry : SootUpInputLocationFactory.resolvedDependencyEntries(context)) {
+    for (Path entry : dependencyEntries) {
       ServiceLoaderDescriptorSource.scanClasspathEntry(entry, descriptors, visited, state);
     }
+  }
+
+  private static List<Path> authorizedRoots(
+      AnalysisContext context, List<Path> dependencyEntries) {
+    List<Path> roots = new ArrayList<>();
+    roots.add(context.repositoryRoot());
+    roots.add(context.applicationClasses());
+    roots.addAll(dependencyEntries);
+    for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
+      roots.add(root.path());
+      Path parent = root.path().getParent();
+      if (parent != null) {
+        roots.add(parent.resolve("resources"));
+      }
+    }
+    return roots.stream().map(path -> path.toAbsolutePath().normalize()).distinct().toList();
   }
 
   static String displayPath(AnalysisContext context, Path path) {

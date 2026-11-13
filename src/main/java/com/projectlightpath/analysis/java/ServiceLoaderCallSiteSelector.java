@@ -35,12 +35,11 @@ final class ServiceLoaderCallSiteSelector {
   }
 
   static Selection select(
-      AnalysisContext context,
       CallEdge edge,
       String sourceText,
-      List<ServiceLoaderCallSite> sites) {
-    Optional<String> methodSource = new SourceMetadataScanner(context)
-        .methodSource(edge.caller(), edge.line());
+      List<ServiceLoaderCallSite> sites,
+      SourceMetadataScanner scanner) {
+    Optional<String> methodSource = scanner.methodSource(edge.caller(), edge.line());
     if (methodSource.isEmpty()) {
       return Selection.empty();
     }

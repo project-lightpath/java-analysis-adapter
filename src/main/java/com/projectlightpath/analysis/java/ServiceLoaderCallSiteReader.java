@@ -28,7 +28,7 @@ final class ServiceLoaderCallSiteReader {
     List<ServiceLoaderCallSite> sites = javaServiceLoaderSites(
         context, edge.caller(), sourceText, scanner);
     ServiceLoaderCallSiteSelector.Selection selection = ServiceLoaderCallSiteSelector.select(
-        context, edge, sourceText, sites);
+        edge, sourceText, sites, scanner);
     List<ServiceLoaderCallSite> selected = selection.sites();
     if (selected.isEmpty()) {
       return ServiceLoadHints.empty();
@@ -110,11 +110,32 @@ final class ServiceLoaderCallSiteReader {
 
   private static Optional<String> resolveServiceType(
       SourceMetadataScanner scanner, MethodSymbol caller, ServiceLoaderCallSite site) {
-    if (!site.serviceTypeRequiresResolution()) {
-      return Optional.of(site.serviceType());
-    }
     return scanner.sourceFile(caller.owner())
-        .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()));
+        .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()))
+        .or(() -> resolveLexicalNestedType(scanner, caller, site))
+        .or(() -> Optional.of(site.fallbackServiceType()));
+  }
+
+  private static Optional<String> resolveLexicalNestedType(
+      SourceMetadataScanner scanner, MethodSymbol caller, ServiceLoaderCallSite site) {
+    String spelling = site.serviceType();
+    if (!spelling.contains(".")) {
+      return Optional.empty();
+    }
+    String nestedSpelling = spelling.replace('.', '$');
+    String owner = caller.owner();
+    while (!owner.isBlank()) {
+      String candidate = owner + "$" + nestedSpelling;
+      if (scanner.files().stream().anyMatch(file -> file.typeName().equals(candidate))) {
+        return Optional.of(candidate);
+      }
+      int separator = owner.lastIndexOf('$');
+      if (separator < 0) {
+        break;
+      }
+      owner = owner.substring(0, separator);
+    }
+    return Optional.empty();
   }
 
   private static boolean explicitClassLoaderOnSites(List<ServiceLoaderCallSite> sites) {

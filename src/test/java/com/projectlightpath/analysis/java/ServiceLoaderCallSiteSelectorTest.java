@@ -55,6 +55,30 @@ class ServiceLoaderCallSiteSelectorTest {
     ServiceLoaderCallSite siblingSite = ServiceLoaderCallSiteParser.parse(siblingArgument).get(0);
     assertFalse(ServiceLoaderCallSiteSelector.hasCallOnStatement(
         siblingArgument, siblingSite.line(), "record", List.of(siblingSite), ignored -> true));
+
+    String controlFlowSibling = "if (java.util.ServiceLoader.load(AuditProvider.class)"
+        + ".findFirst().isPresent()) other.record();";
+    ServiceLoaderCallSite controlFlowSite = ServiceLoaderCallSiteParser.parse(controlFlowSibling).get(0);
+    assertFalse(ServiceLoaderCallSiteSelector.hasCallOnStatement(
+        controlFlowSibling, controlFlowSite.line(), "record", List.of(controlFlowSite), ignored -> true));
+  }
+
+  @Test
+  void statementMatchingAllowsBlockLambdaTargets() {
+    String source = """
+        class Bridge {
+          void audit() {
+            java.util.ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> {
+                  provider.record();
+                });
+          }
+        }
+        """;
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSelector.hasCallOnStatement(
+        source, site.line() + 2, "record", List.of(site), ignored -> true));
   }
 
   @Test
@@ -73,29 +97,29 @@ class ServiceLoaderCallSiteSelectorTest {
     AnalysisContext context = context(sourceRoot);
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
     int callLine = sites.get(0).line();
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
 
     ServiceLoaderCallSiteSelector.Selection statement = ServiceLoaderCallSiteSelector.select(
-        context, edge(callLine), source, sites);
+        edge(callLine), source, sites, scanner);
     assertEquals(List.of(sites.get(0)), statement.sites());
     assertTrue(statement.statementScoped());
     assertTrue(statement.uniquelyBound());
 
     ServiceLoaderCallSiteSelector.Selection beforeCall = ServiceLoaderCallSiteSelector.select(
-        context, edge(callLine - 1), source, sites);
+        edge(callLine - 1), source, sites, scanner);
     assertEquals(List.of(sites.get(0)), beforeCall.sites());
     assertFalse(beforeCall.statementScoped());
     assertFalse(beforeCall.uniquelyBound());
 
     ServiceLoaderCallSiteSelector.Selection unknownLine = ServiceLoaderCallSiteSelector.select(
-        context, edge(-1), source, sites);
+        edge(-1), source, sites, scanner);
     assertEquals(List.of(sites.get(0)), unknownLine.sites());
     assertFalse(unknownLine.statementScoped());
     assertFalse(unknownLine.uniquelyBound());
 
     assertTrue(ServiceLoaderCallSiteSelector.select(
-        context, edge(callLine), source, List.of()).sites().isEmpty());
+        edge(callLine), source, List.of(), scanner).sites().isEmpty());
     assertTrue(ServiceLoaderCallSiteSelector.select(
-        context,
         new CallEdge(
             new MethodSymbol("demo.Missing", "audit", "()V"),
             edge(callLine).callee(),
@@ -104,14 +128,47 @@ class ServiceLoaderCallSiteSelectorTest {
             SemanticCallFacts.Certainty.POSSIBLE,
             "service_loader"),
         source,
-        sites).sites().isEmpty());
+        sites,
+        scanner).sites().isEmpty());
+  }
+
+  @Test
+  void resolvesLexicalNestedServiceTypesBeforeFallbackQualification() throws IOException {
+    Path sourceRoot = temp.resolve("nested-types/src/main/java");
+    String source = """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          interface AuditProvider {}
+          void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+            ServiceLoader.load(Outer.Service.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """;
+    write(sourceRoot, "demo/Bridge.java", source);
+    write(sourceRoot, "demo/Outer.java", "package demo; interface Outer { interface Service {} }\n");
+    AnalysisContext context = context(sourceRoot);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
+
+    assertEquals(List.of("AuditProvider", "Outer.Service"),
+        sites.stream().map(ServiceLoaderCallSite::serviceType).toList());
+    SourceMetadataScanner.SourceFile file = scanner.sourceFile("demo.Bridge").orElseThrow();
+    assertEquals("demo.Bridge$AuditProvider",
+        scanner.resolveReferenceType(sites.get(0).serviceType(), file, sites.get(0).offset()).orElseThrow());
+    assertEquals("demo.Outer$Service",
+        scanner.resolveReferenceType(sites.get(1).serviceType(), file, sites.get(1).offset()).orElseThrow());
+
   }
 
   @Test
   void malformedSourcePositionsDoNotCreateMatches() {
     String malformed = "java.util.ServiceLoader.load(AuditProvider.class";
     ServiceLoaderCallSite malformedSite = new ServiceLoaderCallSite(
-        "java.util.ServiceLoader", "AuditProvider", false, false,
+        "java.util.ServiceLoader", "AuditProvider", "AuditProvider", false,
         malformed.indexOf("load"), 1);
     assertFalse(ServiceLoaderCallSiteSelector.hasCallOnStatement(
         malformed, 1, "record", List.of(malformedSite), ignored -> true));

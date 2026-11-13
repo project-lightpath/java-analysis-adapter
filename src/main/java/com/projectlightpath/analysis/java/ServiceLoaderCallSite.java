@@ -4,7 +4,7 @@ package com.projectlightpath.analysis.java;
 record ServiceLoaderCallSite(
     String receiver,
     String serviceType,
-    boolean serviceTypeRequiresResolution,
+    String fallbackServiceType,
     boolean explicitClassLoader,
     int offset,
     int line) {}

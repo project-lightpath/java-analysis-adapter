@@ -5,6 +5,8 @@ import java.util.regex.Pattern;
 
 /** Source-position and lexical checks used to correlate ServiceLoader call sites. */
 final class ServiceLoaderCallSiteSource {
+  private static final String EXPRESSION_BOUNDARIES = ",;)]}?=+-*/%";
+
   private ServiceLoaderCallSiteSource() {}
 
   /**
@@ -48,7 +50,7 @@ final class ServiceLoaderCallSiteSource {
     if (matcher.find()) {
       return false;
     }
-    return topLevelDelimiter(sourceText, closing + 1, targetOffset, ',') < 0;
+    return !hasExpressionBoundary(sourceText, closing + 1, targetOffset);
   }
 
   static int methodStart(String sourceText, String methodSource, int edgeOffset) {
@@ -93,15 +95,46 @@ final class ServiceLoaderCallSiteSource {
     }
     if (site.line() == line) {
       int lineEnd = sourceText.indexOf('\n', site.offset());
-      String remainder = sourceText.substring(
-          site.offset(), lineEnd < 0 ? sourceText.length() : lineEnd);
-      int terminator = remainder.indexOf(';');
-      return terminator < 0 || remainder.substring(terminator + 1).isBlank();
+      int end = lineEnd < 0 ? sourceText.length() : lineEnd;
+      int terminator = topLevelDelimiter(sourceText, site.offset(), end, ';');
+      return terminator < 0 || sourceText.substring(terminator + 1, end).isBlank();
     }
-    String between = sourceText.substring(site.offset(), edgeStart);
-    return between.indexOf(';') < 0
-        && between.indexOf('{') < 0
-        && between.indexOf('}') < 0;
+    return !hasStatementBoundary(sourceText, site.offset(), edgeStart);
+  }
+
+  private static boolean hasStatementBoundary(String sourceText, int start, int end) {
+    DelimiterDepth depth = new DelimiterDepth();
+    for (int index = start; index < end; index++) {
+      char value = sourceText.charAt(index);
+      if (depth.atTopLevel()
+          && (value == ',' || value == ';' || value == ')' || value == ']'
+              || value == '}' || value == '{')) {
+        return true;
+      }
+      depth.accept(value);
+    }
+    return false;
+  }
+
+  private static boolean hasExpressionBoundary(String sourceText, int start, int end) {
+    DelimiterDepth depth = new DelimiterDepth();
+    for (int index = start; index < end; index++) {
+      char value = sourceText.charAt(index);
+      if (depth.atTopLevel() && isExpressionBoundary(sourceText, index, end, value)) {
+        return true;
+      }
+      depth.accept(value);
+    }
+    return false;
+  }
+
+  private static boolean isExpressionBoundary(
+      String sourceText, int index, int end, char value) {
+    if (EXPRESSION_BOUNDARIES.indexOf(value) >= 0) {
+      return true;
+    }
+    return (value == '&' || value == '|')
+        && index + 1 < end && sourceText.charAt(index + 1) == value;
   }
 
   private static int statementEnd(String sourceText, int start) {
