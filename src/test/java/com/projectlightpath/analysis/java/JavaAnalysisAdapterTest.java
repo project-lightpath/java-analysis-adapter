@@ -1358,6 +1358,85 @@ class JavaAnalysisAdapterTest {
         item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
   }
 
+  /** Keeps nested custom-loader sites possible without borrowing a sibling descriptor. */
+  @Test
+  void nestedLoadsRemainAmbiguousWithCustomLoader() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-nested-custom/src/main/java");
+    Path classes = temp.resolve("service-loader-nested-custom/target/classes");
+    Path resources = temp.resolve("service-loader-nested-custom/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static String audit(ClassLoader loader) {
+            return ServiceLoader.load(Outer.Provider.class, loader).findFirst()
+                .map(value -> value.record())
+                .orElseGet(() -> ServiceLoader.load(Inner.Provider.class, loader).findFirst()
+                    .map(value -> value.record()).orElse("missing"));
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Outer.java", """
+        package demo;
+        final class Outer {
+          interface Provider { String record(); }
+        }
+        """);
+    write(sourceRoot, "demo/Inner.java", """
+        package demo;
+        final class Inner {
+          interface Provider { String record(); }
+        }
+        """);
+    write(sourceRoot, "demo/OuterDefault.java", """
+        package demo;
+        final class OuterDefault implements Outer.Provider {
+          public String record() { return "outer"; }
+        }
+        """);
+    write(sourceRoot, "demo/InnerDefault.java", """
+        package demo;
+        final class InnerDefault implements Inner.Provider {
+          public String record() { return "inner"; }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Outer$Provider", "demo.OuterDefault\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-nested-custom")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-nested-custom/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> innerFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.callee().equals("demo.InnerDefault#record"))
+        .toList();
+
+    assertEquals(1, innerFacts.size(), innerFacts.toString());
+    SemanticCallFacts.Fact inner = innerFacts.get(0);
+    assertEquals("service_loader", inner.relationshipType());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, inner.certainty());
+    assertTrue(inner.limitation().toLowerCase().contains("classloader"), inner.toString());
+    assertTrue(inner.evidence().stream().noneMatch(item ->
+        item.kind().equals("service_loader_descriptor")), inner.toString());
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
