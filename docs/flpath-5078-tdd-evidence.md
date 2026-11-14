@@ -168,3 +168,10 @@ Evidence hashes:
 - `GREEN_16`: commit `73064e7dfc28d2c6172e8803f590606bb54bbec2`; unmapped and zero-counter
   source lines are recorded as non-executable while executable lines remain subject to
   the unchanged 90% threshold.
+
+### coverage-runtime-identity — pinned Java vendor probe
+
+- `RED_17`: commit `a0532381eb5d73a64f4f8a54145567b32350c0e5`; the validator rejected
+  the pinned Temurin runtime because vendor identity was read from the wrong Java output mode.
+- `GREEN_17`: commit `46f8e669b0078bbcb91c39d5a2abf101b3beabac`; runtime validation now reads
+  `-XshowSettings:properties` and accepts the pinned `java.version` property.
