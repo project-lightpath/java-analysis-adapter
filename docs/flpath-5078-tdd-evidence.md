@@ -323,3 +323,19 @@ Evidence hashes:
 - `GREEN_28`: commit `681546857347707c4a93a553600eb923f3df8fd0`; wildcard imports are no
   longer treated as ownership proof, so ambiguous same-package calls abstain. The focused
   regression passes `1/1`.
+
+### final-authoritative-gates-after-wildcard-shadowing-fix
+
+- Final full-suite validation at measured HEAD `fb92474b2781d7b3aac2c8ee8204697864945d85`
+  passes `102/102`; unit-only validation passes `90/90`.
+- Changed-production JaCoCo coverage is `903/984 = 91.77%` full-suite and
+  `894/984 = 90.85%` unit-only, both above the `90%` threshold, using Eclipse Adoptium
+  Temurin `21.0.13` and JaCoCo `0.8.13`.
+- `make evidence-validate` passes all `10` criteria; the TDD ledger validator passes `28/28`.
+  Java lint-plugin tests pass `16/16`; production lint reports `0` new PMD findings and
+  `0` new CPD duplications. Engram diagnostics report no warning-or-higher findings in
+  the three changed production files.
+- The wildcard-import shadowing regression is covered by `RED_28`/`GREEN_28`; ambiguous
+  same-package calls now abstain instead of emitting false Java ServiceLoader facts.
+- Machine-readable details and artifact hashes are in
+  `docs/flpath-5078-tdd/final-validation.json`.
