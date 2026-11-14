@@ -19,6 +19,7 @@ final class ServiceLoaderDescriptorSource {
   static final String SERVICES_DIRECTORY = "META-INF/services";
   static final String WAR_CLASSES_DIRECTORY = "WEB-INF/classes/";
   static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
+  static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
   static final Pattern BINARY_CLASS_NAME = Pattern.compile(
       "[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*");
 
@@ -131,6 +132,19 @@ final class ServiceLoaderDescriptorSource {
 
   static final class ScanState {
     private final List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics = new ArrayList<>();
+    private final long maxDecompressedBytes;
+    private long decompressedBytes;
+
+    ScanState() {
+      this(MAX_ARCHIVE_DECOMPRESSED_BYTES);
+    }
+
+    ScanState(long maxDecompressedBytes) {
+      if (maxDecompressedBytes <= 0) {
+        throw new IllegalArgumentException("maximum decompressed bytes must be positive");
+      }
+      this.maxDecompressedBytes = maxDecompressedBytes;
+    }
 
     void diagnostic(String code, String path, String detail) {
       diagnostics.add(new ServiceLoaderDescriptorScanner.Diagnostic(code, path, detail));
@@ -138,6 +152,25 @@ final class ServiceLoaderDescriptorSource {
 
     List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics() {
       return List.copyOf(diagnostics);
+    }
+
+    long remainingDecompressed() {
+      return maxDecompressedBytes - decompressedBytes;
+    }
+
+    boolean hasDecompressedBudget() {
+      return remainingDecompressed() > 0;
+    }
+
+    boolean consumeDecompressed(long bytes, String path) {
+      if (bytes < 0 || bytes > remainingDecompressed()) {
+        diagnostic(
+            "archive_decompression_limit", path,
+            "archive decompression exceeds " + maxDecompressedBytes + " bytes");
+        return false;
+      }
+      decompressedBytes += bytes;
+      return true;
     }
   }
 }

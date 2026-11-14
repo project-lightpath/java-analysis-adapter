@@ -1,6 +1,7 @@
 package com.projectlightpath.analysis.java;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -31,7 +32,29 @@ final class ServiceLoaderDescriptorArchiveSource {
               ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/"))
           .filter(entry -> names.add(entry.getName()))
           .sorted(java.util.Comparator.comparing(ZipEntry::getName))
-          .forEach(entry -> addDescriptor(zip, normalized, entry, descriptors, state));
+          .forEach(entry -> {
+            if (!state.hasDecompressedBudget()) {
+              state.diagnostic(
+                  "archive_decompression_limit", normalized.toString(),
+                  "archive decompression budget exhausted before all entries were read");
+            } else {
+              addDescriptor(zip, normalized, entry, descriptors, state);
+            }
+          });
+      ZipEntry moduleEntry = entries.stream()
+          .filter(entry -> !entry.isDirectory() && entry.getName().equals("module-info.class"))
+          .findFirst()
+          .orElse(null);
+      if (moduleEntry != null) {
+        String modulePath = normalized + "!/" + moduleEntry.getName();
+        if (!state.hasDecompressedBudget()) {
+          state.diagnostic(
+              "archive_decompression_limit", modulePath,
+              "module-info.class could not be read after the archive decompression budget was exhausted");
+        } else {
+          readEntry(zip, moduleEntry, state, modulePath);
+        }
+      }
       if (ServiceLoaderDescriptorNestedArchiveSource.isWar(normalized)) {
         ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntries(
             entries, normalized, state);
@@ -56,7 +79,10 @@ final class ServiceLoaderDescriptorArchiveSource {
     }
     String path = archive + "!/" + entry.getName();
     try (InputStream input = zip.getInputStream(entry)) {
-      byte[] bytes = input.readAllBytes();
+      byte[] bytes = readEntry(input, state, path);
+      if (bytes == null) {
+        return;
+      }
       ServiceLoaderDescriptorSource.ProviderEntries parsed =
           ServiceLoaderDescriptorSource.providers(bytes);
       descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
@@ -69,6 +95,55 @@ final class ServiceLoaderDescriptorArchiveSource {
     } catch (IOException error) {
       state.diagnostic("archive_entry_read_error", path, message(error));
     }
+  }
+
+  private static byte[] readEntry(
+      ZipFile zip,
+      ZipEntry entry,
+      ServiceLoaderDescriptorSource.ScanState state,
+      String path) {
+    long remaining = state.remainingDecompressed();
+    if (remaining <= 0) {
+      return null;
+    }
+    try (InputStream input = zip.getInputStream(entry)) {
+      return readEntry(input, state, path);
+    } catch (IOException error) {
+      state.diagnostic("archive_entry_read_error", path, message(error));
+      return null;
+    }
+  }
+
+  private static byte[] readEntry(
+      InputStream input,
+      ServiceLoaderDescriptorSource.ScanState state,
+      String path) throws IOException {
+    long maximumBytes = state.remainingDecompressed();
+    ByteArrayOutputStream output = new ByteArrayOutputStream(8192);
+    byte[] buffer = new byte[8192];
+    long total = 0;
+    while (total < maximumBytes) {
+      int requested = (int) Math.min(buffer.length, maximumBytes - total);
+      int count = input.read(buffer, 0, requested);
+      if (count < 0) {
+        return output.toByteArray();
+      }
+      if (count == 0) {
+        continue;
+      }
+      if (!state.consumeDecompressed(count, path)) {
+        return null;
+      }
+      output.write(buffer, 0, count);
+      total += count;
+    }
+    if (input.read() >= 0) {
+      state.diagnostic(
+          "archive_decompression_limit", path,
+          "archive entry exceeds the available decompression budget");
+      return null;
+    }
+    return output.toByteArray();
   }
 
   private static String sha256(byte[] bytes) {
