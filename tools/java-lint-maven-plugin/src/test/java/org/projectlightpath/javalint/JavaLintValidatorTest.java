@@ -260,6 +260,47 @@ class JavaLintValidatorTest {
     assertTrue(report.messages().stream().anyMatch(message -> message.contains("configuration error")));
   }
 
+  /** An absent findings baseline is treated as an empty inventory. */
+  @Test
+  void emptyInventoryPassesWithoutBaseline() throws Exception {
+    Path config = temp.resolve("config");
+    Path target = temp.resolve("target");
+    Files.createDirectories(config);
+    Files.createDirectories(target);
+    String ruleset = """
+        <ruleset>
+          CognitiveComplexity CyclomaticComplexity NPathComplexity NcssCount
+          ExcessiveParameterList AvoidCatchingGenericException PreserveStackTrace
+          UnusedPrivateMethod CommentRequired
+        </ruleset>
+        """;
+    Files.writeString(config.resolve("pmd-production.xml"), ruleset);
+    Files.writeString(target.resolve("pmd.xml"), "<pmd version=\"7.17.0\"/>");
+    Files.writeString(target.resolve("cpd.xml"), "<pmd-cpd pmdVersion=\"7.17.0\"/>");
+    Files.writeString(target.resolve("java-lint-effective-pom.xml"), """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <build>
+            <sourceDirectory>src/main/java</sourceDirectory>
+            <plugins><plugin>
+              <artifactId>maven-pmd-plugin</artifactId>
+              <configuration>
+                <rulesets><ruleset>config/pmd-production.xml</ruleset></rulesets>
+                <includeTests>false</includeTests>
+                <minimumPriority>3</minimumPriority>
+                <minimumTokens>100</minimumTokens>
+              </configuration>
+            </plugin></plugins>
+          </build>
+        </project>
+        """);
+
+    JavaLintValidator.ValidationReport report = new JavaLintValidator(temp).validate(true);
+
+    assertTrue(report.passed());
+    assertEquals(0, report.newFindingCount());
+    assertEquals(0, report.configurationErrorCount());
+  }
+
   /** A threshold change is observable even when the baseline has no CPD findings. */
   @Test
   void effectiveThresholdChangeIsDetectedAgainstBaseline() throws Exception {

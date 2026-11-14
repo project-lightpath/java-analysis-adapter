@@ -19,7 +19,7 @@ import java.util.Set;
  * metadata, but the framework model must then emit possible or unresolved
  * facts rather than promoting them to definite facts.
  */
-public final class AnalysisContext {
+public final class AnalysisContext extends AnalysisContextAccessors {
   public enum Framework {
     QUARKUS("quarkus"),
     SPRING_BOOT("spring-boot");
@@ -497,38 +497,24 @@ public final class AnalysisContext {
     }
 
     /** Compatibility constructor for serialized contexts predating ordered fingerprints. */
-    public Provenance(
-        String sourceRepository,
-        String sourceReference,
-        String sourceRevision,
-        String sourceFingerprint,
-        String generatedSourceFingerprint,
-        String dependencyFingerprint,
-        String buildFingerprint,
-        String toolchainFingerprint,
-        String analyzerFingerprint,
-        String gitRevision,
-        String providerRuntime,
-        String profileDigest,
-        String preparedAt,
-        long freshnessMaxAgeSeconds) {
+    public Provenance(Object... legacyValues) {
       this(
-          sourceRepository,
-          sourceReference,
-          sourceRevision,
-          sourceFingerprint,
-          generatedSourceFingerprint,
-          dependencyFingerprint,
+          legacyString(legacyValues, 0, "sourceRepository"),
+          legacyString(legacyValues, 1, "sourceReference"),
+          legacyString(legacyValues, 2, "sourceRevision"),
+          legacyString(legacyValues, 3, "sourceFingerprint"),
+          legacyString(legacyValues, 4, "generatedSourceFingerprint"),
+          legacyString(legacyValues, 5, "dependencyFingerprint"),
           null,
           null,
-          buildFingerprint,
-          toolchainFingerprint,
-          analyzerFingerprint,
-          gitRevision,
-          providerRuntime,
-          profileDigest,
-          preparedAt,
-          freshnessMaxAgeSeconds);
+          legacyString(legacyValues, 6, "buildFingerprint"),
+          legacyString(legacyValues, 7, "toolchainFingerprint"),
+          legacyString(legacyValues, 8, "analyzerFingerprint"),
+          legacyString(legacyValues, 9, "gitRevision"),
+          legacyString(legacyValues, 10, "providerRuntime"),
+          legacyString(legacyValues, 11, "profileDigest"),
+          legacyString(legacyValues, 12, "preparedAt"),
+          legacyLong(legacyValues, 13, "freshnessMaxAgeSeconds"));
     }
 
     /** Validates provenance fingerprints and freshness policy. */
@@ -573,6 +559,20 @@ public final class AnalysisContext {
         throw new IllegalArgumentException(name + " must not be blank");
       }
     }
+
+    private static String legacyString(Object[] values, int index, String name) {
+      if (values == null || values.length != 14 || !(values[index] instanceof String value)) {
+        throw new IllegalArgumentException("legacy provenance " + name + " is invalid");
+      }
+      return value;
+    }
+
+    private static long legacyLong(Object[] values, int index, String name) {
+      if (values == null || values.length != 14 || !(values[index] instanceof Number value)) {
+        throw new IllegalArgumentException("legacy provenance " + name + " is invalid");
+      }
+      return value.longValue();
+    }
   }
 
   /** Source/build metadata carried alongside the resolved provider inputs. */
@@ -591,26 +591,17 @@ public final class AnalysisContext {
       String mavenInvocationFingerprint,
       String effectivePomFingerprint) {
     /** Compatibility constructor for handoffs without replay metadata. */
-    public Handoff(
-        String schemaVersion,
-        String profileId,
-        String profileVersion,
-        String profileDigest,
-        String buildTool,
-        List<String> buildCommand,
-        String buildArtifact,
-        String buildFingerprint,
-        List<String> limitations) {
+    public Handoff(Object... legacyValues) {
       this(
-          schemaVersion,
-          profileId,
-          profileVersion,
-          profileDigest,
-          buildTool,
-          buildCommand,
-          buildArtifact,
-          buildFingerprint,
-          limitations,
+          legacyString(legacyValues, 0, "schemaVersion"),
+          legacyString(legacyValues, 1, "profileId"),
+          legacyString(legacyValues, 2, "profileVersion"),
+          legacyString(legacyValues, 3, "profileDigest"),
+          legacyString(legacyValues, 4, "buildTool"),
+          legacyList(legacyValues, 5, "buildCommand"),
+          legacyString(legacyValues, 6, "buildArtifact"),
+          legacyString(legacyValues, 7, "buildFingerprint"),
+          legacyList(legacyValues, 8, "limitations"),
           null,
           null,
           null,
@@ -669,6 +660,27 @@ public final class AnalysisContext {
           || mavenInvocationFingerprint != null
           || effectivePomFingerprint != null;
     }
+
+    private static String legacyString(Object[] values, int index, String name) {
+      if (values == null || values.length != 9 || !(values[index] instanceof String value)) {
+        throw new IllegalArgumentException("legacy handoff " + name + " is invalid");
+      }
+      return value;
+    }
+
+    private static List<String> legacyList(Object[] values, int index, String name) {
+      if (values == null || values.length != 9 || !(values[index] instanceof List<?> value)) {
+        throw new IllegalArgumentException("legacy handoff " + name + " is invalid");
+      }
+      List<String> result = new ArrayList<>();
+      for (Object item : value) {
+        if (!(item instanceof String string)) {
+          throw new IllegalArgumentException("legacy handoff " + name + " is invalid");
+        }
+        result.add(string);
+      }
+      return List.copyOf(result);
+    }
   }
 
   /** Freshness identities used to compare a loaded context with a later handoff. */
@@ -705,52 +717,9 @@ public final class AnalysisContext {
     }
   }
 
-  private final String id;
-  private final Framework framework;
-  private final String frameworkVersion;
-  private final String fixtureId;
-  private final int javaRelease;
-  private final Path repositoryRoot;
-  private final Path applicationClasses;
-  private final String selectedProfile;
-  private final Scope analysisScope;
-  private final List<SourceRoot> sourceRoots;
-  private final List<SourceRoot> generatedSourceRoots;
-  private final List<Path> dependencyClasspath;
-  private final boolean dependencyClasspathRequired;
-  private final DependencyCoordinateManifest dependencyCoordinateManifest;
-  private final List<FrameworkMetadata> frameworkMetadata;
-  private final FrameworkBindingMetadata frameworkBindingMetadata;
-  private final Provenance provenance;
-  private final Handoff handoff;
-
   /** Validates and freezes one analysis context from its builder. */
   private AnalysisContext(Builder builder) {
-    id = requireValue(builder.id, "context id");
-    framework = Objects.requireNonNull(builder.framework, "framework");
-    frameworkVersion = requireValue(builder.frameworkVersion, "framework version");
-    fixtureId = requireValue(builder.fixtureId, "fixture id");
-    if (builder.javaRelease <= 0) {
-      throw new IllegalArgumentException("java release must be positive");
-    }
-    javaRelease = builder.javaRelease;
-    repositoryRoot = normalize(builder.repositoryRoot, "repository root");
-    applicationClasses = normalize(builder.applicationClasses, "application classes");
-    selectedProfile = requireValue(builder.selectedProfile, "selected profile");
-    analysisScope = Objects.requireNonNull(builder.analysisScope, "analysis scope");
-    sourceRoots = List.copyOf(builder.sourceRoots);
-    generatedSourceRoots = List.copyOf(builder.generatedSourceRoots);
-    dependencyClasspath = builder.dependencyClasspath.stream()
-        .map(path -> normalize(path, "dependency classpath entry"))
-        .toList();
-    dependencyClasspathRequired = builder.dependencyClasspathRequired;
-    dependencyCoordinateManifest = Objects.requireNonNull(
-        builder.dependencyCoordinateManifest, "dependency coordinate manifest");
-    frameworkMetadata = List.copyOf(builder.frameworkMetadata);
-    frameworkBindingMetadata = Objects.requireNonNull(
-        builder.frameworkBindingMetadata, "framework binding metadata");
-    provenance = Objects.requireNonNull(builder.provenance, "provenance");
-    handoff = Objects.requireNonNull(builder.handoff, "handoff");
+    super(builder);
 
     if (sourceRoots.stream().noneMatch(root -> !root.generated() && root.required())) {
       throw new IllegalArgumentException("at least one required production/source root is required");
@@ -762,129 +731,8 @@ public final class AnalysisContext {
     return new Builder();
   }
 
-  public String id() {
-    return id;
-  }
-
-  public Framework framework() {
-    return framework;
-  }
-
-  public String frameworkVersion() {
-    return frameworkVersion;
-  }
-
-  public String fixtureId() {
-    return fixtureId;
-  }
-
-  public int javaRelease() {
-    return javaRelease;
-  }
-
-  public Path repositoryRoot() {
-    return repositoryRoot;
-  }
-
-  public Path applicationClasses() {
-    return applicationClasses;
-  }
-
-  public String selectedProfile() {
-    return selectedProfile;
-  }
-
-  public Scope analysisScope() {
-    return analysisScope;
-  }
-
-  public List<SourceRoot> sourceRoots() {
-    return sourceRoots;
-  }
-
-  public List<SourceRoot> generatedSourceRoots() {
-    return generatedSourceRoots;
-  }
-
-  /** Returns source roots explicitly included in this analysis. */
-  public List<SourceRoot> includedSourceRoots() {
-    List<SourceRoot> result = new ArrayList<>();
-    result.addAll(sourceRoots.stream()
-        .filter(SourceRoot::included)
-        .filter(root -> root.scope() == analysisScope)
-        .toList());
-    result.addAll(generatedSourceRoots.stream()
-        .filter(SourceRoot::included)
-        .filter(root -> root.scope() == analysisScope)
-        .toList());
-    return List.copyOf(result);
-  }
-
-  public List<Path> dependencyClasspath() {
-    return dependencyClasspath;
-  }
-
-  public boolean dependencyClasspathRequired() {
-    return dependencyClasspathRequired;
-  }
-
-  public DependencyCoordinateManifest dependencyCoordinateManifest() {
-    return dependencyCoordinateManifest;
-  }
-
-  public List<FrameworkMetadata> frameworkMetadata() {
-    return frameworkMetadata;
-  }
-
-  public FrameworkBindingMetadata frameworkBindingMetadata() {
-    return frameworkBindingMetadata;
-  }
-
-  public List<BindingCandidateMetadata> bindingCandidates() {
-    return frameworkBindingMetadata.candidates();
-  }
-
-  public List<ResolvedBindingMetadata> resolvedBindings() {
-    return frameworkBindingMetadata.resolvedBindings();
-  }
-
-  public List<ProxyTargetMetadata> proxyTargetMetadata() {
-    return frameworkBindingMetadata.proxyTargets();
-  }
-
-  public Provenance provenance() {
-    return provenance;
-  }
-
-  public Handoff handoff() {
-    return handoff;
-  }
-
   public FreshnessSnapshot freshnessSnapshot() {
     return FreshnessSnapshot.from(this);
-  }
-
-  /** Reports whether a framework metadata artifact was observed. */
-  public boolean metadataObserved(String metadataId) {
-    return frameworkMetadata.stream()
-        .anyMatch(item -> item.id().equals(metadataId) && item.status() == MetadataStatus.OBSERVED);
-  }
-
-  /** Looks up one framework metadata declaration by ID. */
-  public Optional<FrameworkMetadata> metadata(String metadataId) {
-    return frameworkMetadata.stream().filter(item -> item.id().equals(metadataId)).findFirst();
-  }
-
-  /** Return a stable path relative to the selected source root for provenance. */
-  public String displayPath(Path file) {
-    Path normalized = file.toAbsolutePath().normalize();
-    Optional<SourceRoot> root = mostSpecificRoot(normalized, includedSourceRoots());
-    if (root.isPresent()) {
-      Path relative = root.get().path().relativize(normalized);
-      String suffix = relative.toString().replace(normalized.getFileSystem().getSeparator(), "/");
-      return suffix.isEmpty() ? root.get().declaredPath() : root.get().declaredPath() + "/" + suffix;
-    }
-    return normalized.toString();
   }
 
   /** Orders overlapping roots from most-specific to least-specific provenance. */
@@ -906,21 +754,21 @@ public final class AnalysisContext {
         .findFirst();
   }
 
-  private static String requireValue(String value, String name) {
+  static String requireValue(String value, String name) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException(name + " must not be blank");
     }
     return value;
   }
 
-  private static String optionalValue(String value, String name) {
+  static String optionalValue(String value, String name) {
     if (value == null || value.isBlank()) {
       return null;
     }
     return value;
   }
 
-  private static String optionalFingerprint(String value, String name) {
+  static String optionalFingerprint(String value, String name) {
     if (value == null || value.isBlank()) {
       return null;
     }
@@ -931,31 +779,31 @@ public final class AnalysisContext {
   }
 
   /** Normalizes a required context path and rejects missing values. */
-  private static Path normalize(Path path, String name) {
+  static Path normalize(Path path, String name) {
     return Objects.requireNonNull(path, name).toAbsolutePath().normalize();
   }
 
   /** Mutable construction surface for one immutable analysis context. */
   public static final class Builder {
-    private String id;
-    private Framework framework;
-    private String frameworkVersion;
-    private String fixtureId;
-    private int javaRelease;
-    private Path repositoryRoot;
-    private Path applicationClasses;
-    private String selectedProfile;
-    private Scope analysisScope;
-    private final List<SourceRoot> sourceRoots = new ArrayList<>();
-    private final List<SourceRoot> generatedSourceRoots = new ArrayList<>();
-    private final List<Path> dependencyClasspath = new ArrayList<>();
-    private boolean dependencyClasspathRequired = true;
-    private DependencyCoordinateManifest dependencyCoordinateManifest =
+    String id;
+    Framework framework;
+    String frameworkVersion;
+    String fixtureId;
+    int javaRelease;
+    Path repositoryRoot;
+    Path applicationClasses;
+    String selectedProfile;
+    Scope analysisScope;
+    final List<SourceRoot> sourceRoots = new ArrayList<>();
+    final List<SourceRoot> generatedSourceRoots = new ArrayList<>();
+    final List<Path> dependencyClasspath = new ArrayList<>();
+    boolean dependencyClasspathRequired = true;
+    DependencyCoordinateManifest dependencyCoordinateManifest =
         DependencyCoordinateManifest.absent();
-    private final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
-    private FrameworkBindingMetadata frameworkBindingMetadata = FrameworkBindingMetadata.empty();
-    private Provenance provenance;
-    private Handoff handoff = Handoff.empty();
+    final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
+    FrameworkBindingMetadata frameworkBindingMetadata = FrameworkBindingMetadata.empty();
+    Provenance provenance;
+    Handoff handoff = Handoff.empty();
 
     public Builder id(String value) {
       id = value;

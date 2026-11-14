@@ -704,7 +704,7 @@ class JavaAnalysisAdapterTest {
             AnalysisContext.MetadataStatus.OBSERVED,
             "src/main/java")));
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
-    SourceMetadataScanner.BeanCandidate candidate = scanner.beanCandidates(
+    SourceMetadataScannerState.BeanCandidate candidate = scanner.beanCandidates(
             AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(item -> item.candidateType().equals("demo.ShadowedService"))
         .findFirst()
@@ -2137,13 +2137,13 @@ class JavaAnalysisAdapterTest {
             "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
             "src/main/java")));
 
-    SourceMetadataScanner.InjectionPoint injection = new SourceMetadataScanner(context)
+    SourceMetadataScannerState.InjectionPoint injection = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(item -> item.file().typeName().equals("demo.Consumer"))
         .findFirst()
         .orElseThrow();
 
-    SourceMetadataScanner.Parameter parameter = injection.parameters().get(0);
+    SourceMetadataScannerState.Parameter parameter = injection.parameters().get(0);
     assertEquals("Service", parameter.type());
     assertEquals("service", parameter.name());
     assertEquals(List.of("Qualifier:fast"), parameter.qualifiers());
@@ -2179,7 +2179,7 @@ class JavaAnalysisAdapterTest {
             "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
             "src/main/java")));
 
-    SourceMetadataScanner.InjectionPoint injection = new SourceMetadataScanner(context)
+    SourceMetadataScannerState.InjectionPoint injection = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.QUARKUS).stream()
         .findFirst()
         .orElseThrow();
