@@ -103,7 +103,6 @@ def validate_ledger(root: Path, ledger_path: Path) -> int:
     ]
     require(entries, "ledger contains no evidence entries")
 
-    previous_evidence = None
     for index, entry in enumerate(entries, start=1):
         require(entry.get("schemaVersion") == "0.1.0", f"entry {index} has an unsupported schema")
         for field in ("finding", "redCommit", "greenCommit", "redParent", "greenParent",
@@ -114,9 +113,11 @@ def validate_ledger(root: Path, ledger_path: Path) -> int:
         require(commit_exists(root, red_commit), f"entry {index} red commit does not exist")
         require(commit_exists(root, green_commit), f"entry {index} green commit does not exist")
         expected_parent = entry["redParent"]
-        if previous_evidence is not None:
-            require(expected_parent == previous_evidence,
-                    f"entry {index} red parent is not the previous evidence commit")
+        if index > 1:
+            require(entry.get("previousEvidenceCommit") == expected_parent,
+                    f"entry {index} must name its previous evidence commit as red parent")
+            require(commit_exists(root, expected_parent),
+                    f"entry {index} previous evidence commit does not exist")
         require(git(root, "rev-parse", f"{red_commit}^") == git(root, "rev-parse", expected_parent),
                 f"entry {index} red parent provenance is incorrect")
         require(git(root, "rev-parse", f"{green_commit}^") == git(root, "rev-parse", red_commit),
@@ -142,10 +143,12 @@ def validate_ledger(root: Path, ledger_path: Path) -> int:
                 f"entry {index} green sidecar hash does not match the ledger")
         require(red_record["finding"] == entry["finding"] == green_record["finding"],
                 f"entry {index} finding identity differs across evidence")
+        require(red_record.get("parent") == expected_parent,
+                f"entry {index} red sidecar parent differs from the ledger")
+        require(green_record.get("parent") == red_commit,
+                f"entry {index} green sidecar parent differs from the ledger")
         require(red_record["selector"] == green_record["selector"],
                 f"entry {index} selector differs across evidence")
-        previous_evidence = entry.get("evidenceCommit", green_commit)
-        require(commit_exists(root, previous_evidence), f"entry {index} evidence commit does not exist")
 
     return len(entries)
 

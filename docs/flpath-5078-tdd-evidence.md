@@ -48,3 +48,14 @@ Evidence hashes:
   green commits.
 - Performance guards run three times under the pinned toolchain and preserve
   complete output, test count, and `/usr/bin/time -p` data.
+
+## Completed groups
+
+### 4567038418 — nested ServiceLoader type resolution
+
+- `RED_1`: commit `b0de78f860a21bccf95f60b859f03b71f6d8b7ac`; one behavioral
+  failure, no production-path changes.
+- `GREEN_1`: commit `93302de24dbd200921eed90a5f181707d2947746`; the same
+  selector passed with one test.
+- Sidecar hashes and parent provenance are append-only in
+  `docs/flpath-5078-tdd-commits.jsonl`.
