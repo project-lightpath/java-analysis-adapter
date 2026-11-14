@@ -22,14 +22,20 @@ final class ServiceLoaderCallSiteParser {
     return parse(source, false);
   }
 
-  /** Parses calls with scanner-proven ownership for an on-demand java.util import. */
   static List<ServiceLoaderCallSite> parse(String source, boolean wildcardImportOwned) {
+    return parse(source, wildcardImportOwned, true);
+  }
+
+  /** Parses calls with source-proven ownership for imported ServiceLoader types. */
+  static List<ServiceLoaderCallSite> parse(
+      String source, boolean wildcardImportOwned, boolean serviceLoaderTypeOwned) {
     List<ServiceLoaderCallSite> result = new ArrayList<>();
     String structuralSource = ServiceLoaderSourceMasker.mask(source == null ? "" : source);
     Matcher matcher = LOAD.matcher(structuralSource);
     while (matcher.find()) {
       if (matcher.group(1) == null
-          && !isJavaUtilServiceLoader(structuralSource, wildcardImportOwned)) {
+          && !isJavaUtilServiceLoader(
+              structuralSource, wildcardImportOwned, serviceLoaderTypeOwned)) {
         continue;
       }
       int closing = matchingParenthesis(structuralSource, matcher.end() - 1);
@@ -54,7 +60,11 @@ final class ServiceLoaderCallSiteParser {
     return List.copyOf(result);
   }
 
-  private static boolean isJavaUtilServiceLoader(String source, boolean wildcardImportOwned) {
+  private static boolean isJavaUtilServiceLoader(
+      String source, boolean wildcardImportOwned, boolean serviceLoaderTypeOwned) {
+    if (!serviceLoaderTypeOwned) {
+      return false;
+    }
     if (EXPLICIT_IMPORT.matcher(source).find()) {
       return true;
     }
