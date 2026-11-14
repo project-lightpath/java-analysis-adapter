@@ -178,19 +178,19 @@ Evidence hashes:
 
 ## Final gate evidence
 
-- The authoritative JaCoCo run at post-refactor `HEAD e8b0d55200127ea7a5d2a7bf981fe7fcbcf495dd`
+- The authoritative JaCoCo run at corrected production `HEAD f52ea0514148957ade9ff2da4ebae13d2d3c6fa9`
   used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo 0.8.13, and the pinned no-zero-test
-  Surefire flags; all `90` full-suite tests passed.
+  Surefire flags; all `92` full-suite tests passed.
 - The changed-production threshold intentionally uses the complete adapter suite,
   including its SootUp integration tests. Full-suite changed-production coverage passed
-  at `92.15%` (`751/815` executable changed lines), above the required `90%` threshold.
+  at `92.09%` (`792/860` executable changed lines), above the required `90%` threshold.
   The canonical report SHA-256 is
-  `3142bbf78809f577e156d7244388f42af1e559500dc227a60e98b376c6d2238f`; the raw report
-  SHA-256 is `67b96863ff3124ffb57e0a0a2c3487c030dc9a765af8e29f6c1de9286f8c8a79`.
-- Additional unit-only evidence also passed `78/78` tests at the same `92.15%` changed-
-  production coverage (`751/815`). Its canonical report SHA-256 is
-  `b995a8effa61df527b4bcb23d6fdde130be291ebbc4412e9c2efcb3860e5b6f5`; the raw report
-  SHA-256 is `0c37e55ae6ef006ea52b182cdc4f320e0caa8325feab72c617ae07435688cf73`.
+  `40387901436d2374c22b1383832210bd7d046cfe8e31058e247f7fc5b11e1763`; the raw report
+  SHA-256 is `ad7843761420852ae32ce505b6164d7bf180a4817ab30bdd1fd49b241a84e9d8`.
+- Additional unit-only evidence passed `80/80` tests at `91.28%` changed-production
+  coverage (`785/860`). Its canonical report SHA-256 is
+  `482ffa8919b36f63bdde4164416b50fa06751d2832bddd14dcd03a4e3d9bb3e1`; the raw report
+  SHA-256 is `f598104248067c823f3b80946a00af2ec692ffc432cd298a65b5d785b96ad332`.
   Complete machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`
   and `docs/flpath-5078-tdd/unit-coverage.json`.
 
@@ -228,12 +228,15 @@ Evidence hashes:
 - `GREEN_21`: commit `943af6bc43dfc89a922ec8818973cbba5121a773`; the parser masks non-code text
   while preserving source offsets and line numbers before matching calls.
 
-### post-evidence-quality-refactor
+### post-evidence-quality-and-review-fixes
 
 - `e8b0d55200127ea7a5d2a7bf981fe7fcbcf495dd` extracts the lexical masker and archive
   enumeration helpers without changing the `GREEN_20`/`GREEN_21` behavior. Focused
   ServiceLoader tests pass `7/7`; the direct Java lint gate reports `0` new PMD findings
-  and `0` CPD duplications. Coverage was remeasured on this exact post-refactor HEAD.
+  and `0` CPD duplications.
+- `f52ea0514148957ade9ff2da4ebae13d2d3c6fa9` records the independent-review fixes in
+  `EVIDENCE_22`; focused ServiceLoader tests pass `9/9`, the full suite passes `92/92`,
+  and coverage was remeasured on this corrected production HEAD.
 
 ### independent-review-safety-gaps
 
