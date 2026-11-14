@@ -257,3 +257,12 @@ Evidence hashes:
 - Final follow-up evidence at this production HEAD passes `95/95` full-suite tests and `83/83`
   unit-only tests; changed-production coverage was remeasured at `91.82%` (`819/892`) full-suite
   and `91.03%` (`812/892`) unit-only.
+
+### independent-review-budget-and-nested-lambda
+
+- `RED_24`: commit `c6443fa125e591d5c45a7d76f8c45555a7904c18`; a compiled nested lambda
+  invocation was misattributed as `service_loader`, enumeration crossed the 1,024-entry budget,
+  and a large WAR emitted one diagnostic per skipped nested metadata entry.
+- `GREEN_24`: commit `8be6a11f19f039ec9b7ffb8ccc33fb48014d989a`; ownership uses the outermost
+  containing lambda, directory/archive/wildcard traversal stops at the shared budget, and WAR
+  diagnostics are capped with a suppression summary. Focused regressions pass `5/5`.
