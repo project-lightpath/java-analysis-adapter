@@ -226,6 +226,7 @@ class ServiceLoaderCoverageTest {
         classes, directoryDescriptors, new java.util.HashSet<>(), directoryState);
     assertTrue(directoryState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    assertTrue(directoryDescriptors.isEmpty(), directoryDescriptors.toString());
 
     Path archive = temp.resolve("bounded.jar");
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
@@ -240,8 +241,7 @@ class ServiceLoaderCoverageTest {
     ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
     assertTrue(archiveState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
-    assertTrue(archiveDescriptors.stream()
-        .anyMatch(item -> item.serviceType().equals("demo.Archive")));
+    assertTrue(archiveDescriptors.isEmpty(), archiveDescriptors.toString());
     assertEquals(ENUMERATION_LIMIT, enumeratedEntries(directoryState));
     assertEquals(ENUMERATION_LIMIT, enumeratedEntries(archiveState));
   }
@@ -317,7 +317,7 @@ class ServiceLoaderCoverageTest {
     List<Path> resolved = SootUpInputLocationFactory.resolvedDependencyEntries(context);
     ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
 
-    assertEquals(ENUMERATION_LIMIT, resolved.size());
+    assertTrue(resolved.isEmpty(), resolved.toString());
     assertTrue(scan.diagnostics().stream()
         .anyMatch(item -> item.code().equals("dependency_enumeration_limit")));
   }

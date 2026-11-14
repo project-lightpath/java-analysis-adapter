@@ -1360,6 +1360,71 @@ class JavaAnalysisAdapterTest {
         item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
   }
 
+  /** Does not treat a qualified field receiver as the provider lambda parameter. */
+  @Test
+  void rejectsQualifiedFieldInvocationAsServiceLoaderProvider() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-qualified-field/src/main/java");
+    Path classes = temp.resolve("service-loader-qualified-field/target/classes");
+    Path resources = temp.resolve("service-loader-qualified-field/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          private final OtherImpl provider = new OtherImpl();
+          public void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> this.provider.record());
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          void record() { }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-qualified-field")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-qualified-field/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
   /** Keeps a block-lambda callback after an inner statement, but not after the outer boundary. */
   @Test
   void recognizesBlockLambdaCallback() throws IOException {
