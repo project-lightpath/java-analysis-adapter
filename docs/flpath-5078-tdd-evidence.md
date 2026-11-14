@@ -73,3 +73,10 @@ Evidence hashes:
   unrelated `record()` calls were both classified as ServiceLoader evidence.
 - `GREEN_3`: commit `4acf48a7b905d5016f823690f68f58007e9672b7`; only the
   provider callback remains a ServiceLoader fact.
+
+### 4567038440 — block-lambda ServiceLoader ownership
+
+- `RED_4`: commit `02abf9cb77612df9a75a0770516bca15935b5861`; the callback
+  was missed after an inner block statement.
+- `GREEN_4`: commit `d1217b940ac97f0af4cce850b41cb068ac0822be`; nested delimiter
+  depth preserves the callback and rejects the outer statement.
