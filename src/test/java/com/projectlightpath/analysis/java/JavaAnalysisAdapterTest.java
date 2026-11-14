@@ -1437,6 +1437,76 @@ class JavaAnalysisAdapterTest {
         item.kind().equals("service_loader_descriptor")), inner.toString());
   }
 
+  /** Accepts a closing brace after a load expression, but rejects a second statement on its line. */
+  @Test
+  void acceptsClosingBraceAfterLoadExpression() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-closing/src/main/java");
+    Path classes = temp.resolve("service-loader-closing/target/classes");
+    Path resources = temp.resolve("service-loader-closing/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static void valid() {
+            ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(value -> { value.record(); });
+          }
+          public static void invalid(OtherImpl other) {
+            ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(value -> { value.record(); }); other.record();
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          void record() { }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-closing")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-closing/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultAuditProvider#record")
+            && item.caller().contains("#lambda$valid")), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.caller().contains("#lambda$invalid")
+            || item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
