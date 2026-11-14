@@ -339,3 +339,12 @@ Evidence hashes:
   same-package calls now abstain instead of emitting false Java ServiceLoader facts.
 - Machine-readable details and artifact hashes are in
   `docs/flpath-5078-tdd/final-validation.json`.
+
+### independent-review-valid-wildcard-service-loader
+
+- `RED_29`: commit `ecd0bc03fcf304c81c44d1415456479e3ef1153f`; a valid unqualified
+  `ServiceLoader.load` using `import java.util.*` produced no provider fact when the
+  selected package had no shadowing type.
+- `GREEN_29`: commit `fde218b8c4bb348566be97cd6360cda28f17956f`; source-cache parsing now
+  admits the wildcard only when selected source files contain no same-package
+  `ServiceLoader` declaration. The focused regression passes `1/1`.
