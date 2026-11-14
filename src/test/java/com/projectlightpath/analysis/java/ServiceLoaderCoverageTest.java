@@ -36,6 +36,21 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void parserIgnoresCommentsStringsAndTextBlocks() {
+    String source = "// ServiceLoader.load(comment.Provider.class).record();\n"
+        + "String literal = \"ServiceLoader.load(string.Provider.class);\";\n"
+        + "String textBlock = \"\"\"ServiceLoader.load(text.Provider.class);\"\"\";\n"
+        + "/* ServiceLoader.load(block.Provider.class); */\n"
+        + "return ServiceLoader.load(demo.Provider.class).findFirst();";
+
+    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
+
+    assertEquals(1, sites.size());
+    assertEquals("demo.Provider", sites.get(0).serviceType());
+    assertEquals(source.lastIndexOf("ServiceLoader.load"), sites.get(0).offset());
+  }
+
+  @Test
   void sourceOwnershipHandlesInvalidTargetsAndStatementBoundaries() {
     String source = "return ServiceLoader.load(demo.Provider.class)"
         + ".map(demo.Provider::record); }";
