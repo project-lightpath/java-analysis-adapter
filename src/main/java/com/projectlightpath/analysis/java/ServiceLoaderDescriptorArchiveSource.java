@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,28 +23,43 @@ final class ServiceLoaderDescriptorArchiveSource {
       ServiceLoaderDescriptorSource.ScanState state) {
     Path normalized = archive.toAbsolutePath().normalize();
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
-      List<? extends ZipEntry> entries = zip.stream().toList();
+      List<ZipEntry> descriptorEntries = new ArrayList<>();
+      ZipEntry moduleEntry = null;
       Set<String> names = new HashSet<>();
-      entries.stream()
-          .filter(entry -> !entry.isDirectory())
-          .filter(entry -> entry.getName().startsWith(
-              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/"))
-          .filter(entry -> names.add(entry.getName()))
-          .sorted(java.util.Comparator.comparing(ZipEntry::getName))
-          .forEach(entry -> {
-            if (!state.hasDecompressedBudget()) {
-              state.diagnostic(
-                  "archive_decompression_limit", normalized.toString(),
-                  "archive decompression budget exhausted before all entries were read");
-            } else {
-              addDescriptor(zip, normalized, entry, descriptors, state);
-            }
-          });
-      ZipEntry moduleEntry = entries.stream()
-          .filter(entry -> !entry.isDirectory()
-              && entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO))
-          .findFirst()
-          .orElse(null);
+      Enumeration<? extends ZipEntry> entries = zip.entries();
+      while (entries.hasMoreElements()) {
+        ZipEntry entry = entries.nextElement();
+        String entryPath = normalized + "!/" + entry.getName();
+        if (!state.consumeEnumerated(entryPath)) {
+          break;
+        }
+        if (entry.isDirectory()) {
+          continue;
+        }
+        if (ServiceLoaderDescriptorNestedArchiveSource.isWar(normalized)) {
+          ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
+              entry.getName(), normalized, state);
+        }
+        if (entry.getName().startsWith(
+                ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")
+            && names.add(entry.getName())) {
+          descriptorEntries.add(entry);
+        }
+        if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO)
+            && moduleEntry == null) {
+          moduleEntry = entry;
+        }
+      }
+      descriptorEntries.sort(java.util.Comparator.comparing(ZipEntry::getName));
+      for (ZipEntry entry : descriptorEntries) {
+        if (!state.hasDecompressedBudget()) {
+          state.diagnostic(
+              "archive_decompression_limit", normalized.toString(),
+              "archive decompression budget exhausted before all entries were read");
+          break;
+        }
+        addDescriptor(zip, normalized, entry, descriptors, state);
+      }
       if (moduleEntry != null) {
         String modulePath = normalized + "!/" + moduleEntry.getName();
         if (!state.hasDecompressedBudget()) {
@@ -55,10 +72,6 @@ final class ServiceLoaderDescriptorArchiveSource {
             ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
           }
         }
-      }
-      if (ServiceLoaderDescriptorNestedArchiveSource.isWar(normalized)) {
-        ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntries(
-            entries, normalized, state);
       }
     } catch (ZipException error) {
       state.diagnostic("invalid_archive", normalized.toString(),

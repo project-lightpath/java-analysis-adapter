@@ -26,6 +26,8 @@ final class ServiceLoaderDescriptorReader {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
     ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        context.applicationClasses(), descriptors, visited, state);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
       Path parent = root.path().getParent();
       if (parent != null) {
@@ -40,6 +42,12 @@ final class ServiceLoaderDescriptorReader {
       }
       Path declared = Path.of(metadata.declaredPath());
       Path resolved = declared.isAbsolute() ? declared : context.repositoryRoot().resolve(declared);
+      if (!authorizedPath(context, resolved)) {
+        state.diagnostic(
+            "descriptor_path_outside_context", resolved.toAbsolutePath().normalize().toString(),
+            "observed descriptor metadata path is outside the selected analysis inputs");
+        continue;
+      }
       if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
         addFile(resolved, context, descriptors, visited, state);
       } else {
@@ -62,12 +70,22 @@ final class ServiceLoaderDescriptorReader {
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
-    try (Stream<Path> paths = Files.list(directory)) {
-      paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-          .sorted()
-          .forEach(path -> addFile(path, context, descriptors, visited, state));
+    List<Path> candidates = new ArrayList<>();
+    try (var paths = Files.newDirectoryStream(directory)) {
+      for (Path path : paths) {
+        if (!state.consumeEnumerated(path.toString())) {
+          break;
+        }
+        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+          candidates.add(path);
+        }
+      }
     } catch (IOException error) {
       throw new IllegalStateException("cannot scan ServiceLoader descriptor directory: " + directory, error);
+    }
+    candidates.sort(Path::compareTo);
+    for (Path path : candidates) {
+      addFile(path, context, descriptors, visited, state);
     }
   }
 
@@ -78,7 +96,10 @@ final class ServiceLoaderDescriptorReader {
       Set<String> visited,
       ServiceLoaderDescriptorSource.ScanState state) {
     Path normalized = file.toAbsolutePath().normalize();
-    if (!visited.add("descriptor:" + normalized) || normalized.getFileName() == null) {
+    if (!visited.add("descriptor:" + normalized)
+        || normalized.getFileName() == null
+        || !ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(
+            normalized.getFileName().toString()).matches()) {
       return;
     }
     try (InputStream input = Files.newInputStream(normalized)) {
@@ -118,6 +139,32 @@ final class ServiceLoaderDescriptorReader {
     return path.startsWith(root)
         ? root.relativize(path).toString().replace(path.getFileSystem().getSeparator(), "/")
         : path.toString();
+  }
+
+  private static boolean authorizedPath(AnalysisContext context, Path path) {
+    Path normalized = path.toAbsolutePath().normalize();
+    if (under(normalized, context.repositoryRoot())
+        || under(normalized, context.applicationClasses())) {
+      return true;
+    }
+    for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
+      if (under(normalized, root.path())) {
+        return true;
+      }
+    }
+    for (Path dependency : SootUpInputLocationFactory.resolvedDependencyEntries(context)) {
+      if (under(normalized, dependency)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean under(Path path, Path root) {
+    Path normalizedRoot = root.toAbsolutePath().normalize();
+    return Files.isDirectory(normalizedRoot, LinkOption.NOFOLLOW_LINKS)
+        ? path.startsWith(normalizedRoot)
+        : path.equals(normalizedRoot);
   }
 
 }

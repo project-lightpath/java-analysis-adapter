@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.lang.module.InvalidModuleDescriptorException;
 import java.lang.module.ModuleDescriptor;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -23,6 +24,7 @@ final class ServiceLoaderDescriptorSource {
   static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
   static final String MODULE_INFO = "module-info.class";
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
+  static final int MAX_ENUMERATED_ENTRIES = 1024;
   static final Pattern BINARY_CLASS_NAME = Pattern.compile(
       "[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*");
 
@@ -42,7 +44,7 @@ final class ServiceLoaderDescriptorSource {
     }
   }
 
-  private static void scanServiceDirectory(
+  static void scanServiceDirectory(
       Path directory,
       String label,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
@@ -53,13 +55,23 @@ final class ServiceLoaderDescriptorSource {
         || !visited.add("services:" + normalized)) {
       return;
     }
-    try (Stream<Path> paths = Files.list(normalized)) {
-      paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-          .sorted()
-          .forEach(path -> addServiceFile(path, label, descriptors, visited, state));
+    List<Path> candidates = new ArrayList<>();
+    try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
+      for (Path path : paths) {
+        if (!state.consumeEnumerated(path.toString())) {
+          break;
+        }
+        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+          candidates.add(path);
+        }
+      }
     } catch (IOException error) {
       state.diagnostic(
           "service_directory_read_error", normalized.toString(), message(error));
+    }
+    candidates.sort(Path::compareTo);
+    for (Path path : candidates) {
+      addServiceFile(path, label, descriptors, visited, state);
     }
   }
 
@@ -75,8 +87,12 @@ final class ServiceLoaderDescriptorSource {
         || !BINARY_CLASS_NAME.matcher(normalized.getFileName().toString()).matches()) {
       return;
     }
-    try {
-      byte[] bytes = Files.readAllBytes(normalized);
+    try (var input = Files.newInputStream(normalized)) {
+      byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(
+          input, state, normalized.toString());
+      if (bytes == null) {
+        return;
+      }
       ProviderEntries parsed = providers(bytes);
       descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
           normalized.getFileName().toString(),
@@ -184,8 +200,21 @@ final class ServiceLoaderDescriptorSource {
       return maxDecompressedBytes - decompressedBytes;
     }
 
+    private int enumeratedEntries;
+
     boolean hasDecompressedBudget() {
       return remainingDecompressed() > 0;
+    }
+
+    boolean consumeEnumerated(String path) {
+      if (enumeratedEntries >= MAX_ENUMERATED_ENTRIES) {
+        diagnostic(
+            "descriptor_enumeration_limit", path,
+            "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
+        return false;
+      }
+      enumeratedEntries++;
+      return true;
     }
 
     boolean consumeDecompressed(long bytes, String path) {

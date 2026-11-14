@@ -14,16 +14,24 @@ final class ServiceLoaderDescriptorNestedArchiveSource {
       Path war,
       ServiceLoaderDescriptorSource.ScanState state) {
     for (ZipEntry entry : entries) {
-      if (entry.isDirectory()) {
-        continue;
-      }
-      String name = entry.getName();
-      if (containsSkippedMetadata(name)) {
-        state.diagnostic(
-            "war_nested_service_metadata_skipped",
-            war + "!/" + name,
-            "WAR-contained ServiceLoader metadata was not scanned");
-      }
+      diagnoseSkippedEntry(entry, war, state);
+    }
+  }
+
+  static void diagnoseSkippedEntry(
+      ZipEntry entry, Path war, ServiceLoaderDescriptorSource.ScanState state) {
+    if (!entry.isDirectory()) {
+      diagnoseSkippedEntry(entry.getName(), war, state);
+    }
+  }
+
+  static void diagnoseSkippedEntry(
+      String name, Path war, ServiceLoaderDescriptorSource.ScanState state) {
+    if (containsSkippedMetadata(name)) {
+      state.diagnostic(
+          "war_nested_service_metadata_skipped",
+          war + "!/" + name,
+          "WAR-contained ServiceLoader metadata was not scanned");
     }
   }
 
