@@ -21,7 +21,15 @@ final class ProviderFactNormalizer {
     Set<String> ids = new HashSet<>();
     CallReferences references = collectCallReferences(graph);
     Map<Integer, String> callIds = callIds(references, ids);
-    List<SemanticCallFacts.Fact> facts = callFacts(context, references.edges(), callIds);
+    boolean hasServiceLoaderEdges = references.edges().stream()
+        .anyMatch(ref -> ref.edge().relationshipType().equals("service_loader"));
+    SourceMetadataScanner sourceScanner = hasServiceLoaderEdges
+        ? new SourceMetadataScanner(context) : null;
+    ServiceLoaderDescriptorScanner.Scan descriptors = hasServiceLoaderEdges
+        ? ServiceLoaderDescriptorScanner.scan(context)
+        : new ServiceLoaderDescriptorScanner.Scan(List.of());
+    List<SemanticCallFacts.Fact> facts = callFacts(
+        context, references.edges(), callIds, descriptors, sourceScanner);
     facts.addAll(dynamicFacts(context, graph.dynamicFeatures(), ids));
     return List.copyOf(facts);
   }
@@ -65,22 +73,39 @@ final class ProviderFactNormalizer {
 
   /** Normalizes ordinary call edges in their original provider order. */
   private static List<SemanticCallFacts.Fact> callFacts(
-      AnalysisContext context, List<EdgeRef> edgeRefs, Map<Integer, String> callIds) {
+      AnalysisContext context,
+      List<EdgeRef> edgeRefs,
+      Map<Integer, String> callIds,
+      ServiceLoaderDescriptorScanner.Scan descriptors,
+      SourceMetadataScanner sourceScanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     for (EdgeRef ref : edgeRefs) {
-      facts.add(callFact(context, ref.edge(), callIds.get(ref.index())));
+      facts.add(callFact(context, ref.edge(), callIds.get(ref.index()), descriptors, sourceScanner));
     }
     return facts;
   }
 
   /** Normalizes one ordinary provider edge with the centralized certainty policy. */
   private static SemanticCallFacts.Fact callFact(
-      AnalysisContext context, CallEdge edge, String id) {
+      AnalysisContext context,
+      CallEdge edge,
+      String id,
+      ServiceLoaderDescriptorScanner.Scan descriptors,
+      SourceMetadataScanner sourceScanner) {
     boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
         edge.relationshipType());
+    ServiceLoaderDescriptorScanner.Resolution serviceResolution =
+        edge.relationshipType().equals("service_loader")
+            ? ServiceLoaderDescriptorScanner.resolve(context, edge, descriptors, sourceScanner)
+            : null;
     SemanticCallFacts.Certainty certainty = openWorldDynamic
         ? SemanticCallFacts.Certainty.UNRESOLVED
-        : edge.certaintyHint();
+        : serviceResolution == null ? edge.certaintyHint() : serviceResolution.certainty();
+    List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
+    evidence.add(sootupEvidence(edge));
+    if (serviceResolution != null) {
+      evidence.addAll(serviceResolution.evidence());
+    }
     return SemanticCallFacts.Fact.provider(
         id,
         context,
@@ -88,8 +113,8 @@ final class ProviderFactNormalizer {
         edge.callee().displayName(),
         edge.relationshipType(),
         certainty,
-        List.of(sootupEvidence(edge)),
-        limitation(openWorldDynamic, certainty));
+        List.copyOf(evidence),
+        serviceResolution == null ? limitation(openWorldDynamic, certainty) : serviceResolution.limitation());
   }
 
   /** Normalizes source-backed dynamic observations after ordinary call IDs exist. */

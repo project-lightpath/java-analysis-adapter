@@ -369,7 +369,7 @@ final class SourceMetadataScanner {
         .findFirst());
   }
 
-  private Optional<SourceFile> sourceFile(String owner) {
+  Optional<SourceFile> sourceFile(String owner) {
     String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
     return files().stream().filter(file -> file.typeName().equals(topLevel)).findFirst();
   }
@@ -479,7 +479,7 @@ final class SourceMetadataScanner {
   }
 
   /** Resolves a source type with lexical nested-type precedence at one source offset. */
-  private Optional<String> resolveReferenceType(String type, SourceFile sourceFile, int siteOffset) {
+  Optional<String> resolveReferenceType(String type, SourceFile sourceFile, int siteOffset) {
     String normalized = stripBalancedGenericArguments(type == null ? "" : type).trim();
     if (normalized.endsWith("...")) {
       normalized = normalized.substring(0, normalized.length() - 3) + "[]";
