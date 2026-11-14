@@ -145,3 +145,10 @@ Evidence hashes:
   names exceeded the five-second normalization bound.
 - `GREEN_13`: commit `bb1a249f386195a9efed0014dd9d7ec60feb34d0`; ordered-set normalization
   preserves encounter order, removes duplicates, and completes within the bound.
+
+### lexical-ownership-regression — lambda receiver ownership
+
+- `RED_14`: commit `7373d8d7fd3ee4eaf995514658ffbbc13907949a`; a provider lambda was
+  rejected when an unrelated trailing lambda invocation shared the statement.
+- `GREEN_14`: commit `8de0ee244f03b55d64f04c8fe261bf949340f917`; target source lines and
+  lambda receiver ownership distinguish the provider call from the unrelated sibling.
