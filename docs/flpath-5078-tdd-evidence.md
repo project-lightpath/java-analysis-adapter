@@ -282,3 +282,13 @@ Evidence hashes:
 - Final follow-up coverage at this production HEAD passes `98/98` full-suite tests and `86/86`
   unit-only tests; changed-production coverage is `91.44%` (`844/923`) full-suite and `90.68%`
   (`837/923`) unit-only.
+
+### independent-review-api-authorization-and-io
+
+- `RED_26`: commit `465250a51db134ab67911d395c7faea9f4322f92`; a custom imported
+  `ServiceLoader` lookalike was parsed as the Java API, repository-root metadata scanned an
+  unselected descriptor, and unreadable descriptor directory/file inputs aborted analysis.
+- `GREEN_26`: commit `cd76de68e09780efa93ca79b0be712d7674fd323`; unqualified calls now require
+  `java.util.ServiceLoader` import/package ownership, repository-root-wide authorization is
+  removed while selected metadata locations remain supported, and descriptor I/O failures emit
+  diagnostics. Focused regressions pass `3/3`.
