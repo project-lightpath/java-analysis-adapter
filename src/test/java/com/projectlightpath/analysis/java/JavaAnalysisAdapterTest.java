@@ -1660,6 +1660,58 @@ class JavaAnalysisAdapterTest {
     assertTrue(resolution.limitation().toLowerCase().contains("module"), resolution.toString());
   }
 
+  /** Keeps a BOM-prefixed provider malformed and explains the resulting possible fact. */
+  @Test
+  void bomPrefixedProviderIsMalformed() throws IOException {
+    Path fixture = temp.resolve("service-loader-bom");
+    Path sourceRoot = fixture.resolve("src/main/java");
+    Path resources = fixture.resolve("resources");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    write(resources, "META-INF/services/demo.Provider", "\uFEFFdemo.DefaultProvider\n");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-bom")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(fixture.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-bom", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-bom/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    ServiceLoaderDescriptorScanner.Descriptor descriptor = scan.descriptors().stream()
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scan.descriptors().toString()));
+    assertTrue(descriptor.providers().isEmpty(), descriptor.toString());
+    assertEquals(List.of("\uFEFFdemo.DefaultProvider"), descriptor.malformedEntries());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().toLowerCase().contains("malformed"), resolution.toString());
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
