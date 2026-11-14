@@ -1553,6 +1553,64 @@ class JavaAnalysisAdapterTest {
         "same-package ServiceLoader must shadow java.util.* and remain unclassified");
   }
 
+  /** Recognizes java.util.* ServiceLoader when the selected package has no shadowing type. */
+  @Test
+  void recognizesValidWildcardServiceLoaderWithoutSamePackageShadow() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-valid-wildcard/src/main/java");
+    Path classes = temp.resolve("service-loader-valid-wildcard/target/classes");
+    Path resources = temp.resolve("service-loader-valid-wildcard/resources");
+    write(sourceRoot, "demo/Provider.java", """
+        package demo;
+        public interface Provider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultProvider.java", """
+        package demo;
+        public final class DefaultProvider implements Provider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/App.java", """
+        package demo;
+        import java.util.*;
+        public final class App {
+          public static void audit() {
+            ServiceLoader.load(Provider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-valid-wildcard")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-valid-wildcard/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultProvider#record")), serviceFacts.toString());
+  }
+
   /** Keeps a block-lambda callback after an inner statement, but not after the outer boundary. */
   @Test
   void recognizesBlockLambdaCallback() throws IOException {
