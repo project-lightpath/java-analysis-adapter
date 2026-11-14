@@ -29,7 +29,7 @@ final class ServiceLoaderCallSiteReader {
     return ServiceLoaderCallSiteParser.parse(source).stream()
         .filter(site -> site.line() <= call.getLineNumber())
         .filter(site -> sameStatement(source, site, call.getLineNumber()))
-        .anyMatch(site -> statementContainsMethod(source, site, targetMethod));
+        .anyMatch(site -> statementContainsMethod(source, site, targetMethod, call.getLineNumber()));
   }
 
   static ServiceLoadHints read(
@@ -80,7 +80,7 @@ final class ServiceLoaderCallSiteReader {
   }
 
   private static boolean statementContainsMethod(
-      String source, ServiceLoaderCallSite site, String targetMethod) {
+      String source, ServiceLoaderCallSite site, String targetMethod, int line) {
     if (targetMethod == null || targetMethod.isBlank() || targetMethod.equals("<init>")) {
       return false;
     }
@@ -92,9 +92,14 @@ final class ServiceLoaderCallSiteReader {
     if (statementEnd < 0) {
       statementEnd = source.length();
     }
-    String suffix = source.substring(loadEnd + 1, statementEnd);
-    return suffix.matches("(?s).*\\.\\s*" + java.util.regex.Pattern.quote(targetMethod)
-        + "\\s*\\(.*");
+    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+        "\\.\\s*" + java.util.regex.Pattern.quote(targetMethod) + "\\s*\\(")
+        .matcher(source);
+    matcher.region(loadEnd + 1, statementEnd);
+    if (!matcher.find()) {
+      return false;
+    }
+    return lineAt(source, matcher.start()) == line;
   }
 
   private static int lineStart(String source, int line) {
@@ -108,5 +113,15 @@ final class ServiceLoaderCallSiteReader {
       }
     }
     return current == line ? source.length() : -1;
+  }
+
+  private static int lineAt(String source, int offset) {
+    int line = 1;
+    for (int index = 0; index < offset; index++) {
+      if (source.charAt(index) == '\n') {
+        line++;
+      }
+    }
+    return line;
   }
 }
