@@ -1,20 +1,35 @@
 package com.projectlightpath.analysis.java;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** Loads and validates the VPE AnalysisContext JSON handoff. */
 public final class AnalysisContextLoader {
   public static final String SUPPORTED_SCHEMA_VERSION = "0.1.0";
 
-  private static final ObjectMapper MAPPER = new ObjectMapper()
+  private static final Set<String> MANIFEST_FIELDS = Set.of(
+      "schemaVersion", "owner", "entries", "fingerprint");
+  private static final Set<String> ENTRY_FIELDS = Set.of(
+      "classpathEntry", "groupId", "artifactId", "version", "fingerprint", "classifier");
+  private static final Set<String> BUILD_FIELDS = Set.of(
+      "tool", "command", "artifact", "fingerprint", "activeMavenProfiles",
+      "mavenProfileActivationSources", "mavenInvocationFingerprint", "effectivePomFingerprint");
+  private static final ObjectMapper MAPPER = new ObjectMapper(
+      JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
       .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
       .configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true);
 
@@ -23,11 +38,17 @@ public final class AnalysisContextLoader {
   /** Read one immutable context from a VPE-emitted JSON file. */
   public static AnalysisContext load(Path filename) throws IOException {
     Objects.requireNonNull(filename, "context filename");
-    return fromDocument(MAPPER.readValue(filename.toFile(), ContextDocument.class));
+    JsonNode root = MAPPER.readValue(filename.toFile(), JsonNode.class);
+    if (root == null || !root.isObject()) {
+      throw new IllegalArgumentException("analysis context must be a JSON object");
+    }
+    rejectManifestAliases(root);
+    dependencyClasspathRequired(root);
+    return fromDocument(MAPPER.treeToValue(root, ContextDocument.class), root);
   }
 
   /** Converts the validated JSON handoff document into an immutable context. */
-  private static AnalysisContext fromDocument(ContextDocument document) {
+  private static AnalysisContext fromDocument(ContextDocument document, JsonNode documentNode) {
     require(document, "analysis context");
     if (!SUPPORTED_SCHEMA_VERSION.equals(document.schemaVersion())) {
       throw new IllegalArgumentException(
@@ -51,9 +72,12 @@ public final class AnalysisContextLoader {
     }
 
     Path repositoryRoot = requiredDirectory(document.repositoryRoot(), "repository root");
-    Path applicationClasses = requiredDirectory(document.applicationClasses(), "application classes");
-    boolean dependencyClasspathRequired = document.dependencyClasspathRequired() == null
-        || document.dependencyClasspathRequired();
+    Path applicationClasses = requiredDirectory(
+        document.applicationClasses(), "application classes");
+    boolean dependencyClasspathRequired = dependencyClasspathRequired(documentNode);
+    AnalysisContext.DependencyCoordinateManifest manifest = dependencyCoordinateManifest(
+        documentNode, repositoryRoot);
+    AnalysisContext.Provenance provenance = provenance(document.provenance(), documentNode);
     AnalysisContext.Builder builder = AnalysisContext.builder()
         .id(id)
         .framework(framework)
@@ -65,7 +89,8 @@ public final class AnalysisContextLoader {
         .selectedProfile(required(document.selectedProfile(), "selected profile"))
         .analysisScope(parseScope(document.analysisScope()))
         .dependencyClasspathRequired(dependencyClasspathRequired)
-        .provenance(provenance(document.provenance()));
+        .dependencyCoordinateManifest(manifest)
+        .provenance(provenance);
 
     for (ResolvedRootDocument root : nonNull(document.sourceRoots())) {
       addRoot(builder, root, false, repositoryRoot);
@@ -73,8 +98,11 @@ public final class AnalysisContextLoader {
     for (ResolvedRootDocument root : nonNull(document.generatedSourceRoots())) {
       addRoot(builder, root, true, repositoryRoot);
     }
+    if (documentNode.has("dependencyClasspath") && documentNode.get("dependencyClasspath").isNull()) {
+      throw new IllegalArgumentException("dependencyClasspath must not be null");
+    }
     List<Path> dependencyClasspath = nonNull(document.dependencyClasspath()).stream()
-        .map(value -> existingPath(value, "dependency classpath entry"))
+        .map(value -> dependencyPath(value, repositoryRoot, manifest.present()))
         .toList();
     if (dependencyClasspathRequired && dependencyClasspath.isEmpty()) {
       throw new IllegalArgumentException("required dependency classpath is empty");
@@ -88,7 +116,7 @@ public final class AnalysisContextLoader {
           metadata.path());
     }
     builder.frameworkBindingMetadata(bindingMetadata(document));
-    builder.handoff(handoff(document));
+    builder.handoff(handoff(document, documentNode, manifest));
     return builder.build();
   }
 
@@ -184,11 +212,12 @@ public final class AnalysisContextLoader {
       boolean generatedCollection,
       Path repositoryRoot) {
     String declaredPath = required(root.declaredPath(), "source root declaredPath");
-    Path resolved = normalizedPath(root.path(), "source root " + declaredPath);
+    Path resolved = normalizedPath(
+        root.path(), "source root " + declaredPath, repositoryRoot, false, false);
     if (!resolved.startsWith(repositoryRoot)) {
       throw new IllegalArgumentException("source root must remain inside repository root: " + declaredPath);
     }
-    if (!Files.exists(resolved)
+    if (!existsNoFollow(resolved)
         && (!generatedCollection || root.required() || root.included())) {
       throw new IllegalArgumentException("source root is unavailable: " + declaredPath);
     }
@@ -206,8 +235,10 @@ public final class AnalysisContextLoader {
   }
 
   /** Converts serialized provenance while preserving freshness fields. */
-  private static AnalysisContext.Provenance provenance(ProvenanceDocument value) {
+  private static AnalysisContext.Provenance provenance(
+      ProvenanceDocument value, JsonNode root) {
     require(value, "provenance");
+    JsonNode provenanceNode = requiredObject(root, "provenance");
     return new AnalysisContext.Provenance(
         required(value.sourceRepository(), "provenance sourceRepository"),
         required(value.sourceReference(), "provenance sourceReference"),
@@ -215,6 +246,8 @@ public final class AnalysisContextLoader {
         required(value.sourceFingerprint(), "provenance sourceFingerprint"),
         required(value.generatedSourceFingerprint(), "provenance generatedSourceFingerprint"),
         required(value.dependencyFingerprint(), "provenance dependencyFingerprint"),
+        optionalFingerprint(provenanceNode, "dependencyClasspathOrderFingerprint"),
+        optionalFingerprint(provenanceNode, "dependencyCoordinateFingerprint"),
         required(value.buildFingerprint(), "provenance buildFingerprint"),
         required(value.toolchainFingerprint(), "provenance toolchainFingerprint"),
         required(value.analyzerFingerprint(), "provenance analyzerFingerprint"),
@@ -226,9 +259,30 @@ public final class AnalysisContextLoader {
   }
 
   /** Converts the serialized build handoff. */
-  private static AnalysisContext.Handoff handoff(ContextDocument document) {
+  private static AnalysisContext.Handoff handoff(
+      ContextDocument document,
+      JsonNode root,
+      AnalysisContext.DependencyCoordinateManifest manifest) {
     ProfileDocument profile = document.profile();
     BuildDocument build = document.build();
+    JsonNode buildNode = root.get("build");
+    boolean replayExpected = manifest.present();
+    if (replayExpected && (buildNode == null || buildNode.isNull() || !buildNode.isObject())) {
+      throw new IllegalArgumentException("coordinate-enabled context requires a build object");
+    }
+    if (!replayExpected && buildNode != null && buildNode.isObject()
+        && hasAny(buildNode,
+            "activeMavenProfiles",
+            "mavenProfileActivationSources",
+            "mavenInvocationFingerprint",
+            "effectivePomFingerprint")) {
+      throw new IllegalArgumentException(
+          "replay metadata requires a dependency coordinate manifest");
+    }
+    if (replayExpected) {
+      rejectUnknownFields(buildNode, BUILD_FIELDS, "build");
+      requireReplayFields(buildNode);
+    }
     return new AnalysisContext.Handoff(
         required(document.schemaVersion(), "schemaVersion"),
         profile == null ? "" : nullToEmpty(profile.id()),
@@ -238,7 +292,11 @@ public final class AnalysisContextLoader {
         build == null ? List.of() : nonNull(build.command()),
         build == null ? "" : nullToEmpty(build.artifact()),
         build == null ? "" : nullToEmpty(build.fingerprint()),
-        nonNull(document.limitations()));
+        nonNull(document.limitations()),
+        replayExpected ? List.copyOf(build.activeMavenProfiles()) : null,
+        replayExpected ? Map.copyOf(build.mavenProfileActivationSources()) : null,
+        replayExpected ? required(build.mavenInvocationFingerprint(), "build mavenInvocationFingerprint") : null,
+        replayExpected ? required(build.effectivePomFingerprint(), "build effectivePomFingerprint") : null);
   }
 
   /** Parses a serialized production or test scope. */
@@ -249,6 +307,204 @@ public final class AnalysisContextLoader {
       case "TEST" -> AnalysisContext.Scope.TEST;
       default -> throw new IllegalArgumentException("unsupported analysis scope: " + value);
     };
+  }
+
+  /** Decodes the presence-aware dependency-coordinate manifest before model binding can erase it. */
+  private static AnalysisContext.DependencyCoordinateManifest dependencyCoordinateManifest(
+      JsonNode root, Path repositoryRoot) {
+    if (!root.has("dependencyCoordinateManifest")) {
+      return AnalysisContext.DependencyCoordinateManifest.absent();
+    }
+    JsonNode node = root.get("dependencyCoordinateManifest");
+    if (node == null || node.isNull() || !node.isObject()) {
+      throw new IllegalArgumentException("dependencyCoordinateManifest must be a JSON object");
+    }
+    rejectUnknownFields(node, MANIFEST_FIELDS, "dependencyCoordinateManifest");
+    String schemaVersion = requiredText(node, "schemaVersion", "manifest schemaVersion");
+    String owner = requiredText(node, "owner", "manifest owner");
+    JsonNode entriesNode = node.get("entries");
+    if (entriesNode == null || entriesNode.isNull() || !entriesNode.isArray()) {
+      throw new IllegalArgumentException("manifest entries must be a non-null array");
+    }
+    List<AnalysisContext.DependencyCoordinateEntry> entries = new java.util.ArrayList<>();
+    for (JsonNode entryNode : entriesNode) {
+      if (entryNode == null || entryNode.isNull() || !entryNode.isObject()) {
+        throw new IllegalArgumentException("manifest entry must be a JSON object");
+      }
+      rejectUnknownFields(entryNode, ENTRY_FIELDS, "dependency coordinate manifest entry");
+      String classpathEntry = requiredText(
+          entryNode, "classpathEntry", "dependency coordinate classpathEntry");
+      Path normalized = normalizedPath(
+          classpathEntry,
+          "dependency coordinate classpathEntry",
+          repositoryRoot,
+          true,
+          false);
+      if (!existsNoFollow(normalized)) {
+        throw new IllegalArgumentException(
+            "dependency coordinate classpathEntry is unavailable: " + classpathEntry);
+      }
+      entries.add(new AnalysisContext.DependencyCoordinateEntry(
+          normalized,
+          optionalText(entryNode, "fingerprint", "dependency coordinate entry fingerprint"),
+          requiredText(entryNode, "groupId", "dependency coordinate groupId"),
+          requiredText(entryNode, "artifactId", "dependency coordinate artifactId"),
+          requiredText(entryNode, "version", "dependency coordinate version"),
+          optionalText(entryNode, "classifier", "dependency coordinate classifier")));
+    }
+    String fingerprint = null;
+    if (!entries.isEmpty()) {
+      fingerprint = requiredText(node, "fingerprint", "manifest fingerprint");
+      validateFingerprint(fingerprint, "manifest fingerprint");
+    } else if (node.has("fingerprint")) {
+      throw new IllegalArgumentException(
+          "present-empty dependency coordinate manifest must omit fingerprint");
+    }
+    return new AnalysisContext.DependencyCoordinateManifest(
+        schemaVersion, owner, fingerprint, entries);
+  }
+
+  private static boolean dependencyClasspathRequired(JsonNode root) {
+    if (!root.has("dependencyClasspathRequired")) {
+      return true;
+    }
+    JsonNode value = root.get("dependencyClasspathRequired");
+    if (value == null || value.isNull() || !value.isBoolean()) {
+      throw new IllegalArgumentException("dependencyClasspathRequired must be a boolean");
+    }
+    return value.booleanValue();
+  }
+
+  private static Path dependencyPath(
+      String value, Path repositoryRoot, boolean manifestPresent) {
+    Path path = normalizedPath(
+        value,
+        "dependency classpath entry",
+        repositoryRoot,
+        true,
+        !manifestPresent);
+    if (isWildcard(path)) {
+      return path;
+    }
+    if (!existsNoFollow(path)) {
+      throw new IllegalArgumentException("dependency classpath entry is unavailable: " + value);
+    }
+    return path;
+  }
+
+  private static boolean isWildcard(Path path) {
+    return path.toString().contains("*");
+  }
+
+  private static void rejectManifestAliases(JsonNode root) {
+    for (String alias : List.of(
+        "dependencyCoordinates", "dependencyClasspathMetadata", "dependencyMetadata")) {
+      if (root.has(alias)) {
+        throw new IllegalArgumentException("unsupported dependency coordinate manifest alias: " + alias);
+      }
+    }
+  }
+
+  private static void rejectUnknownFields(JsonNode node, Set<String> allowed, String label) {
+    var fields = node.fieldNames();
+    while (fields.hasNext()) {
+      String field = fields.next();
+      if (!allowed.contains(field)) {
+        throw new IllegalArgumentException(label + " contains unknown field: " + field);
+      }
+    }
+  }
+
+  private static String requiredText(JsonNode object, String field, String label) {
+    JsonNode value = object.get(field);
+    if (value == null || value.isNull() || !value.isTextual() || value.textValue().isBlank()) {
+      throw new IllegalArgumentException(label + " must be a nonblank string");
+    }
+    return value.textValue();
+  }
+
+  private static String optionalText(JsonNode object, String field, String label) {
+    if (!object.has(field)) {
+      return null;
+    }
+    return requiredText(object, field, label);
+  }
+
+  private static String optionalFingerprint(JsonNode object, String field) {
+    if (!object.has(field)) {
+      return null;
+    }
+    String value = requiredText(object, field, "provenance " + field);
+    validateFingerprint(value, "provenance " + field);
+    return value;
+  }
+
+  private static void validateFingerprint(String value, String label) {
+    if (!value.matches("[0-9a-f]{64}")) {
+      throw new IllegalArgumentException(label + " must be a lowercase SHA-256 fingerprint");
+    }
+  }
+
+  private static JsonNode requiredObject(JsonNode root, String field) {
+    JsonNode value = root.get(field);
+    if (value == null || value.isNull() || !value.isObject()) {
+      throw new IllegalArgumentException(field + " must be a JSON object");
+    }
+    return value;
+  }
+
+  private static boolean hasAny(JsonNode object, String... fields) {
+    for (String field : fields) {
+      if (object.has(field)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static void requireReplayFields(JsonNode buildNode) {
+    JsonNode profiles = buildNode.get("activeMavenProfiles");
+    JsonNode sources = buildNode.get("mavenProfileActivationSources");
+    if (profiles == null || profiles.isNull() || !profiles.isArray()
+        || sources == null || sources.isNull() || !sources.isObject()) {
+      throw new IllegalArgumentException("coordinate-enabled build requires replay profile metadata");
+    }
+    String invocation = requiredText(
+        buildNode, "mavenInvocationFingerprint", "build mavenInvocationFingerprint");
+    String pom = requiredText(
+        buildNode, "effectivePomFingerprint", "build effectivePomFingerprint");
+    validateFingerprint(invocation, "build mavenInvocationFingerprint");
+    validateFingerprint(pom, "build effectivePomFingerprint");
+    List<String> profileValues = new java.util.ArrayList<>();
+    for (JsonNode profile : profiles) {
+      if (profile == null || profile.isNull() || !profile.isTextual() || profile.textValue().isBlank()) {
+        throw new IllegalArgumentException("activeMavenProfiles must contain nonblank strings");
+      }
+      profileValues.add(profile.textValue());
+    }
+    List<String> sorted = profileValues.stream().sorted().toList();
+    if (!profileValues.equals(sorted)
+        || new HashSet<>(profileValues).size() != profileValues.size()) {
+      throw new IllegalArgumentException("activeMavenProfiles must be sorted and unique");
+    }
+    if (sources.size() != profileValues.size()) {
+      throw new IllegalArgumentException(
+          "mavenProfileActivationSources must cover activeMavenProfiles exactly");
+    }
+    for (String profile : profileValues) {
+      JsonNode source = sources.get(profile);
+      if (source == null || !source.isTextual() || !"explicit".equals(source.textValue())) {
+        throw new IllegalArgumentException(
+            "maven profile activation source must be explicit for " + profile);
+      }
+    }
+    var sourceNames = sources.fieldNames();
+    while (sourceNames.hasNext()) {
+      if (!profileValues.contains(sourceNames.next())) {
+        throw new IllegalArgumentException(
+            "mavenProfileActivationSources contains an inactive profile");
+      }
+    }
   }
 
   /** Parses an observed or not-captured metadata status. */
@@ -263,30 +519,93 @@ public final class AnalysisContextLoader {
 
   /** Validates a required existing directory path. */
   private static Path requiredDirectory(String value, String label) {
-    Path path = existingPath(value, label);
-    if (!Files.isDirectory(path)) {
+    String required = required(value, label);
+    Path path;
+    try {
+      path = Path.of(required).toAbsolutePath().normalize();
+    } catch (RuntimeException error) {
+      throw new IllegalArgumentException(label + " is not a valid path: " + required, error);
+    }
+    if (!path.isAbsolute() || !existsNoFollow(path)) {
+      throw new IllegalArgumentException(label + " is unavailable: " + required);
+    }
+    if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
       throw new IllegalArgumentException(label + " must be a directory: " + path);
     }
     return path;
   }
 
-  /** Validates a required existing filesystem path. */
-  private static Path existingPath(String value, String label) {
-    Path path = normalizedPath(value, label);
-    if (!Files.exists(path)) {
-      throw new IllegalArgumentException(label + " is unavailable: " + value);
+  /** Normalizes a serialized path lexically without resolving symlinks. */
+  private static Path normalizedPath(
+      String value,
+      String label,
+      Path repositoryRoot,
+      boolean allowExternal,
+      boolean allowWildcard) {
+    String required = required(value, label);
+    Path path;
+    try {
+      path = Path.of(required);
+    } catch (RuntimeException error) {
+      throw new IllegalArgumentException(label + " is not a valid path: " + required, error);
+    }
+    if (!path.isAbsolute()) {
+      if (repositoryRoot == null) {
+        throw new IllegalArgumentException(label + " must be absolute: " + required);
+      }
+      path = repositoryRoot.resolve(path);
+    }
+    path = path.toAbsolutePath().normalize();
+    boolean wildcard = isWildcard(path);
+    if (wildcard) {
+      if (!allowWildcard || !validWildcard(path)) {
+        throw new IllegalArgumentException(label + " contains an invalid wildcard: " + required);
+      }
+      Path directory = path.getParent();
+      if (directory == null || !existsNoFollow(directory)
+          || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+        throw new IllegalArgumentException(label + " wildcard directory is unavailable: " + required);
+      }
+    } else if (!hasNoSymlinkComponents(path)) {
+      throw new IllegalArgumentException(label + " must not traverse a symlink: " + required);
+    }
+    if (!allowExternal && repositoryRoot != null && !path.startsWith(repositoryRoot)) {
+      throw new IllegalArgumentException(label + " must remain inside repository root: " + required);
     }
     return path;
   }
 
-  /** Normalizes a serialized path without requiring it to exist. */
-  private static Path normalizedPath(String value, String label) {
-    String required = required(value, label);
-    Path path = Path.of(required);
-    if (!path.isAbsolute()) {
-      throw new IllegalArgumentException(label + " must be absolute: " + required);
+  private static boolean validWildcard(Path path) {
+    String value = path.toString();
+    return path.getFileName() != null
+        && "*".equals(path.getFileName().toString())
+        && value.indexOf('*') == value.lastIndexOf('*');
+  }
+
+  private static boolean existsNoFollow(Path path) {
+    return Files.exists(path, LinkOption.NOFOLLOW_LINKS)
+        && hasNoSymlinkComponents(path);
+  }
+
+  private static boolean hasNoSymlinkComponents(Path path) {
+    Path normalized = path.toAbsolutePath().normalize();
+    Path current = normalized.getRoot();
+    if (current == null) {
+      return false;
     }
-    return path.normalize();
+    for (Path component : normalized) {
+      current = current.resolve(component);
+      if (Files.isSymbolicLink(current) && !isTrustedPrefixAlias(current)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** macOS exposes temporary directories through the trusted /var alias. */
+  private static boolean isTrustedPrefixAlias(Path path) {
+    String value = path.toAbsolutePath().normalize().toString();
+    return "/var".equals(value) || "/tmp".equals(value);
   }
 
   /** Requires a nonblank serialized scalar. */
@@ -418,7 +737,15 @@ public final class AnalysisContextLoader {
       @JsonAlias({"sourcePath", "declaredPath"}) String path,
       String providerFactId) {}
 
-  private record BuildDocument(String tool, List<String> command, String artifact, String fingerprint) {}
+  private record BuildDocument(
+      String tool,
+      List<String> command,
+      String artifact,
+      String fingerprint,
+      List<String> activeMavenProfiles,
+      Map<String, String> mavenProfileActivationSources,
+      String mavenInvocationFingerprint,
+      String effectivePomFingerprint) {}
 
   private record FreshnessDocument(long maxAgeSeconds) {}
 
@@ -429,6 +756,8 @@ public final class AnalysisContextLoader {
       String sourceFingerprint,
       String generatedSourceFingerprint,
       String dependencyFingerprint,
+      String dependencyClasspathOrderFingerprint,
+      String dependencyCoordinateFingerprint,
       String buildFingerprint,
       String toolchainFingerprint,
       String analyzerFingerprint,

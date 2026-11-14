@@ -35,6 +35,46 @@ a unique non-abstained provider target identity. Links use
 `enriches_without_replacing`, preserving separate provider and framework fact
 sets.
 
+## Dependency Maven coordinate handoff
+
+`AnalysisContext` optionally accepts a versioned
+`dependencyCoordinateManifest`. The adapter consumes this upstream-owned
+metadata; it never derives coordinates from a filename, local Maven repository
+path, archive contents, or `META-INF/pom.properties`.
+
+The supported `0.1.0` shape is:
+
+```json
+{
+  "dependencyCoordinateManifest": {
+    "schemaVersion": "0.1.0",
+    "owner": "vulnerability-prioritization-engine/analysiscontext.Coordinator.Prepare",
+    "fingerprint": "same-value-as-provenance.dependencyCoordinateFingerprint",
+    "entries": [
+      {
+        "classpathEntry": "/absolute/normalized/dependency.jar",
+        "fingerprint": "optional-entry-fingerprint",
+        "groupId": "com.example",
+        "artifactId": "dependency",
+        "version": "1.2.3",
+        "classifier": "tests"
+      }
+    ]
+  }
+}
+```
+
+The manifest is optional for backward compatibility. When present with entries,
+its fingerprint must equal `provenance.dependencyCoordinateFingerprint`, every entry path
+is normalized and must match exactly one distinct normalized
+`dependencyClasspath` path, and duplicate paths or missing coordinate values
+are rejected. `classifier` and entry `fingerprint` may be absent. A
+dependency fact keeps the existing exact `dependencyClasspathEntry` and adds
+only supplied values as `dependencyGroupId`, `dependencyArtifactId`,
+`dependencyVersion`, `dependencyClassifier`, and
+`dependencyClasspathEntryFingerprint`; absent metadata produces no coordinate
+attributes.
+
 ## Java API versioning
 
 The Maven module is currently `0.1.0-SNAPSHOT` and has no production release.

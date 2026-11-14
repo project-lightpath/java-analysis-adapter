@@ -10,36 +10,25 @@
     "includeTests": false,
     "findings": [
       {
-        "class": "AnalysisContextLoader",
+        "class": "AnalysisContext",
         "classification": "maintainability",
-        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
-        "fingerprint": "4b4e07586437085547792b443a34cb0dd3597be55ceea4ab38932dfdb94a4344",
-        "message": "Possible God Class (WMC=87, ATFD=7, TCC=0.000%)",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContext.java",
+        "fingerprint": "9d9aad51b9627595d2a1f513dec2d78d9ed688dc06a0d7408ea04924d992cfa4",
+        "message": "Possible God Class (WMC=49, ATFD=38, TCC=2.273%)",
         "method": "",
-        "rationale": "Reviewed maintainability baseline: context-document parsing intentionally aggregates optional metadata and compatibility defaults; the behavior is covered by loader tests and should be split only with targeted schema regressions.",
+        "rationale": "Reviewed maintainability baseline: AnalysisContext intentionally centralizes versioned source, dependency, framework, provenance, and strict coordinate ownership inputs; decomposition is future work and the handoff regressions cover the added validation.",
         "rule": "GodClass",
         "variable": ""
       },
       {
-        "class": "AnalysisContextLoader",
+        "class": "AnalysisContext",
         "classification": "maintainability",
-        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
-        "fingerprint": "10880b50fc0b0148f93bca81ae5508cc99490bf35af12233df2a31255819f456",
-        "message": "The method 'fromDocument(ContextDocument)' has a cyclomatic complexity of 17.",
-        "method": "fromDocument",
-        "rationale": "Reviewed maintainability baseline: context-document parsing intentionally aggregates optional metadata and compatibility defaults; the behavior is covered by loader tests and should be split only with targeted schema regressions.",
-        "rule": "CyclomaticComplexity",
-        "variable": ""
-      },
-      {
-        "class": "AnalysisContextLoader",
-        "classification": "maintainability",
-        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
-        "fingerprint": "02fadb4278cd7d6257b8ff661d86e7140b9531e6ec17e91c736eeb67dcd7aa24",
-        "message": "The method 'fromDocument(ContextDocument)' has an NPath complexity of 494, current threshold is 300",
-        "method": "fromDocument",
-        "rationale": "Reviewed maintainability baseline: context-document parsing intentionally aggregates optional metadata and compatibility defaults; the behavior is covered by loader tests and should be split only with targeted schema regressions.",
-        "rule": "NPathComplexity",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContext.java",
+        "fingerprint": "50750f4e44e5db8d8145b5d58bda442e7820bf1279e91b5192309c47b3586f54",
+        "message": "This class has a bunch of public methods and attributes",
+        "method": "",
+        "rationale": "Reviewed maintainability baseline: AnalysisContext is the pre-release public handoff API and its coordinate manifest/accessors are required by the adapter and downstream handoff consumers; the API is covered by loader and integration tests.",
+        "rule": "ExcessivePublicCount",
         "variable": ""
       },
       {
@@ -150,28 +139,6 @@
         "method": "main",
         "rationale": "Intentional process-boundary handling: the CLI must convert any analysis failure into a stable user-facing error and non-zero exit; narrowing this catch requires redesigning the command boundary.",
         "rule": "AvoidCatchingGenericException",
-        "variable": ""
-      },
-      {
-        "class": "ProviderFactNormalizer",
-        "classification": "maintainability",
-        "file": "src/main/java/com/projectlightpath/analysis/java/ProviderFactNormalizer.java",
-        "fingerprint": "3fbf0a1821c2674cb406f19a1758574a5e156721d834558a4e4dff56d2b8048f",
-        "message": "The method 'normalize(AnalysisContext, AnalysisGraph)' has a cognitive complexity of 20, current threshold is 20",
-        "method": "normalize",
-        "rationale": "Reviewed maintainability baseline: provider normalization combines fact identity, dynamic-certainty guards, and contract-preserving defaults; the branches are behavior-bearing and covered by normalization tests.",
-        "rule": "CognitiveComplexity",
-        "variable": ""
-      },
-      {
-        "class": "ProviderFactNormalizer",
-        "classification": "maintainability",
-        "file": "src/main/java/com/projectlightpath/analysis/java/ProviderFactNormalizer.java",
-        "fingerprint": "03578503563f4b3ea007862733f12db6512c5aedf8f09bc6f4c7cdf659d1f808",
-        "message": "The method 'normalize(AnalysisContext, AnalysisGraph)' has an NPath complexity of 442, current threshold is 300",
-        "method": "normalize",
-        "rationale": "Reviewed maintainability baseline: provider normalization combines fact identity, dynamic-certainty guards, and contract-preserving defaults; the branches are behavior-bearing and covered by normalization tests.",
-        "rule": "NPathComplexity",
         "variable": ""
       },
       {
@@ -788,6 +755,149 @@
         "method": "beanCandidates",
         "rationale": "Reviewed maintainability baseline for FLPATH-5077: repository-interface classification now preserves annotated Spring Data candidates while the existing scanner intentionally centralizes bounded source parsing; focused repository and lifecycle regressions cover the behavior.",
         "rule": "NPathComplexity",
+        "variable": ""
+      },
+      {
+        "class": "Provenance",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContext.java",
+        "fingerprint": "f801245f80935d0f6c8da7f2069f22c71c8c507bf0671da09037cee379a9646d",
+        "message": "Avoid long parameter lists.",
+        "method": "Provenance",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: the public record shape mirrors the versioned provenance handoff and retains compatibility constructors for existing callers; replacing fields with an opaque parameter object would weaken the serialized audit contract.",
+        "rule": "ExcessiveParameterList",
+        "variable": ""
+      },
+      {
+        "class": "Handoff",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContext.java",
+        "fingerprint": "8e69b16512db250a1483101c15c9d93abf79f8b8cab4e61fab26629b9242e6cb",
+        "message": "Avoid long parameter lists.",
+        "method": "Handoff",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: the public record shape mirrors the build replay handoff and retains a legacy constructor for existing callers; each field is independently serialized and validated by the business-level handoff tests.",
+        "rule": "ExcessiveParameterList",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "7d2b277af8fd9f5490410398a5dce1f25679d6ae282b5e61ee20c6af74f5236e",
+        "message": "Possible God Class (WMC=222, ATFD=39, TCC=0.000%)",
+        "method": "",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: this loader is the single JSON trust boundary and intentionally keeps schema, filesystem, manifest, provenance, and replay validation together; end-to-end tests exercise the boundary without implementation coupling.",
+        "rule": "GodClass",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "a424de21204e91366eda935e3b3ef55ee48d64366405c3c49637c7a5ceeed3d0",
+        "message": "The class 'AnalysisContextLoader' has a total cyclomatic complexity of 222 (highest 27).",
+        "method": "",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: complexity is concentrated at the serialized handoff trust boundary, where compatibility defaults and fail-closed validation must be evaluated together; the business scenarios preserve the review surface.",
+        "rule": "CyclomaticComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "859e5b2cde70b533f778da01637807e524d3a6076d3bf5171ebf002226f407fb",
+        "message": "The method 'fromDocument(ContextDocument, JsonNode)' has a cyclomatic complexity of 20.",
+        "method": "fromDocument",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: document conversion must sequence raw JSON presence checks before typed binding, then build the immutable context; this ordering prevents null/alias ambiguity and is covered through AnalysisContextLoader.load.",
+        "rule": "CyclomaticComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "91a916749b415c96d1599d00c539a79c424ade6da941998f02958f8546c4a8ac",
+        "message": "The method 'fromDocument(ContextDocument, JsonNode)' has an NPath complexity of 542, current threshold is 300",
+        "method": "fromDocument",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: the conversion path intentionally distinguishes legacy contexts from coordinate-enabled contexts before constructing the immutable model; the serialized red/green tests verify compatibility and rejection semantics.",
+        "rule": "NPathComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "7a38f7a053b6acd03d3a16f8446f68ee7d36d74021228064296574c143165bf3",
+        "message": "The method 'handoff(ContextDocument, JsonNode, DependencyCoordinateManifest)' has a cyclomatic complexity of 23.",
+        "method": "handoff",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: replay metadata is accepted only when a coordinate manifest is present and all required build identities are explicit; the branches encode provenance integrity rather than incidental control flow.",
+        "rule": "CyclomaticComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "cb7e0785f641ca6d4b054682a769177f9e1d1ab600bcb81bebc0a2dfa7c92593",
+        "message": "The method 'handoff(ContextDocument, JsonNode, DependencyCoordinateManifest)' has an NPath complexity of 32773, current threshold is 300",
+        "method": "handoff",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: the handoff method preserves a strict legacy path while requiring reproducible Maven replay metadata for coordinate-enabled inputs; business-level tests cover both paths.",
+        "rule": "NPathComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "c4631a92226600fb4d08c3d55553d7c0d53193b024d03a760665934265d9efac",
+        "message": "The method 'dependencyCoordinateManifest(JsonNode, Path)' has a cyclomatic complexity of 20.",
+        "method": "dependencyCoordinateManifest",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: raw manifest parsing intentionally validates allowlisted fields, producer ownership, concrete paths, supplied coordinates, and entry fingerprints before model binding; rejection tests are tied to integrity objectives.",
+        "rule": "CyclomaticComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "f2f9a4eb324cf118165b2e0c6d4ec03ed34cf18031a98c9c2814c4c47392c239",
+        "message": "The method 'requireReplayFields(JsonNode)' has a cyclomatic complexity of 27.",
+        "method": "requireReplayFields",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: profile ordering, uniqueness, exact activation-source coverage, and SHA-256 replay identities are separate trust checks; keeping them explicit prevents silent provenance weakening.",
+        "rule": "CyclomaticComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "intentional",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "297c52f908091a67ef529f5a344400b70bfbda4bb2dbbda231fd00d115e518be",
+        "message": "Avoid catching generic exceptions such as NullPointerException, RuntimeException, Exception in try-catch block",
+        "method": "requiredDirectory",
+        "rationale": "Intentional deserialization trust-boundary handling: malformed serialized paths must become stable IllegalArgumentException diagnostics instead of leaking platform-specific unchecked path errors; the loader contract tests cover fail-closed behavior.",
+        "rule": "AvoidCatchingGenericException",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "maintainability",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "3cb72fbc98e4857779d64a205aa8e2f6b823f91467667e429c661e2f2129d2fd",
+        "message": "The method 'normalizedPath(String, String, Path, boolean, boolean)' has a cyclomatic complexity of 20.",
+        "method": "normalizedPath",
+        "rationale": "Reviewed FLPATH-5112 maintainability finding: one path policy deliberately handles absolute/relative resolution, wildcard restrictions, symlink rejection, repository containment, and external dependency ownership; each branch protects the serialized trust boundary.",
+        "rule": "CyclomaticComplexity",
+        "variable": ""
+      },
+      {
+        "class": "AnalysisContextLoader",
+        "classification": "intentional",
+        "file": "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+        "fingerprint": "97da0c6b317a1de38e04353ec8f07166431d2129b6e324e7d6b0bcf3cfeedc4d",
+        "message": "Avoid catching generic exceptions such as NullPointerException, RuntimeException, Exception in try-catch block",
+        "method": "normalizedPath",
+        "rationale": "Intentional deserialization trust-boundary handling: all invalid path syntax must be normalized to one fail-closed IllegalArgumentException contract before filesystem checks; this avoids platform-dependent diagnostics and is covered by loader validation scenarios.",
+        "rule": "AvoidCatchingGenericException",
         "variable": ""
       }
     ],

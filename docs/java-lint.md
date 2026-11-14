@@ -87,22 +87,23 @@ quality regressions or partial reports.
 
 ### Baseline captured for this change
 
-The current reviewed inventory contains:
+The current reviewed inventory contains the existing parser/model backlog plus
+the FLPATH-5112 serialized-handoff trust-boundary findings:
 
 | Category | Count | Meaning |
 | --- | ---: | --- |
-| Maintainability | 67 | Parser/model complexity retained as an explicit reviewed backlog. |
-| Intentional | 1 | The CLI's process-boundary `RuntimeException` catch. |
+| Maintainability | 78 | Parser/model and serialized-handoff complexity retained as an explicit reviewed backlog. |
+| Intentional | 3 | The CLI process-boundary catch plus two loader trust-boundary path catches. |
 | High-confidence defect | 0 | Fixable dead code and duplicated parser mechanics were removed before capture. |
 | Configuration noise | 0 | Documentation/parser false positives were removed from the production ruleset. |
-| PMD findings | 68 | All listed with stable fingerprints in the JSON baseline. |
+| PMD findings | 81 | All listed with stable fingerprints and issue-specific rationales in the JSON baseline. |
 | CPD duplications | 0 | No duplication remains at the 100-token threshold. |
 
-The PMD distribution is 25 `CognitiveComplexity`, 25
-`CyclomaticComplexity`, 13 `NPathComplexity`, 3 `GodClass`, 1 `NcssCount`,
-and 1 intentional `AvoidCatchingGenericException`. The largest reviewed
-clusters are the source parser, bounded framework model, context loader, and
-provider normalizer.
+The PMD distribution is 24 `CognitiveComplexity`, 31
+`CyclomaticComplexity`, 15 `NPathComplexity`, 4 `GodClass`, 2
+`ExcessiveParameterList`, 1 `ExcessivePublicCount`, 1 `NcssCount`, and 3
+`AvoidCatchingGenericException`. The largest reviewed clusters are the source
+parser, bounded framework model, context loader, and provider normalizer.
 
 Before capture, the change fixed unused locals/private code, isolated scanner
 I/O error handling, consolidated repeated parser splitting and import

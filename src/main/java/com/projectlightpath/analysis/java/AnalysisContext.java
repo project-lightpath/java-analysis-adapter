@@ -3,9 +3,12 @@ package com.projectlightpath.analysis.java;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The build, framework, source, dependency, and provenance inputs selected for
@@ -50,6 +53,13 @@ public final class AnalysisContext {
   public enum MetadataStatus {
     OBSERVED,
     NOT_CAPTURED
+  }
+
+  /** Presence state for the optional dependency-coordinate handoff. */
+  public enum DependencyCoordinateManifestPresence {
+    ABSENT,
+    PRESENT_EMPTY,
+    PRESENT_NONEMPTY
   }
 
   public record SourceRoot(
@@ -119,6 +129,154 @@ public final class AnalysisContext {
       }
       Objects.requireNonNull(status, "framework metadata status");
     }
+  }
+
+  /** Versioned upstream metadata binding dependency paths to supplied Maven coordinates. */
+  public record DependencyCoordinateManifest(
+      String schemaVersion,
+      String owner,
+      String fingerprint,
+      List<DependencyCoordinateEntry> entries,
+      DependencyCoordinateManifestPresence presence) {
+    public static final String SUPPORTED_SCHEMA_VERSION = "0.1.0";
+    public static final String OWNER =
+        "vulnerability-prioritization-engine/analysiscontext.Coordinator.Prepare";
+
+    /** Creates a present manifest and derives its empty/non-empty state. */
+    public DependencyCoordinateManifest(
+        String schemaVersion,
+        String owner,
+        String fingerprint,
+        List<DependencyCoordinateEntry> entries) {
+      this(
+          schemaVersion,
+          owner,
+          fingerprint,
+          entries,
+          entries == null || entries.isEmpty()
+              ? DependencyCoordinateManifestPresence.PRESENT_EMPTY
+              : DependencyCoordinateManifestPresence.PRESENT_NONEMPTY);
+    }
+
+    /** Compatibility constructor for the historical three-argument model. */
+    public DependencyCoordinateManifest(
+        String schemaVersion, String fingerprint, List<DependencyCoordinateEntry> entries) {
+      this(schemaVersion, OWNER, fingerprint, entries);
+    }
+
+    /** Creates a backward-compatible absent manifest state. */
+    public static DependencyCoordinateManifest absent() {
+      return new DependencyCoordinateManifest(
+          SUPPORTED_SCHEMA_VERSION,
+          OWNER,
+          null,
+          List.of(),
+          DependencyCoordinateManifestPresence.ABSENT);
+    }
+
+    /** Historical name for the absent, backward-compatible state. */
+    public static DependencyCoordinateManifest empty() {
+      return absent();
+    }
+
+    /** Creates the explicit present-empty state used for required no-dependency runs. */
+    public static DependencyCoordinateManifest presentEmpty() {
+      return new DependencyCoordinateManifest(
+          SUPPORTED_SCHEMA_VERSION,
+          OWNER,
+          null,
+          List.of(),
+          DependencyCoordinateManifestPresence.PRESENT_EMPTY);
+    }
+
+    /** Validates and freezes the dependency coordinate handoff. */
+    public DependencyCoordinateManifest {
+      if (!SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+        throw new IllegalArgumentException(
+            "unsupported dependency coordinate manifest schemaVersion: " + schemaVersion);
+      }
+      if (!OWNER.equals(owner)) {
+        throw new IllegalArgumentException("unsupported dependency coordinate manifest owner: " + owner);
+      }
+      presence = Objects.requireNonNull(presence, "dependency coordinate manifest presence");
+      entries = List.copyOf(entries == null ? List.of() : entries);
+      fingerprint = optionalFingerprint(fingerprint, "dependency coordinate manifest fingerprint");
+      Set<Path> paths = new HashSet<>();
+      for (DependencyCoordinateEntry entry : entries) {
+        Objects.requireNonNull(entry, "dependency coordinate manifest entry");
+        if (!paths.add(entry.classpathEntry())) {
+          throw new IllegalArgumentException(
+              "duplicate dependency coordinate manifest path: " + entry.classpathEntry());
+        }
+      }
+      if (presence == DependencyCoordinateManifestPresence.ABSENT && (!entries.isEmpty() || fingerprint != null)) {
+        throw new IllegalArgumentException("absent dependency coordinate manifest must be empty");
+      }
+      if (presence == DependencyCoordinateManifestPresence.PRESENT_EMPTY && !entries.isEmpty()) {
+        throw new IllegalArgumentException("present-empty dependency coordinate manifest must have no entries");
+      }
+      if (presence == DependencyCoordinateManifestPresence.PRESENT_EMPTY && fingerprint != null) {
+        throw new IllegalArgumentException(
+            "present-empty dependency coordinate manifest must omit fingerprint");
+      }
+      if (presence == DependencyCoordinateManifestPresence.PRESENT_NONEMPTY && entries.isEmpty()) {
+        throw new IllegalArgumentException("present-nonempty dependency coordinate manifest must have entries");
+      }
+      if (presence == DependencyCoordinateManifestPresence.PRESENT_NONEMPTY && fingerprint == null) {
+        throw new IllegalArgumentException(
+            "dependency coordinate manifest fingerprint is required for non-empty entries");
+      }
+    }
+
+    /** Finds metadata for one normalized dependency path without discovering any metadata. */
+    public Optional<DependencyCoordinateEntry> entryFor(Path path) {
+      Path normalized = normalize(path, "dependency coordinate lookup path");
+      return entries.stream()
+          .filter(entry -> entry.classpathEntry().equals(normalized))
+          .findFirst();
+    }
+
+    public boolean present() {
+      return presence != DependencyCoordinateManifestPresence.ABSENT;
+    }
+
+    public boolean hasEntries() {
+      return !entries.isEmpty();
+    }
+  }
+
+  /** One upstream-owned dependency path, fingerprint, and Maven coordinate tuple. */
+  public record DependencyCoordinateEntry(
+      Path classpathEntry,
+      String fingerprint,
+      String groupId,
+      String artifactId,
+      String version,
+      String classifier) {
+    /** Validates and normalizes one dependency coordinate row. */
+    public DependencyCoordinateEntry {
+      classpathEntry = normalize(classpathEntry, "dependency coordinate classpath entry");
+      if (classpathEntry.toString().contains("*")) {
+        throw new IllegalArgumentException("dependency coordinate classpathEntry must be concrete");
+      }
+      requireValue(groupId, "dependency coordinate groupId");
+      requireValue(artifactId, "dependency coordinate artifactId");
+      requireValue(version, "dependency coordinate version");
+      fingerprint = optionalFingerprint(fingerprint, "dependency coordinate entry fingerprint");
+      classifier = optionalValue(classifier, "dependency coordinate classifier");
+    }
+
+    /** Convenience constructor for callers using serialized path strings. */
+    public DependencyCoordinateEntry(
+        String classpathEntry,
+        String fingerprint,
+        String groupId,
+        String artifactId,
+        String version,
+        String classifier) {
+      this(Path.of(classpathEntry), fingerprint, groupId, artifactId, version, classifier);
+    }
+
   }
 
   /** Versioned, candidate-level framework evidence used for binding resolution. */
@@ -302,6 +460,8 @@ public final class AnalysisContext {
       String sourceFingerprint,
       String generatedSourceFingerprint,
       String dependencyFingerprint,
+      String dependencyClasspathOrderFingerprint,
+      String dependencyCoordinateFingerprint,
       String buildFingerprint,
       String toolchainFingerprint,
       String analyzerFingerprint,
@@ -313,25 +473,62 @@ public final class AnalysisContext {
     /** Compatibility constructor for programmatic callers and existing tests. */
     public Provenance(
         String sourceFingerprint,
-        String generatedSourceFingerprint,
-        String dependencyFingerprint,
-        String gitRevision,
-        String providerRuntime) {
+         String generatedSourceFingerprint,
+         String dependencyFingerprint,
+         String gitRevision,
+         String providerRuntime) {
       this(
-          "",
-          "",
-          "",
-          sourceFingerprint,
-          generatedSourceFingerprint,
-          dependencyFingerprint,
-          "",
-          "",
-          "",
+           "",
+           "",
+           "",
+           sourceFingerprint,
+           generatedSourceFingerprint,
+           dependencyFingerprint,
+           null,
+           null,
+           "",
+           "",
+           "",
           gitRevision,
           providerRuntime,
           "",
           "",
-          0);
+           0);
+    }
+
+    /** Compatibility constructor for serialized contexts predating ordered fingerprints. */
+    public Provenance(
+        String sourceRepository,
+        String sourceReference,
+        String sourceRevision,
+        String sourceFingerprint,
+        String generatedSourceFingerprint,
+        String dependencyFingerprint,
+        String buildFingerprint,
+        String toolchainFingerprint,
+        String analyzerFingerprint,
+        String gitRevision,
+        String providerRuntime,
+        String profileDigest,
+        String preparedAt,
+        long freshnessMaxAgeSeconds) {
+      this(
+          sourceRepository,
+          sourceReference,
+          sourceRevision,
+          sourceFingerprint,
+          generatedSourceFingerprint,
+          dependencyFingerprint,
+          null,
+          null,
+          buildFingerprint,
+          toolchainFingerprint,
+          analyzerFingerprint,
+          gitRevision,
+          providerRuntime,
+          profileDigest,
+          preparedAt,
+          freshnessMaxAgeSeconds);
     }
 
     /** Validates provenance fingerprints and freshness policy. */
@@ -339,6 +536,10 @@ public final class AnalysisContext {
       requireValue(sourceFingerprint, "sourceFingerprint");
       requireValue(generatedSourceFingerprint, "generatedSourceFingerprint");
       requireValue(dependencyFingerprint, "dependencyFingerprint");
+      dependencyClasspathOrderFingerprint = optionalFingerprint(
+          dependencyClasspathOrderFingerprint, "dependencyClasspathOrderFingerprint");
+      dependencyCoordinateFingerprint = optionalFingerprint(
+          dependencyCoordinateFingerprint, "dependencyCoordinateFingerprint");
       requireValue(gitRevision, "gitRevision");
       requireValue(providerRuntime, "providerRuntime");
       if (freshnessMaxAgeSeconds < 0) {
@@ -352,10 +553,12 @@ public final class AnalysisContext {
           "https://example.test/repository.git",
           "test-revision",
           "test-revision",
-          "test-source",
-          "test-generated",
-          "test-dependencies",
-          "test-build",
+           "test-source",
+           "test-generated",
+           "test-dependencies",
+           null,
+           null,
+           "test-build",
           "test-toolchain",
           "test-analyzer",
           "test-revision",
@@ -382,16 +585,123 @@ public final class AnalysisContext {
       List<String> buildCommand,
       String buildArtifact,
       String buildFingerprint,
-      List<String> limitations) {
+      List<String> limitations,
+      List<String> activeMavenProfiles,
+      Map<String, String> mavenProfileActivationSources,
+      String mavenInvocationFingerprint,
+      String effectivePomFingerprint) {
+    /** Compatibility constructor for handoffs without replay metadata. */
+    public Handoff(
+        String schemaVersion,
+        String profileId,
+        String profileVersion,
+        String profileDigest,
+        String buildTool,
+        List<String> buildCommand,
+        String buildArtifact,
+        String buildFingerprint,
+        List<String> limitations) {
+      this(
+          schemaVersion,
+          profileId,
+          profileVersion,
+          profileDigest,
+          buildTool,
+          buildCommand,
+          buildArtifact,
+          buildFingerprint,
+          limitations,
+          null,
+          null,
+          null,
+          null);
+    }
+
     /** Freezes build handoff lists for downstream consumers. */
     public Handoff {
       buildCommand = List.copyOf(buildCommand == null ? List.of() : buildCommand);
       limitations = List.copyOf(limitations == null ? List.of() : limitations);
+      activeMavenProfiles = activeMavenProfiles == null ? null : List.copyOf(activeMavenProfiles);
+      mavenProfileActivationSources = mavenProfileActivationSources == null
+          ? null
+          : Map.copyOf(mavenProfileActivationSources);
+      mavenInvocationFingerprint = optionalFingerprint(
+          mavenInvocationFingerprint, "mavenInvocationFingerprint");
+      effectivePomFingerprint = optionalFingerprint(effectivePomFingerprint, "effectivePomFingerprint");
+      boolean replayMetadataPresent = activeMavenProfiles != null
+          || mavenProfileActivationSources != null
+          || mavenInvocationFingerprint != null
+          || effectivePomFingerprint != null;
+      boolean replayMetadataComplete = activeMavenProfiles != null
+          && mavenProfileActivationSources != null
+          && mavenInvocationFingerprint != null
+          && effectivePomFingerprint != null;
+      if (replayMetadataPresent && !replayMetadataComplete) {
+        throw new IllegalArgumentException(
+            "Maven replay metadata must provide profiles, activation sources, and both fingerprints");
+      }
+      if (replayMetadataComplete) {
+        if (activeMavenProfiles.stream().anyMatch(value -> value == null || value.isBlank())
+            || !activeMavenProfiles.stream().sorted().toList().equals(activeMavenProfiles)
+            || new HashSet<>(activeMavenProfiles).size() != activeMavenProfiles.size()) {
+          throw new IllegalArgumentException("activeMavenProfiles must be sorted and unique");
+        }
+        Set<String> profiles = new HashSet<>(activeMavenProfiles);
+        if (mavenProfileActivationSources.size() != profiles.size()
+            || !mavenProfileActivationSources.keySet().equals(profiles)
+            || mavenProfileActivationSources.values().stream()
+                .anyMatch(value -> !"explicit".equals(value))) {
+          throw new IllegalArgumentException(
+              "mavenProfileActivationSources must explicitly cover activeMavenProfiles");
+        }
+      }
     }
 
     /** Creates an empty build handoff for programmatic contexts. */
     public static Handoff empty() {
       return new Handoff("", "", "", "", "", List.of(), "", "", List.of());
+    }
+
+    /** Returns whether replay metadata was present in the input handoff. */
+    public boolean hasReplayMetadata() {
+      return activeMavenProfiles != null
+          || mavenProfileActivationSources != null
+          || mavenInvocationFingerprint != null
+          || effectivePomFingerprint != null;
+    }
+  }
+
+  /** Freshness identities used to compare a loaded context with a later handoff. */
+  public record FreshnessSnapshot(
+      String dependencyFingerprint,
+      String dependencyClasspathOrderFingerprint,
+      String dependencyCoordinateFingerprint,
+      String mavenInvocationFingerprint,
+      String effectivePomFingerprint) {
+    public static FreshnessSnapshot from(AnalysisContext context) {
+      Objects.requireNonNull(context, "analysis context");
+      return new FreshnessSnapshot(
+          context.provenance().dependencyFingerprint(),
+          context.provenance().dependencyClasspathOrderFingerprint(),
+          context.provenance().dependencyCoordinateFingerprint(),
+          context.handoff().mavenInvocationFingerprint(),
+          context.handoff().effectivePomFingerprint());
+    }
+
+    /** Compares required identities and skips only metadata unknown to the older context. */
+    public boolean staleAgainst(FreshnessSnapshot current) {
+      Objects.requireNonNull(current, "current freshness snapshot");
+      return !Objects.equals(dependencyFingerprint, current.dependencyFingerprint)
+          || differsWhenKnown(dependencyClasspathOrderFingerprint,
+              current.dependencyClasspathOrderFingerprint)
+          || differsWhenKnown(dependencyCoordinateFingerprint,
+              current.dependencyCoordinateFingerprint)
+          || differsWhenKnown(mavenInvocationFingerprint, current.mavenInvocationFingerprint)
+          || differsWhenKnown(effectivePomFingerprint, current.effectivePomFingerprint);
+    }
+
+    private static boolean differsWhenKnown(String previous, String current) {
+      return previous != null && !previous.equals(current);
     }
   }
 
@@ -408,6 +718,7 @@ public final class AnalysisContext {
   private final List<SourceRoot> generatedSourceRoots;
   private final List<Path> dependencyClasspath;
   private final boolean dependencyClasspathRequired;
+  private final DependencyCoordinateManifest dependencyCoordinateManifest;
   private final List<FrameworkMetadata> frameworkMetadata;
   private final FrameworkBindingMetadata frameworkBindingMetadata;
   private final Provenance provenance;
@@ -433,6 +744,8 @@ public final class AnalysisContext {
         .map(path -> normalize(path, "dependency classpath entry"))
         .toList();
     dependencyClasspathRequired = builder.dependencyClasspathRequired;
+    dependencyCoordinateManifest = Objects.requireNonNull(
+        builder.dependencyCoordinateManifest, "dependency coordinate manifest");
     frameworkMetadata = List.copyOf(builder.frameworkMetadata);
     frameworkBindingMetadata = Objects.requireNonNull(
         builder.frameworkBindingMetadata, "framework binding metadata");
@@ -442,6 +755,7 @@ public final class AnalysisContext {
     if (sourceRoots.stream().noneMatch(root -> !root.generated() && root.required())) {
       throw new IllegalArgumentException("at least one required production/source root is required");
     }
+    DependencyCoordinateManifestValidator.validate(this);
   }
 
   public static Builder builder() {
@@ -514,6 +828,10 @@ public final class AnalysisContext {
     return dependencyClasspathRequired;
   }
 
+  public DependencyCoordinateManifest dependencyCoordinateManifest() {
+    return dependencyCoordinateManifest;
+  }
+
   public List<FrameworkMetadata> frameworkMetadata() {
     return frameworkMetadata;
   }
@@ -540,6 +858,10 @@ public final class AnalysisContext {
 
   public Handoff handoff() {
     return handoff;
+  }
+
+  public FreshnessSnapshot freshnessSnapshot() {
+    return FreshnessSnapshot.from(this);
   }
 
   /** Reports whether a framework metadata artifact was observed. */
@@ -591,6 +913,23 @@ public final class AnalysisContext {
     return value;
   }
 
+  private static String optionalValue(String value, String name) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    return value;
+  }
+
+  private static String optionalFingerprint(String value, String name) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    if (!value.matches("[0-9a-f]{64}")) {
+      throw new IllegalArgumentException(name + " must be a lowercase SHA-256 fingerprint");
+    }
+    return value;
+  }
+
   /** Normalizes a required context path and rejects missing values. */
   private static Path normalize(Path path, String name) {
     return Objects.requireNonNull(path, name).toAbsolutePath().normalize();
@@ -611,6 +950,8 @@ public final class AnalysisContext {
     private final List<SourceRoot> generatedSourceRoots = new ArrayList<>();
     private final List<Path> dependencyClasspath = new ArrayList<>();
     private boolean dependencyClasspathRequired = true;
+    private DependencyCoordinateManifest dependencyCoordinateManifest =
+        DependencyCoordinateManifest.absent();
     private final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
     private FrameworkBindingMetadata frameworkBindingMetadata = FrameworkBindingMetadata.empty();
     private Provenance provenance;
@@ -706,6 +1047,13 @@ public final class AnalysisContext {
 
     public Builder dependencyClasspathRequired(boolean value) {
       dependencyClasspathRequired = value;
+      return this;
+    }
+
+    /** Sets the optional upstream dependency coordinate handoff. */
+    public Builder dependencyCoordinateManifest(DependencyCoordinateManifest value) {
+      dependencyCoordinateManifest = Objects.requireNonNull(
+          value, "dependency coordinate manifest");
       return this;
     }
 

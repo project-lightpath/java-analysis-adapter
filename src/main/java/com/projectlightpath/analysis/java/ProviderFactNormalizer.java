@@ -88,7 +88,7 @@ final class ProviderFactNormalizer {
         edge.callee().displayName(),
         edge.relationshipType(),
         certainty,
-        List.of(sootupEvidence(edge)),
+        List.of(sootupEvidence(context, edge)),
         limitation(openWorldDynamic, certainty));
   }
 
@@ -194,7 +194,8 @@ final class ProviderFactNormalizer {
         : dependencyCallIdentity(edge);
   }
 
-  private static SemanticCallFacts.Evidence sootupEvidence(CallEdge edge) {
+  private static SemanticCallFacts.Evidence sootupEvidence(
+      AnalysisContext context, CallEdge edge) {
     Map<String, String> attributes = new LinkedHashMap<>();
     attributes.put("basis", "SootUp CHA application call");
     attributes.put("caller", edge.caller().displayName());
@@ -212,9 +213,35 @@ final class ProviderFactNormalizer {
       if (!edge.targetContext().targetSourcePath().isBlank()) {
         attributes.put("targetSourcePath", edge.targetContext().targetSourcePath());
       }
+      if (!DynamicCertaintyPolicy.isOpenWorldProviderRelationship(edge.relationshipType())) {
+        addDependencyCoordinateAttributes(attributes, context, edge);
+      }
     }
     return new SemanticCallFacts.Evidence(
         "sootup_call", edge.sourcePath(), List.of(), edge.line(), attributes);
+  }
+
+  /** Adds only upstream-supplied coordinate values to dependency evidence. */
+  private static void addDependencyCoordinateAttributes(
+      Map<String, String> attributes,
+      AnalysisContext context,
+      CallEdge edge) {
+    AnalysisContext.DependencyCoordinateEntry coordinate = context
+        .dependencyCoordinateManifest()
+        .entryFor(java.nio.file.Path.of(edge.targetContext().dependencyClasspathEntry()))
+        .orElse(null);
+    if (coordinate == null) {
+      return;
+    }
+    attributes.put("dependencyGroupId", coordinate.groupId());
+    attributes.put("dependencyArtifactId", coordinate.artifactId());
+    attributes.put("dependencyVersion", coordinate.version());
+    if (coordinate.classifier() != null) {
+      attributes.put("dependencyClassifier", coordinate.classifier());
+    }
+    if (coordinate.fingerprint() != null) {
+      attributes.put("dependencyClasspathEntryFingerprint", coordinate.fingerprint());
+    }
   }
 
   /** Keeps legacy IDs stable for ordinary edges while making collisions explicit and safe. */
