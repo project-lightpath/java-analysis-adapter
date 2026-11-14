@@ -1572,6 +1572,94 @@ class JavaAnalysisAdapterTest {
         evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
   }
 
+  /** Keeps module-info provider evidence possible when module visibility is not proven. */
+  @Test
+  void moduleInfoProviderIsPossibleWithoutModuleVisibility() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-module/src/main/java");
+    Path classes = temp.resolve("service-loader-module/target/classes");
+    Path moduleSourceRoot = temp.resolve("service-loader-module/module-src");
+    Path moduleClasses = temp.resolve("service-loader-module/module-classes");
+    Path archive = temp.resolve("service-loader-module/provider.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    write(moduleSourceRoot, "module-info.java", "module demo.provider {"
+        + " provides demo.Provider with demo.DefaultProvider; }\n");
+    write(moduleSourceRoot, "demo/Provider.java", "package demo;\n"
+        + "public interface Provider { void record(); }\n");
+    write(moduleSourceRoot, "demo/DefaultProvider.java", "package demo;\n"
+        + "public final class DefaultProvider implements Provider {"
+        + " public void record() {} }\n");
+    Files.createDirectories(moduleClasses);
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assertNotNull(compiler, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> moduleSources = Files.walk(moduleSourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = fileManager.getJavaFileObjectsFromFiles(
+          moduleSources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null,
+          fileManager,
+          null,
+          List.of("--release", "17", "-d", moduleClasses.toString()),
+          null,
+          units).call(), "module metadata fixture compilation failed");
+    }
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(Files.readAllBytes(moduleClasses.resolve("module-info.class")));
+      output.closeEntry();
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-module")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(archive))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    ServiceLoaderDescriptorScanner.Descriptor moduleDescriptor = scan.descriptors().stream()
+        .filter(item -> item.kind().equals("module_info"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scan.descriptors().toString()));
+    assertEquals("demo.Provider", moduleDescriptor.serviceType());
+    assertEquals(List.of("demo.DefaultProvider"), moduleDescriptor.providers());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    SemanticCallFacts.Evidence descriptorEvidence = resolution.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(resolution.evidence().toString()));
+    assertEquals("not_proven", descriptorEvidence.attributes().get("moduleVisibility"));
+    assertTrue(resolution.limitation().toLowerCase().contains("module"), resolution.toString());
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
