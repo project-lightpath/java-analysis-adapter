@@ -46,13 +46,22 @@ final class ServiceLoaderCallSiteSource {
         + "(?=\\s*(?:\\(|[;,.)}]))";
     Matcher matcher = Pattern.compile(methodPattern).matcher(sourceText);
     matcher.region(closing + 1, end);
-    List<Integer> providerTargets = new ArrayList<>();
+    List<Integer> targetOffsets = new ArrayList<>();
     while (matcher.find()) {
-      if (targetLine > 0 && lineAt(sourceText, matcher.start()) != targetLine) {
+      targetOffsets.add(matcher.start());
+    }
+    if (targetLine > 0
+        && (targetOffsets.isEmpty() || lineAt(sourceText, targetOffsets.get(0)) != targetLine)) {
+      return false;
+    }
+    boolean hasTargetOnRequestedLine = targetLine > 0;
+    List<Integer> providerTargets = new ArrayList<>();
+    for (int targetOffset : targetOffsets) {
+      if (hasTargetOnRequestedLine && lineAt(sourceText, targetOffset) != targetLine) {
         continue;
       }
-      if (isProviderOwnedTarget(sourceText, closing + 1, matcher.start())) {
-        providerTargets.add(matcher.start());
+      if (isProviderOwnedTarget(sourceText, closing + 1, targetOffset)) {
+        providerTargets.add(targetOffset);
       }
     }
     if (providerTargets.size() != 1) {
