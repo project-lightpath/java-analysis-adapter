@@ -7,7 +7,7 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
-/** Maven goal that enforces the reviewed PMD/CPD baseline for a project. */
+/** Maven goal that enforces the production PMD/CPD lint contract for a project. */
 @Mojo(name = "validate", requiresProject = true, threadSafe = true)
 public final class ValidateJavaLintMojo extends AbstractMojo {
   /** Project root containing config/, target/, and src/. */

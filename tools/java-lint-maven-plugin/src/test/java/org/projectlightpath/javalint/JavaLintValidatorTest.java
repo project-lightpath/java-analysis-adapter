@@ -260,6 +260,48 @@ class JavaLintValidatorTest {
     assertTrue(report.messages().stream().anyMatch(message -> message.contains("configuration error")));
   }
 
+  /** An absent findings baseline is treated as an empty inventory. */
+  @Test
+  void emptyInventoryPassesWithoutBaseline() throws Exception {
+    Path config = temp.resolve("config");
+    Path target = temp.resolve("target");
+    Files.createDirectories(config);
+    Files.createDirectories(target);
+    String ruleset = productionRuleset();
+    Files.writeString(config.resolve("pmd-production.xml"), ruleset);
+    Files.writeString(target.resolve("pmd.xml"), "<pmd version=\"7.17.0\"/>");
+    Files.writeString(target.resolve("cpd.xml"), "<pmd-cpd pmdVersion=\"7.17.0\"/>");
+    Files.writeString(target.resolve("java-lint-effective-pom.xml"), """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <build>
+            <sourceDirectory>src/main/java</sourceDirectory>
+            <plugins><plugin>
+              <artifactId>maven-pmd-plugin</artifactId>
+              <configuration>
+                <rulesets><ruleset>config/pmd-production.xml</ruleset></rulesets>
+                <includeTests>false</includeTests>
+                <minimumPriority>3</minimumPriority>
+                <minimumTokens>100</minimumTokens>
+              </configuration>
+            </plugin></plugins>
+          </build>
+        </project>
+        """);
+
+    JavaLintValidator.ValidationReport report = new JavaLintValidator(temp).validate(true);
+
+    assertTrue(report.passed());
+    assertEquals(0, report.newFindingCount());
+    assertEquals(0, report.configurationErrorCount());
+
+    Files.writeString(config.resolve("pmd-production.xml"), ruleset + "\n<!-- changed -->\n");
+    JavaLintValidator.ValidationReport changedRuleset = new JavaLintValidator(temp).validate(true);
+
+    assertFalse(changedRuleset.passed());
+    assertTrue(changedRuleset.messages().stream()
+        .anyMatch(message -> message.contains("ruleset content changed")));
+  }
+
   /** A threshold change is observable even when the baseline has no CPD findings. */
   @Test
   void effectiveThresholdChangeIsDetectedAgainstBaseline() throws Exception {
@@ -280,6 +322,17 @@ class JavaLintValidatorTest {
   private static String sha256(String value) throws Exception {
     return HexFormat.of().formatHex(
         MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private static String productionRuleset() throws Exception {
+    for (Path candidate : List.of(
+        Path.of("config/pmd-production.xml"),
+        Path.of("../../config/pmd-production.xml"))) {
+      if (Files.isRegularFile(candidate)) {
+        return Files.readString(candidate);
+      }
+    }
+    throw new IllegalStateException("production PMD ruleset is not available to the test");
   }
 
   private static String effectivePomWithConfiguration(String configuration) {

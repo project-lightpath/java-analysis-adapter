@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -64,6 +65,12 @@ public final class SemanticCallFactsJsonWriter {
     result.put("graphCallCount", metadata.graphCallCount());
     result.put("provenance", provenance(metadata.provenance()));
     result.put("handoff", handoff(metadata.handoff()));
+    if (metadata.dependencyCoordinateManifest().present()) {
+      result.put(
+          "dependencyCoordinateManifest",
+          dependencyCoordinateManifest(
+              metadata.dependencyCoordinateManifest(), metadata.repositoryRoot()));
+    }
     result.put("sourceRoots", metadata.sourceRoots().stream()
         .map(SemanticCallFactsJsonWriter::sourceRoot)
         .toList());
@@ -93,6 +100,14 @@ public final class SemanticCallFactsJsonWriter {
     result.put("sourceFingerprint", provenance.sourceFingerprint());
     result.put("generatedSourceFingerprint", provenance.generatedSourceFingerprint());
     result.put("dependencyFingerprint", provenance.dependencyFingerprint());
+    putIfPresent(
+        result,
+        "dependencyClasspathOrderFingerprint",
+        provenance.dependencyClasspathOrderFingerprint());
+    putIfPresent(
+        result,
+        "dependencyCoordinateFingerprint",
+        provenance.dependencyCoordinateFingerprint());
     result.put("buildFingerprint", provenance.buildFingerprint());
     result.put("toolchainFingerprint", provenance.toolchainFingerprint());
     result.put("analyzerFingerprint", provenance.analyzerFingerprint());
@@ -115,7 +130,85 @@ public final class SemanticCallFactsJsonWriter {
     result.put("buildArtifact", handoff.buildArtifact());
     result.put("buildFingerprint", handoff.buildFingerprint());
     result.put("limitations", handoff.limitations());
+    if (handoff.activeMavenProfiles() != null) {
+      result.put("activeMavenProfiles", handoff.activeMavenProfiles());
+    }
+    if (handoff.mavenProfileActivationSources() != null) {
+      result.put(
+          "mavenProfileActivationSources",
+          new java.util.TreeMap<>(handoff.mavenProfileActivationSources()));
+    }
+    putIfPresent(result, "mavenInvocationFingerprint", handoff.mavenInvocationFingerprint());
+    putIfPresent(result, "effectivePomFingerprint", handoff.effectivePomFingerprint());
     return result;
+  }
+
+  private static Map<String, Object> dependencyCoordinateManifest(
+      AnalysisContext.DependencyCoordinateManifest manifest, Path repositoryRoot) {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("schemaVersion", manifest.schemaVersion());
+    result.put("owner", manifest.owner());
+    result.put("entries", manifest.entries().stream()
+        .sorted((left, right) -> compareEntries(left, right, repositoryRoot))
+        .map(SemanticCallFactsJsonWriter::dependencyCoordinateEntry)
+        .toList());
+    putIfPresent(result, "fingerprint", manifest.fingerprint());
+    return result;
+  }
+
+  private static Map<String, Object> dependencyCoordinateEntry(
+      AnalysisContext.DependencyCoordinateEntry entry) {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("classpathEntry", entry.classpathEntry().toString());
+    result.put("groupId", entry.groupId());
+    result.put("artifactId", entry.artifactId());
+    result.put("version", entry.version());
+    putIfPresent(result, "fingerprint", entry.fingerprint());
+    putIfPresent(result, "classifier", entry.classifier());
+    return result;
+  }
+
+  private static int compareEntries(
+      AnalysisContext.DependencyCoordinateEntry left,
+      AnalysisContext.DependencyCoordinateEntry right,
+      Path repositoryRoot) {
+    String leftLabel = canonicalLabel(left.classpathEntry(), repositoryRoot);
+    String rightLabel = canonicalLabel(right.classpathEntry(), repositoryRoot);
+    int labels = compareUtf8(leftLabel, rightLabel);
+    return labels != 0
+        ? labels
+        : compareUtf8(left.classpathEntry().toString(), right.classpathEntry().toString());
+  }
+
+  private static String canonicalLabel(Path path, Path repositoryRoot) {
+    Path normalized = path.toAbsolutePath().normalize();
+    Path root = repositoryRoot.toAbsolutePath().normalize();
+    if (normalized.startsWith(root)) {
+      return root.relativize(normalized).toString().replace(
+          normalized.getFileSystem().getSeparator(), "/");
+    }
+    return "external:" + normalized.toString().replace(
+        normalized.getFileSystem().getSeparator(), "/");
+  }
+
+  private static int compareUtf8(String left, String right) {
+    byte[] leftBytes = left.getBytes(StandardCharsets.UTF_8);
+    byte[] rightBytes = right.getBytes(StandardCharsets.UTF_8);
+    int length = Math.min(leftBytes.length, rightBytes.length);
+    for (int index = 0; index < length; index++) {
+      int comparison = Byte.toUnsignedInt(leftBytes[index])
+          - Byte.toUnsignedInt(rightBytes[index]);
+      if (comparison != 0) {
+        return comparison;
+      }
+    }
+    return Integer.compare(leftBytes.length, rightBytes.length);
+  }
+
+  private static void putIfPresent(Map<String, Object> result, String key, String value) {
+    if (value != null) {
+      result.put(key, value);
+    }
   }
 
   private static Map<String, Object> fact(SemanticCallFacts.Fact fact) {

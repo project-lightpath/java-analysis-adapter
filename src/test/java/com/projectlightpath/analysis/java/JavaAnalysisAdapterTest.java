@@ -19,6 +19,26 @@ import org.junit.jupiter.api.io.TempDir;
 class JavaAnalysisAdapterTest {
   @TempDir Path temp;
 
+  /** Skips package and module descriptors that do not declare source types. */
+  @Test
+  void sourceScannerSkipsPackageAndModuleDescriptors() throws IOException {
+    Path sourceRoot = temp.resolve("descriptor-sources/src/main/java");
+    write(sourceRoot, "package-info.java", "@Deprecated package demo;\n");
+    write(sourceRoot, "module-info.java", "module demo { }\n");
+    write(sourceRoot, "demo/Application.java", "package demo; public class Application { }\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    assertEquals(List.of("demo.Application"), new SourceMetadataScanner(context).files().stream()
+        .map(SourceMetadataScannerState.SourceFile::typeName)
+        .toList());
+  }
+
   /** Keeps provider routes separate from unresolved dynamic proxy evidence. */
   @Test
   void quarkusFactsKeepRoutesAndUnresolvedDynamicProxySeparate() throws IOException {
@@ -704,7 +724,7 @@ class JavaAnalysisAdapterTest {
             AnalysisContext.MetadataStatus.OBSERVED,
             "src/main/java")));
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
-    SourceMetadataScanner.BeanCandidate candidate = scanner.beanCandidates(
+    SourceMetadataScannerState.BeanCandidate candidate = scanner.beanCandidates(
             AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(item -> item.candidateType().equals("demo.ShadowedService"))
         .findFirst()
@@ -919,6 +939,25 @@ class JavaAnalysisAdapterTest {
           }
         }
         """);
+    write(quarkusSource, "one/EmptyAuthCallback.java", """
+        package one;
+        public interface EmptyAuthCallback {
+          static void helper() { }
+          private void hidden() { }
+        }
+        """);
+    write(quarkusSource, "one/EmptyAuthProxyFactory.java", """
+        package one;
+        import java.lang.reflect.Proxy;
+        public class EmptyAuthProxyFactory {
+          EmptyAuthCallback create() {
+            return (EmptyAuthCallback) Proxy.newProxyInstance(
+                EmptyAuthCallback.class.getClassLoader(),
+                new Class<?>[] {EmptyAuthCallback.class},
+                (proxy, method, args) -> null);
+          }
+        }
+        """);
 
     SemanticCallFacts quarkusFacts = new JavaAnalysisAdapter().analyze(
         context(
@@ -941,8 +980,10 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> dynamicProxyFacts = quarkusFacts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .toList();
-    assertEquals(3, dynamicProxyFacts.size());
-    assertEquals(3, dynamicProxyFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertEquals(4, dynamicProxyFacts.size());
+    assertEquals(4, dynamicProxyFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(dynamicProxyFacts.stream()
+        .anyMatch(item -> item.callee().equals("one.EmptyAuthCallback#unknown")));
     assertFalse(dynamicProxyFacts.stream().anyMatch(item -> item.id().equals("quarkus-unbounded-proxy-abstention")));
 
     Path springSource = temp.resolve("id-collisions/spring/src/main/java");
@@ -1198,6 +1239,21 @@ class JavaAnalysisAdapterTest {
     assertTrue(injections.stream().anyMatch(item -> item.caller().contains("demo.TransferResource$Second")));
   }
 
+  /** Rejects conflicting resolved-binding qualifiers while preserving empty-list wildcards. */
+  @Test
+  void resolvedBindingQualifiersRejectConflicts() {
+    assertTrue(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of(), List.of("Qualifier:fast")));
+    assertTrue(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of("Qualifier:fast", "Tier:silver"), List.of("Qualifier:fast")));
+    assertFalse(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of("Region:west", "Tier:silver"),
+        List.of("Region:west", "Tier:gold")));
+    assertFalse(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of("Qualifier:fast"),
+        List.of("Qualifier:slow")));
+  }
+
   /** Matches resolved binding metadata against nested injection owners. */
   @Test
   void resolvedBindingMatchesNestedInjectionOwner() throws IOException {
@@ -1377,6 +1433,10 @@ class JavaAnalysisAdapterTest {
           @Path("/submit")
           @POST @Consumes("text/plain") @Produces("application/xml")
           public String submit(String request) { return request; }
+          static class NestedResource {
+            @Path("/nested") @GET public String nested() { return "nested"; }
+          }
+          @Path("/after") @GET public String after() { return "after"; }
         }
         """);
     write(sourceRoot, "routes/MethodOnlyResource.java", """
@@ -1408,7 +1468,7 @@ class JavaAnalysisAdapterTest {
         .filter(item -> item.relationshipType().equals("framework_entrypoint"))
         .toList();
 
-    assertEquals(4, routes.size());
+    assertEquals(5, routes.size());
     SemanticCallFacts.Fact readOne = routes.stream()
         .filter(item -> item.callee().equals("routes.MultiResource#read"))
         .filter(item -> item.selectionCriteria().pathTemplate().equals("/api/one"))
@@ -1426,12 +1486,25 @@ class JavaAnalysisAdapterTest {
     assertEquals("/api/submit", submit.selectionCriteria().pathTemplate());
     assertEquals(List.of("text/plain"), submit.selectionCriteria().consumes());
     assertEquals(List.of("application/xml"), submit.selectionCriteria().produces());
+    assertTrue(routes.stream().anyMatch(item -> item.callee().equals("routes.MultiResource#after")
+        && item.selectionCriteria().pathTemplate().equals("/api/after")));
+    assertFalse(routes.stream().anyMatch(item -> item.callee().equals("routes.MultiResource$NestedResource#nested")));
 
     SemanticCallFacts.Fact methodOnly = route(facts, "routes.MethodOnlyResource#only");
     assertEquals("/root/only", methodOnly.selectionCriteria().pathTemplate());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, methodOnly.certainty());
     assertFalse(facts.frameworkFacts().stream()
         .anyMatch(item -> item.callee().startsWith("routes.UnregisteredMethodResource#")));
+  }
+
+  /** Keeps a quote inside a character literal from swallowing the next field declarator. */
+  @Test
+  void balancedFieldSplitRecognizesDoubleQuotesInsideCharacterLiterals() {
+    String source = "first = pick('\"'), second = Target.class";
+
+    assertEquals(
+        List.of("first = pick('\"')", "second = Target.class"),
+        JavaSourceText.splitBalanced(source, ',', true));
   }
 
   /** Enumerates Spring mappings, conditions, and collision-safe route IDs. */
@@ -1902,6 +1975,7 @@ class JavaAnalysisAdapterTest {
         import org.springframework.transaction.annotation.Transactional;
         @Service public class AService implements Service {
           @Transactional public void run() { }
+          synchronized void run(String value) { }
         }
         """);
     write(sourceRoot, "demo/BService.java", """
@@ -2055,6 +2129,11 @@ class JavaAnalysisAdapterTest {
         @Component public class ResourceConsumer {
           @Resource Service service;
           @Resource(name = "missing") OtherService missing;
+          @Resource(name = "fastPaymentService") PaymentService suppressedDefault;
+          @Resource(name = "qualifier-only") QualifierOnlyService qualifierOnly;
+          @Resource(name = "unnamedNamedService") OtherService unnamedNamed;
+          @Resource(name = "factoryClock") FactoryClock factoryClock;
+          @Resource void setURL(UrlService service) { }
         }
         """);
     write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { }\n");
@@ -2079,6 +2158,38 @@ class JavaAnalysisAdapterTest {
         package demo;
         import org.springframework.stereotype.Service;
         @Service public class OtherServiceImpl implements OtherService { }
+        """);
+    write(sourceRoot, "demo/QualifierOnlyService.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Service;
+        @Service @Qualifier("qualifier-only")
+        public class QualifierOnlyService implements OtherService { }
+        """);
+    write(sourceRoot, "demo/UnnamedNamedService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @Named public class UnnamedNamedService implements OtherService { }
+        """);
+    write(sourceRoot, "demo/FactoryClock.java", "package demo; public class FactoryClock { }\n");
+    write(sourceRoot, "demo/FactoryConfiguration.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration("factory") public class FactoryConfiguration {
+          @Bean public FactoryClock factoryClock() { return new FactoryClock(); }
+        }
+        """);
+    write(sourceRoot, "demo/UrlService.java", "package demo; public interface UrlService { }\n");
+    write(sourceRoot, "demo/UpperUrlService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("URL") public class UpperUrlService implements UrlService { }
+        """);
+    write(sourceRoot, "demo/LowerUrlService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("uRL") public class LowerUrlService implements UrlService { }
         """);
     AnalysisContext context = context(
         AnalysisContext.Framework.SPRING_BOOT,
@@ -2108,6 +2219,73 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, namedResource.certainty());
     assertTrue(namedResource.callee().contains("OtherService#<unresolved-bean>"));
+    SemanticCallFacts.Fact suppressedDefault = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#suppressedDefault(PaymentService)"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, suppressedDefault.certainty());
+    SemanticCallFacts.Fact qualifierOnlyName = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#qualifierOnly(QualifierOnlyService)"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, qualifierOnlyName.certainty());
+    SemanticCallFacts.Fact unnamedNamed = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#unnamedNamed(OtherService)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.UnnamedNamedService#<init>", unnamedNamed.callee());
+    SemanticCallFacts.Fact factoryClock = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#factoryClock(FactoryClock)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.FactoryConfiguration#factoryClock", factoryClock.callee());
+    SemanticCallFacts.Fact acronymSetter = facts.stream()
+        .filter(item -> item.caller().equals("spring:injection:demo.ResourceConsumer#setURL(UrlService)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.UpperUrlService#<init>", acronymSetter.callee());
+  }
+
+  /** Parses an optional constructor throws clause without losing the injection point. */
+  @Test
+  void springConstructorInjectionParsesThrowsClause() throws IOException {
+    Path sourceRoot = temp.resolve("spring-constructor-throws/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) throws java.io.IOException { }
+        }
+        """);
+    write(sourceRoot, "demo/SingleConsumer.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class SingleConsumer {
+          public SingleConsumer(Service service) throws java.io.IOException { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/ServiceImpl.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class ServiceImpl implements Service { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream()
+        .allMatch(item -> item.callee().equals("demo.ServiceImpl#<init>")));
   }
 
   /** Excludes qualifier lookalikes and annotation-shaped text from injection parameters. */
@@ -2137,13 +2315,13 @@ class JavaAnalysisAdapterTest {
             "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
             "src/main/java")));
 
-    SourceMetadataScanner.InjectionPoint injection = new SourceMetadataScanner(context)
+    SourceMetadataScannerState.InjectionPoint injection = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(item -> item.file().typeName().equals("demo.Consumer"))
         .findFirst()
         .orElseThrow();
 
-    SourceMetadataScanner.Parameter parameter = injection.parameters().get(0);
+    SourceMetadataScannerState.Parameter parameter = injection.parameters().get(0);
     assertEquals("Service", parameter.type());
     assertEquals("service", parameter.name());
     assertEquals(List.of("Qualifier:fast"), parameter.qualifiers());
@@ -2179,7 +2357,7 @@ class JavaAnalysisAdapterTest {
             "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
             "src/main/java")));
 
-    SourceMetadataScanner.InjectionPoint injection = new SourceMetadataScanner(context)
+    SourceMetadataScannerState.InjectionPoint injection = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.QUARKUS).stream()
         .findFirst()
         .orElseThrow();
@@ -2272,6 +2450,96 @@ class JavaAnalysisAdapterTest {
         .toList();
     assertEquals(1, dependentProxies.size());
     assertEquals(SemanticCallFacts.Certainty.DEFINITE, dependentProxies.get(0).certainty());
+  }
+
+  /** Keeps generic contract arguments distinct during source binding matching. */
+  @Test
+  void genericContractsMatchTheirArguments() throws IOException {
+    Path sourceRoot = temp.resolve("generic-contracts/src/main/java");
+    write(sourceRoot, "api/Port.java", "package api; public interface Port<T> { }\n");
+    write(sourceRoot, "demo/StringPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class StringPort implements Port<String> { }
+        """);
+    write(sourceRoot, "demo/IntegerPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class IntegerPort implements Port<Integer> { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Port<Integer> port) { }
+        }
+        """);
+    write(sourceRoot, "demo/ArrayPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayPort implements Port<java.util.List<String>[]> { }
+        """);
+    write(sourceRoot, "demo/ArrayConsumer.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayConsumer {
+          @Autowired public ArrayConsumer(Port<java.util.List<String>[]> port) { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.StringPort", "demo.StringPort", List.of("api.Port<String>"), List.of(),
+                "Service", true, false, false),
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.IntegerPort", "demo.IntegerPort", List.of("api.Port<Integer>"), List.of(),
+                "Service", true, false, false)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "wrong-generic-binding", "demo.Consumer", "<init>", "Port<String>", 0,
+            List.of(), "demo.StringPort", true, true, "wrong generic argument", null, null)),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    AnalysisContext sourceOnlyContext = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    List<SemanticCallFacts.Fact> sourceOnlyInjections = new JavaAnalysisAdapter()
+        .analyze(sourceOnlyContext, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, sourceOnlyInjections.size());
+    assertTrue(sourceOnlyInjections.stream().anyMatch(item ->
+        item.caller().contains("demo.Consumer") && item.callee().equals("demo.IntegerPort#<init>")));
+    assertTrue(sourceOnlyInjections.stream().anyMatch(item -> item.caller().contains("demo.ArrayConsumer")
+        && item.callee().equals("demo.ArrayPort#<init>")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("spring:injection:demo.Consumer"))
+        .toList();
+
+    assertEquals(1, injections.size());
+    assertEquals("demo.IntegerPort#<init>", injections.get(0).callee());
   }
 
   /** Resolves proxy descriptors and erased generic producer types. */
@@ -2812,6 +3080,25 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals("demo.ChildService#<init>", injection.callee());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injection.certainty());
+  }
+
+  /** Rejects body statements even when the bounded method scan retains a leading delimiter. */
+  @Test
+  void springProxyMethodRejectsLeadingBodyDelimiter() throws IOException {
+    Path sourceRoot = temp.resolve("spring-proxy-delimiter/src/main/java");
+    write(sourceRoot, "demo/Proxy.java", "package demo; public class Proxy { }\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    SourceMetadataScannerState.SourceFile file = new SourceMetadataScanner(context).files().get(0);
+    SourceMetadataScannerState.MethodInfo method = new SourceMetadataScannerState.MethodInfo(
+        "bodyStatement", "", "} return target();", 0, 0, 1);
+
+    assertFalse(SourceMetadataScannerTextLayer13.springProxyMethod(file, method));
   }
 
   /** Excludes Spring methods that proxy infrastructure cannot intercept. */
