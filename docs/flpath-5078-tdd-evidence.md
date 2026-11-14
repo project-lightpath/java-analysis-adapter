@@ -152,3 +152,11 @@ Evidence hashes:
   rejected when an unrelated trailing lambda invocation shared the statement.
 - `GREEN_14`: commit `8de0ee244f03b55d64f04c8fe261bf949340f917`; target source lines and
   lambda receiver ownership distinguish the provider call from the unrelated sibling.
+
+### nested-load-ownership-regression — nested source-line ownership
+
+- `RED_15`: commit `4026fbf92c128507f87a97f850e62e706328a654`; the outer nested load
+  borrowed the inner target line and prevented the inner custom-loader fact from being
+  classified as `service_loader`.
+- `GREEN_15`: commit `651122813529a1bcf9aef62dcc12eb0a14dc4eb2`; source-line matching now
+  uses the first target occurrence for each load, preserving nested-load ownership.
