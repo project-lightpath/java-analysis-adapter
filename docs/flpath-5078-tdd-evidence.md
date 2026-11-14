@@ -178,19 +178,19 @@ Evidence hashes:
 
 ## Final gate evidence
 
-- The authoritative JaCoCo run at corrected production `HEAD 8be6a11f19f039ec9b7ffb8ccc33fb48014d989a`
+- The authoritative JaCoCo run at corrected production `HEAD f0ace3e21ab6a5f2e4ac68f5b04a8e87fd1f8f85`
   used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo 0.8.13, and the pinned no-zero-test
-  Surefire flags; all `97` full-suite tests passed.
+  Surefire flags; all `98` full-suite tests passed.
 - The changed-production threshold intentionally uses the complete adapter suite,
   including its SootUp integration tests. Full-suite changed-production coverage passed
-  at `91.36%` (`825/903` executable changed lines), above the required `90%` threshold.
+  at `91.44%` (`844/923` executable changed lines), above the required `90%` threshold.
   The canonical report SHA-256 is
-  `5b2daabbab2f8cf873accfc6ad0594bcdc7f03432f6c3d3b32e42c9e70d44281`; the raw report
-  SHA-256 is `b635c6498ab3bee5d9e5198a9de57e03bff6dbfcff0494e852fc28d2e0e72f7d`.
-- Additional unit-only evidence passed `85/85` tests at `90.59%` changed-production
-  coverage (`818/903`). Its canonical report SHA-256 is
-  `d2f3f1ac084a9dbcce6c19909c01eff8a14b583fb5228ccd37043553e32a315e`; the raw report
-  SHA-256 is `46fb3b17ef552a750a0b8607325a3a05cf881549b53cccf895978d02c3029ea1`.
+  `65e3c9ad330d22610940beef14e8fd36cf82cea1eb466bd6d79a7875c0b1ff93`; the raw report
+  SHA-256 is `54c1d7c446dc8e978ae7f626589925e300e8c0b61c5165ae19ed815cb8b9c30f`.
+- Additional unit-only evidence passed `86/86` tests at `90.68%` changed-production
+  coverage (`837/923`). Its canonical report SHA-256 is
+  `8f5a852433b34be4b6c2f656e1bd6071e4e4390f78d2fac27086aa676ab9e398`; the raw report
+  SHA-256 is `f2b9192bafa02a515bb95ff7ff80428fd8945521c660a0d52bfec29fb9f37e9f`.
   Complete machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`
   and `docs/flpath-5078-tdd/unit-coverage.json`.
 
@@ -279,3 +279,6 @@ Evidence hashes:
 - `GREEN_25`: commit `f0ace3e21ab6a5f2e4ac68f5b04a8e87fd1f8f85`; ownership now requires a bare
   lambda-parameter receiver, while overflow is fail-closed for directory/archive descriptors and
   wildcard dependency entries. Focused regressions pass `3/3`.
+- Final follow-up coverage at this production HEAD passes `98/98` full-suite tests and `86/86`
+  unit-only tests; changed-production coverage is `91.44%` (`844/923`) full-suite and `90.68%`
+  (`837/923`) unit-only.
