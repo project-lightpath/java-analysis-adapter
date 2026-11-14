@@ -87,3 +87,10 @@ Evidence hashes:
   custom-loader fact incorrectly borrowed the sibling descriptor.
 - `GREEN_5`: commit `1357f0d1ec1055c59dd25ff41e3a2b3b24f7442c`; site selection
   keeps the fact possible and removes unrelated descriptor evidence.
+
+### 4567750984 — same-line ServiceLoader statement boundaries
+
+- `RED_6`: commit `88a956fe133797155692cf159b4926988fb832dc`; an unrelated
+  invocation after a closing lambda brace was classified as ServiceLoader.
+- `GREEN_6`: commit `abcac6eae9307d02da19ec83ae2eff49413676de`; lexical site
+  matching accepts a closing-brace suffix and rejects a second same-line statement.
