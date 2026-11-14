@@ -348,3 +348,10 @@ Evidence hashes:
 - `GREEN_29`: commit `fde218b8c4bb348566be97cd6360cda28f17956f`; source-cache parsing now
   admits the wildcard only when selected source files contain no same-package
   `ServiceLoader` declaration. The focused regression passes `1/1`.
+
+### independent-review-statement-boundary-comment-masking
+
+- `RED_30`: commit `9bd04309acd912b70218d64373c443ca68f967de`; a trailing comment containing
+  `;` and `}` made raw statement-boundary matching reject a valid ServiceLoader call.
+- `GREEN_30`: commit `dfb1e9c95e59dd2e0d5eeaec685dae8504c2ba22`; statement-boundary checks now
+  use the offset-preserving masked source. The focused regression passes `1/1`.
