@@ -131,3 +131,10 @@ Evidence hashes:
 - `GREEN_11`: commit `c1b06e807038d65d54b20c202d864c1e044b7507`; descriptor scanning
   uses the same resolved wildcard dependency entries as SootUp and retains explicit-loader
   results as `POSSIBLE`.
+
+### 4567751011 — BOM-prefixed provider metadata
+
+- `RED_12`: commit `d1018fc08e9456d3129428af02858f2667920a43`; the BOM entry was
+  malformed but the possible-resolution limitation did not explain that metadata failure.
+- `GREEN_12`: commit `fcde3c541a7444d20e002cf9b24ab80e87bca93c`; BOM-prefixed provider
+  names remain malformed and the resolution limitation reports malformed metadata.
