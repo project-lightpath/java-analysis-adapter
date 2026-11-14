@@ -28,10 +28,7 @@ final class ServiceLoaderDescriptorNestedArchiveSource {
   static void diagnoseSkippedEntry(
       String name, Path war, ServiceLoaderDescriptorSource.ScanState state) {
     if (containsSkippedMetadata(name)) {
-      state.diagnostic(
-          "war_nested_service_metadata_skipped",
-          war + "!/" + name,
-          "WAR-contained ServiceLoader metadata was not scanned");
+      state.warNestedMetadataSkipped(war + "!/" + name);
     }
   }
 

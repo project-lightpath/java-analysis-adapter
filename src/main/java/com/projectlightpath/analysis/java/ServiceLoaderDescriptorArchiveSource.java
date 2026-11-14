@@ -42,7 +42,9 @@ final class ServiceLoaderDescriptorArchiveSource {
     while (entries.hasMoreElements()) {
       ZipEntry entry = entries.nextElement();
       String entryPath = archive + "!/" + entry.getName();
-      state.recordEnumeration(entryPath);
+      if (!state.tryEnumerate(entryPath)) {
+        break;
+      }
       if (entry.isDirectory()) {
         continue;
       }

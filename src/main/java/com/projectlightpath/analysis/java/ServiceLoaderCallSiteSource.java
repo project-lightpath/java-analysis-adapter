@@ -107,9 +107,11 @@ final class ServiceLoaderCallSiteSource {
     lambda.region(start, targetOffset);
     while (lambda.find()) {
       String parameters = lambda.group(1) != null ? lambda.group(1) : lambda.group(2);
-      if (containsParameter(parameters, receiver)
-          && lambdaContainsTarget(sourceText, lambda.end(), targetOffset)) {
-        return true;
+      if (lambdaContainsTarget(sourceText, lambda.end(), targetOffset)) {
+        // The first lambda whose body contains the target is the outermost
+        // lexical owner. Do not let an unrelated nested lambda lend its
+        // parameter ownership to a ServiceLoader edge.
+        return containsParameter(parameters, receiver);
       }
     }
     return false;

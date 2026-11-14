@@ -59,7 +59,9 @@ final class ServiceLoaderDescriptorSource {
     NavigableSet<Path> candidates = new TreeSet<>();
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
       for (Path path : paths) {
-        state.recordEnumeration(path.toString());
+        if (!state.tryEnumerate(path.toString())) {
+          break;
+        }
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
           retainSmallest(candidates, path, MAX_ENUMERATED_ENTRIES);
         }
@@ -184,6 +186,9 @@ final class ServiceLoaderDescriptorSource {
     private final List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics = new ArrayList<>();
     private final long maxDecompressedBytes;
     private long decompressedBytes;
+    private boolean enumerationLimitReported;
+    private boolean warMetadataLimitReported;
+    private int warMetadataDiagnostics;
 
     ScanState() {
       this(MAX_ARCHIVE_DECOMPRESSED_BYTES);
@@ -200,6 +205,20 @@ final class ServiceLoaderDescriptorSource {
       diagnostics.add(new ServiceLoaderDescriptorScanner.Diagnostic(code, path, detail));
     }
 
+    void warNestedMetadataSkipped(String path) {
+      if (warMetadataDiagnostics == 0) {
+        diagnostic(
+            "war_nested_service_metadata_skipped", path,
+            "WAR-contained ServiceLoader metadata was not scanned");
+        warMetadataDiagnostics++;
+      } else if (!warMetadataLimitReported) {
+        diagnostic(
+            "war_nested_service_metadata_skipped_limit", path,
+            "additional WAR-contained ServiceLoader metadata diagnostics were suppressed");
+        warMetadataLimitReported = true;
+      }
+    }
+
     List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics() {
       return List.copyOf(diagnostics);
     }
@@ -214,17 +233,18 @@ final class ServiceLoaderDescriptorSource {
       return remainingDecompressed() > 0;
     }
 
-    void recordEnumeration(String path) {
-      if (enumeratedEntries == MAX_ENUMERATED_ENTRIES) {
-        diagnostic(
-            "descriptor_enumeration_limit", path,
-            "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
-        enumeratedEntries++;
-        return;
+    boolean tryEnumerate(String path) {
+      if (enumeratedEntries >= MAX_ENUMERATED_ENTRIES) {
+        if (!enumerationLimitReported) {
+          enumerationLimitReported = true;
+          diagnostic(
+              "descriptor_enumeration_limit", path,
+              "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
+        }
+        return false;
       }
-      if (enumeratedEntries < MAX_ENUMERATED_ENTRIES) {
-        enumeratedEntries++;
-      }
+      enumeratedEntries++;
+      return true;
     }
 
     boolean consumeDecompressed(long bytes, String path) {

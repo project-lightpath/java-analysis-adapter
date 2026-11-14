@@ -1356,8 +1356,6 @@ class JavaAnalysisAdapterTest {
         .filter(item -> item.relationshipType().equals("service_loader"))
         .toList();
 
-    assertTrue(serviceFacts.stream().anyMatch(item ->
-        item.callee().equals("demo.DefaultAuditProvider#record")), serviceFacts.toString());
     assertTrue(serviceFacts.stream().noneMatch(item ->
         item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
   }

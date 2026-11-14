@@ -92,7 +92,9 @@ final class ServiceLoaderDescriptorReader {
     NavigableSet<Path> candidates = new TreeSet<>();
     try (var paths = Files.newDirectoryStream(directory)) {
       for (Path path : paths) {
-        state.recordEnumeration(path.toString());
+        if (!state.tryEnumerate(path.toString())) {
+          break;
+        }
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
           ServiceLoaderDescriptorSource.retainSmallest(
               candidates, path, ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES);

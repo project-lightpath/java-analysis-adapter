@@ -139,14 +139,17 @@ final class SootUpInputLocationFactory {
     }
     NavigableSet<Path> entries = new TreeSet<>();
     boolean truncated = false;
+    int enumeratedEntries = 0;
     try (var paths = Files.newDirectoryStream(directory)) {
       for (Path path : paths) {
+        if (enumeratedEntries >= MAX_DEPENDENCY_ENTRIES) {
+          truncated = true;
+          break;
+        }
+        enumeratedEntries++;
         String fileName = path.getFileName().toString();
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-          && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
-          if (entries.size() >= MAX_DEPENDENCY_ENTRIES) {
-            truncated = true;
-          }
+            && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
           ServiceLoaderDescriptorSource.retainSmallest(
               entries, path, MAX_DEPENDENCY_ENTRIES);
         }

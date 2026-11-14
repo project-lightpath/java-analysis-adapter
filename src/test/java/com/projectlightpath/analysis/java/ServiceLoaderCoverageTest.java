@@ -229,10 +229,10 @@ class ServiceLoaderCoverageTest {
 
     Path archive = temp.resolve("bounded.jar");
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Archive", "demo.ArchiveProvider\n");
       for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
         put(output, "noise/entry-" + index, "ignored");
       }
-      put(output, "META-INF/services/demo.Archive", "demo.ArchiveProvider\n");
     }
     List<ServiceLoaderDescriptorScanner.Descriptor> archiveDescriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState archiveState =
