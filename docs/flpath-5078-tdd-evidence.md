@@ -270,3 +270,12 @@ Evidence hashes:
 - Final follow-up coverage at this production HEAD passes `97/97` full-suite tests and `85/85`
   unit-only tests; changed-production coverage is `91.36%` (`825/903`) full-suite and `90.59%`
   (`818/903`) unit-only.
+
+### independent-review-qualified-receiver-and-order-independence
+
+- `RED_25`: commit `8ef9dbe1c73857a3824a506fc0651170bd8d6772`; a qualified `this.provider`
+  receiver was misattributed as `service_loader`, and overflowing directory/archive/wildcard
+  scans returned order-dependent prefixes.
+- `GREEN_25`: commit `f0ace3e21ab6a5f2e4ac68f5b04a8e87fd1f8f85`; ownership now requires a bare
+  lambda-parameter receiver, while overflow is fail-closed for directory/archive descriptors and
+  wildcard dependency entries. Focused regressions pass `3/3`.
