@@ -4,11 +4,10 @@ import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -37,16 +36,13 @@ final class ServiceLoaderDescriptorArchiveSource {
 
   private static ArchiveEntries enumerate(
       ZipFile zip, Path archive, ServiceLoaderDescriptorSource.ScanState state) {
-    List<ZipEntry> descriptors = new ArrayList<>();
+    NavigableMap<String, ZipEntry> descriptors = new TreeMap<>();
     ZipEntry module = null;
-    Set<String> names = new HashSet<>();
     Enumeration<? extends ZipEntry> entries = zip.entries();
     while (entries.hasMoreElements()) {
       ZipEntry entry = entries.nextElement();
       String entryPath = archive + "!/" + entry.getName();
-      if (!state.consumeEnumerated(entryPath)) {
-        break;
-      }
+      state.recordEnumeration(entryPath);
       if (entry.isDirectory()) {
         continue;
       }
@@ -55,16 +51,28 @@ final class ServiceLoaderDescriptorArchiveSource {
             entry.getName(), archive, state);
       }
       if (entry.getName().startsWith(
-              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")
-          && names.add(entry.getName())) {
-        descriptors.add(entry);
+              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")) {
+        retainDescriptor(descriptors, entry);
       }
       if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
         module = entry;
       }
     }
-    descriptors.sort(java.util.Comparator.comparing(ZipEntry::getName));
-    return new ArchiveEntries(descriptors, module);
+    return new ArchiveEntries(List.copyOf(descriptors.values()), module);
+  }
+
+  private static void retainDescriptor(
+      NavigableMap<String, ZipEntry> descriptors, ZipEntry entry) {
+    String name = entry.getName();
+    if (descriptors.containsKey(name)) {
+      return;
+    }
+    if (descriptors.size() < ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES) {
+      descriptors.put(name, entry);
+    } else if (name.compareTo(descriptors.lastKey()) < 0) {
+      descriptors.pollLastEntry();
+      descriptors.put(name, entry);
+    }
   }
 
   private static void readDescriptors(

@@ -13,7 +13,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NavigableSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /** Reads ServiceLoader metadata from selected classpath directories and archives. */
@@ -54,23 +56,30 @@ final class ServiceLoaderDescriptorSource {
         || !visited.add("services:" + normalized)) {
       return;
     }
-    List<Path> candidates = new ArrayList<>();
+    NavigableSet<Path> candidates = new TreeSet<>();
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
       for (Path path : paths) {
-        if (!state.consumeEnumerated(path.toString())) {
-          break;
-        }
+        state.recordEnumeration(path.toString());
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-          candidates.add(path);
+          retainSmallest(candidates, path, MAX_ENUMERATED_ENTRIES);
         }
       }
     } catch (IOException error) {
       state.diagnostic(
           "service_directory_read_error", normalized.toString(), message(error));
     }
-    candidates.sort(Path::compareTo);
     for (Path path : candidates) {
       addServiceFile(path, label, descriptors, visited, state);
+    }
+  }
+
+  static <T extends Comparable<? super T>> void retainSmallest(
+      NavigableSet<T> values, T candidate, int limit) {
+    if (values.size() < limit) {
+      values.add(candidate);
+    } else if (candidate.compareTo(values.last()) < 0) {
+      values.pollLast();
+      values.add(candidate);
     }
   }
 
@@ -205,15 +214,17 @@ final class ServiceLoaderDescriptorSource {
       return remainingDecompressed() > 0;
     }
 
-    boolean consumeEnumerated(String path) {
-      if (enumeratedEntries >= MAX_ENUMERATED_ENTRIES) {
+    void recordEnumeration(String path) {
+      if (enumeratedEntries == MAX_ENUMERATED_ENTRIES) {
         diagnostic(
             "descriptor_enumeration_limit", path,
             "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
-        return false;
+        enumeratedEntries++;
+        return;
       }
-      enumeratedEntries++;
-      return true;
+      if (enumeratedEntries < MAX_ENUMERATED_ENTRIES) {
+        enumeratedEntries++;
+      }
     }
 
     boolean consumeDecompressed(long bytes, String path) {

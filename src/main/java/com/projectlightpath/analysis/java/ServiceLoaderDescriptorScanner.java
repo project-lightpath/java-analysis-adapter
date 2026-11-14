@@ -35,8 +35,10 @@ final class ServiceLoaderDescriptorScanner {
 
   private static List<Descriptor> selectedDescriptors(
       ServiceLoaderCallSiteReader.ServiceLoadHints hints, Scan scan) {
+    Set<DescriptorIdentity> seen = new LinkedHashSet<>();
     return scan.descriptors().stream()
         .filter(item -> hints.serviceTypes().contains(item.serviceType()))
+        .filter(item -> seen.add(DescriptorIdentity.from(item)))
         .toList();
   }
 
@@ -210,6 +212,22 @@ final class ServiceLoaderDescriptorScanner {
 
     boolean moduleInfo() {
       return kind.equals("module_info");
+    }
+  }
+
+  private record DescriptorIdentity(
+      String serviceType,
+      List<String> providers,
+      String fingerprint,
+      String kind,
+      List<String> malformedEntries) {
+    static DescriptorIdentity from(Descriptor descriptor) {
+      return new DescriptorIdentity(
+          descriptor.serviceType(),
+          descriptor.providers(),
+          descriptor.fingerprint(),
+          descriptor.kind(),
+          descriptor.malformedEntries());
     }
   }
 }

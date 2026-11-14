@@ -27,16 +27,19 @@ final class ServiceLoaderCallSiteSource {
     if (!validTargetMethod(targetMethod)) {
       return false;
     }
-    SourceBounds bounds = loadBounds(sourceText, site);
+    String structuralSource = ServiceLoaderSourceMasker.mask(sourceText);
+    SourceBounds bounds = loadBounds(structuralSource, site);
     if (bounds == null) {
       return false;
     }
-    List<Integer> targetOffsets = targetOffsets(sourceText, targetMethod, bounds);
-    List<Integer> scopedTargets = targetsOnRequestedLine(sourceText, targetOffsets, targetLine);
+    List<Integer> targetOffsets = targetOffsets(structuralSource, targetMethod, bounds);
+    List<Integer> scopedTargets = targetsOnRequestedLine(
+        structuralSource, targetOffsets, targetLine);
     List<Integer> providerTargets = providerTargets(
-        sourceText, scopedTargets, bounds.expressionStart());
+        structuralSource, scopedTargets, bounds.expressionStart());
     return providerTargets.size() == 1
-        && !hasExpressionBoundary(sourceText, bounds.expressionStart(), providerTargets.get(0));
+        && !hasExpressionBoundary(
+            structuralSource, bounds.expressionStart(), providerTargets.get(0));
   }
 
   private static boolean validTargetMethod(String targetMethod) {

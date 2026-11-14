@@ -2,14 +2,16 @@ package com.projectlightpath.analysis.java;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.WeakHashMap;
 import sootup.core.inputlocation.AnalysisInputLocation;
 import sootup.core.inputlocation.FileType;
@@ -35,7 +37,13 @@ final class SootUpInputLocationFactory {
         context.applicationClasses().toString(), SourceType.Application));
     Map<AnalysisInputLocation, Path> dependencyEntries = new IdentityHashMap<>();
     Set<Path> dependencyPaths = new LinkedHashSet<>();
-    for (Path dependency : dependencyResolution(context).entries()) {
+    DependencyResolution resolution = dependencyResolution(context);
+    if (!resolution.truncatedWildcards().isEmpty()) {
+      throw new IllegalArgumentException(
+          "dependency_enumeration_limit: dependency wildcard expansion exceeds "
+              + MAX_DEPENDENCY_ENTRIES + " entries: " + resolution.truncatedWildcards());
+    }
+    for (Path dependency : resolution.entries()) {
       addDependencyLocation(dependency, locations, dependencyEntries, dependencyPaths);
     }
     if (!context.dependencyClasspath().isEmpty() && dependencyEntries.isEmpty()) {
@@ -79,7 +87,9 @@ final class SootUpInputLocationFactory {
   }
 
   private static boolean isValidInputLocation(Path path) {
-    return Files.exists(path) && (Files.isDirectory(path) || PathUtils.isArchive(path));
+    return Files.exists(path, LinkOption.NOFOLLOW_LINKS)
+        && (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+            || (!Files.isSymbolicLink(path) && PathUtils.isArchive(path)));
   }
 
   /** Associates WAR-contained class sources with the outer WAR dependency entry. */
@@ -124,29 +134,29 @@ final class SootUpInputLocationFactory {
 
     int wildcardIndex = value.indexOf('*');
     Path directory = normalized.getFileSystem().getPath(value.substring(0, wildcardIndex));
-    if (!Files.isDirectory(directory)) {
+    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       return new Expansion(List.of(), false);
     }
-    List<Path> entries = new ArrayList<>();
+    NavigableSet<Path> entries = new TreeSet<>();
     boolean truncated = false;
     try (var paths = Files.newDirectoryStream(directory)) {
       for (Path path : paths) {
         String fileName = path.getFileName().toString();
-        if (Files.isRegularFile(path)
-            && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
+        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+          && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
           if (entries.size() >= MAX_DEPENDENCY_ENTRIES) {
             truncated = true;
-            break;
           }
-          entries.add(path.toAbsolutePath().normalize());
+          ServiceLoaderDescriptorSource.retainSmallest(
+              entries, path, MAX_DEPENDENCY_ENTRIES);
         }
       }
     } catch (IOException error) {
       throw new IllegalArgumentException(
           "cannot expand dependency classpath wildcard: " + dependency, error);
     }
-    entries.sort(Comparator.comparing(Path::toString));
-    return new Expansion(List.copyOf(entries), truncated);
+    return new Expansion(
+        entries.stream().map(path -> path.toAbsolutePath().normalize()).toList(), truncated);
   }
 
   record Inputs(JavaView view, Map<AnalysisInputLocation, Path> dependencyEntries) {}

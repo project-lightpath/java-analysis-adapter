@@ -12,8 +12,10 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.TreeSet;
 
 /** Reads selected META-INF/services files for the first bounded ServiceLoader path. */
 final class ServiceLoaderDescriptorReader {
@@ -87,20 +89,18 @@ final class ServiceLoaderDescriptorReader {
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
-    List<Path> candidates = new ArrayList<>();
+    NavigableSet<Path> candidates = new TreeSet<>();
     try (var paths = Files.newDirectoryStream(directory)) {
       for (Path path : paths) {
-        if (!state.consumeEnumerated(path.toString())) {
-          break;
-        }
+        state.recordEnumeration(path.toString());
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-          candidates.add(path);
+          ServiceLoaderDescriptorSource.retainSmallest(
+              candidates, path, ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES);
         }
       }
     } catch (IOException error) {
       throw new IllegalStateException("cannot scan ServiceLoader descriptor directory: " + directory, error);
     }
-    candidates.sort(Path::compareTo);
     for (Path path : candidates) {
       addFile(path, context, descriptors, visited, state);
     }
