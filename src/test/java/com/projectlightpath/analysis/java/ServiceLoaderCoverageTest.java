@@ -80,6 +80,17 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void sourceOwnershipIgnoresCommentsStringsAndTextBlocks() {
+    String source = "return ServiceLoader.load(demo.Provider.class)"
+        + ".map(provider -> { /* provider.record(); */"
+        + " String text = \"provider.record()\";"
+        + " String block = \"\"\"provider.record()\"\"\"; return provider; });";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
+  }
+
+  @Test
   void descriptorSourcesHandleMalformedEntriesAndBudgetGuards() throws IOException {
     Path root = temp.resolve("classes");
     Path services = root.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
@@ -228,6 +239,8 @@ class ServiceLoaderCoverageTest {
     ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
     assertTrue(archiveState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    assertTrue(archiveDescriptors.stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Archive")));
   }
 
   @Test
@@ -304,6 +317,45 @@ class ServiceLoaderCoverageTest {
     assertEquals(ENUMERATION_LIMIT, resolved.size());
     assertTrue(scan.diagnostics().stream()
         .anyMatch(item -> item.code().equals("dependency_enumeration_limit")));
+  }
+
+  @Test
+  void symlinkedDependencyArchivesFollowTheDescriptorScanPolicy() throws IOException {
+    Path dependencies = temp.resolve("symlink-dependencies");
+    Files.createDirectories(dependencies);
+    Path realArchive = dependencies.resolve("real.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(realArchive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+    }
+    Path linkedArchive = dependencies.resolve("linked.jar");
+    Files.createSymbolicLink(linkedArchive, realArchive.getFileName());
+    Path sourceRoot = temp.resolve("symlink-src");
+    Files.createDirectories(sourceRoot);
+    Path classes = temp.resolve("symlink-classes");
+    Files.createDirectories(classes);
+    AnalysisContext context = AnalysisContext.builder()
+        .id("symlink-dependencies")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("symlink-dependencies")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("symlink-src", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependencies.resolve("*")))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<Path> resolved = SootUpInputLocationFactory.resolvedDependencyEntries(context);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertTrue(resolved.contains(realArchive.toAbsolutePath().normalize()));
+    assertTrue(resolved.stream().noneMatch(path -> path.equals(linkedArchive.toAbsolutePath().normalize())));
+    assertTrue(scan.descriptors().stream()
+        .noneMatch(item -> item.path().contains("linked.jar")));
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
