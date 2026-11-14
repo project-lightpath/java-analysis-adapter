@@ -206,3 +206,12 @@ Evidence hashes:
   metadata made equivalent reports hash differently.
 - `GREEN_19`: commit `69317d2386d9ad1468e441f81446191dcc4a3095`; report evidence now stores
   a canonical hash with session metadata removed and preserves the raw report hash separately.
+
+### metadata-boundary-and-enumeration — authorized bounded descriptor inputs
+
+- `RED_20`: commit `7c040cfba9a513a9038eef45283de1d4c058aa07`; application output metadata was
+  not scanned, an observed descriptor outside selected inputs was accepted, and archive/directory
+  enumeration had no bound.
+- `GREEN_20`: commit `11c774b2fc8ad492169f8afb5d285ddfd62d1802`; application output metadata is
+  scanned, external paths are diagnosed and skipped, and archive/directory enumeration plus
+  descriptor reads share explicit bounds.
