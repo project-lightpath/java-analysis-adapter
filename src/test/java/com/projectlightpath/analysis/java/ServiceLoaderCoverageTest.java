@@ -59,7 +59,12 @@ class ServiceLoaderCoverageTest {
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, null));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, ""));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "<init>"));
-    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
+     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
+    String unrelatedReference = "return ServiceLoader.load(demo.Provider.class)"
+        + ".map(other.Provider::record);";
+    ServiceLoaderCallSite unrelatedSite = ServiceLoaderCallSiteParser.parse(unrelatedReference).get(0);
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        unrelatedReference, unrelatedSite, "record"));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
         source, new ServiceLoaderCallSite("demo.Provider", "demo.Provider", false, source.length(), 1),
         "record"));
@@ -223,6 +228,82 @@ class ServiceLoaderCoverageTest {
     ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
     assertTrue(archiveState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+  }
+
+  @Test
+  void readerRejectsSymlinkTraversalAndMalformedDeclaredPaths() throws IOException {
+    Path sourceRoot = temp.resolve("src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("classes");
+    Files.createDirectories(applicationClasses);
+    Path outside = Files.createTempDirectory("service-loader-outside");
+    Files.writeString(outside.resolve("demo.Symlink"), "demo.SymlinkProvider\n");
+    Path link = temp.resolve("linked-services");
+    Files.createSymbolicLink(link, outside);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("unsafe-paths")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("unsafe-paths")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(applicationClasses)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "symlink", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            link.resolve("demo.Symlink").toString()))
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "invalid", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "\u0000invalid"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertTrue(scan.descriptors().isEmpty(), scan.descriptors().toString());
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_path_outside_context")));
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_path_invalid")));
+  }
+
+  @Test
+  void wildcardDependencyExpansionIsBoundedAndDiagnosed() throws IOException {
+    Path dependencies = temp.resolve("dependencies");
+    Files.createDirectories(dependencies);
+    for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+      Files.write(dependencies.resolve("dependency-" + index + ".jar"), new byte[0]);
+    }
+    Path sourceRoot = temp.resolve("wildcard-src");
+    Files.createDirectories(sourceRoot);
+    Path classes = temp.resolve("wildcard-classes");
+    Files.createDirectories(classes);
+    AnalysisContext context = AnalysisContext.builder()
+        .id("wildcard-dependencies")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("wildcard-dependencies")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("wildcard-src", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependencies.resolve("*")))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<Path> resolved = SootUpInputLocationFactory.resolvedDependencyEntries(context);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertEquals(ENUMERATION_LIMIT, resolved.size());
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("dependency_enumeration_limit")));
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
