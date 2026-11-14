@@ -300,3 +300,17 @@ Evidence hashes:
 - `GREEN_27`: commit `5e199cccceb329451474bd7ea34f401d0e0afccb`; descriptor path authorization
   moved into a focused helper, restoring the reviewed lint baseline. The production gate reports
   zero new PMD findings and zero CPD duplications.
+
+### final-authoritative-gates-at-e820583
+
+- Final full-suite validation at measured HEAD `e820583ea2f1942dbf7d48837fdbbe57f8a11b43`
+  passes `101/101`; unit-only validation passes `89/89`.
+- Changed-production JaCoCo coverage is `874/956 = 91.42%` full-suite and
+  `867/956 = 90.69%` unit-only, both above the `90%` threshold, using Eclipse Adoptium
+  Temurin `21.0.13` and JaCoCo `0.8.13`.
+- `make evidence-validate` passes all `10` criteria; the TDD ledger validator passes `27/27`.
+  Java lint-plugin tests pass `16/16`; production lint reports `0` new PMD findings and
+  `0` new CPD duplications. Engram diagnostics report no warning-or-higher findings in
+  the three changed production files.
+- Machine-readable details and artifact hashes are in
+  `docs/flpath-5078-tdd/final-validation.json`.

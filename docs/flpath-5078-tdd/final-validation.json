@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "0.1.0",
+  "recordedAt": "2026-11-14T12:59:16.304651+00:00",
+  "base": "a87b6fcb20f001e0722d8d951ba66f4aafca6e75",
+  "measuredHead": "e820583ea2f1942dbf7d48837fdbbe57f8a11b43",
+  "toolchain": {
+    "javaVersionFile": "docs/flpath-5078-tdd/java-version-final-api-authorization-io.txt",
+    "javaVersionSha256": "b8046fd5bc7f6b1d2541037719dbee012cb9a1db0a9cd765d3fa3b877d11380c",
+    "requiredRuntime": "Eclipse Adoptium Temurin 21.0.13",
+    "maven": "spike/scripts/bootstrap-maven.sh",
+    "jacoco": "0.8.13"
+  },
+  "fullSuite": {
+    "testsPassed": 101,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "docs/flpath-5078-tdd/full-suite-final-api-authorization-io.log",
+    "logSha256": "e49fd48a6ec33862cfdf5f7e04885d17a9d7ebb1481db7d4e54dd925e8d73de0",
+    "coverageEvidence": "docs/flpath-5078-tdd/changed-coverage.json",
+    "coverageEvidenceSha256": "59504e50e4464839d2b559822fd4b798e5fc2a5c926d14314814d7f453a9a3b2",
+    "changedExecutableLines": 956,
+    "coveredExecutableLines": 874,
+    "coveragePercentage": 91.42259414225941,
+    "threshold": 90.0
+  },
+  "unitOnlySuite": {
+    "testsPassed": 89,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "docs/flpath-5078-tdd/unit-suite-final-api-authorization-io.log",
+    "logSha256": "e6f270aa1517db67455b2ef37d262a577cfd7432407be5fcc15e5a71bc6be720",
+    "coverageEvidence": "docs/flpath-5078-tdd/unit-coverage.json",
+    "coverageEvidenceSha256": "e5d9064f51ce42246372735bf331c89d2deabe129fa33a46ceb89c8708ea928f",
+    "changedExecutableLines": 956,
+    "coveredExecutableLines": 867,
+    "coveragePercentage": 90.69037656903765,
+    "threshold": 90.0,
+    "integrationTestsExcluded": [
+      "SootUpBaseGraphProviderIntegrationTest",
+      "SootUpDependencyBoundaryIntegrationTest"
+    ]
+  },
+  "lint": {
+    "testCount": 16,
+    "testLog": "docs/flpath-5078-tdd/java-lint-test-final-api-authorization-io.log",
+    "testLogSha256": "e88a77a5bf84006be35ab8b2d57949f765bc2c12ed070ded3344a77258451d7e",
+    "gateLog": "docs/flpath-5078-tdd/java-lint-final-api-authorization-io.log",
+    "gateLogSha256": "d58bdc03c7b641453978c8e2c30bfb7987d5236ad5dff87d8c491469434879d3",
+    "newPmdFindings": 0,
+    "newCpdDuplications": 0
+  },
+  "evidence": {
+    "tddLedgerEntries": 27,
+    "tddLedgerValidation": "validate_tdd_evidence: 27 entries passed",
+    "spikeValidation": "validated 10 acceptance criteria, 3 candidates, 10 capability cases, 21 expected relationships, and 10 observed results",
+    "log": "docs/flpath-5078-tdd/evidence-validate-final-api-authorization-io.log",
+    "logSha256": "f3fec842eab3256d904bf20637173c9657253d065142927f678587525f52287f"
+  },
+  "diagnostics": {
+    "severityAtMostWarning": 0,
+    "files": [
+      "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteParser.java",
+      "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorReader.java",
+      "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorAuthorization.java"
+    ]
+  },
+  "diffCheck": "passed"
+}
