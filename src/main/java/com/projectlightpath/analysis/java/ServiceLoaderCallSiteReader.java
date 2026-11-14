@@ -72,7 +72,7 @@ final class ServiceLoaderCallSiteReader {
         .filter(site -> site.line() <= line)
         .filter(site -> ServiceLoaderCallSiteSource.sameStatement(source, site, line))
         .filter(site -> ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
-            source, site, targetMethod))
+            source, site, targetMethod, line))
         .toList();
   }
 

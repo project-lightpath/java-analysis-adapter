@@ -1,17 +1,27 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Source-position and lexical checks used to correlate ServiceLoader call sites. */
 final class ServiceLoaderCallSiteSource {
   private static final String EXPRESSION_BOUNDARIES = ",;)]}?=+-*/%";
+  private static final Pattern LAMBDA = Pattern.compile(
+      "\\(([^()]*)\\)\\s*->|([A-Za-z_$][\\w$]*)\\s*->");
 
   private ServiceLoaderCallSiteSource() {}
 
   /** Correlates a line-only bytecode call with the ServiceLoader expression that can own it. */
   static boolean invokeIsLexicallyBound(
       String sourceText, ServiceLoaderCallSite site, String targetMethod) {
+    return invokeIsLexicallyBound(sourceText, site, targetMethod, -1);
+  }
+
+  /** Correlates a target invocation using its source line when bytecode provides one. */
+  static boolean invokeIsLexicallyBound(
+      String sourceText, ServiceLoaderCallSite site, String targetMethod, int targetLine) {
     if (targetMethod == null || targetMethod.isBlank() || targetMethod.equals("<init>")) {
       return false;
     }
@@ -36,14 +46,111 @@ final class ServiceLoaderCallSiteSource {
         + "(?=\\s*(?:\\(|[;,.)}]))";
     Matcher matcher = Pattern.compile(methodPattern).matcher(sourceText);
     matcher.region(closing + 1, end);
-    if (!matcher.find()) {
+    List<Integer> providerTargets = new ArrayList<>();
+    while (matcher.find()) {
+      if (targetLine > 0 && lineAt(sourceText, matcher.start()) != targetLine) {
+        continue;
+      }
+      if (isProviderOwnedTarget(sourceText, closing + 1, matcher.start())) {
+        providerTargets.add(matcher.start());
+      }
+    }
+    if (providerTargets.size() != 1) {
       return false;
     }
-    int targetOffset = matcher.start();
-    if (matcher.find()) {
-      return false;
-    }
+    int targetOffset = providerTargets.get(0);
     return !hasExpressionBoundary(sourceText, closing + 1, targetOffset);
+  }
+
+  private static boolean isProviderOwnedTarget(String sourceText, int start, int targetOffset) {
+    if (sourceText.charAt(targetOffset) == ':') {
+      return true;
+    }
+    String receiver = receiverName(sourceText, targetOffset);
+    if (receiver == null) {
+      return false;
+    }
+    Matcher lambda = LAMBDA.matcher(sourceText);
+    lambda.region(start, targetOffset);
+    while (lambda.find()) {
+      String parameters = lambda.group(1) != null ? lambda.group(1) : lambda.group(2);
+      if (containsParameter(parameters, receiver)
+          && lambdaContainsTarget(sourceText, lambda.end(), targetOffset)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static String receiverName(String sourceText, int targetOffset) {
+    int end = targetOffset - 1;
+    while (end >= 0 && Character.isWhitespace(sourceText.charAt(end))) {
+      end--;
+    }
+    if (end < 0 || !Character.isJavaIdentifierPart(sourceText.charAt(end))) {
+      return null;
+    }
+    int start = end;
+    while (start >= 0 && Character.isJavaIdentifierPart(sourceText.charAt(start))) {
+      start--;
+    }
+    if (start >= 0 && Character.isJavaIdentifierStart(sourceText.charAt(start))) {
+      return sourceText.substring(start, end + 1);
+    }
+    return sourceText.substring(start + 1, end + 1);
+  }
+
+  private static boolean containsParameter(String parameters, String receiver) {
+    if (parameters == null || parameters.isBlank()) {
+      return false;
+    }
+    for (String parameter : parameters.split(",")) {
+      Matcher name = Pattern.compile("([A-Za-z_$][\\w$]*)\\s*$").matcher(parameter.trim());
+      if (name.find() && name.group(1).equals(receiver)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean lambdaContainsTarget(String sourceText, int arrowEnd, int targetOffset) {
+    int bodyStart = arrowEnd;
+    while (bodyStart < sourceText.length()
+        && Character.isWhitespace(sourceText.charAt(bodyStart))) {
+      bodyStart++;
+    }
+    if (bodyStart > targetOffset) {
+      return false;
+    }
+    if (bodyStart < sourceText.length() && sourceText.charAt(bodyStart) == '{') {
+      int bodyEnd = matchingDelimiter(sourceText, bodyStart, '{', '}');
+      return bodyEnd > targetOffset;
+    }
+    return expressionEnd(sourceText, bodyStart) > targetOffset;
+  }
+
+  private static int expressionEnd(String sourceText, int start) {
+    DelimiterDepth depth = new DelimiterDepth();
+    for (int index = start; index < sourceText.length(); index++) {
+      char value = sourceText.charAt(index);
+      if (depth.atTopLevel()
+          && (value == ',' || value == ';' || value == ')' || value == ']'
+              || value == '}')) {
+        return index;
+      }
+      depth.accept(value);
+    }
+    return sourceText.length();
+  }
+
+  private static int lineAt(String sourceText, int offset) {
+    int line = 1;
+    for (int index = 0; index < offset && index < sourceText.length(); index++) {
+      if (sourceText.charAt(index) == '\n') {
+        line++;
+      }
+    }
+    return line;
   }
 
   /** Returns whether a source call and bytecode line belong to one expression statement. */
