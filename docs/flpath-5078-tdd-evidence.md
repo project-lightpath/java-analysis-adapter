@@ -292,3 +292,11 @@ Evidence hashes:
   `java.util.ServiceLoader` import/package ownership, repository-root-wide authorization is
   removed while selected metadata locations remain supported, and descriptor I/O failures emit
   diagnostics. Focused regressions pass `3/3`.
+
+### lint-regression-after-authorization-fix
+
+- `RED_27`: commit `c7e9de1f27afd3e9eb49c0db31e85381e248f2b1`; the production lint gate
+  reported one new `GodClass` finding after the descriptor authorization and I/O changes.
+- `GREEN_27`: commit `5e199cccceb329451474bd7ea34f401d0e0afccb`; descriptor path authorization
+  moved into a focused helper, restoring the reviewed lint baseline. The production gate reports
+  zero new PMD findings and zero CPD duplications.
