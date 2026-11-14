@@ -4,6 +4,8 @@
 from pathlib import Path
 import sys
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
@@ -24,6 +26,23 @@ class ValidateChangedCoverageTest(unittest.TestCase):
             {10, 11, 12}, {10: (1, 0), 11: (0, 1)})
         self.assertEqual(executable, {10, 11})
         self.assertEqual(non_executable, {12})
+
+    @patch("validate_changed_coverage.subprocess.run")
+    def test_java_version_reads_adoptium_vendor_from_settings(
+        self, run: object
+    ) -> None:
+        run.return_value = SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr='java.version = 21.0.13\njava.vendor = Eclipse Adoptium\n',
+        )
+        self.assertIn("Eclipse Adoptium", validate_changed_coverage.java21_version())
+        run.assert_called_once_with(
+            ["java", "-XshowSettings:properties", "-version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
 
 if __name__ == "__main__":
