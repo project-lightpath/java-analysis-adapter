@@ -103,7 +103,10 @@ final class ServiceLoaderDescriptorReader {
         }
       }
     } catch (IOException error) {
-      throw new IllegalStateException("cannot scan ServiceLoader descriptor directory: " + directory, error);
+      state.diagnostic("descriptor_directory_read_error",
+          directory.toAbsolutePath().normalize().toString(),
+          ServiceLoaderDescriptorSource.message(error));
+      return;
     }
     if (!complete) {
       return;
@@ -154,7 +157,8 @@ final class ServiceLoaderDescriptorReader {
           "meta_inf_services",
           malformed));
     } catch (IOException error) {
-      throw new IllegalStateException("cannot read ServiceLoader descriptor: " + normalized, error);
+      state.diagnostic("descriptor_read_error", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
     }
   }
 
@@ -168,8 +172,7 @@ final class ServiceLoaderDescriptorReader {
   private static boolean authorizedPath(
       AnalysisContext context, Path path, List<Path> dependencyEntries) {
     Path normalized = path.toAbsolutePath().normalize();
-    if (under(normalized, context.repositoryRoot())
-        || under(normalized, context.applicationClasses())) {
+    if (under(normalized, context.applicationClasses())) {
       return true;
     }
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
@@ -182,7 +185,42 @@ final class ServiceLoaderDescriptorReader {
         return true;
       }
     }
+    return explicitlySelectedMetadataLocation(context, normalized);
+  }
+
+  private static boolean explicitlySelectedMetadataLocation(
+      AnalysisContext context, Path normalized) {
+    Path repositoryRoot = context.repositoryRoot().toAbsolutePath().normalize();
+    for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
+      if (metadata.status() != AnalysisContext.MetadataStatus.OBSERVED
+          || !"service_loader_descriptor".equals(metadata.kind())
+          || metadata.declaredPath() == null) {
+        continue;
+      }
+      Path declared;
+      try {
+        declared = Path.of(metadata.declaredPath());
+      } catch (InvalidPathException error) {
+        continue;
+      }
+      Path selected = (declared.isAbsolute() ? declared : repositoryRoot.resolve(declared))
+          .toAbsolutePath().normalize();
+      if (sameRealPath(selected, repositoryRoot)
+          || !under(selected, repositoryRoot)
+          || !sameRealPath(selected, normalized)) {
+        continue;
+      }
+      return true;
+    }
     return false;
+  }
+
+  private static boolean sameRealPath(Path left, Path right) {
+    try {
+      return left.toRealPath().equals(right.toRealPath());
+    } catch (IOException | SecurityException error) {
+      return false;
+    }
   }
 
   private static boolean under(Path path, Path root) {
