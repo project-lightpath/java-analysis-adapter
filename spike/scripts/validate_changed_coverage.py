@@ -95,6 +95,17 @@ def jacoco_lines(report: Path) -> dict[str, dict[int, tuple[int, int]]]:
     return result
 
 
+def partition_changed_lines(
+    changed: set[int], source_lines: dict[int, tuple[int, int]]
+) -> tuple[set[int], set[int]]:
+    """Separate changed lines with JaCoCo instructions from non-executable lines."""
+    executable = {
+        line for line in changed
+        if line in source_lines and sum(source_lines[line]) > 0
+    }
+    return executable, changed - executable
+
+
 def java21_version() -> str:
     """Return and validate the pinned runtime identity."""
     result = subprocess.run(["java", "-version"], capture_output=True, text=True, check=False)
@@ -136,27 +147,22 @@ def validate_report(
     denominator = 0
     file_evidence: list[dict[str, Any]] = []
     for path, lines in sorted(changed.items()):
+        require(path in coverage, f"JaCoCo report has no sourcefile for {path}")
         source_lines = coverage.get(path, {})
-        file_numerator = 0
-        file_denominator = 0
-        missing = []
-        for line in sorted(lines):
-            counters = source_lines.get(line)
-            if counters is None:
-                missing.append(line)
-                continue
-            if sum(counters) == 0:
-                continue
-            file_denominator += 1
-            if counters[0] > 0:
-                file_numerator += 1
-        require(not missing, f"JaCoCo report has no counters for {path}:{missing}")
-        require(file_denominator > 0, f"changed file has zero executable lines: {path}")
+        executable, non_executable = partition_changed_lines(lines, source_lines)
+        file_numerator = sum(1 for line in executable if source_lines[line][0] > 0)
+        file_denominator = len(executable)
+        unmapped = sorted(line for line in non_executable if line not in source_lines)
+        zero_counter = sorted(line for line in non_executable if line in source_lines)
         numerator += file_numerator
         denominator += file_denominator
         file_evidence.append({
             "path": path,
             "changedLines": sorted(lines),
+            "executableChangedLines": sorted(executable),
+            "nonExecutableChangedLines": sorted(non_executable),
+            "unmappedChangedLines": unmapped,
+            "zeroCounterChangedLines": zero_counter,
             "coveredExecutableLines": file_numerator,
             "executableLines": file_denominator,
             "nestedClassUnion": "sourcefile",
@@ -194,6 +200,10 @@ def self_test() -> int:
         '</sourcefile></package></report>'
     )
     require(xml.find(".//sourcefile") is not None, "fixture sourcefile was not parsed")
+    executable, non_executable = partition_changed_lines(
+        {10, 11, 12}, {10: (1, 0), 11: (0, 1)})
+    require(executable == {10, 11}, "coverage self-test did not classify executable lines")
+    require(non_executable == {12}, "coverage self-test did not exclude unmapped lines")
     parsed = {"fixtures": 1, "nestedClassUnion": "sourcefile", "covered": 1, "executable": 2}
     require(parsed["fixtures"] > 0, "coverage self-test executed zero fixtures")
     require(parsed["covered"] / parsed["executable"] == 0.5,
