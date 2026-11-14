@@ -13,7 +13,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /** Reads selected META-INF/services files for the first bounded ServiceLoader path. */
 final class ServiceLoaderDescriptorReader {

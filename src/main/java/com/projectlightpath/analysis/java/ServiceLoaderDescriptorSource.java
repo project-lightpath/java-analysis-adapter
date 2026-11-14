@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /** Reads ServiceLoader metadata from selected classpath directories and archives. */
 final class ServiceLoaderDescriptorSource {
