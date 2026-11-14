@@ -13,6 +13,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.tools.JavaCompiler;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -1216,6 +1219,73 @@ class JavaAnalysisAdapterTest {
         .orElseThrow();
     assertEquals("demo.Outer$Service", descriptor.attributes().get("serviceType"));
     assertEquals("demo.Provider", descriptor.attributes().get("providers"));
+  }
+
+  /** Does not attach a ServiceLoader relationship to an unrelated same-statement invocation. */
+  @Test
+  void rejectsUnrelatedInvocationAfterLoadCondition() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-unrelated/src/main/java");
+    Path classes = temp.resolve("service-loader-unrelated/target/classes");
+    Path resources = temp.resolve("service-loader-unrelated/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static String audit(OtherImpl other) {
+            return ServiceLoader.load(AuditProvider.class).findFirst()
+                .map(value -> value.record())
+                .orElseGet(() -> other.record());
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { String record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public String record() { return "provider"; }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          String record() { return "other"; }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-unrelated")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-unrelated/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultAuditProvider#record")), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
   }
 
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
@@ -6215,5 +6285,30 @@ class JavaAnalysisAdapterTest {
     Path path = root.resolve(relative);
     Files.createDirectories(path.getParent());
     Files.writeString(path, source);
+  }
+
+  /** Compiles one source fixture for a provider-boundary regression. */
+  private static void compileFixture(Path sourceRoot, Path classes) throws IOException {
+    Files.createDirectories(classes);
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    if (compiler == null) {
+      throw new IllegalStateException("a JDK compiler is required for the ServiceLoader fixture");
+    }
+    try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(sourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = fileManager.getJavaFileObjectsFromFiles(
+          sources.stream().map(Path::toFile).toList());
+      boolean compiled = compiler.getTask(
+          null,
+          fileManager,
+          null,
+          List.of("--release", "17", "-d", classes.toString()),
+          null,
+          units).call();
+      assertTrue(compiled, "ServiceLoader fixture compilation failed");
+    }
   }
 }
