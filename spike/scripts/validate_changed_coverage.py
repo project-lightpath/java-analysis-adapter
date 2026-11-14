@@ -106,12 +106,22 @@ def partition_changed_lines(
     return executable, changed - executable
 
 
+def pinned_java21(output: str) -> bool:
+    """Recognize the pinned version in either Java version output format."""
+    return 'version "21.0.13"' in output or "java.version = 21.0.13" in output
+
+
 def java21_version() -> str:
     """Return and validate the pinned runtime identity."""
-    result = subprocess.run(["java", "-version"], capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["java", "-XshowSettings:properties", "-version"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     output = result.stdout + result.stderr
     require(result.returncode == 0, "java -version failed")
-    require('version "21.0.13"' in output, "coverage must run on Temurin 21.0.13")
+    require(pinned_java21(output), "coverage must run on Temurin 21.0.13")
     require("Eclipse Adoptium" in output, "coverage must run on Eclipse Adoptium")
     return output.strip()
 
@@ -134,7 +144,7 @@ def validate_report(
     if java_text is None:
         java_text = java21_version()
     else:
-        require('version "21.0.13"' in java_text and "Eclipse Adoptium" in java_text,
+        require(pinned_java21(java_text) and "Eclipse Adoptium" in java_text,
                 "fixture Java version is not pinned")
     if require_fresh:
         head_time = int(run_git(root, "show", "-s", "--format=%ct", resolved_head).strip())
