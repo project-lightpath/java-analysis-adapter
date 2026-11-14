@@ -101,3 +101,11 @@ Evidence hashes:
   cache reuse was absent.
 - `GREEN_7`: commit `887cc149bd239e65a1ac489c2700a9e08386f434`; source text and
   parsed ServiceLoader sites are reused per scanner and source file.
+
+### 4567750992 — skipped WAR ServiceLoader metadata
+
+- `RED_8`: commit `d77869f6c72275ed5e34d809f6def347a298e042`; a WAR root descriptor
+  was not observed and nested metadata had no blocking diagnostic.
+- `GREEN_8`: commit `efa7e3f6c2b8cfd9c886f7034f66973d9b9838da`; root descriptors are
+  scanned while `WEB-INF/classes` and nested `WEB-INF/lib` metadata emits a diagnostic
+  that prevents a definite provider resolution.
