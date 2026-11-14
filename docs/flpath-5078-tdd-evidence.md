@@ -59,3 +59,10 @@ Evidence hashes:
   selector passed with one test.
 - Sidecar hashes and parent provenance are append-only in
   `docs/flpath-5078-tdd-commits.jsonl`.
+
+### 4567038425 — SootUp ServiceLoader edge classification
+
+- `RED_2`: commit `63a856a9538f4ed380104a5e9d5ca75112ad5ecd`; one behavioral
+  failure (`128` expected, `0` ServiceLoader facts), with no production-path changes.
+- `GREEN_2`: commit `4c39df9d43b0b7c5d8f2657151419b156249e86c`; the same
+  selector passed with 128 exact provider facts.
