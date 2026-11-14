@@ -24,7 +24,8 @@ final class ServiceLoaderDescriptorReader {
 
   static ServiceLoaderDescriptorScanner.Scan scan(AnalysisContext context) {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
-    Set<Path> visited = new HashSet<>();
+    Set<String> visited = new HashSet<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
       Path parent = root.path().getParent();
       if (parent != null) {
@@ -45,15 +46,18 @@ final class ServiceLoaderDescriptorReader {
         scanDirectory(resolved, context, descriptors, visited);
       }
     }
+    for (Path dependency : context.dependencyClasspath()) {
+      ServiceLoaderDescriptorSource.scanClasspathEntry(dependency, descriptors, visited, state);
+    }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));
-    return new ServiceLoaderDescriptorScanner.Scan(descriptors);
+    return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics());
   }
 
   private static void scanDirectory(
       Path directory,
       AnalysisContext context,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<Path> visited) {
+      Set<String> visited) {
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
@@ -70,9 +74,9 @@ final class ServiceLoaderDescriptorReader {
       Path file,
       AnalysisContext context,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<Path> visited) {
+      Set<String> visited) {
     Path normalized = file.toAbsolutePath().normalize();
-    if (!visited.add(normalized) || normalized.getFileName() == null) {
+    if (!visited.add("descriptor:" + normalized) || normalized.getFileName() == null) {
       return;
     }
     try {

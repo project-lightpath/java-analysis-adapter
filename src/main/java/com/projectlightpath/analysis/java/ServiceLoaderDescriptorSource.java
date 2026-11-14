@@ -1,0 +1,143 @@
+package com.projectlightpath.analysis.java;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+/** Reads ServiceLoader metadata from selected classpath directories and archives. */
+final class ServiceLoaderDescriptorSource {
+  static final String SERVICES_DIRECTORY = "META-INF/services";
+  static final String WAR_CLASSES_DIRECTORY = "WEB-INF/classes/";
+  static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
+  static final Pattern BINARY_CLASS_NAME = Pattern.compile(
+      "[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*");
+
+  private ServiceLoaderDescriptorSource() {}
+
+  static void scanClasspathEntry(
+      Path entry,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ScanState state) {
+    Path normalized = entry.toAbsolutePath().normalize();
+    if (Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
+      scanServiceDirectory(normalized.resolve(SERVICES_DIRECTORY), normalized.toString(),
+          descriptors, visited, state);
+    } else if (Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
+      ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
+    }
+  }
+
+  private static void scanServiceDirectory(
+      Path directory,
+      String label,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ScanState state) {
+    Path normalized = directory.toAbsolutePath().normalize();
+    if (!Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)
+        || !visited.add("services:" + normalized)) {
+      return;
+    }
+    try (Stream<Path> paths = Files.list(normalized)) {
+      paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+          .sorted()
+          .forEach(path -> addServiceFile(path, label, descriptors, visited, state));
+    } catch (IOException error) {
+      state.diagnostic(
+          "service_directory_read_error", normalized.toString(), message(error));
+    }
+  }
+
+  private static void addServiceFile(
+      Path path,
+      String label,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ScanState state) {
+    Path normalized = path.toAbsolutePath().normalize();
+    if (!visited.add("descriptor:" + normalized)
+        || normalized.getFileName() == null
+        || !BINARY_CLASS_NAME.matcher(normalized.getFileName().toString()).matches()) {
+      return;
+    }
+    try {
+      byte[] bytes = Files.readAllBytes(normalized);
+      ProviderEntries parsed = providers(bytes);
+      descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
+          normalized.getFileName().toString(),
+          parsed.providers(),
+          label + "/" + SERVICES_DIRECTORY + "/" + normalized.getFileName(),
+          sha256(bytes),
+          "meta_inf_services",
+          parsed.malformedEntries()));
+    } catch (IOException error) {
+      state.diagnostic("descriptor_read_error", normalized.toString(), message(error));
+    }
+  }
+
+  static ProviderEntries providers(byte[] bytes) {
+    Set<String> providers = new java.util.LinkedHashSet<>();
+    List<String> malformed = new ArrayList<>();
+    new String(bytes, StandardCharsets.UTF_8).lines()
+        .map(ServiceLoaderDescriptorSource::withoutComment)
+        .map(String::trim)
+        .filter(value -> !value.isBlank())
+        .forEach(value -> {
+          if (BINARY_CLASS_NAME.matcher(value).matches()) {
+            providers.add(value);
+          } else {
+            malformed.add(value);
+          }
+        });
+    return new ProviderEntries(List.copyOf(providers), List.copyOf(malformed));
+  }
+
+  private static String withoutComment(String line) {
+    int comment = line.indexOf('#');
+    return comment < 0 ? line : line.substring(0, comment);
+  }
+
+  private static String sha256(byte[] bytes) {
+    try {
+      byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+      StringBuilder result = new StringBuilder(digest.length * 2);
+      for (byte value : digest) {
+        result.append(Character.forDigit((value >>> 4) & 0x0f, 16));
+        result.append(Character.forDigit(value & 0x0f, 16));
+      }
+      return result.toString();
+    } catch (NoSuchAlgorithmException error) {
+      throw new IllegalStateException("SHA-256 is unavailable", error);
+    }
+  }
+
+  private static String message(Exception error) {
+    return error.getMessage() == null || error.getMessage().isBlank()
+        ? error.getClass().getSimpleName() : error.getMessage();
+  }
+
+  record ProviderEntries(List<String> providers, List<String> malformedEntries) {}
+
+  static final class ScanState {
+    private final List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics = new ArrayList<>();
+
+    void diagnostic(String code, String path, String detail) {
+      diagnostics.add(new ServiceLoaderDescriptorScanner.Diagnostic(code, path, detail));
+    }
+
+    List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics() {
+      return List.copyOf(diagnostics);
+    }
+  }
+}

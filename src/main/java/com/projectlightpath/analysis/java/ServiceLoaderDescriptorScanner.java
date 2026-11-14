@@ -28,11 +28,13 @@ final class ServiceLoaderDescriptorScanner {
     Set<String> providers = descriptors.stream()
         .flatMap(item -> item.providers().stream())
         .collect(Collectors.toCollection(LinkedHashSet::new));
+    boolean blockingDiagnostics = !scan.diagnostics().isEmpty();
     boolean unique = !hints.explicitClassLoader()
         && hints.callSiteBound()
         && descriptors.size() == 1
         && providers.size() == 1
         && !descriptors.get(0).malformed()
+        && !blockingDiagnostics
         && providers.contains(edge.callee().owner());
     SemanticCallFacts.Certainty certainty = edge.certaintyHint() == SemanticCallFacts.Certainty.UNRESOLVED
         ? SemanticCallFacts.Certainty.UNRESOLVED
@@ -66,10 +68,24 @@ final class ServiceLoaderDescriptorScanner {
               "providers", String.join(",", descriptor.providers()),
               "descriptorKind", descriptor.kind(),
               "descriptorFingerprint", descriptor.fingerprint(),
-              "selection", selection)));
+               "selection", selection)));
+    }
+    for (Diagnostic diagnostic : scan.diagnostics()) {
+      evidence.add(new SemanticCallFacts.Evidence(
+          "service_loader_scan_diagnostic",
+          diagnostic.path(),
+          List.of(),
+          null,
+          Map.of(
+              "diagnosticCode", diagnostic.code(),
+              "detail", diagnostic.detail(),
+              "scanStatus", "incomplete")));
     }
     String limitation = unique ? null
-        : "ServiceLoader registration or runtime classloader selection is not unique.";
+        : blockingDiagnostics
+            ? "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
+                .map(Diagnostic::code).distinct().sorted().collect(Collectors.joining(", ")) + "."
+            : "ServiceLoader registration or runtime classloader selection is not unique.";
     return new Resolution(certainty, List.copyOf(evidence), limitation);
   }
 
