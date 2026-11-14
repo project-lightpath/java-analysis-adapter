@@ -10,6 +10,7 @@ class ServiceLoaderCallSiteSourceTest {
   @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
         + "class Bridge {\n"
         + "  String audit(OtherImpl other) {\n"
         + "    return ServiceLoader.load(AuditProvider.class).findFirst()\n"

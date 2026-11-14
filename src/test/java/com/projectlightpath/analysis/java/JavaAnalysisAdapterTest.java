@@ -1425,6 +1425,64 @@ class JavaAnalysisAdapterTest {
         item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
   }
 
+  /** Does not treat a same-package custom ServiceLoader lookalike as java.util.ServiceLoader. */
+  @Test
+  void rejectsCustomServiceLoaderLookalike() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-lookalike/src/main/java");
+    Path classes = temp.resolve("service-loader-lookalike/target/classes");
+    write(sourceRoot, "demo/ServiceLoader.java", """
+        package demo;
+        import java.util.Optional;
+        import java.util.function.Consumer;
+        public final class ServiceLoader<T> {
+          public static <S> ServiceLoader<S> load(Class<S> type) {
+            return new ServiceLoader<>();
+          }
+          public Optional<T> findFirst() { return Optional.empty(); }
+          public void ifPresent(Consumer<T> consumer) { findFirst().ifPresent(consumer); }
+        }
+        """);
+    write(sourceRoot, "demo/Provider.java", """
+        package demo;
+        public interface Provider { void record(); }
+        """);
+    Path appSource = sourceRoot.resolve("consumer/App.java");
+    write(sourceRoot, "consumer/App.java", """
+        package consumer;
+        import demo.Provider;
+        import demo.ServiceLoader;
+        public final class App {
+          public static void audit() {
+            ServiceLoader.load(Provider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-lookalike")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    assertTrue(facts.providerFacts().stream().noneMatch(item ->
+        item.relationshipType().equals("service_loader")), facts.providerFacts().toString());
+    assertTrue(ServiceLoaderCallSiteParser.parse(Files.readString(appSource)).isEmpty(),
+        "custom imported ServiceLoader must not produce Java ServiceLoader sites");
+  }
+
   /** Keeps a block-lambda callback after an inner statement, but not after the outer boundary. */
   @Test
   void recognizesBlockLambdaCallback() throws IOException {

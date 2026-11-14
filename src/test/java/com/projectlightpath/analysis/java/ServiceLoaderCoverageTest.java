@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,7 +32,8 @@ class ServiceLoaderCoverageTest {
     assertTrue(ServiceLoaderCallSiteParser.parse("ServiceLoader.load(provider)").isEmpty());
 
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
-        "ServiceLoader.load(demo.Provider.class, loader(foo[0], new Object() { }));");
+        "import java.util.ServiceLoader;\n"
+            + "ServiceLoader.load(demo.Provider.class, loader(foo[0], new Object() { }));");
     assertEquals(1, sites.size());
     assertTrue(sites.get(0).explicitClassLoader());
     assertEquals("demo.Provider", sites.get(0).serviceType());
@@ -38,7 +41,8 @@ class ServiceLoaderCoverageTest {
 
   @Test
   void parserIgnoresCommentsStringsAndTextBlocks() {
-    String source = "// ServiceLoader.load(comment.Provider.class).record();\n"
+    String source = "import java.util.ServiceLoader;\n"
+        + "// ServiceLoader.load(comment.Provider.class).record();\n"
         + "String literal = \"ServiceLoader.load(string.Provider.class);\";\n"
         + "String textBlock = \"\"\"ServiceLoader.load(text.Provider.class);\"\"\";\n"
         + "/* ServiceLoader.load(block.Provider.class); */\n"
@@ -53,7 +57,8 @@ class ServiceLoaderCoverageTest {
 
   @Test
   void sourceOwnershipHandlesInvalidTargetsAndStatementBoundaries() {
-    String source = "return ServiceLoader.load(demo.Provider.class)"
+    String source = "import java.util.ServiceLoader;\n"
+        + "return ServiceLoader.load(demo.Provider.class)"
         + ".map(demo.Provider::record); }";
     ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
 
@@ -61,7 +66,8 @@ class ServiceLoaderCoverageTest {
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, ""));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "<init>"));
      assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
-    String unrelatedReference = "return ServiceLoader.load(demo.Provider.class)"
+    String unrelatedReference = "import java.util.ServiceLoader;\n"
+        + "return ServiceLoader.load(demo.Provider.class)"
         + ".map(other.Provider::record);";
     ServiceLoaderCallSite unrelatedSite = ServiceLoaderCallSiteParser.parse(unrelatedReference).get(0);
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
@@ -73,7 +79,8 @@ class ServiceLoaderCoverageTest {
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(source, site, 99));
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(source, site, site.line() + 1));
 
-    String separate = "ServiceLoader.load(demo.Provider.class).findFirst(); other.record();";
+    String separate = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(demo.Provider.class).findFirst(); other.record();";
     ServiceLoaderCallSite separateSite = ServiceLoaderCallSiteParser.parse(separate).get(0);
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(separate, separateSite, 1));
     assertTrue(ServiceLoaderCallSiteSource.sameStatement(
@@ -82,7 +89,8 @@ class ServiceLoaderCoverageTest {
 
   @Test
   void sourceOwnershipIgnoresCommentsStringsAndTextBlocks() {
-    String source = "return ServiceLoader.load(demo.Provider.class)"
+    String source = "import java.util.ServiceLoader;\n"
+        + "return ServiceLoader.load(demo.Provider.class)"
         + ".map(provider -> { /* provider.record(); */"
         + " String text = \"provider.record()\";"
         + " String block = \"\"\"provider.record()\"\"\"; return provider; });";
@@ -209,6 +217,108 @@ class ServiceLoaderCoverageTest {
         .anyMatch(item -> item.code().equals("descriptor_path_outside_context")));
     assertTrue(scan.diagnostics().stream()
         .anyMatch(item -> item.code().equals("archive_decompression_limit")));
+  }
+
+  @Test
+  void readerRejectsRepositoryRootAsAnUnselectedMetadataInput() throws IOException {
+    Path sourceRoot = temp.resolve("root-authorization/src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("root-authorization/classes");
+    Files.createDirectories(applicationClasses);
+    Files.writeString(temp.resolve("demo.Unselected"), "demo.UnselectedProvider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("root-authorization")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("root-authorization")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(applicationClasses)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "repository-root", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            temp.toString()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertTrue(scan.descriptors().isEmpty(), scan.descriptors().toString());
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_path_outside_context")),
+        scan.diagnostics().toString());
+  }
+
+  @Test
+  void descriptorIoFailuresBecomeDiagnosticsInsteadOfAbortingAnalysis() throws IOException {
+    Path sourceRoot = temp.resolve("io-failures/src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("io-failures/classes");
+    Files.createDirectories(applicationClasses);
+    Path unreadableDirectory = temp.resolve("unreadable-services");
+    Files.createDirectories(unreadableDirectory);
+    Path unreadableFile = temp.resolve("demo.Unreadable");
+    Files.writeString(unreadableFile, "demo.UnreadableProvider\n");
+
+    Assumptions.assumeTrue(Files.getFileAttributeView(
+        unreadableDirectory, java.nio.file.attribute.PosixFileAttributeView.class) != null);
+    Set<java.nio.file.attribute.PosixFilePermission> directoryPermissions =
+        Files.getPosixFilePermissions(unreadableDirectory);
+    Set<java.nio.file.attribute.PosixFilePermission> filePermissions =
+        Files.getPosixFilePermissions(unreadableFile);
+    try {
+      Files.setPosixFilePermissions(unreadableDirectory, Set.of());
+      Files.setPosixFilePermissions(unreadableFile, Set.of());
+      try (var ignored = Files.newDirectoryStream(unreadableDirectory)) {
+        Assumptions.assumeTrue(false, "test user can still enumerate unreadable directory");
+      } catch (IOException expected) {
+        // The fixture must exercise the descriptor directory failure path.
+      }
+      try (var ignored = Files.newInputStream(unreadableFile)) {
+        Assumptions.assumeTrue(false, "test user can still read unreadable descriptor");
+      } catch (IOException expected) {
+        // The fixture must exercise the descriptor file failure path.
+      }
+
+      AnalysisContext context = AnalysisContext.builder()
+          .id("io-failures")
+          .framework(AnalysisContext.Framework.QUARKUS)
+          .frameworkVersion("3.40.1")
+          .fixtureId("io-failures")
+          .javaRelease(17)
+          .repositoryRoot(temp)
+          .applicationClasses(applicationClasses)
+          .selectedProfile("test")
+          .analysisScope(AnalysisContext.Scope.PRODUCTION)
+          .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+          .dependencyClasspathRequired(false)
+          .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+              "directory", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+              unreadableDirectory.toString()))
+          .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+              "file", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+              unreadableFile.toString()))
+          .provenance(AnalysisContext.Provenance.forTesting())
+          .build();
+
+      ServiceLoaderDescriptorScanner.Scan scan = assertDoesNotThrow(
+          () -> ServiceLoaderDescriptorReader.scan(context));
+
+      assertTrue(scan.descriptors().isEmpty(), scan.descriptors().toString());
+      assertTrue(scan.diagnostics().stream()
+          .anyMatch(item -> item.code().equals("descriptor_directory_read_error")),
+          scan.diagnostics().toString());
+      assertTrue(scan.diagnostics().stream()
+          .anyMatch(item -> item.code().equals("descriptor_read_error")),
+          scan.diagnostics().toString());
+    } finally {
+      Files.setPosixFilePermissions(unreadableDirectory, directoryPermissions);
+      Files.setPosixFilePermissions(unreadableFile, filePermissions);
+    }
   }
 
   @Test
