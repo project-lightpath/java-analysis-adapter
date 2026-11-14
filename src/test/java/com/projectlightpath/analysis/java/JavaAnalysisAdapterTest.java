@@ -1288,6 +1288,76 @@ class JavaAnalysisAdapterTest {
         item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
   }
 
+  /** Keeps a block-lambda callback after an inner statement, but not after the outer boundary. */
+  @Test
+  void recognizesBlockLambdaCallback() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-block/src/main/java");
+    Path classes = temp.resolve("service-loader-block/target/classes");
+    Path resources = temp.resolve("service-loader-block/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static String audit(OtherImpl other) {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(value -> {
+                  int marker = 1;
+                  value.record();
+                });
+            return other.record();
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          String record() { return "other"; }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-block")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-block/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultAuditProvider#record")), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
