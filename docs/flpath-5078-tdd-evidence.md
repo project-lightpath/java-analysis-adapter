@@ -215,3 +215,10 @@ Evidence hashes:
 - `GREEN_20`: commit `11c774b2fc8ad492169f8afb5d285ddfd62d1802`; application output metadata is
   scanned, external paths are diagnosed and skipped, and archive/directory enumeration plus
   descriptor reads share explicit bounds.
+
+### lexical-source-masking — comment and literal exclusion
+
+- `RED_21`: commit `454b03e7b463d319a3908bb43c37ee4f99c2c222`; raw comments, string literals,
+  and text blocks produced false ServiceLoader call sites.
+- `GREEN_21`: commit `943af6bc43dfc89a922ec8818973cbba5121a773`; the parser masks non-code text
+  while preserving source offsets and line numbers before matching calls.
