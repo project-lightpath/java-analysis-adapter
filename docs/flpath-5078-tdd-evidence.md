@@ -160,3 +160,11 @@ Evidence hashes:
   classified as `service_loader`.
 - `GREEN_15`: commit `651122813529a1bcf9aef62dcc12eb0a14dc4eb2`; source-line matching now
   uses the first target occurrence for each load, preserving nested-load ownership.
+
+### coverage-gate-mapping — JaCoCo executable-line classification
+
+- `RED_16`: commit `125a19075bb5320a83b611a447081647ea3b1d93`; the coverage gate
+  had no classification for changed source lines without JaCoCo instructions.
+- `GREEN_16`: commit `73064e7dfc28d2c6172e8803f590606bb54bbec2`; unmapped and zero-counter
+  source lines are recorded as non-executable while executable lines remain subject to
+  the unchanged 90% threshold.
