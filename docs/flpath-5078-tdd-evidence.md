@@ -175,3 +175,12 @@ Evidence hashes:
   the pinned Temurin runtime because vendor identity was read from the wrong Java output mode.
 - `GREEN_17`: commit `46f8e669b0078bbcb91c39d5a2abf101b3beabac`; runtime validation now reads
   `-XshowSettings:properties` and accepts the pinned `java.version` property.
+
+## Final gate evidence
+
+- The authoritative JaCoCo run used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo
+  0.8.13, and the pinned no-zero-test Surefire flags; all `88` tests passed.
+- Changed-production coverage passed at `93.06%` (`617/663` executable changed lines),
+  above the required `90%` threshold. The report SHA-256 is
+  `87c974e6cbf3bb80a59cebf369cc32f099d2872a9e5e3b2f17aa08111b9ed4b6`; complete
+  machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`.
