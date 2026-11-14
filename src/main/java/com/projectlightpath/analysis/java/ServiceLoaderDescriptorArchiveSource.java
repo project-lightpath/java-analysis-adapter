@@ -42,7 +42,8 @@ final class ServiceLoaderDescriptorArchiveSource {
             }
           });
       ZipEntry moduleEntry = entries.stream()
-          .filter(entry -> !entry.isDirectory() && entry.getName().equals("module-info.class"))
+          .filter(entry -> !entry.isDirectory()
+              && entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO))
           .findFirst()
           .orElse(null);
       if (moduleEntry != null) {
@@ -52,7 +53,10 @@ final class ServiceLoaderDescriptorArchiveSource {
               "archive_decompression_limit", modulePath,
               "module-info.class could not be read after the archive decompression budget was exhausted");
         } else {
-          readEntry(zip, moduleEntry, state, modulePath);
+          byte[] bytes = readEntry(zip, moduleEntry, state, modulePath);
+          if (bytes != null) {
+            ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
+          }
         }
       }
       if (ServiceLoaderDescriptorNestedArchiveSource.isWar(normalized)) {

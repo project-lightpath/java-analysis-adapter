@@ -29,12 +29,14 @@ final class ServiceLoaderDescriptorScanner {
         .flatMap(item -> item.providers().stream())
         .collect(Collectors.toCollection(LinkedHashSet::new));
     boolean blockingDiagnostics = !scan.diagnostics().isEmpty();
+    boolean moduleVisibilityProven = descriptors.stream().noneMatch(Descriptor::moduleInfo);
     boolean unique = !hints.explicitClassLoader()
         && hints.callSiteBound()
         && descriptors.size() == 1
         && providers.size() == 1
         && !descriptors.get(0).malformed()
         && !blockingDiagnostics
+        && moduleVisibilityProven
         && providers.contains(edge.callee().owner());
     SemanticCallFacts.Certainty certainty = edge.certaintyHint() == SemanticCallFacts.Certainty.UNRESOLVED
         ? SemanticCallFacts.Certainty.UNRESOLVED
@@ -59,16 +61,22 @@ final class ServiceLoaderDescriptorScanner {
         "service_loader_resolution", edge.sourcePath(), List.of(edge.callee().displayName()),
         edge.line() > 0 ? edge.line() : null, attributes));
     for (Descriptor descriptor : descriptors) {
+      Map<String, String> descriptorAttributes = new java.util.LinkedHashMap<>();
+      descriptorAttributes.put(
+          "basis", descriptor.moduleInfo()
+              ? "module-info provides declaration" : "META-INF/services descriptor");
+      descriptorAttributes.put("serviceType", descriptor.serviceType());
+      descriptorAttributes.put("providerCount", Integer.toString(descriptor.providers().size()));
+      descriptorAttributes.put("providers", String.join(",", descriptor.providers()));
+      descriptorAttributes.put("descriptorKind", descriptor.kind());
+      descriptorAttributes.put("descriptorFingerprint", descriptor.fingerprint());
+      descriptorAttributes.put("selection", selection);
+      if (descriptor.moduleInfo()) {
+        descriptorAttributes.put("moduleVisibility", "not_proven");
+      }
       evidence.add(new SemanticCallFacts.Evidence(
           "service_loader_descriptor", descriptor.path(), List.of(descriptor.serviceType()), null,
-          Map.of(
-              "basis", "META-INF/services descriptor",
-              "serviceType", descriptor.serviceType(),
-              "providerCount", Integer.toString(descriptor.providers().size()),
-              "providers", String.join(",", descriptor.providers()),
-              "descriptorKind", descriptor.kind(),
-              "descriptorFingerprint", descriptor.fingerprint(),
-               "selection", selection)));
+          descriptorAttributes));
     }
     for (Diagnostic diagnostic : scan.diagnostics()) {
       evidence.add(new SemanticCallFacts.Evidence(
@@ -85,6 +93,8 @@ final class ServiceLoaderDescriptorScanner {
         : blockingDiagnostics
             ? "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
                 .map(Diagnostic::code).distinct().sorted().collect(Collectors.joining(", ")) + "."
+            : !moduleVisibilityProven
+                ? "module-info provides evidence is possible; selected loader module visibility is not explicit."
             : "ServiceLoader registration or runtime classloader selection is not unique.";
     return new Resolution(certainty, List.copyOf(evidence), limitation);
   }
@@ -121,6 +131,10 @@ final class ServiceLoaderDescriptorScanner {
 
     boolean malformed() {
       return !malformedEntries.isEmpty();
+    }
+
+    boolean moduleInfo() {
+      return kind.equals("module_info");
     }
   }
 }

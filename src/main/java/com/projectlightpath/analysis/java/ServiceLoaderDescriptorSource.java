@@ -1,6 +1,9 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.module.InvalidModuleDescriptorException;
+import java.lang.module.ModuleDescriptor;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -19,6 +22,7 @@ final class ServiceLoaderDescriptorSource {
   static final String SERVICES_DIRECTORY = "META-INF/services";
   static final String WAR_CLASSES_DIRECTORY = "WEB-INF/classes/";
   static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
+  static final String MODULE_INFO = "module-info.class";
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
   static final Pattern BINARY_CLASS_NAME = Pattern.compile(
       "[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*");
@@ -102,6 +106,29 @@ final class ServiceLoaderDescriptorSource {
           }
         });
     return new ProviderEntries(List.copyOf(providers), List.copyOf(malformed));
+  }
+
+  static void addModuleBytes(
+      byte[] bytes,
+      String path,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ScanState state) {
+    try {
+      ModuleDescriptor module = ModuleDescriptor.read(new ByteArrayInputStream(bytes));
+      for (ModuleDescriptor.Provides provides : module.provides()) {
+        if (!provides.providers().isEmpty()) {
+          descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
+              provides.service(),
+              List.copyOf(provides.providers()),
+              path,
+              sha256(bytes),
+              "module_info",
+              List.of()));
+        }
+      }
+    } catch (IOException | InvalidModuleDescriptorException error) {
+      state.diagnostic("malformed_module_info", path, message(error));
+    }
   }
 
   private static String withoutComment(String line) {
