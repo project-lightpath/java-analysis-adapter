@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "0.1.0",
+  "finding": "service-loader-valid-wildcard-ownership",
+  "parent": "ecd0bc03fcf304c81c44d1415456479e3ef1153f",
+  "selector": "JavaAnalysisAdapterTest#recognizesValidWildcardServiceLoaderWithoutSamePackageShadow",
+  "command": "spike/scripts/run_tdd_maven.sh 'JavaAnalysisAdapterTest#recognizesValidWildcardServiceLoaderWithoutSamePackageShadow'",
+  "exitCode": 0,
+  "testCount": 1,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "behavioralAssertion": true,
+  "compileOnly": false,
+  "outputFile": "docs/flpath-5078-tdd-green/service-loader-valid-wildcard.green.log",
+  "outputSha256": "a5e5c5115ea0eb418d315bb67e2ea8fd498e17a7eb5c3ee62ee15e09540dc0f2",
+  "testFiles": [
+    "src/test/java/com/projectlightpath/analysis/java/JavaAnalysisAdapterTest.java"
+  ],
+  "testFileSha256": {
+    "src/test/java/com/projectlightpath/analysis/java/JavaAnalysisAdapterTest.java": "907b1bdf77332448ccfe6d86595aa8b30a4abe36"
+  },
+  "productionManifest": [
+    "src/main/java/com/projectlightpath/analysis/java/AnalysisContext.java",
+    "src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java",
+    "src/main/java/com/projectlightpath/analysis/java/AnalysisGraph.java",
+    "src/main/java/com/projectlightpath/analysis/java/BoundedFrameworkModel.java",
+    "src/main/java/com/projectlightpath/analysis/java/CallEdge.java",
+    "src/main/java/com/projectlightpath/analysis/java/DynamicCertaintyPolicy.java",
+    "src/main/java/com/projectlightpath/analysis/java/DynamicFeature.java",
+    "src/main/java/com/projectlightpath/analysis/java/FrameworkModel.java",
+    "src/main/java/com/projectlightpath/analysis/java/FrameworkModels.java",
+    "src/main/java/com/projectlightpath/analysis/java/JavaAnalysisAdapter.java",
+    "src/main/java/com/projectlightpath/analysis/java/ManualAnalysisMain.java",
+    "src/main/java/com/projectlightpath/analysis/java/MethodSymbol.java",
+    "src/main/java/com/projectlightpath/analysis/java/ProviderFactNormalizer.java",
+    "src/main/java/com/projectlightpath/analysis/java/QuarkusFrameworkModel.java",
+    "src/main/java/com/projectlightpath/analysis/java/SemanticCallFacts.java",
+    "src/main/java/com/projectlightpath/analysis/java/SemanticCallFactsJsonWriter.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSite.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteParser.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteReader.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteSource.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorArchiveSource.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorAuthorization.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorNestedArchiveSource.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorReader.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorScanner.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderDescriptorSource.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderSourceCache.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderSourceMasker.java",
+    "src/main/java/com/projectlightpath/analysis/java/SootUpBaseGraphProvider.java",
+    "src/main/java/com/projectlightpath/analysis/java/SootUpCallGraphExtractor.java",
+    "src/main/java/com/projectlightpath/analysis/java/SootUpInputLocationFactory.java",
+    "src/main/java/com/projectlightpath/analysis/java/SourceMetadataScanner.java",
+    "src/main/java/com/projectlightpath/analysis/java/SpringBootFrameworkModel.java"
+  ],
+  "productionChangedPaths": [
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteParser.java",
+    "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderSourceCache.java"
+  ]
+}

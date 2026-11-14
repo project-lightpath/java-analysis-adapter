@@ -13,15 +13,23 @@ final class ServiceLoaderCallSiteParser {
       "\\bpackage\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
   private static final Pattern EXPLICIT_IMPORT = Pattern.compile(
       "(?m)^\\s*import\\s+java\\.util\\.ServiceLoader\\s*;");
+  private static final Pattern ON_DEMAND_IMPORT = Pattern.compile(
+      "(?m)^\\s*import\\s+java\\.util\\.\\*\\s*;");
 
   private ServiceLoaderCallSiteParser() {}
 
   static List<ServiceLoaderCallSite> parse(String source) {
+    return parse(source, false);
+  }
+
+  /** Parses calls with scanner-proven ownership for an on-demand java.util import. */
+  static List<ServiceLoaderCallSite> parse(String source, boolean wildcardImportOwned) {
     List<ServiceLoaderCallSite> result = new ArrayList<>();
     String structuralSource = ServiceLoaderSourceMasker.mask(source == null ? "" : source);
     Matcher matcher = LOAD.matcher(structuralSource);
     while (matcher.find()) {
-      if (matcher.group(1) == null && !isJavaUtilServiceLoader(structuralSource)) {
+      if (matcher.group(1) == null
+          && !isJavaUtilServiceLoader(structuralSource, wildcardImportOwned)) {
         continue;
       }
       int closing = matchingParenthesis(structuralSource, matcher.end() - 1);
@@ -46,9 +54,11 @@ final class ServiceLoaderCallSiteParser {
     return List.copyOf(result);
   }
 
-  private static boolean isJavaUtilServiceLoader(String source) {
-    // A wildcard import is not ownership proof: a same-package type shadows it in Java.
+  private static boolean isJavaUtilServiceLoader(String source, boolean wildcardImportOwned) {
     if (EXPLICIT_IMPORT.matcher(source).find()) {
+      return true;
+    }
+    if (wildcardImportOwned && ON_DEMAND_IMPORT.matcher(source).find()) {
       return true;
     }
     Matcher packageMatcher = PACKAGE.matcher(source);

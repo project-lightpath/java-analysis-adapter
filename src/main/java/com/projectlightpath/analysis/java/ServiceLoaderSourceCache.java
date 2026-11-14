@@ -24,7 +24,7 @@ final class ServiceLoaderSourceCache {
     ServiceLoaderSourceCache cache = cacheFor(scanner);
     synchronized (cache) {
       return scanner.sourceFile(symbol.owner()).map(file ->
-          cache.sources.computeIfAbsent(file.path(), ignored -> create(file)));
+          cache.sources.computeIfAbsent(file.path(), ignored -> create(scanner, file)));
     }
   }
 
@@ -34,9 +34,13 @@ final class ServiceLoaderSourceCache {
     }
   }
 
-  private static CachedSource create(SourceMetadataScanner.SourceFile file) {
+  private static CachedSource create(
+      SourceMetadataScanner scanner, SourceMetadataScanner.SourceFile file) {
     String source = file.source();
-    return new CachedSource(source, ServiceLoaderCallSiteParser.parse(source));
+    boolean wildcardImportOwned = scanner.files().stream()
+        .noneMatch(candidate -> candidate.packageName().equals(file.packageName())
+            && candidate.simpleTypeName().equals("ServiceLoader"));
+    return new CachedSource(source, ServiceLoaderCallSiteParser.parse(source, wildcardImportOwned));
   }
 
   record CachedSource(String sourceText, List<ServiceLoaderCallSite> sites) {
