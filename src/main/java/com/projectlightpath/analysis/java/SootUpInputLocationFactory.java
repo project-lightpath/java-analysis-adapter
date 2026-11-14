@@ -114,6 +114,7 @@ final class SootUpInputLocationFactory {
       Expansion expansion = expandDependencyPath(dependency);
       if (expansion.truncated()) {
         truncatedWildcards.add(dependency.toAbsolutePath().normalize());
+        continue;
       }
       for (Path expanded : expansion.entries()) {
         Path normalized = expanded.toAbsolutePath().normalize();

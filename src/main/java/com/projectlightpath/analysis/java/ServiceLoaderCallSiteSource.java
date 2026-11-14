@@ -129,6 +129,15 @@ final class ServiceLoaderCallSiteSource {
     while (start >= 0 && Character.isJavaIdentifierPart(sourceText.charAt(start))) {
       start--;
     }
+    int qualifier = start;
+    while (qualifier >= 0 && Character.isWhitespace(sourceText.charAt(qualifier))) {
+      qualifier--;
+    }
+    if (qualifier >= 0
+        && (sourceText.charAt(qualifier) == '.'
+            || Character.isJavaIdentifierPart(sourceText.charAt(qualifier)))) {
+      return null;
+    }
     return sourceText.substring(start + 1, end + 1);
   }
 

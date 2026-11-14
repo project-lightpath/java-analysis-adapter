@@ -38,11 +38,13 @@ final class ServiceLoaderDescriptorArchiveSource {
       ZipFile zip, Path archive, ServiceLoaderDescriptorSource.ScanState state) {
     NavigableMap<String, ZipEntry> descriptors = new TreeMap<>();
     ZipEntry module = null;
+    boolean complete = true;
     Enumeration<? extends ZipEntry> entries = zip.entries();
     while (entries.hasMoreElements()) {
       ZipEntry entry = entries.nextElement();
       String entryPath = archive + "!/" + entry.getName();
       if (!state.tryEnumerate(entryPath)) {
+        complete = false;
         break;
       }
       if (entry.isDirectory()) {
@@ -60,7 +62,9 @@ final class ServiceLoaderDescriptorArchiveSource {
         module = entry;
       }
     }
-    return new ArchiveEntries(List.copyOf(descriptors.values()), module);
+    return complete
+        ? new ArchiveEntries(List.copyOf(descriptors.values()), module)
+        : new ArchiveEntries(List.of(), null);
   }
 
   private static void retainDescriptor(

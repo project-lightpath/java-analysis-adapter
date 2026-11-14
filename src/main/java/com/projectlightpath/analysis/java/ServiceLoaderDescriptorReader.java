@@ -90,9 +90,11 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     NavigableSet<Path> candidates = new TreeSet<>();
+    boolean complete = true;
     try (var paths = Files.newDirectoryStream(directory)) {
       for (Path path : paths) {
         if (!state.tryEnumerate(path.toString())) {
+          complete = false;
           break;
         }
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
@@ -102,6 +104,9 @@ final class ServiceLoaderDescriptorReader {
       }
     } catch (IOException error) {
       throw new IllegalStateException("cannot scan ServiceLoader descriptor directory: " + directory, error);
+    }
+    if (!complete) {
+      return;
     }
     for (Path path : candidates) {
       addFile(path, context, descriptors, visited, state);

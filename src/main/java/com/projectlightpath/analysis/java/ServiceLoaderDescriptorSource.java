@@ -57,9 +57,11 @@ final class ServiceLoaderDescriptorSource {
       return;
     }
     NavigableSet<Path> candidates = new TreeSet<>();
+    boolean complete = true;
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
       for (Path path : paths) {
         if (!state.tryEnumerate(path.toString())) {
+          complete = false;
           break;
         }
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
@@ -69,6 +71,9 @@ final class ServiceLoaderDescriptorSource {
     } catch (IOException error) {
       state.diagnostic(
           "service_directory_read_error", normalized.toString(), message(error));
+    }
+    if (!complete) {
+      return;
     }
     for (Path path : candidates) {
       addServiceFile(path, label, descriptors, visited, state);
