@@ -1153,6 +1153,71 @@ class JavaAnalysisAdapterTest {
         .noneMatch(item -> item.id().equals("quarkus-resource-to-cdi-bean")));
   }
 
+  /** Resolves qualified nested ServiceLoader types to their binary service identity. */
+  @Test
+  void nestedServiceTypesResolveAtCallSite() throws IOException {
+    Path sourceRoot = temp.resolve("nested-service-loader/src/main/java");
+    Path resources = temp.resolve("nested-service-loader/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(Outer.Service.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Outer.java", """
+        package demo;
+        interface Outer {
+          interface Service { void record(); }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Outer$Service", "demo.Provider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("nested-service-loader")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("nested-service-loader/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "nested-service-loader/resources/META-INF/services"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.Provider", "record", "()V"),
+        6,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.Provider"),
+            "SootUp", "3.0.1", 2, 1))
+        .providerFacts().stream()
+        .filter(item -> item.caller().equals("demo.Bridge#lambda$audit$0"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, serviceFact.certainty());
+    SemanticCallFacts.Evidence descriptor = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.Outer$Service", descriptor.attributes().get("serviceType"));
+    assertEquals("demo.Provider", descriptor.attributes().get("providers"));
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
