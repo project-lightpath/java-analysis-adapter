@@ -109,3 +109,10 @@ Evidence hashes:
 - `GREEN_8`: commit `efa7e3f6c2b8cfd9c886f7034f66973d9b9838da`; root descriptors are
   scanned while `WEB-INF/classes` and nested `WEB-INF/lib` metadata emits a diagnostic
   that prevents a definite provider resolution.
+
+### 4567750996 — archive decompression budget diagnostics
+
+- `RED_9`: commit `6a902a9b4b966a40f24eaad5fd43808d9332b27e`; a consumed archive
+  budget skipped `module-info.class` without `archive_decompression_limit` evidence.
+- `GREEN_9`: commit `160ba51963b744905b9e97d09262b4b10ad17352`; archive entries are
+  streamed against a cumulative decompression budget and skipped module entries are diagnosed.
