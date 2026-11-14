@@ -1,8 +1,9 @@
 # FLPATH-5078 TDD evidence
 
-This ledger starts from the approved baseline and records immutable
-`RED -> GREEN -> EVIDENCE` commits. Implementation-first results from the
-quarantine worktree are not accepted as TDD evidence.
+This document records the implementation outcome from the approved baseline,
+including the historical `RED -> GREEN -> EVIDENCE` commit provenance.
+Generated logs, JSON sidecars, runtime snapshots, and validator scripts are
+transient working artifacts and are intentionally not retained in this PR.
 
 ## Baseline
 
@@ -12,34 +13,20 @@ quarantine worktree are not accepted as TDD evidence.
 - Pinned runtime home: `/Users/jgil/.cache/project-lightpath/jdk/jdk-21.0.13+9/Contents/Home`
 - Baseline worktree status: clean at worktree creation
 - Baseline committed diff from approved baseline: empty
-- Quarantine snapshot manifests: `/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/flpath-5078-quarantine/`
 
 ## Baseline verification
 
-The exact command was run with both Surefire no-test guards:
-
-```sh
-export JAVA21_HOME="/Users/jgil/.cache/project-lightpath/jdk/jdk-21.0.13+9/Contents/Home"
-export JAVA_HOME="$JAVA21_HOME"
-export PATH="$JAVA_HOME/bin:$PATH"
-MAVEN_BIN="$(bash spike/scripts/bootstrap-maven.sh)"
-"$MAVEN_BIN" -B -ntp -Dsurefire.failIfNoTests=true \
-  -Dsurefire.failIfNoSpecifiedTests=true test -f pom.xml
-```
-
-Result: exit code `0`; `69` tests passed, `0` failures, `0` errors, `0`
-skipped. The complete output is in
-`docs/flpath-5078-tdd/baseline-test.log`.
-
-Evidence hashes:
-
-- `java-version-baseline.txt`: `b8046fd5bc7f6b1d2541037719dbee012cb9a1db0a9cd765d3fa3b877d11380c`
-- `baseline-test.log`: `c1d06a7c944cbf129b05d0dd3b400f95268cd674d69c9c3be012c9a7e1c194bc`
+The pinned Temurin `21.0.13` baseline suite passed with exit code `0`: `69`
+tests passed, with `0` failures, `0` errors, and `0` skipped. Raw baseline
+output and runtime snapshots are not retained.
 
 ## TDD rules
 
-- A red record must prove a behavioral assertion failure from a selected test;
-  compilation-only failures are rejected.
+- A behavioral red record must prove an assertion failure from a selected test;
+  compilation-only failures are rejected. Historical red records whose output
+  contains a test error or lint-gate failure set `redEvidenceKind` to
+  `test-error` or `lint`; they are supplemental evidence, not behavioral RED
+  evidence.
 - Production source is unchanged in every red commit and its tree must equal
   the previous evidence commit.
 - A green commit has the red commit as its direct parent and records a passing
@@ -57,8 +44,8 @@ Evidence hashes:
   failure, no production-path changes.
 - `GREEN_1`: commit `93302de24dbd200921eed90a5f181707d2947746`; the same
   selector passed with one test.
-- Sidecar hashes and parent provenance are append-only in
-  `docs/flpath-5078-tdd-commits.jsonl`.
+- The historical commit IDs above preserve the implementation provenance;
+  per-run sidecars are not retained.
 
 ### 4567038425 — SootUp ServiceLoader edge classification
 
@@ -169,12 +156,18 @@ Evidence hashes:
   source lines are recorded as non-executable while executable lines remain subject to
   the unchanged 90% threshold.
 
+- The original RED output was a test error before the intended assertion ran;
+  the ledger records it as `redEvidenceKind: test-error`.
+
 ### coverage-runtime-identity — pinned Java vendor probe
 
 - `RED_17`: commit `a0532381eb5d73a64f4f8a54145567b32350c0e5`; the validator rejected
   the pinned Temurin runtime because vendor identity was read from the wrong Java output mode.
 - `GREEN_17`: commit `46f8e669b0078bbcb91c39d5a2abf101b3beabac`; runtime validation now reads
   `-XshowSettings:properties` and accepts the pinned `java.version` property.
+
+- The original RED output was a test error before the intended assertion ran;
+  the ledger records it as `redEvidenceKind: test-error`.
 
 ## Final gate evidence
 
@@ -191,12 +184,12 @@ Evidence hashes:
   coverage (`837/923`). Its canonical report SHA-256 is
   `8f5a852433b34be4b6c2f656e1bd6071e4e4390f78d2fac27086aa676ab9e398`; the raw report
   SHA-256 is `f2b9192bafa02a515bb95ff7ff80428fd8945521c660a0d52bfec29fb9f37e9f`.
-  Complete machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`
-  and `docs/flpath-5078-tdd/unit-coverage.json`.
+  The machine-readable coverage sidecars are transient and are not retained;
+  the measured totals and hashes above are the documented outcome.
 
-- Raw Maven/JDK output sidecars retain their exact bytes for immutable evidence hashes.
-  `.gitattributes` limits the trailing-space exemption to those raw `.log` and `.txt`
-  sidecars; source, tests, JSON, and Markdown remain covered by `git diff --check`.
+- Raw Maven/JDK output, coverage JSON, and report sidecars were transient
+  validation artifacts and are intentionally not retained. The documented
+  coverage values and report hashes above preserve the final outcome.
 
 ### directory-descriptor-budget — bounded directory metadata
 
@@ -211,6 +204,9 @@ Evidence hashes:
   metadata made equivalent reports hash differently.
 - `GREEN_19`: commit `69317d2386d9ad1468e441f81446191dcc4a3095`; report evidence now stores
   a canonical hash with session metadata removed and preserves the raw report hash separately.
+
+- The original RED output stopped at an implementation error before comparing
+  digests; the ledger records it as `redEvidenceKind: test-error`.
 
 ### metadata-boundary-and-enumeration — authorized bounded descriptor inputs
 
@@ -301,6 +297,9 @@ Evidence hashes:
   moved into a focused helper, restoring the reviewed lint baseline. The production gate reports
   zero new PMD findings and zero CPD duplications.
 
+- This RED is a lint-gate failure rather than a behavioral test assertion; the
+  ledger records it as `redEvidenceKind: lint`.
+
 ### final-authoritative-gates-at-e820583
 
 - Final full-suite validation at measured HEAD `e820583ea2f1942dbf7d48837fdbbe57f8a11b43`
@@ -312,8 +311,8 @@ Evidence hashes:
   Java lint-plugin tests pass `16/16`; production lint reports `0` new PMD findings and
   `0` new CPD duplications. Engram diagnostics report no warning-or-higher findings in
   the three changed production files.
-- Machine-readable details and artifact hashes are in
-  `docs/flpath-5078-tdd/final-validation.json`.
+- Machine-readable validation JSON was transient and is not retained; the
+  final gate result is documented above.
 
 ### independent-review-wildcard-service-loader-shadowing
 
@@ -337,8 +336,8 @@ Evidence hashes:
   the three changed production files.
 - The wildcard-import shadowing regression is covered by `RED_28`/`GREEN_28`; ambiguous
   same-package calls now abstain instead of emitting false Java ServiceLoader facts.
-- Machine-readable details and artifact hashes are in
-  `docs/flpath-5078-tdd/final-validation.json`.
+- Machine-readable validation JSON was transient and is not retained; the
+  final gate result is documented above.
 
 ### independent-review-valid-wildcard-service-loader
 
@@ -370,5 +369,5 @@ Evidence hashes:
   the three changed production files.
 - The final regressions cover source-aware wildcard ownership (`RED_28`/`GREEN_28` and
   `RED_29`/`GREEN_29`) and offset-preserving comment masking (`RED_30`/`GREEN_30`).
-- Machine-readable details and artifact hashes are in
-  `docs/flpath-5078-tdd/final-validation.json`.
+- Machine-readable validation JSON was transient and is not retained; the
+  final gate result is documented above.
