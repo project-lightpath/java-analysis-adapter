@@ -185,6 +185,10 @@ Evidence hashes:
   `87c974e6cbf3bb80a59cebf369cc32f099d2872a9e5e3b2f17aa08111b9ed4b6`; complete
   machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`.
 
+- Raw Maven/JDK output sidecars retain their exact bytes for immutable evidence hashes.
+  `.gitattributes` limits the trailing-space exemption to those raw `.log` and `.txt`
+  sidecars; source, tests, JSON, and Markdown remain covered by `git diff --check`.
+
 ### directory-descriptor-budget — bounded directory metadata
 
 - `RED_18`: commit `53d952fe2044f25edce6a05762a9d1a3367f3ab3`; a large directory
