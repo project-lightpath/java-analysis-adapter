@@ -66,3 +66,10 @@ Evidence hashes:
   failure (`128` expected, `0` ServiceLoader facts), with no production-path changes.
 - `GREEN_2`: commit `4c39df9d43b0b7c5d8f2657151419b156249e86c`; the same
   selector passed with 128 exact provider facts.
+
+### 4567038430 — ServiceLoader expression ownership
+
+- `RED_3`: commit `75e3884029b0375ecf21662815f3f624ab72b057`; valid and
+  unrelated `record()` calls were both classified as ServiceLoader evidence.
+- `GREEN_3`: commit `4acf48a7b905d5016f823690f68f58007e9672b7`; only the
+  provider callback remains a ServiceLoader fact.
