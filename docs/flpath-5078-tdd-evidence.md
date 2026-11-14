@@ -180,6 +180,9 @@ Evidence hashes:
 
 - The authoritative JaCoCo run used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo
   0.8.13, and the pinned no-zero-test Surefire flags; all `88` tests passed.
+- The changed-production threshold intentionally uses the complete adapter suite,
+  including its SootUp integration tests; no separate unit-only coverage threshold is
+  claimed.
 - Changed-production coverage passed at `93.49%` (`618/661` executable changed lines),
   above the required `90%` threshold. The canonical report SHA-256 is
   `4eac6d8bc486301c29c20bdfcbf6a7c9bdd881a6a7e5a66319e922d3da616fd8`; the raw
