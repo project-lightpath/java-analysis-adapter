@@ -4,9 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
@@ -162,6 +165,85 @@ class SootUpBaseGraphProviderIntegrationTest {
                     && evidence.attributes().get("serviceType").equals("demo.Provider"))));
   }
 
+  /** Keeps a clean explicit-loader provider possible and preserves malformed sibling evidence. */
+  @Test
+  void explicitLoaderWithCleanProviderRemainsPossible() throws IOException {
+    Path sourceRoot = temp.resolve("explicit-loader/src/main/java");
+    Path dependencyDirectory = temp.resolve("explicit-loader/dependencies");
+    Path first = dependencyDirectory.resolve("01-audit.jar");
+    Path second = dependencyDirectory.resolve("02-other.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit(ClassLoader loader) {"
+        + " ServiceLoader.load(AuditProvider.class, loader).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "  void other(ClassLoader loader) {"
+        + " ServiceLoader.load(OtherProvider.class, loader).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/AuditProvider.java", "package demo;\n"
+        + "interface AuditProvider { void record(); }\n");
+    write(sourceRoot, "demo/OtherProvider.java", "package demo;\n"
+        + "interface OtherProvider { void record(); }\n");
+    writeArchive(first, "META-INF/services/demo.AuditProvider",
+        "demo.DefaultAuditProvider\nnot a binary provider name\n");
+    writeArchive(second, "META-INF/services/demo.OtherProvider", "demo.DefaultOtherProvider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("explicit-loader")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("sootup-service-loader-integration")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("explicit-loader/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependencyDirectory.resolve("*")))
+        .dependencyClasspathRequired(true)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
+
+    CallEdge auditEdge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "(Ljava/lang/ClassLoader;)V"),
+        new MethodSymbol("demo.DefaultAuditProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    CallEdge otherEdge = new CallEdge(
+        new MethodSymbol("demo.App", "other", "(Ljava/lang/ClassLoader;)V"),
+        new MethodSymbol("demo.DefaultOtherProvider", "record", "()V"),
+        5,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    ServiceLoaderDescriptorScanner.Resolution audit = ServiceLoaderDescriptorScanner.resolve(
+        context, auditEdge, scan, scanner);
+    ServiceLoaderDescriptorScanner.Resolution other = ServiceLoaderDescriptorScanner.resolve(
+        context, otherEdge, scan, scanner);
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, audit.certainty());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, other.certainty());
+    assertTrue(other.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_descriptor")
+            && evidence.attributes().get("serviceType").equals("demo.OtherProvider")),
+        other.evidence().toString());
+    assertTrue(other.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_resolution")
+            && evidence.attributes().get("classLoaderSelection").equals("explicit")),
+        other.evidence().toString());
+    assertTrue(audit.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_descriptor")
+            && evidence.attributes().get("descriptorStatus").equals("malformed")),
+        audit.evidence().toString());
+  }
+
   private static void compile(Path sourceRoot, Path classes) throws IOException {
     Files.createDirectories(classes);
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -190,5 +272,14 @@ class SootUpBaseGraphProviderIntegrationTest {
     Path path = root.resolve(relative);
     Files.createDirectories(path.getParent());
     Files.writeString(path, source);
+  }
+
+  private static void writeArchive(Path archive, String entryName, String value) throws IOException {
+    Files.createDirectories(archive.getParent());
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry(entryName));
+      output.write(value.getBytes(StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
   }
 }
