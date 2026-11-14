@@ -91,7 +91,10 @@ final class ServiceLoaderCallSiteSource {
 
   private static boolean isProviderOwnedTarget(String sourceText, int start, int targetOffset) {
     if (sourceText.charAt(targetOffset) == ':') {
-      return true;
+      // A method reference does not expose enough source information to prove
+      // that its receiver is the ServiceLoader provider. Abstain rather than
+      // attributing an unrelated reference to the provider edge.
+      return false;
     }
     String receiver = receiverName(sourceText, targetOffset);
     if (receiver == null) {

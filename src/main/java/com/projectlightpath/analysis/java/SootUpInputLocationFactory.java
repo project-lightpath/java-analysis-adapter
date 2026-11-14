@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import sootup.core.inputlocation.AnalysisInputLocation;
 import sootup.core.inputlocation.FileType;
 import sootup.core.model.SourceType;
@@ -22,6 +23,10 @@ import sootup.java.core.views.JavaView;
 
 /** Builds SootUp input locations while retaining exact dependency ownership. */
 final class SootUpInputLocationFactory {
+  static final int MAX_DEPENDENCY_ENTRIES = 1024;
+  private static final Map<AnalysisContext, DependencyResolution> DEPENDENCY_CACHE =
+      new WeakHashMap<>();
+
   private SootUpInputLocationFactory() {}
 
   static Inputs createView(AnalysisContext context) {
@@ -30,8 +35,8 @@ final class SootUpInputLocationFactory {
         context.applicationClasses().toString(), SourceType.Application));
     Map<AnalysisInputLocation, Path> dependencyEntries = new IdentityHashMap<>();
     Set<Path> dependencyPaths = new LinkedHashSet<>();
-    for (Path dependency : context.dependencyClasspath()) {
-      addDependencyLocations(dependency, locations, dependencyEntries, dependencyPaths);
+    for (Path dependency : dependencyResolution(context).entries()) {
+      addDependencyLocation(dependency, locations, dependencyEntries, dependencyPaths);
     }
     if (!context.dependencyClasspath().isEmpty() && dependencyEntries.isEmpty()) {
       throw new IllegalArgumentException(
@@ -45,35 +50,32 @@ final class SootUpInputLocationFactory {
 
   /** Returns the concrete dependency entries selected from the analysis classpath. */
   static List<Path> resolvedDependencyEntries(AnalysisContext context) {
-    Set<Path> resolved = new LinkedHashSet<>();
-    for (Path dependency : context.dependencyClasspath()) {
-      for (Path expanded : expandDependencyPath(dependency)) {
-        Path normalized = expanded.toAbsolutePath().normalize();
-        if (isValidInputLocation(normalized)) {
-          resolved.add(normalized);
-        }
-      }
-    }
-    return List.copyOf(resolved);
+    return dependencyResolution(context).entries();
   }
 
-  private static void addDependencyLocations(
+  /** Returns cached, bounded dependency entries and wildcard-limit diagnostics. */
+  static DependencyResolution dependencyResolution(AnalysisContext context) {
+    synchronized (DEPENDENCY_CACHE) {
+      return DEPENDENCY_CACHE.computeIfAbsent(context,
+          SootUpInputLocationFactory::resolveDependencies);
+    }
+  }
+
+  private static void addDependencyLocation(
       Path dependency,
       List<AnalysisInputLocation> locations,
       Map<AnalysisInputLocation, Path> dependencyEntries,
       Set<Path> dependencyPaths) {
-    for (Path expanded : expandDependencyPath(dependency)) {
-      Path normalized = expanded.toAbsolutePath().normalize();
-      if (!isValidInputLocation(normalized) || !dependencyPaths.add(normalized)) {
-        continue;
-      }
-      AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
-          normalized,
-          SourceType.Library,
-          BytecodeBodyInterceptors.Default.getBodyInterceptors());
-      locations.add(location);
-      dependencyEntries.put(location, normalized);
+    Path normalized = dependency.toAbsolutePath().normalize();
+    if (!isValidInputLocation(normalized) || !dependencyPaths.add(normalized)) {
+      return;
     }
+    AnalysisInputLocation location = PathBasedAnalysisInputLocation.create(
+        normalized,
+        SourceType.Library,
+        BytecodeBodyInterceptors.Default.getBodyInterceptors());
+    locations.add(location);
+    dependencyEntries.put(location, normalized);
   }
 
   private static boolean isValidInputLocation(Path path) {
@@ -95,24 +97,47 @@ final class SootUpInputLocationFactory {
   }
 
   /** Expands SootUp-compatible trailing wildcards into concrete JAR entries. */
-  private static List<Path> expandDependencyPath(Path dependency) {
+  private static DependencyResolution resolveDependencies(AnalysisContext context) {
+    Set<Path> resolved = new LinkedHashSet<>();
+    List<Path> truncatedWildcards = new ArrayList<>();
+    for (Path dependency : context.dependencyClasspath()) {
+      Expansion expansion = expandDependencyPath(dependency);
+      if (expansion.truncated()) {
+        truncatedWildcards.add(dependency.toAbsolutePath().normalize());
+      }
+      for (Path expanded : expansion.entries()) {
+        Path normalized = expanded.toAbsolutePath().normalize();
+        if (isValidInputLocation(normalized)) {
+          resolved.add(normalized);
+        }
+      }
+    }
+    return new DependencyResolution(List.copyOf(resolved), List.copyOf(truncatedWildcards));
+  }
+
+  private static Expansion expandDependencyPath(Path dependency) {
     Path normalized = dependency.toAbsolutePath().normalize();
     String value = normalized.toString();
     if (!value.endsWith("*")) {
-      return List.of(normalized);
+      return new Expansion(List.of(normalized), false);
     }
 
     int wildcardIndex = value.indexOf('*');
     Path directory = normalized.getFileSystem().getPath(value.substring(0, wildcardIndex));
     if (!Files.isDirectory(directory)) {
-      return List.of();
+      return new Expansion(List.of(), false);
     }
     List<Path> entries = new ArrayList<>();
+    boolean truncated = false;
     try (var paths = Files.newDirectoryStream(directory)) {
       for (Path path : paths) {
         String fileName = path.getFileName().toString();
         if (Files.isRegularFile(path)
             && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
+          if (entries.size() >= MAX_DEPENDENCY_ENTRIES) {
+            truncated = true;
+            break;
+          }
           entries.add(path.toAbsolutePath().normalize());
         }
       }
@@ -121,8 +146,17 @@ final class SootUpInputLocationFactory {
           "cannot expand dependency classpath wildcard: " + dependency, error);
     }
     entries.sort(Comparator.comparing(Path::toString));
-    return List.copyOf(entries);
+    return new Expansion(List.copyOf(entries), truncated);
   }
 
   record Inputs(JavaView view, Map<AnalysisInputLocation, Path> dependencyEntries) {}
+
+  record DependencyResolution(List<Path> entries, List<Path> truncatedWildcards) {
+    DependencyResolution {
+      entries = List.copyOf(entries);
+      truncatedWildcards = List.copyOf(truncatedWildcards);
+    }
+  }
+
+  private record Expansion(List<Path> entries, boolean truncated) {}
 }

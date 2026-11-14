@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,6 +26,15 @@ final class ServiceLoaderDescriptorReader {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
     ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    SootUpInputLocationFactory.DependencyResolution dependencyResolution =
+        SootUpInputLocationFactory.dependencyResolution(context);
+    for (Path wildcard : dependencyResolution.truncatedWildcards()) {
+      state.diagnostic(
+          "dependency_enumeration_limit", wildcard.toString(),
+          "dependency wildcard expansion exceeds "
+              + SootUpInputLocationFactory.MAX_DEPENDENCY_ENTRIES + " entries");
+    }
+    List<Path> dependencyEntries = dependencyResolution.entries();
     ServiceLoaderDescriptorSource.scanClasspathEntry(
         context.applicationClasses(), descriptors, visited, state);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
@@ -39,9 +49,17 @@ final class ServiceLoaderDescriptorReader {
           || metadata.declaredPath() == null) {
         continue;
       }
-      Path declared = Path.of(metadata.declaredPath());
+      Path declared;
+      try {
+        declared = Path.of(metadata.declaredPath());
+      } catch (InvalidPathException error) {
+        state.diagnostic(
+            "descriptor_path_invalid", metadata.declaredPath(),
+            ServiceLoaderDescriptorSource.message(error));
+        continue;
+      }
       Path resolved = declared.isAbsolute() ? declared : context.repositoryRoot().resolve(declared);
-      if (!authorizedPath(context, resolved)) {
+      if (!authorizedPath(context, resolved, dependencyEntries)) {
         state.diagnostic(
             "descriptor_path_outside_context", resolved.toAbsolutePath().normalize().toString(),
             "observed descriptor metadata path is outside the selected analysis inputs");
@@ -53,7 +71,7 @@ final class ServiceLoaderDescriptorReader {
         scanDirectory(resolved, context, descriptors, visited, state);
       }
     }
-    for (Path dependency : SootUpInputLocationFactory.resolvedDependencyEntries(context)) {
+    for (Path dependency : dependencyEntries) {
       ServiceLoaderDescriptorSource.scanClasspathEntry(dependency, descriptors, visited, state);
     }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));
@@ -140,7 +158,8 @@ final class ServiceLoaderDescriptorReader {
         : path.toString();
   }
 
-  private static boolean authorizedPath(AnalysisContext context, Path path) {
+  private static boolean authorizedPath(
+      AnalysisContext context, Path path, List<Path> dependencyEntries) {
     Path normalized = path.toAbsolutePath().normalize();
     if (under(normalized, context.repositoryRoot())
         || under(normalized, context.applicationClasses())) {
@@ -151,7 +170,7 @@ final class ServiceLoaderDescriptorReader {
         return true;
       }
     }
-    for (Path dependency : SootUpInputLocationFactory.resolvedDependencyEntries(context)) {
+    for (Path dependency : dependencyEntries) {
       if (under(normalized, dependency)) {
         return true;
       }
@@ -160,10 +179,15 @@ final class ServiceLoaderDescriptorReader {
   }
 
   private static boolean under(Path path, Path root) {
-    Path normalizedRoot = root.toAbsolutePath().normalize();
-    return Files.isDirectory(normalizedRoot, LinkOption.NOFOLLOW_LINKS)
-        ? path.startsWith(normalizedRoot)
-        : path.equals(normalizedRoot);
+    try {
+      Path realPath = path.toRealPath();
+      Path realRoot = root.toRealPath();
+      return Files.isDirectory(realRoot, LinkOption.NOFOLLOW_LINKS)
+          ? realPath.startsWith(realRoot)
+          : realPath.equals(realRoot);
+    } catch (IOException | SecurityException error) {
+      return false;
+    }
   }
 
 }
