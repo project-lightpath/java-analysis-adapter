@@ -94,3 +94,10 @@ Evidence hashes:
   invocation after a closing lambda brace was classified as ServiceLoader.
 - `GREEN_6`: commit `abcac6eae9307d02da19ec83ae2eff49413676de`; lexical site
   matching accepts a closing-brace suffix and rejects a second same-line statement.
+
+### 4567750975 — ServiceLoader source-model caching
+
+- `RED_7`: commit `ee27b9dc34975f4d0c619a649747f461018dc70c`; repeated-edge
+  cache reuse was absent.
+- `GREEN_7`: commit `887cc149bd239e65a1ac489c2700a9e08386f434`; source text and
+  parsed ServiceLoader sites are reused per scanner and source file.
