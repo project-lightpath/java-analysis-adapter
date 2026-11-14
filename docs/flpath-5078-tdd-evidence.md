@@ -178,16 +178,21 @@ Evidence hashes:
 
 ## Final gate evidence
 
-- The authoritative JaCoCo run used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo
-  0.8.13, and the pinned no-zero-test Surefire flags; all `88` tests passed.
+- The authoritative JaCoCo run at post-refactor `HEAD e8b0d55200127ea7a5d2a7bf981fe7fcbcf495dd`
+  used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo 0.8.13, and the pinned no-zero-test
+  Surefire flags; all `90` full-suite tests passed.
 - The changed-production threshold intentionally uses the complete adapter suite,
-  including its SootUp integration tests; no separate unit-only coverage threshold is
-  claimed.
-- Changed-production coverage passed at `93.49%` (`618/661` executable changed lines),
-  above the required `90%` threshold. The canonical report SHA-256 is
-  `4eac6d8bc486301c29c20bdfcbf6a7c9bdd881a6a7e5a66319e922d3da616fd8`; the raw
-  report SHA-256 is `b8ceff94d74ecbefac3063c84a47daa01d239667fe7d0950b2e2ca50a56e760b`.
-  Complete machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`.
+  including its SootUp integration tests. Full-suite changed-production coverage passed
+  at `92.15%` (`751/815` executable changed lines), above the required `90%` threshold.
+  The canonical report SHA-256 is
+  `3142bbf78809f577e156d7244388f42af1e559500dc227a60e98b376c6d2238f`; the raw report
+  SHA-256 is `67b96863ff3124ffb57e0a0a2c3487c030dc9a765af8e29f6c1de9286f8c8a79`.
+- Additional unit-only evidence also passed `78/78` tests at the same `92.15%` changed-
+  production coverage (`751/815`). Its canonical report SHA-256 is
+  `b995a8effa61df527b4bcb23d6fdde130be291ebbc4412e9c2efcb3860e5b6f5`; the raw report
+  SHA-256 is `0c37e55ae6ef006ea52b182cdc4f320e0caa8325feab72c617ae07435688cf73`.
+  Complete machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`
+  and `docs/flpath-5078-tdd/unit-coverage.json`.
 
 - Raw Maven/JDK output sidecars retain their exact bytes for immutable evidence hashes.
   `.gitattributes` limits the trailing-space exemption to those raw `.log` and `.txt`
@@ -222,3 +227,10 @@ Evidence hashes:
   and text blocks produced false ServiceLoader call sites.
 - `GREEN_21`: commit `943af6bc43dfc89a922ec8818973cbba5121a773`; the parser masks non-code text
   while preserving source offsets and line numbers before matching calls.
+
+### post-evidence-quality-refactor
+
+- `e8b0d55200127ea7a5d2a7bf981fe7fcbcf495dd` extracts the lexical masker and archive
+  enumeration helpers without changing the `GREEN_20`/`GREEN_21` behavior. Focused
+  ServiceLoader tests pass `7/7`; the direct Java lint gate reports `0` new PMD findings
+  and `0` CPD duplications. Coverage was remeasured on this exact post-refactor HEAD.
