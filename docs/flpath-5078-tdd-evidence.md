@@ -116,3 +116,10 @@ Evidence hashes:
   budget skipped `module-info.class` without `archive_decompression_limit` evidence.
 - `GREEN_9`: commit `160ba51963b744905b9e97d09262b4b10ad17352`; archive entries are
   streamed against a cumulative decompression budget and skipped module entries are diagnosed.
+
+### 4567751004 — module provider visibility
+
+- `RED_10`: commit `e4ae8c1ac7ec88806d0aa3728236321d1b9d01`; module-info provider
+  metadata was not observed.
+- `GREEN_10`: commit `c12fa3b4e4a34a24af8dc9fe5ad7a2b297738c2f`; module provides
+  declarations are retained as `POSSIBLE` with `moduleVisibility=not_proven`.
