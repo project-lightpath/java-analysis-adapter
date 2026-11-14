@@ -83,8 +83,10 @@ class ServiceLoaderCoverageTest {
         + "ServiceLoader.load(demo.Provider.class).findFirst(); other.record();";
     ServiceLoaderCallSite separateSite = ServiceLoaderCallSiteParser.parse(separate).get(0);
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(separate, separateSite, 1));
-    assertTrue(ServiceLoaderCallSiteSource.sameStatement(
-        "ServiceLoader.load(demo.Provider.class).findFirst(); }", separateSite, 1));
+    String closing = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(demo.Provider.class).findFirst(); }";
+    ServiceLoaderCallSite closingSite = ServiceLoaderCallSiteParser.parse(closing).get(0);
+    assertTrue(ServiceLoaderCallSiteSource.sameStatement(closing, closingSite, 2));
   }
 
   @Test
