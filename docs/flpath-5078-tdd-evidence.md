@@ -246,3 +246,12 @@ Evidence hashes:
 - `GREEN_22`: commit `f52ea0514148957ade9ff2da4ebae13d2d3c6fa9`; unsupported method references now
   abstain, descriptor authorization uses real-path containment, malformed paths are diagnosed and
   skipped, and cached wildcard dependency expansion is bounded with a diagnostic.
+
+### independent-review-follow-ups
+
+- `RED_23`: commit `2a420a19f2b58fc719d72603e50bbd6163afb987`; regressions covered raw target text,
+  duplicate output/resource descriptors, archive-order dependence, and symlinked dependencies.
+- `GREEN_23`: commit `73e303905280098d47b18a15096b0d4b2c483e16`; ownership matching masks comments
+  and literals, identical descriptors are deduplicated for uniqueness, bounded subsets retain the
+  deterministic smallest entries, and dependency/SootUp and descriptor scanning share a no-follow
+  symlink policy with cached wildcard-limit diagnostics and fail-fast propagation.
