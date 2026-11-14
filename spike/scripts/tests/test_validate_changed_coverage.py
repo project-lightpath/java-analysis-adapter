@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -43,6 +44,22 @@ class ValidateChangedCoverageTest(unittest.TestCase):
             text=True,
             check=False,
         )
+
+    def test_jacoco_digest_ignores_volatile_session_metadata(self) -> None:
+        report = """<report name="adapter">
+  <sessioninfo id="volatile" start="1" dump="2"/>
+  <package name="demo"><sourcefile name="A.java"><line nr="1" ci="1" mi="0"/></sourcefile></package>
+</report>
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "first.xml"
+            second = Path(directory) / "second.xml"
+            first.write_text(report.replace("volatile", "one").replace('start="1"', 'start="10"'))
+            second.write_text(report.replace("volatile", "two").replace('start="1"', 'start="20"'))
+            self.assertEqual(
+                validate_changed_coverage.jacoco_digest(first),
+                validate_changed_coverage.jacoco_digest(second),
+            )
 
 
 if __name__ == "__main__":
