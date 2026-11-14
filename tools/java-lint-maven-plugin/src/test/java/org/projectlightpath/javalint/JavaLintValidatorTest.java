@@ -267,13 +267,7 @@ class JavaLintValidatorTest {
     Path target = temp.resolve("target");
     Files.createDirectories(config);
     Files.createDirectories(target);
-    String ruleset = """
-        <ruleset>
-          CognitiveComplexity CyclomaticComplexity NPathComplexity NcssCount
-          ExcessiveParameterList AvoidCatchingGenericException PreserveStackTrace
-          UnusedPrivateMethod CommentRequired
-        </ruleset>
-        """;
+    String ruleset = productionRuleset();
     Files.writeString(config.resolve("pmd-production.xml"), ruleset);
     Files.writeString(target.resolve("pmd.xml"), "<pmd version=\"7.17.0\"/>");
     Files.writeString(target.resolve("cpd.xml"), "<pmd-cpd pmdVersion=\"7.17.0\"/>");
@@ -299,6 +293,13 @@ class JavaLintValidatorTest {
     assertTrue(report.passed());
     assertEquals(0, report.newFindingCount());
     assertEquals(0, report.configurationErrorCount());
+
+    Files.writeString(config.resolve("pmd-production.xml"), ruleset + "\n<!-- changed -->\n");
+    JavaLintValidator.ValidationReport changedRuleset = new JavaLintValidator(temp).validate(true);
+
+    assertFalse(changedRuleset.passed());
+    assertTrue(changedRuleset.messages().stream()
+        .anyMatch(message -> message.contains("ruleset content changed")));
   }
 
   /** A threshold change is observable even when the baseline has no CPD findings. */
@@ -321,6 +322,17 @@ class JavaLintValidatorTest {
   private static String sha256(String value) throws Exception {
     return HexFormat.of().formatHex(
         MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private static String productionRuleset() throws Exception {
+    for (Path candidate : List.of(
+        Path.of("config/pmd-production.xml"),
+        Path.of("../../config/pmd-production.xml"))) {
+      if (Files.isRegularFile(candidate)) {
+        return Files.readString(candidate);
+      }
+    }
+    throw new IllegalStateException("production PMD ruleset is not available to the test");
   }
 
   private static String effectivePomWithConfiguration(String configuration) {

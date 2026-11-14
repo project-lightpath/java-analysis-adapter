@@ -72,7 +72,7 @@ static Optional<List<String>> literalPathValues(String expression) {
         return Optional.of(List.of());
       }
       List<String> result = new ArrayList<>();
-      for (String item : splitArguments(body)) {
+      for (String item : splitArgumentsWithoutTrailingEmpty(body)) {
         Optional<String> literal = literalString(item.trim());
         if (literal.isEmpty()) {
           return Optional.empty();

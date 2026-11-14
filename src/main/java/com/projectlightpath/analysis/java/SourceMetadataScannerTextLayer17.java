@@ -41,8 +41,12 @@ static String beanKind(
   /** Returns source annotation spellings that establish one candidate's registration. */
   List<String> sourceAnnotations(BeanCandidate candidate, AnalysisContext.Framework framework) {
     if (candidate.producer()) {
+      String producerParameters = candidate.producerParameters() == null
+          ? ""
+          : candidate.producerParameters().replaceAll("\\s+", " ").trim();
       String block = methods(candidate.file()).stream()
-          .filter(method -> method.name().equals(candidate.producerMethod()))
+          .filter(method -> method.name().equals(candidate.producerMethod())
+              && method.parameters().replaceAll("\\s+", " ").trim().equals(producerParameters))
           .map(MethodInfo::annotationBlock)
           .findFirst()
           .orElse("");

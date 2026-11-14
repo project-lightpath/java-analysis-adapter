@@ -133,10 +133,11 @@ static String typeHeader(SourceFile file) {
   }
 
   /** Adds explicit or implicit resource-name qualifiers for injection points. */
-static List<String> injectionQualifiers(
+  static List<String> injectionQualifiers(
       String annotations,
       String defaultName,
-      boolean cdi) {
+      boolean cdi,
+      boolean setterMethod) {
     List<String> result = new ArrayList<>(qualifierNames(annotations));
     if (cdi && hasAnnotation(annotations, "Named")) {
       for (int index = 0; index < result.size(); index++) {
@@ -148,7 +149,7 @@ static List<String> injectionQualifiers(
     if (hasAnnotation(annotations, "Resource")
         && result.stream().noneMatch(value -> value.startsWith("Resource:"))) {
       String name = defaultName;
-      if (name.startsWith("set") && name.length() > 3) {
+       if (setterMethod && name.startsWith("set") && name.length() > 3) {
         name = Character.toLowerCase(name.charAt(3)) + name.substring(4);
       }
       result.add("ResourceDefault:" + name);

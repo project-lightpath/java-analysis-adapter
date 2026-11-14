@@ -252,6 +252,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
       List<AnalysisContext.ResolvedBindingMetadata> bindingRows = request.bindingRows();
       if (!selectedRows.isEmpty()) {
         List<SourceMetadataScannerState.BeanCandidate> activeCandidates = candidates.stream()
+            .filter(candidate -> model.matches(
+                context, scanner, injection.file(), parameter.type(), candidate))
             .filter(candidate -> model.profileMatches(candidate.profiles()) != Boolean.FALSE)
             .filter(candidate -> model.candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
             .toList();

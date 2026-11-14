@@ -27,16 +27,41 @@ static boolean isAccessibleField(
       String declaringType,
       String siteType,
       String declaration) {
+    String header = fieldHeader(declaration);
     boolean lexicalAccess = siteType.equals(declaringType)
         || siteType.startsWith(declaringType + "$");
-    if (Pattern.compile("\\bprivate\\b").matcher(declaration).find()) {
+    if (Pattern.compile("\\bprivate\\b").matcher(header).find()) {
       return lexicalAccess;
     }
     if (isInterfaceType(declaringFile, declaringType)) {
       return true;
     }
     return declaringFile.packageName().equals(siteFile.packageName())
-        || Pattern.compile("\\b(?:public|protected)\\b").matcher(declaration).find();
+        || Pattern.compile("\\b(?:public|protected)\\b").matcher(header).find();
+  }
+
+  /** Returns a field header without modifiers nested in its initializer. */
+  static String fieldHeader(String declaration) {
+    int parentheses = 0;
+    int brackets = 0;
+    int braces = 0;
+    String source = maskStringLiterals(declaration);
+    for (int index = 0; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '=' && parentheses == 0 && brackets == 0 && braces == 0) {
+        return declaration.substring(0, index);
+      }
+      switch (character) {
+        case '(' -> parentheses++;
+        case ')' -> parentheses = Math.max(0, parentheses - 1);
+        case '[' -> brackets++;
+        case ']' -> brackets = Math.max(0, brackets - 1);
+        case '{' -> braces++;
+        case '}' -> braces = Math.max(0, braces - 1);
+        default -> { }
+      }
+    }
+    return declaration;
   }
 
 static int declarationScopeIndex(String source, int matchStart) {

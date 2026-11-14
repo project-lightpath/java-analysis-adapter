@@ -51,7 +51,9 @@ static String normalizeDeclaredTypeName(String spelling, SourceFile sourceFile) 
   }
 
 static boolean isDeclarationKeyword(String value) {
-    return Set.of("return", "throw", "new", "if", "for", "while", "switch", "case", "catch", "assert")
+    return Set.of(
+            "return", "throw", "new", "if", "for", "while", "switch", "case", "catch", "assert",
+            "else", "do", "yield")
         .contains(value);
   }
 

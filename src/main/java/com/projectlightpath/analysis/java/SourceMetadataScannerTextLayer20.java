@@ -44,11 +44,15 @@ static List<Parameter> parameters(
     MethodInfo selected = candidates.stream()
         .filter(method -> lineOffset >= 0 && methodContains(file, method, lineOffset))
         .findFirst()
-        .orElseGet(() -> candidates.stream()
-            .filter(method -> descriptorParameterCount(symbol.descriptor()) < 0
-                || parameters(method.parameters()).size() == descriptorParameterCount(symbol.descriptor()))
-            .findFirst()
-            .orElse(null));
+        .orElse(null);
+    if (selected == null) {
+      int descriptorCount = descriptorParameterCount(symbol.descriptor());
+      List<MethodInfo> descriptorMatches = candidates.stream()
+          .filter(method -> descriptorCount < 0
+              || parameters(method.parameters()).size() == descriptorCount)
+          .toList();
+      selected = descriptorMatches.size() == 1 ? descriptorMatches.get(0) : null;
+    }
     if (selected == null && lineOffset >= 0) {
       MethodInfo enclosing = methodContaining(file, lineOffset);
       if (!enclosing.name().equals("<unknown>")) {

@@ -195,6 +195,8 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
         return List.of(dynamicProxyFeature(file, caller, qualified + "#unknown", "", proxyOffset));
       }
       return interfaceMethods.stream()
+          .filter(method -> !hasModifier(method.annotationBlock(), "static"))
+          .filter(method -> !hasModifier(method.annotationBlock(), "private"))
           .map(method -> dynamicProxyFeature(
               file,
               caller,
@@ -317,7 +319,10 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
         return;
       }
       while (invoke.find()) {
-        addSite(result, source, handlerOffset + invoke.start(), "Method.invoke");
+        int absoluteOffset = handlerOffset + invoke.start();
+        if (isBareReceiver(source, absoluteOffset)) {
+          addSite(result, source, absoluteOffset, "Method.invoke");
+        }
       }
     }
 

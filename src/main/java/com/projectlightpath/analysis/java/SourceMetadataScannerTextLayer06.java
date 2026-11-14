@@ -62,7 +62,7 @@ static List<String> importedTypes(String type, SourceFile sourceFile) {
     if (nestedSeparator >= 0) {
       simpleType = type.substring(0, nestedSeparator);
     }
-    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\s*;")
+    Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\s*;")
         .matcher(maskStringLiterals(sourceFile.structuralSource()));
     List<String> result = new ArrayList<>();
     while (matcher.find()) {
@@ -75,7 +75,7 @@ static List<String> importedTypes(String type, SourceFile sourceFile) {
   }
 
 static Set<String> onDemandImportPackages(SourceFile sourceFile) {
-    Matcher matcher = Pattern.compile("(?m)^\\s*import\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
+    Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
         .matcher(maskStringLiterals(sourceFile.structuralSource()));
     Set<String> packages = new LinkedHashSet<>();
     while (matcher.find()) {
@@ -117,7 +117,7 @@ static List<String> splitTypeIntersectionBounds(String expression) {
   }
 
 static boolean hasOnDemandImport(SourceFile sourceFile, String packageName) {
-    return Pattern.compile("(?m)^\\s*import\\s+" + Pattern.quote(packageName) + "\\.\\*\\s*;")
+    return Pattern.compile("(?m)\\bimport\\s+" + Pattern.quote(packageName) + "\\.\\*\\s*;")
         .matcher(maskStringLiterals(sourceFile.structuralSource()))
         .find();
   }

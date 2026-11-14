@@ -153,7 +153,14 @@ static List<MethodInfo> executableMethods(SourceFile file) {
 
   /** Reports whether a proxy target method name has multiple declared overloads. */
   boolean proxyMethodOverloaded(ProxyTarget target) {
+    TypeInfo owner = innermostType(target.file(), target.method().start());
     return methods(target.file()).stream()
+        .filter(method -> {
+          TypeInfo containing = innermostType(target.file(), method.start());
+          return owner != null && containing != null && owner.start() == containing.start();
+        })
+        .filter(method -> !maskAnnotationArguments(stripComments(method.annotationBlock())).trim()
+            .matches("(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do|try|synchronized|yield)\\b.*"))
         .filter(method -> method.name().equals(target.method().name()))
         .count() > 1;
   }

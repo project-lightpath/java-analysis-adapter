@@ -105,7 +105,7 @@ final class FrameworkInjectionScanning {
           continue;
         }
         List<String> qualifiers = scanner.injectionQualifiers(
-            annotations, matcher.group(3), framework == AnalysisContext.Framework.QUARKUS);
+            annotations, matcher.group(3), framework == AnalysisContext.Framework.QUARKUS, false);
         result.add(new InjectionPoint(
             file,
             List.of(new Parameter(matcher.group(2), matcher.group(3), qualifiers)),
@@ -135,10 +135,11 @@ final class FrameworkInjectionScanning {
               method.line(),
               method.start(),
               scanner.typeContaining(file, method.start()),
-              method.name(),
-              "method",
-              scanner.injectionQualifiers(
-                  method.annotationBlock(), method.name(), framework == AnalysisContext.Framework.QUARKUS)));
+               method.name(),
+               "method",
+               scanner.injectionQualifiers(
+                   method.annotationBlock(), method.name(), framework == AnalysisContext.Framework.QUARKUS,
+                   true)));
         }
       }
       return result;

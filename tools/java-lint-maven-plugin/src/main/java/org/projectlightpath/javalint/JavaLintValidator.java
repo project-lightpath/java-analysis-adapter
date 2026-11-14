@@ -43,6 +43,8 @@ public final class JavaLintValidator {
   private static final boolean DEFAULT_PMD_INCLUDE_TESTS = false;
   private static final int ENFORCED_PMD_MINIMUM_PRIORITY = 3;
   private static final String ENFORCED_PMD_VERSION = "7.17.0";
+  private static final String ENFORCED_RULESET_SHA256 =
+      "780ee85ac689a3a9b651d08bda79ac36ac2f6983156510322e099a683e71f83f";
   private static final List<String> ENFORCED_RULESETS = List.of("config/pmd-production.xml");
   private static final List<String> ENFORCED_SOURCE_SCOPE = List.of("src/main/java");
   private static final Pattern LOCATION_MESSAGE =
@@ -412,7 +414,7 @@ public final class JavaLintValidator {
       boolean baselinePresent) {
     List<String> errors = new ArrayList<>();
     if (!baselinePresent) {
-      return validateNoBaselineMetadata(pmd, cpd, effectivePmd);
+      return validateNoBaselineMetadata(pmd, cpd, effectivePmd, rulesetText);
     }
     JsonNode pmdBaseline = baseline.path("pmd");
     JsonNode cpdBaseline = baseline.path("cpd");
@@ -465,7 +467,10 @@ public final class JavaLintValidator {
 
   /** Enforces the production lint contract when no historical baseline remains. */
   private static List<String> validateNoBaselineMetadata(
-      Document pmd, Document cpd, EffectivePmdConfiguration effectivePmd) {
+      Document pmd,
+      Document cpd,
+      EffectivePmdConfiguration effectivePmd,
+      String rulesetText) {
     List<String> errors = new ArrayList<>();
     if (!ENFORCED_PMD_VERSION.equals(pmd.getDocumentElement().getAttribute("version"))) {
       errors.add("PMD version must be " + quote(ENFORCED_PMD_VERSION));
@@ -484,6 +489,9 @@ public final class JavaLintValidator {
     }
     if (!ENFORCED_SOURCE_SCOPE.equals(effectivePmd.sourceScope())) {
       errors.add("PMD source scope must be " + ENFORCED_SOURCE_SCOPE);
+    }
+    if (!ENFORCED_RULESET_SHA256.equals(sha256(rulesetText))) {
+      errors.add("PMD ruleset content changed; review the enforced ruleset");
     }
     if (effectivePmd.minimumTokens() != CPD_MINIMUM_TOKENS) {
       errors.add("CPD minimum token configuration must be " + CPD_MINIMUM_TOKENS);

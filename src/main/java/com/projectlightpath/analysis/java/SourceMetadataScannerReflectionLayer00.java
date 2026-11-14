@@ -73,6 +73,7 @@ static String lambdaParameterName(String parameter) {
   }
 
 static boolean lambdaBodyContains(String source, int lambdaEnd, int offset) {
+    source = maskStringLiterals(source);
     int bodyStart = lambdaEnd;
     while (bodyStart < source.length() && Character.isWhitespace(source.charAt(bodyStart))) {
       bodyStart++;
@@ -83,8 +84,38 @@ static boolean lambdaBodyContains(String source, int lambdaEnd, int offset) {
     if (source.charAt(bodyStart) == '{') {
       return matchingDelimiter(source, bodyStart, '{', '}') >= offset;
     }
-    int boundary = source.indexOf(';', bodyStart);
+    int boundary = lambdaExpressionBoundary(source, bodyStart);
     return offset >= bodyStart && (boundary < 0 || offset < boundary);
+  }
+
+  /** Finds the top-level boundary of an expression-bodied lambda. */
+  static int lambdaExpressionBoundary(String source, int start) {
+    int[] depth = new int[3];
+    for (int index = start; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (atExpressionBoundary(character, depth)) {
+        return index;
+      }
+      updateExpressionDepth(character, depth);
+    }
+    return source.length();
+  }
+
+  private static boolean atExpressionBoundary(char character, int[] depth) {
+    return (character == ',' || character == ';' || character == ')' || character == '}')
+        && depth[0] == 0 && depth[1] == 0 && depth[2] == 0;
+  }
+
+  private static void updateExpressionDepth(char character, int[] depth) {
+    switch (character) {
+      case '(' -> depth[0]++;
+      case ')' -> depth[0] = Math.max(0, depth[0] - 1);
+      case '[' -> depth[1]++;
+      case ']' -> depth[1] = Math.max(0, depth[1] - 1);
+      case '{' -> depth[2]++;
+      case '}' -> depth[2] = Math.max(0, depth[2] - 1);
+      default -> { }
+    }
   }
 
 static void addSite(List<DynamicSite> result, String source, int offset, String symbol) {

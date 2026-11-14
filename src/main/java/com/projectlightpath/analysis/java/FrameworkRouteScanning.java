@@ -7,6 +7,7 @@ import com.projectlightpath.analysis.java.SourceMetadataScannerState.MethodInfo;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.Parameter;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.Route;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.SourceFile;
+import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,7 +100,13 @@ final class FrameworkRouteScanning {
           ? scanner.httpMethods(file, classBlock, "RequestMapping")
           : SourceMetadataScanner.SUPPORTED_HTTP_METHODS;
       List<Route> result = new ArrayList<>();
+      TypeInfo topLevelType = scanner.innermostType(file, file.typeDeclarationStart());
       for (MethodInfo method : SourceMetadataScanner.methods(file)) {
+        TypeInfo methodType = scanner.innermostType(file, method.start());
+        if (topLevelType == null || methodType == null
+            || methodType.start() != topLevelType.start()) {
+          continue;
+        }
         result.addAll(routesForMethod(new RouteMethodRequest(
             scanner,
             framework,

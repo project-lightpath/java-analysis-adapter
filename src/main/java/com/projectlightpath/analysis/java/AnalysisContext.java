@@ -561,10 +561,11 @@ public final class AnalysisContext extends AnalysisContextAccessors {
     }
 
     private static String legacyString(Object[] values, int index, String name) {
-      if (values == null || values.length != 14 || !(values[index] instanceof String value)) {
+      if (values == null || values.length != 14
+          || values[index] != null && !(values[index] instanceof String)) {
         throw new IllegalArgumentException("legacy provenance " + name + " is invalid");
       }
-      return value;
+      return (String) values[index];
     }
 
     private static long legacyLong(Object[] values, int index, String name) {
@@ -662,16 +663,22 @@ public final class AnalysisContext extends AnalysisContextAccessors {
     }
 
     private static String legacyString(Object[] values, int index, String name) {
-      if (values == null || values.length != 9 || !(values[index] instanceof String value)) {
+      if (values == null || values.length != 9
+          || values[index] != null && !(values[index] instanceof String)) {
         throw new IllegalArgumentException("legacy handoff " + name + " is invalid");
       }
-      return value;
+      return (String) values[index];
     }
 
     private static List<String> legacyList(Object[] values, int index, String name) {
-      if (values == null || values.length != 9 || !(values[index] instanceof List<?> value)) {
+      if (values == null || values.length != 9
+          || values[index] != null && !(values[index] instanceof List<?>)) {
         throw new IllegalArgumentException("legacy handoff " + name + " is invalid");
       }
+      if (values[index] == null) {
+        return null;
+      }
+      List<?> value = (List<?>) values[index];
       List<String> result = new ArrayList<>();
       for (Object item : value) {
         if (!(item instanceof String string)) {

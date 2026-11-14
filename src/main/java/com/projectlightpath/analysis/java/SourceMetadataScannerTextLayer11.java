@@ -30,7 +30,7 @@ static String methodDescriptor(MethodInfo method) {
 
   /** Extracts constructor bodies so dynamic sites retain an explicit initializer caller. */
 static List<MethodInfo> constructors(SourceFile file) {
-    String maskedSource = maskAnnotationArguments(file.structuralSource());
+    String maskedSource = maskStringLiterals(maskAnnotationArguments(file.structuralSource()));
     List<MethodInfo> result = new ArrayList<>();
     for (TypeInfo type : typeDeclarations(file)) {
       Pattern constructor = Pattern.compile(

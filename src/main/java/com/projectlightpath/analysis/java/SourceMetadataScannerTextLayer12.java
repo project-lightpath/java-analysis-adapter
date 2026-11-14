@@ -48,9 +48,12 @@ static boolean hasAnnotation(String block, String name) {
 
 static List<AnnotationOccurrence> canonicalAnnotationOccurrences(
       SourceFile file, String block, String simpleName, Set<String> canonical) {
-    List<String> explicitImports = importedTypes(simpleName, file);
-    boolean canonicalImport = explicitImports.stream().anyMatch(canonical::contains);
-    return annotationOccurrences(block, simpleName).stream()
+    List<AnnotationOccurrence> occurrences = annotationOccurrences(block, simpleName);
+    if (occurrences.isEmpty()) {
+      return List.of();
+    }
+    boolean canonicalImport = importedTypes(simpleName, file).stream().anyMatch(canonical::contains);
+    return occurrences.stream()
         .filter(occurrence -> canonical.contains(annotationType(occurrence.source()))
             || annotationType(occurrence.source()).equals(simpleName) && canonicalImport)
         .toList();

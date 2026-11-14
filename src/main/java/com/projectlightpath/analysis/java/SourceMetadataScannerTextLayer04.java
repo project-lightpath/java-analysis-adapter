@@ -67,33 +67,18 @@ static String compactGenericWhitespace(String source) {
     return result.toString();
   }
 
-  /** Splits comma-separated Java expressions while respecting nested delimiters. */
+/** Splits comma-separated Java expressions while respecting nested delimiters. */
 static List<String> splitArguments(String source) {
-    List<String> result = new ArrayList<>();
-    int depth = 0;
-    int start = 0;
-    boolean quoted = false;
-    boolean escaped = false;
-    for (int index = 0; index < source.length(); index++) {
-      char character = source.charAt(index);
-      if (character == '"' && !escaped) {
-        quoted = !quoted;
-      }
-      if (quoted) {
-        escaped = character == '\\' && !escaped;
-        continue;
-      }
-      escaped = false;
-      if (character == '<' || character == '{' || character == '(') {
-        depth++;
-      } else if (character == '>' || character == '}' || character == ')') {
-        depth--;
-      } else if (character == ',' && depth == 0) {
-        result.add(source.substring(start, index));
-        start = index + 1;
-      }
+    return splitBalanced(source, ',', false);
+  }
+
+  /** Splits arguments while accepting one empty fragment from a trailing comma. */
+  static List<String> splitArgumentsWithoutTrailingEmpty(String source) {
+    List<String> result = splitArguments(source);
+    if (source.trim().endsWith(",") && !result.isEmpty()
+        && result.get(result.size() - 1).isBlank()) {
+      return result.subList(0, result.size() - 1);
     }
-    result.add(source.substring(start));
     return result;
   }
 

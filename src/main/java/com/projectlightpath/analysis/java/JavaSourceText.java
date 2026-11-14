@@ -118,8 +118,14 @@ final class JavaSourceText {
       return false;
     }
     int closing = matchingGenericDelimiter(source, opening);
-    int after = previousNonWhitespace(source, closing + 1);
-    return closing >= 0 && after >= 0 && source.charAt(after) == ')';
+    if (closing < 0) {
+      return false;
+    }
+    int after = closing + 1;
+    while (after < source.length() && Character.isWhitespace(source.charAt(after))) {
+      after++;
+    }
+    return after < source.length() && source.charAt(after) == ')';
   }
 
   private static int previousNonWhitespace(String source, int start) {
@@ -363,13 +369,17 @@ final class JavaSourceText {
     private int braces;
     private int angleBrackets;
     private boolean quoted;
+    private boolean characterLiteral;
     private boolean escaped;
 
     boolean consumeQuoted(char character) {
       if (character == '"' && !escaped) {
         quoted = !quoted;
       }
-      if (!quoted) {
+      if (character == '\'' && !escaped && !quoted) {
+        characterLiteral = !characterLiteral;
+      }
+      if (!quoted && !characterLiteral) {
         return false;
       }
       escaped = character == '\\' ? !escaped : false;

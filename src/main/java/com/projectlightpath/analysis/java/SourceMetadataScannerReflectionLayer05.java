@@ -181,9 +181,13 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
                 + "|[A-Za-z_$][\\w$]*\\.class"
                 + "|[A-Za-z_$][\\w$]*)\\s*\\.\\s*"
                 + "(?:getDeclaredMethod|getMethod|getDeclaredConstructor|getConstructor)"
-                + "\\s*\\([^;{}]*\\)$")
+                + "\\s*\\(")
         .matcher(initializer);
     if (!lookup.find()) {
+      return false;
+    }
+    int closing = matchingDelimiter(initializer, lookup.end() - 1, '(', ')');
+    if (closing != initializer.length() - 1) {
       return false;
     }
     String receiver = lookup.group(1).trim();
