@@ -8,11 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
@@ -1505,6 +1509,67 @@ class JavaAnalysisAdapterTest {
     assertTrue(serviceFacts.stream().noneMatch(item ->
         item.caller().contains("#lambda$invalid")
             || item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
+  /** Reports a skipped module entry when archive decompression budget is exhausted. */
+  @Test
+  void moduleBudgetExhaustionIsDiagnosed() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-budget/src/main/java");
+    Path classes = temp.resolve("service-loader-budget/target/classes");
+    Path archive = temp.resolve("service-loader-budget/provider.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    Files.createDirectories(classes);
+    byte[] descriptor = new byte[16 * 1024 * 1024 + 1];
+    byte[] provider = "demo.DefaultProvider\n".getBytes(StandardCharsets.UTF_8);
+    System.arraycopy(provider, 0, descriptor, 0, provider.length);
+    Arrays.fill(descriptor, provider.length, descriptor.length, (byte) '#');
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("META-INF/services/demo.Provider"));
+      output.write(descriptor);
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-budget")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(archive))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    assertTrue(scan.diagnostics().stream().anyMatch(item ->
+        item.code().equals("archive_decompression_limit")), scan.diagnostics().toString());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertNotEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
+    assertTrue(resolution.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
   }
 
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
