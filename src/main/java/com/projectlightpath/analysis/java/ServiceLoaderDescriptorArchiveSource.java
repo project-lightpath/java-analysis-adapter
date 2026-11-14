@@ -23,62 +23,86 @@ final class ServiceLoaderDescriptorArchiveSource {
       ServiceLoaderDescriptorSource.ScanState state) {
     Path normalized = archive.toAbsolutePath().normalize();
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
-      List<ZipEntry> descriptorEntries = new ArrayList<>();
-      ZipEntry moduleEntry = null;
-      Set<String> names = new HashSet<>();
-      Enumeration<? extends ZipEntry> entries = zip.entries();
-      while (entries.hasMoreElements()) {
-        ZipEntry entry = entries.nextElement();
-        String entryPath = normalized + "!/" + entry.getName();
-        if (!state.consumeEnumerated(entryPath)) {
-          break;
-        }
-        if (entry.isDirectory()) {
-          continue;
-        }
-        if (ServiceLoaderDescriptorNestedArchiveSource.isWar(normalized)) {
-          ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
-              entry.getName(), normalized, state);
-        }
-        if (entry.getName().startsWith(
-                ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")
-            && names.add(entry.getName())) {
-          descriptorEntries.add(entry);
-        }
-        if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO)
-            && moduleEntry == null) {
-          moduleEntry = entry;
-        }
-      }
-      descriptorEntries.sort(java.util.Comparator.comparing(ZipEntry::getName));
-      for (ZipEntry entry : descriptorEntries) {
-        if (!state.hasDecompressedBudget()) {
-          state.diagnostic(
-              "archive_decompression_limit", normalized.toString(),
-              "archive decompression budget exhausted before all entries were read");
-          break;
-        }
-        addDescriptor(zip, normalized, entry, descriptors, state);
-      }
-      if (moduleEntry != null) {
-        String modulePath = normalized + "!/" + moduleEntry.getName();
-        if (!state.hasDecompressedBudget()) {
-          state.diagnostic(
-              "archive_decompression_limit", modulePath,
-              "module-info.class could not be read after the archive decompression budget was exhausted");
-        } else {
-          byte[] bytes = readEntry(zip, moduleEntry, state, modulePath);
-          if (bytes != null) {
-            ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
-          }
-        }
-      }
+      ArchiveEntries entries = enumerate(zip, normalized, state);
+      readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
+      readModule(zip, normalized, entries.module(), descriptors, state);
     } catch (ZipException error) {
       state.diagnostic("invalid_archive", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
     } catch (IOException error) {
       state.diagnostic("archive_read_error", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
+    }
+  }
+
+  private static ArchiveEntries enumerate(
+      ZipFile zip, Path archive, ServiceLoaderDescriptorSource.ScanState state) {
+    List<ZipEntry> descriptors = new ArrayList<>();
+    ZipEntry module = null;
+    Set<String> names = new HashSet<>();
+    Enumeration<? extends ZipEntry> entries = zip.entries();
+    while (entries.hasMoreElements()) {
+      ZipEntry entry = entries.nextElement();
+      String entryPath = archive + "!/" + entry.getName();
+      if (!state.consumeEnumerated(entryPath)) {
+        break;
+      }
+      if (entry.isDirectory()) {
+        continue;
+      }
+      if (ServiceLoaderDescriptorNestedArchiveSource.isWar(archive)) {
+        ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
+            entry.getName(), archive, state);
+      }
+      if (entry.getName().startsWith(
+              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")
+          && names.add(entry.getName())) {
+        descriptors.add(entry);
+      }
+      if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
+        module = entry;
+      }
+    }
+    descriptors.sort(java.util.Comparator.comparing(ZipEntry::getName));
+    return new ArchiveEntries(descriptors, module);
+  }
+
+  private static void readDescriptors(
+      ZipFile zip,
+      Path archive,
+      List<ZipEntry> entries,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    for (ZipEntry entry : entries) {
+      if (!state.hasDecompressedBudget()) {
+        state.diagnostic(
+            "archive_decompression_limit", archive.toString(),
+            "archive decompression budget exhausted before all entries were read");
+        break;
+      }
+      addDescriptor(zip, archive, entry, descriptors, state);
+    }
+  }
+
+  private static void readModule(
+      ZipFile zip,
+      Path archive,
+      ZipEntry module,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    if (module == null) {
+      return;
+    }
+    String modulePath = archive + "!/" + module.getName();
+    if (!state.hasDecompressedBudget()) {
+      state.diagnostic(
+          "archive_decompression_limit", modulePath,
+          "module-info.class could not be read after the archive decompression budget was exhausted");
+      return;
+    }
+    byte[] bytes = readEntry(zip, module, state, modulePath);
+    if (bytes != null) {
+      ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
     }
   }
 
@@ -163,5 +187,7 @@ final class ServiceLoaderDescriptorArchiveSource {
     }
     return output.toByteArray();
   }
+
+  private record ArchiveEntries(List<ZipEntry> descriptors, ZipEntry module) {}
 
 }
