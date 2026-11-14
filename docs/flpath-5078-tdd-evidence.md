@@ -314,3 +314,12 @@ Evidence hashes:
   the three changed production files.
 - Machine-readable details and artifact hashes are in
   `docs/flpath-5078-tdd/final-validation.json`.
+
+### independent-review-wildcard-service-loader-shadowing
+
+- `RED_28`: commit `c8097f59a837f1546c0f237f6c56386710308b43`; a compiled same-package
+  custom `ServiceLoader` shadowed `java.util.*`, but the parser and adapter emitted a
+  Java ServiceLoader relationship.
+- `GREEN_28`: commit `681546857347707c4a93a553600eb923f3df8fd0`; wildcard imports are no
+  longer treated as ownership proof, so ambiguous same-package calls abstain. The focused
+  regression passes `1/1`.
