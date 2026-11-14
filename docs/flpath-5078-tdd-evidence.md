@@ -191,3 +191,10 @@ Evidence hashes:
   descriptor was read and fingerprinted without the shared decompression budget.
 - `GREEN_18`: commit `4c2350832931fc4f6d95a78e4ba139392a439dd2`; directory descriptors
   now stream through the bounded reader and emit the existing budget diagnostic.
+
+### jacoco-report-digest — stable report provenance
+
+- `RED_19`: commit `bcebe5e59fc8e573a3c52ba85b9d8374324d35db`; volatile JaCoCo session
+  metadata made equivalent reports hash differently.
+- `GREEN_19`: commit `69317d2386d9ad1468e441f81446191dcc4a3095`; report evidence now stores
+  a canonical hash with session metadata removed and preserves the raw report hash separately.
