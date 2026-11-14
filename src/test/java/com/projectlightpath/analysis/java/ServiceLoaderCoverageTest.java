@@ -17,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ServiceLoaderCoverageTest {
+  private static final int ENUMERATION_LIMIT = 1024;
+
   @TempDir Path temp;
 
   @Test
@@ -128,6 +130,10 @@ class ServiceLoaderCoverageTest {
   void readerUsesObservedFilesInsideAndOutsideRepository() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("classes");
+    Path applicationServices = applicationClasses.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
+    Files.createDirectories(applicationServices);
+    Files.writeString(applicationServices.resolve("demo.Output"), "demo.OutputProvider\n");
     Path declaredDirectory = temp.resolve("declared-services");
     Files.createDirectories(declaredDirectory);
     Path inside = declaredDirectory.resolve("demo.Inside");
@@ -144,7 +150,7 @@ class ServiceLoaderCoverageTest {
         .fixtureId("coverage")
         .javaRelease(17)
         .repositoryRoot(temp)
-        .applicationClasses(temp.resolve("classes"))
+        .applicationClasses(applicationClasses)
         .selectedProfile("test")
         .analysisScope(AnalysisContext.Scope.PRODUCTION)
         .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
@@ -163,10 +169,45 @@ class ServiceLoaderCoverageTest {
 
     ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
     assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
+    assertTrue(scan.descriptors().stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Output")));
     assertTrue(scan.descriptors().stream().anyMatch(item -> item.path().equals("declared-services/demo.Inside")));
-    assertTrue(scan.descriptors().stream().anyMatch(item -> item.path().equals(outside.toString())));
+    assertTrue(scan.descriptors().stream().noneMatch(item -> item.path().equals(outside.toString())));
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_path_outside_context")));
     assertTrue(scan.diagnostics().stream()
         .anyMatch(item -> item.code().equals("archive_decompression_limit")));
+  }
+
+  @Test
+  void descriptorEnumerationStopsForDirectoriesAndArchives() throws IOException {
+    Path classes = temp.resolve("bounded-classes");
+    Path services = classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
+    Files.createDirectories(services);
+    for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+      Files.writeString(services.resolve("demo.Provider" + index), "demo.ProviderImpl\n");
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> directoryDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState directoryState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, directoryDescriptors, new java.util.HashSet<>(), directoryState);
+    assertTrue(directoryState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+
+    Path archive = temp.resolve("bounded.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+        put(output, "noise/entry-" + index, "ignored");
+      }
+      put(output, "META-INF/services/demo.Archive", "demo.ArchiveProvider\n");
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> archiveDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState archiveState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
+    assertTrue(archiveState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
