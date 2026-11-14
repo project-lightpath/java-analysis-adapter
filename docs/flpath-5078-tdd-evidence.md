@@ -184,3 +184,10 @@ Evidence hashes:
   above the required `90%` threshold. The report SHA-256 is
   `87c974e6cbf3bb80a59cebf369cc32f099d2872a9e5e3b2f17aa08111b9ed4b6`; complete
   machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`.
+
+### directory-descriptor-budget — bounded directory metadata
+
+- `RED_18`: commit `53d952fe2044f25edce6a05762a9d1a3367f3ab3`; a large directory
+  descriptor was read and fingerprinted without the shared decompression budget.
+- `GREEN_18`: commit `4c2350832931fc4f6d95a78e4ba139392a439dd2`; directory descriptors
+  now stream through the bounded reader and emit the existing budget diagnostic.
