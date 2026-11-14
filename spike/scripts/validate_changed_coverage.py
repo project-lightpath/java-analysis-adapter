@@ -34,6 +34,18 @@ def digest(path: Path) -> str:
     return result.hexdigest()
 
 
+def jacoco_digest(path: Path) -> str:
+    """Hash JaCoCo XML after removing volatile execution-session metadata."""
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as error:
+        raise SystemExit(f"changed coverage validation failed: invalid JaCoCo report: {error}") from error
+    for session in root.findall("sessioninfo"):
+        root.remove(session)
+    canonical = ET.tostring(root, encoding="utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def run_git(root: Path, *arguments: str) -> str:
     """Run a git query and return stdout."""
     result = subprocess.run(
@@ -189,9 +201,11 @@ def validate_report(
         "java": java_text,
         "report": {
             "path": str(report.relative_to(root)),
-            "sha256": digest(report),
+            "sha256": jacoco_digest(report),
+            "rawSha256": digest(report),
             "size": report.stat().st_size,
             "mtimeNs": report.stat().st_mtime_ns,
+            "sessionInfoNormalized": True,
         },
         "nestedClassUnion": "sourcefile",
         "coveredExecutableLines": numerator,
