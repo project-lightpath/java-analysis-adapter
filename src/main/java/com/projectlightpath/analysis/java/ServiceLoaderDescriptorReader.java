@@ -10,6 +10,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -80,7 +81,7 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     try {
-      List<String> providers = new ArrayList<>();
+      Set<String> providers = new LinkedHashSet<>();
       List<String> malformed = new ArrayList<>();
       for (String line : Files.readAllLines(normalized, StandardCharsets.UTF_8)) {
         String candidate = line.split("#", 2)[0].trim();
@@ -88,9 +89,7 @@ final class ServiceLoaderDescriptorReader {
           continue;
         }
         if (PROVIDER.matcher(candidate).matches()) {
-          if (!providers.contains(candidate)) {
-            providers.add(candidate);
-          }
+          providers.add(candidate);
         } else {
           malformed.add(candidate);
         }
@@ -98,7 +97,7 @@ final class ServiceLoaderDescriptorReader {
       String serviceType = normalized.getFileName().toString();
       descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
           serviceType,
-          providers,
+          List.copyOf(providers),
           displayPath(context, normalized),
           fingerprint(normalized),
           "meta_inf_services",
