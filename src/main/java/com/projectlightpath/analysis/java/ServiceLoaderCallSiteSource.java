@@ -197,17 +197,18 @@ final class ServiceLoaderCallSiteSource {
   /** Returns whether a source call and bytecode line belong to one expression statement. */
   static boolean sameStatement(
       String sourceText, ServiceLoaderCallSite site, int line) {
-    int edgeStart = lineStartOffset(sourceText, line);
+    String structuralSource = ServiceLoaderSourceMasker.mask(sourceText);
+    int edgeStart = lineStartOffset(structuralSource, line);
     if (edgeStart < 0 || site.line() > line) {
       return false;
     }
     if (site.line() == line) {
-      int lineEnd = sourceText.indexOf('\n', site.offset());
-      int end = lineEnd < 0 ? sourceText.length() : lineEnd;
-      int terminator = topLevelDelimiter(sourceText, site.offset(), end, ';');
-      return terminator < 0 || isClosingBlockSuffix(sourceText, terminator + 1, end);
+      int lineEnd = structuralSource.indexOf('\n', site.offset());
+      int end = lineEnd < 0 ? structuralSource.length() : lineEnd;
+      int terminator = topLevelDelimiter(structuralSource, site.offset(), end, ';');
+      return terminator < 0 || isClosingBlockSuffix(structuralSource, terminator + 1, end);
     }
-    return !hasStatementBoundary(sourceText, site.offset(), edgeStart);
+    return !hasStatementBoundary(structuralSource, site.offset(), edgeStart);
   }
 
   private static boolean hasStatementBoundary(String sourceText, int start, int end) {
