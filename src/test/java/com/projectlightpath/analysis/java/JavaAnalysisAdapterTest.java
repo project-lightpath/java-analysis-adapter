@@ -1483,6 +1483,76 @@ class JavaAnalysisAdapterTest {
         "custom imported ServiceLoader must not produce Java ServiceLoader sites");
   }
 
+  /** Does not treat a same-package type as java.util.ServiceLoader through a wildcard import. */
+  @Test
+  void rejectsSamePackageServiceLoaderShadowedByWildcardImport() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-wildcard-lookalike/src/main/java");
+    Path classes = temp.resolve("service-loader-wildcard-lookalike/target/classes");
+    Path resources = temp.resolve("service-loader-wildcard-lookalike/resources");
+    write(sourceRoot, "demo/ServiceLoader.java", """
+        package demo;
+        import java.util.Optional;
+        import java.util.function.Consumer;
+        public final class ServiceLoader<T> {
+          public static <S> ServiceLoader<S> load(Class<S> type) {
+            return new ServiceLoader<>();
+          }
+          public Optional<T> findFirst() { return Optional.empty(); }
+          public void ifPresent(Consumer<T> consumer) { findFirst().ifPresent(consumer); }
+        }
+        """);
+    write(sourceRoot, "demo/Provider.java", """
+        package demo;
+        public interface Provider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultProvider.java", """
+        package demo;
+        public final class DefaultProvider implements Provider {
+          public void record() { }
+        }
+        """);
+    Path appSource = sourceRoot.resolve("demo/App.java");
+    write(sourceRoot, "demo/App.java", """
+        package demo;
+        import java.util.*;
+        public final class App {
+          public static void audit() {
+            ServiceLoader.load(Provider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-wildcard-lookalike")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-wildcard-lookalike/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    assertTrue(facts.providerFacts().stream().noneMatch(item ->
+        item.relationshipType().equals("service_loader")), facts.providerFacts().toString());
+    assertTrue(ServiceLoaderCallSiteParser.parse(Files.readString(appSource)).isEmpty(),
+        "same-package ServiceLoader must shadow java.util.* and remain unclassified");
+  }
+
   /** Keeps a block-lambda callback after an inner statement, but not after the outer boundary. */
   @Test
   void recognizesBlockLambdaCallback() throws IOException {

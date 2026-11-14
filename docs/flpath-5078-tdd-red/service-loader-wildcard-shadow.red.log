@@ -1,0 +1,68 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------< org.projectlightpath:flpath-java-analysis-adapter >----------
+[INFO] Building FLPATH Java analysis adapter 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ flpath-java-analysis-adapter ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ flpath-java-analysis-adapter ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ flpath-java-analysis-adapter ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ flpath-java-analysis-adapter ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 10 source files with javac [debug release 17] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.0:test (default-test) @ flpath-java-analysis-adapter ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.projectlightpath.analysis.java.JavaAnalysisAdapterTest
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 2.698 s <<< FAILURE! -- in com.projectlightpath.analysis.java.JavaAnalysisAdapterTest
+[ERROR] com.projectlightpath.analysis.java.JavaAnalysisAdapterTest.rejectsSamePackageServiceLoaderShadowedByWildcardImport -- Time elapsed: 2.688 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: [Fact[id=sootup-call-acb8cb0b, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.App#audit, callee=demo.ServiceLoader#findFirst, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/App.java, symbols=[], line=5, attributes={callee=demo.ServiceLoader#findFirst, calleeSignature=()Ljava/util/Optional;, callerSignature=()V, caller=demo.App#audit, basis=SootUp CHA application call}]], limitation=null], Fact[id=sootup-call-ee6f2d50, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.App#audit, callee=demo.ServiceLoader#load, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/App.java, symbols=[], line=5, attributes={callee=demo.ServiceLoader#load, calleeSignature=(Ljava/lang/Class;)Ldemo/ServiceLoader;, callerSignature=()V, caller=demo.App#audit, basis=SootUp CHA application call}]], limitation=null], Fact[id=sootup-call-777f8e2b, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.App#lambda$audit$0, callee=demo.DefaultProvider#record, relationshipType=service_loader, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/App.java, symbols=[], line=6, attributes={callee=demo.DefaultProvider#record, calleeSignature=()V, callerSignature=(Ldemo/Provider;)V, caller=demo.App#lambda$audit$0, basis=SootUp CHA application call}], Evidence[kind=service_loader_resolution, path=src/main/java/demo/App.java, symbols=[demo.DefaultProvider#record], line=6, attributes={descriptorCount=1, classLoaderSelection=default_context, providerCount=1, descriptorStatus=observed, providerCandidates=demo.DefaultProvider, serviceType=demo.Provider, callSiteBound=true, selection=unique, basis=selected classpath ServiceLoader metadata}], Evidence[kind=service_loader_descriptor, path=service-loader-wildcard-lookalike/resources/META-INF/services/demo.Provider, symbols=[demo.Provider], line=null, attributes={providerCount=1, serviceType=demo.Provider, basis=META-INF/services descriptor, selection=unique, descriptorFingerprint=7765e3c7090f76dfd08e1050f0918b952713ff156a73e1d96dc09204ef90ea86, descriptorKind=meta_inf_services, providers=demo.DefaultProvider, descriptorStatus=observed}]], limitation=null], Fact[id=sootup-call-714c62b9, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.ServiceLoader#ifPresent, callee=demo.ServiceLoader#findFirst, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/ServiceLoader.java, symbols=[], line=9, attributes={callee=demo.ServiceLoader#findFirst, calleeSignature=()Ljava/util/Optional;, callerSignature=(Ljava/util/function/Consumer;)V, caller=demo.ServiceLoader#ifPresent, basis=SootUp CHA application call}]], limitation=null], Fact[id=sootup-call-7fbfc139, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.ServiceLoader#load, callee=demo.ServiceLoader#<init>, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/ServiceLoader.java, symbols=[], line=6, attributes={callee=demo.ServiceLoader#<init>, calleeSignature=()V, callerSignature=(Ljava/lang/Class;)Ldemo/ServiceLoader;, caller=demo.ServiceLoader#load, basis=SootUp CHA application call}]], limitation=null]] ==> expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at com.projectlightpath.analysis.java.JavaAnalysisAdapterTest.rejectsSamePackageServiceLoaderShadowedByWildcardImport(JavaAnalysisAdapterTest.java:1550)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   JavaAnalysisAdapterTest.rejectsSamePackageServiceLoaderShadowedByWildcardImport:1550 [Fact[id=sootup-call-acb8cb0b, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.App#audit, callee=demo.ServiceLoader#findFirst, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/App.java, symbols=[], line=5, attributes={callee=demo.ServiceLoader#findFirst, calleeSignature=()Ljava/util/Optional;, callerSignature=()V, caller=demo.App#audit, basis=SootUp CHA application call}]], limitation=null], Fact[id=sootup-call-ee6f2d50, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.App#audit, callee=demo.ServiceLoader#load, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/App.java, symbols=[], line=5, attributes={callee=demo.ServiceLoader#load, calleeSignature=(Ljava/lang/Class;)Ldemo/ServiceLoader;, callerSignature=()V, caller=demo.App#audit, basis=SootUp CHA application call}]], limitation=null], Fact[id=sootup-call-777f8e2b, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.App#lambda$audit$0, callee=demo.DefaultProvider#record, relationshipType=service_loader, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/App.java, symbols=[], line=6, attributes={callee=demo.DefaultProvider#record, calleeSignature=()V, callerSignature=(Ldemo/Provider;)V, caller=demo.App#lambda$audit$0, basis=SootUp CHA application call}], Evidence[kind=service_loader_resolution, path=src/main/java/demo/App.java, symbols=[demo.DefaultProvider#record], line=6, attributes={descriptorCount=1, classLoaderSelection=default_context, providerCount=1, descriptorStatus=observed, providerCandidates=demo.DefaultProvider, serviceType=demo.Provider, callSiteBound=true, selection=unique, basis=selected classpath ServiceLoader metadata}], Evidence[kind=service_loader_descriptor, path=service-loader-wildcard-lookalike/resources/META-INF/services/demo.Provider, symbols=[demo.Provider], line=null, attributes={providerCount=1, serviceType=demo.Provider, basis=META-INF/services descriptor, selection=unique, descriptorFingerprint=7765e3c7090f76dfd08e1050f0918b952713ff156a73e1d96dc09204ef90ea86, descriptorKind=meta_inf_services, providers=demo.DefaultProvider, descriptorStatus=observed}]], limitation=null], Fact[id=sootup-call-714c62b9, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.ServiceLoader#ifPresent, callee=demo.ServiceLoader#findFirst, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/ServiceLoader.java, symbols=[], line=9, attributes={callee=demo.ServiceLoader#findFirst, calleeSignature=()Ljava/util/Optional;, callerSignature=(Ljava/util/function/Consumer;)V, caller=demo.ServiceLoader#ifPresent, basis=SootUp CHA application call}]], limitation=null], Fact[id=sootup-call-7fbfc139, framework=quarkus, contextId=service-loader-wildcard-lookalike, caller=demo.ServiceLoader#load, callee=demo.ServiceLoader#<init>, relationshipType=invokes, certainty=DEFINITE, status=EMITTED, factSet=PROVIDER, evidenceOrigin=SOOTUP_BASE_GRAPH, modelRule=null, claim=null, runtimeSelection=null, providerCallerAbsence=null, selectionCriteria=null, derivedFrom=null, evidence=[Evidence[kind=sootup_call, path=src/main/java/demo/ServiceLoader.java, symbols=[], line=6, attributes={callee=demo.ServiceLoader#<init>, calleeSignature=()V, callerSignature=(Ljava/lang/Class;)Ldemo/ServiceLoader;, caller=demo.ServiceLoader#load, basis=SootUp CHA application call}]], limitation=null]] ==> expected: <true> but was: <false>
+[INFO] 
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  4.379 s
+[INFO] Finished at: 2026-11-14T12:03:03-05:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.0:test (default-test) on project flpath-java-analysis-adapter: There are test failures.
+[ERROR] 
+[ERROR] Please refer to /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/target/surefire-reports for the individual test results.
+[ERROR] Please refer to dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
