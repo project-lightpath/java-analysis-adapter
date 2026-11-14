@@ -191,12 +191,14 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
       List<MethodInfo> interfaceMethods = interfaceFile
           .map(SourceMetadataScanner::methods)
           .orElse(List.of());
-      if (interfaceMethods.isEmpty()) {
-        return List.of(dynamicProxyFeature(file, caller, qualified + "#unknown", "", proxyOffset));
-      }
-      return interfaceMethods.stream()
+      List<MethodInfo> eligibleMethods = interfaceMethods.stream()
           .filter(method -> !hasModifier(method.annotationBlock(), "static"))
           .filter(method -> !hasModifier(method.annotationBlock(), "private"))
+          .toList();
+      if (eligibleMethods.isEmpty()) {
+        return List.of(dynamicProxyFeature(file, caller, qualified + "#unknown", "", proxyOffset));
+      }
+      return eligibleMethods.stream()
           .map(method -> dynamicProxyFeature(
               file,
               caller,

@@ -159,9 +159,17 @@ static List<MethodInfo> executableMethods(SourceFile file) {
           TypeInfo containing = innermostType(target.file(), method.start());
           return owner != null && containing != null && owner.start() == containing.start();
         })
-        .filter(method -> !maskAnnotationArguments(stripComments(method.annotationBlock())).trim()
-            .matches("(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do|try|synchronized|yield)\\b.*"))
+        .filter(method -> !proxyMethodBodyStatement(method.annotationBlock()))
         .filter(method -> method.name().equals(target.method().name()))
         .count() > 1;
+  }
+
+  /** Distinguishes method declarations from method-shaped body statements. */
+  private static boolean proxyMethodBodyStatement(String annotationBlock) {
+    String prefix = maskAnnotationArguments(stripComments(annotationBlock))
+        .replaceFirst("^[;{}\\s]+", "");
+    return prefix.matches(
+            "(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do|try|yield)\\b.*")
+        || prefix.matches("(?s)^synchronized\\s*\\(.*");
   }
 }

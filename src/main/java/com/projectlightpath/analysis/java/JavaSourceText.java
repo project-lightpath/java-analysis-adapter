@@ -373,7 +373,7 @@ final class JavaSourceText {
     private boolean escaped;
 
     boolean consumeQuoted(char character) {
-      if (character == '"' && !escaped) {
+      if (character == '"' && !escaped && !characterLiteral) {
         quoted = !quoted;
       }
       if (character == '\'' && !escaped && !quoted) {

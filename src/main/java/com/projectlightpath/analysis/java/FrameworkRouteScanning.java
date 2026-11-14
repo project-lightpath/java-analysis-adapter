@@ -102,7 +102,8 @@ final class FrameworkRouteScanning {
       List<Route> result = new ArrayList<>();
       TypeInfo topLevelType = scanner.innermostType(file, file.typeDeclarationStart());
       for (MethodInfo method : SourceMetadataScanner.methods(file)) {
-        TypeInfo methodType = scanner.innermostType(file, method.start());
+        TypeInfo methodType = scanner.innermostType(
+            file, SourceMetadataScanner.declarationStart(file, method.start()));
         if (topLevelType == null || methodType == null
             || methodType.start() != topLevelType.start()) {
           continue;

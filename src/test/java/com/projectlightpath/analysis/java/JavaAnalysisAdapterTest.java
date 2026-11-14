@@ -919,6 +919,25 @@ class JavaAnalysisAdapterTest {
           }
         }
         """);
+    write(quarkusSource, "one/EmptyAuthCallback.java", """
+        package one;
+        public interface EmptyAuthCallback {
+          static void helper() { }
+          private void hidden() { }
+        }
+        """);
+    write(quarkusSource, "one/EmptyAuthProxyFactory.java", """
+        package one;
+        import java.lang.reflect.Proxy;
+        public class EmptyAuthProxyFactory {
+          EmptyAuthCallback create() {
+            return (EmptyAuthCallback) Proxy.newProxyInstance(
+                EmptyAuthCallback.class.getClassLoader(),
+                new Class<?>[] {EmptyAuthCallback.class},
+                (proxy, method, args) -> null);
+          }
+        }
+        """);
 
     SemanticCallFacts quarkusFacts = new JavaAnalysisAdapter().analyze(
         context(
@@ -941,8 +960,10 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> dynamicProxyFacts = quarkusFacts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .toList();
-    assertEquals(3, dynamicProxyFacts.size());
-    assertEquals(3, dynamicProxyFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertEquals(4, dynamicProxyFacts.size());
+    assertEquals(4, dynamicProxyFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(dynamicProxyFacts.stream()
+        .anyMatch(item -> item.callee().equals("one.EmptyAuthCallback#unknown")));
     assertFalse(dynamicProxyFacts.stream().anyMatch(item -> item.id().equals("quarkus-unbounded-proxy-abstention")));
 
     Path springSource = temp.resolve("id-collisions/spring/src/main/java");
@@ -1377,6 +1398,10 @@ class JavaAnalysisAdapterTest {
           @Path("/submit")
           @POST @Consumes("text/plain") @Produces("application/xml")
           public String submit(String request) { return request; }
+          static class NestedResource {
+            @Path("/nested") @GET public String nested() { return "nested"; }
+          }
+          @Path("/after") @GET public String after() { return "after"; }
         }
         """);
     write(sourceRoot, "routes/MethodOnlyResource.java", """
@@ -1408,7 +1433,7 @@ class JavaAnalysisAdapterTest {
         .filter(item -> item.relationshipType().equals("framework_entrypoint"))
         .toList();
 
-    assertEquals(4, routes.size());
+    assertEquals(5, routes.size());
     SemanticCallFacts.Fact readOne = routes.stream()
         .filter(item -> item.callee().equals("routes.MultiResource#read"))
         .filter(item -> item.selectionCriteria().pathTemplate().equals("/api/one"))
@@ -1426,12 +1451,25 @@ class JavaAnalysisAdapterTest {
     assertEquals("/api/submit", submit.selectionCriteria().pathTemplate());
     assertEquals(List.of("text/plain"), submit.selectionCriteria().consumes());
     assertEquals(List.of("application/xml"), submit.selectionCriteria().produces());
+    assertTrue(routes.stream().anyMatch(item -> item.callee().equals("routes.MultiResource#after")
+        && item.selectionCriteria().pathTemplate().equals("/api/after")));
+    assertFalse(routes.stream().anyMatch(item -> item.callee().equals("routes.MultiResource$NestedResource#nested")));
 
     SemanticCallFacts.Fact methodOnly = route(facts, "routes.MethodOnlyResource#only");
     assertEquals("/root/only", methodOnly.selectionCriteria().pathTemplate());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, methodOnly.certainty());
     assertFalse(facts.frameworkFacts().stream()
         .anyMatch(item -> item.callee().startsWith("routes.UnregisteredMethodResource#")));
+  }
+
+  /** Keeps a quote inside a character literal from swallowing the next field declarator. */
+  @Test
+  void balancedFieldSplitRecognizesDoubleQuotesInsideCharacterLiterals() {
+    String source = "first = pick('\"'), second = Target.class";
+
+    assertEquals(
+        List.of("first = pick('\"')", "second = Target.class"),
+        JavaSourceText.splitBalanced(source, ',', true));
   }
 
   /** Enumerates Spring mappings, conditions, and collision-safe route IDs. */
@@ -1902,6 +1940,7 @@ class JavaAnalysisAdapterTest {
         import org.springframework.transaction.annotation.Transactional;
         @Service public class AService implements Service {
           @Transactional public void run() { }
+          synchronized void run(String value) { }
         }
         """);
     write(sourceRoot, "demo/BService.java", """
@@ -2055,6 +2094,7 @@ class JavaAnalysisAdapterTest {
         @Component public class ResourceConsumer {
           @Resource Service service;
           @Resource(name = "missing") OtherService missing;
+          @Resource void setURL(UrlService service) { }
         }
         """);
     write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { }\n");
@@ -2079,6 +2119,17 @@ class JavaAnalysisAdapterTest {
         package demo;
         import org.springframework.stereotype.Service;
         @Service public class OtherServiceImpl implements OtherService { }
+        """);
+    write(sourceRoot, "demo/UrlService.java", "package demo; public interface UrlService { }\n");
+    write(sourceRoot, "demo/UpperUrlService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("URL") public class UpperUrlService implements UrlService { }
+        """);
+    write(sourceRoot, "demo/LowerUrlService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("uRL") public class LowerUrlService implements UrlService { }
         """);
     AnalysisContext context = context(
         AnalysisContext.Framework.SPRING_BOOT,
@@ -2108,6 +2159,10 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, namedResource.certainty());
     assertTrue(namedResource.callee().contains("OtherService#<unresolved-bean>"));
+    SemanticCallFacts.Fact acronymSetter = facts.stream()
+        .filter(item -> item.caller().equals("spring:injection:demo.ResourceConsumer#setURL(UrlService)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.UpperUrlService#<init>", acronymSetter.callee());
   }
 
   /** Excludes qualifier lookalikes and annotation-shaped text from injection parameters. */

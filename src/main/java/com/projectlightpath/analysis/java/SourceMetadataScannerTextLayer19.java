@@ -149,12 +149,22 @@ static String typeHeader(SourceFile file) {
     if (hasAnnotation(annotations, "Resource")
         && result.stream().noneMatch(value -> value.startsWith("Resource:"))) {
       String name = defaultName;
-       if (setterMethod && name.startsWith("set") && name.length() > 3) {
-        name = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+      if (setterMethod && name.startsWith("set") && name.length() > 3) {
+        name = decapitalizeBeanProperty(name.substring(3));
       }
       result.add("ResourceDefault:" + name);
     }
     return List.copyOf(result);
+  }
+
+  /** Applies JavaBeans decapitalization to an implicit setter property name. */
+  private static String decapitalizeBeanProperty(String property) {
+    if (property.length() < 2
+        || !Character.isUpperCase(property.charAt(0))
+        || !Character.isUpperCase(property.charAt(1))) {
+      return Character.toLowerCase(property.charAt(0)) + property.substring(1);
+    }
+    return property;
   }
 
 static List<Parameter> parameters(SourceFile file, String source) {
