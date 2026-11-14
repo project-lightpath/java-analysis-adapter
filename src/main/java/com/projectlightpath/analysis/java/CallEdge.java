@@ -8,7 +8,8 @@ public record CallEdge(
     String sourcePath,
     SemanticCallFacts.Certainty certaintyHint,
     String relationshipType,
-    TargetContext targetContext) {
+    TargetContext targetContext,
+    String invocationReceiver) {
   public enum TargetOrigin {
     APPLICATION("application"),
     DEPENDENCY("dependency");
@@ -60,7 +61,20 @@ public record CallEdge(
       String sourcePath,
       SemanticCallFacts.Certainty certaintyHint,
       String relationshipType) {
-    this(caller, callee, line, sourcePath, certaintyHint, relationshipType, TargetContext.application());
+    this(caller, callee, line, sourcePath, certaintyHint, relationshipType,
+        TargetContext.application(), null);
+  }
+
+  /** Compatibility constructor for edges that already carry target context. */
+  public CallEdge(
+      MethodSymbol caller,
+      MethodSymbol callee,
+      int line,
+      String sourcePath,
+      SemanticCallFacts.Certainty certaintyHint,
+      String relationshipType,
+      TargetContext targetContext) {
+    this(caller, callee, line, sourcePath, certaintyHint, relationshipType, targetContext, null);
   }
 
   public CallEdge {
@@ -73,6 +87,8 @@ public record CallEdge(
     certaintyHint = certaintyHint == null ? SemanticCallFacts.Certainty.DEFINITE : certaintyHint;
     relationshipType = relationshipType == null || relationshipType.isBlank() ? "invokes" : relationshipType;
     targetContext = targetContext == null ? TargetContext.application() : targetContext;
+    invocationReceiver = invocationReceiver == null || invocationReceiver.isBlank()
+        ? null : invocationReceiver;
   }
 
   public static CallEdge definite(MethodSymbol caller, MethodSymbol callee, int line, String sourcePath) {

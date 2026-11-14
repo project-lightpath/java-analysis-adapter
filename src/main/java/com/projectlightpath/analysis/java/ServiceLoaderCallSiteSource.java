@@ -18,12 +18,22 @@ final class ServiceLoaderCallSiteSource {
   /** Correlates a line-only bytecode call with the ServiceLoader expression that can own it. */
   static boolean invokeIsLexicallyBound(
       String sourceText, ServiceLoaderCallSite site, String targetMethod) {
-    return invokeIsLexicallyBound(sourceText, site, targetMethod, -1);
+    return invokeIsLexicallyBound(sourceText, site, targetMethod, -1, null);
   }
 
   /** Correlates a target invocation using its source line when bytecode provides one. */
   static boolean invokeIsLexicallyBound(
       String sourceText, ServiceLoaderCallSite site, String targetMethod, int targetLine) {
+    return invokeIsLexicallyBound(sourceText, site, targetMethod, targetLine, null);
+  }
+
+  /** Correlates a target invocation using the bytecode receiver when it is available. */
+  static boolean invokeIsLexicallyBound(
+      String sourceText,
+      ServiceLoaderCallSite site,
+      String targetMethod,
+      int targetLine,
+      String targetReceiver) {
     if (!validTargetMethod(targetMethod)) {
       return false;
     }
@@ -35,6 +45,21 @@ final class ServiceLoaderCallSiteSource {
     List<Integer> targetOffsets = targetOffsets(structuralSource, targetMethod, bounds);
     List<Integer> scopedTargets = targetsOnRequestedLine(
         structuralSource, targetOffsets, targetLine);
+    if (targetReceiver == null && scopedTargets.size() > 1) {
+      return false;
+    }
+    if (targetReceiver != null) {
+      List<Integer> receiverMatches = scopedTargets.stream()
+          .filter(offset -> targetReceiver.equals(receiverName(structuralSource, offset)))
+          .toList();
+      if (!receiverMatches.isEmpty()) {
+        scopedTargets = receiverMatches;
+      } else if (scopedTargets.size() > 1) {
+        // Bytecode locals are not guaranteed to retain source parameter names. Keep
+        // unique source targets eligible, but do not guess between same-line calls.
+        return false;
+      }
+    }
     List<Integer> providerTargets = providerTargets(
         structuralSource, scopedTargets, bounds.expressionStart());
     return providerTargets.size() == 1
@@ -73,9 +98,6 @@ final class ServiceLoaderCallSiteSource {
     if (targetLine <= 0) {
       return offsets;
     }
-    if (offsets.isEmpty() || lineAt(sourceText, offsets.get(0)) != targetLine) {
-      return List.of();
-    }
     return offsets.stream()
         .filter(offset -> lineAt(sourceText, offset) == targetLine)
         .toList();
@@ -105,14 +127,16 @@ final class ServiceLoaderCallSiteSource {
     }
     Matcher lambda = LAMBDA.matcher(sourceText);
     lambda.region(start, targetOffset);
+    boolean priorLambda = false;
     while (lambda.find()) {
       String parameters = lambda.group(1) != null ? lambda.group(1) : lambda.group(2);
       if (lambdaContainsTarget(sourceText, lambda.end(), targetOffset)) {
         // The first lambda whose body contains the target is the outermost
         // lexical owner. Do not let an unrelated nested lambda lend its
         // parameter ownership to a ServiceLoader edge.
-        return containsParameter(parameters, receiver);
+        return !priorLambda && containsParameter(parameters, receiver);
       }
+      priorLambda = true;
     }
     return false;
   }
@@ -133,9 +157,7 @@ final class ServiceLoaderCallSiteSource {
     while (qualifier >= 0 && Character.isWhitespace(sourceText.charAt(qualifier))) {
       qualifier--;
     }
-    if (qualifier >= 0
-        && (sourceText.charAt(qualifier) == '.'
-            || Character.isJavaIdentifierPart(sourceText.charAt(qualifier)))) {
+    if (qualifier >= 0 && sourceText.charAt(qualifier) == '.') {
       return null;
     }
     return sourceText.substring(start + 1, end + 1);

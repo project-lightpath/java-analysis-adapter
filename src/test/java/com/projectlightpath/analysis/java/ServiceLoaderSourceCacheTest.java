@@ -139,6 +139,45 @@ class ServiceLoaderSourceCacheTest {
         """).isEmpty());
   }
 
+  @Test
+  void explicitImportWinsOverSamePackageTypeInAnotherFile() throws IOException {
+    String id = "explicit-import-with-package-shadow";
+    Path root = temp.resolve(id);
+    Path sourceRoot = root.resolve("src/main/java");
+    Path bridge = sourceRoot.resolve("demo/Bridge.java");
+    Files.createDirectories(bridge.getParent());
+    Files.writeString(bridge, """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """);
+    Files.writeString(sourceRoot.resolve("demo/ServiceLoader.java"), """
+        package demo;
+        class ServiceLoader<T> { }
+        """);
+    AnalysisContext context = AnalysisContext.builder()
+        .id(id)
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("cache-shadow-test")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<ServiceLoaderCallSite> sites = ServiceLoaderSourceCache.source(
+        new SourceMetadataScanner(context), new MethodSymbol("demo.Bridge", "audit", "()V"))
+        .orElseThrow().sites();
+    assertFalse(sites.isEmpty());
+  }
+
   private List<ServiceLoaderCallSite> cachedSites(String id, String sourceText) throws IOException {
     Path sourceRoot = temp.resolve(id).resolve("src/main/java");
     Path source = sourceRoot.resolve("demo/Bridge.java");

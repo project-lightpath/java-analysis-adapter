@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import javax.tools.JavaCompiler;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,6 +40,16 @@ class ServiceLoaderCoverageTest {
     assertEquals(1, sites.size());
     assertTrue(sites.get(0).explicitClassLoader());
     assertEquals("demo.Provider", sites.get(0).serviceType());
+
+    List<ServiceLoaderCallSite> genericSites = ServiceLoaderCallSiteParser.parse(
+        "import java.util.ServiceLoader;\n"
+            + "ServiceLoader.load(demo.Provider.class, Factory.<String, Integer>loader());");
+    assertEquals(1, genericSites.size());
+    assertTrue(genericSites.get(0).explicitClassLoader());
+
+    assertTrue(ServiceLoaderCallSiteParser.parse(
+        "import java.util.ServiceLoader;\n"
+            + "ServiceLoader.load(demo.Provider.class, first, second);").isEmpty());
   }
 
   @Test
@@ -144,6 +157,44 @@ class ServiceLoaderCoverageTest {
         moduleState);
     assertTrue(moduleState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("malformed_module_info")));
+  }
+
+  @Test
+  void explodedDirectoriesIncludeModuleInfoProviders() throws IOException {
+    Path moduleSource = temp.resolve("module-src");
+    Path moduleClasses = temp.resolve("module-classes");
+    Files.createDirectories(moduleClasses);
+    Files.createDirectories(moduleSource.resolve("demo"));
+    Files.writeString(moduleSource.resolve("module-info.java"),
+        "module demo.provider { provides demo.Provider with demo.DefaultProvider; }\n");
+    Files.writeString(moduleSource.resolve("demo/Provider.java"),
+        "package demo; public interface Provider { void record(); }\n");
+    Files.writeString(moduleSource.resolve("demo/DefaultProvider.java"),
+        "package demo; public final class DefaultProvider implements Provider {"
+            + " public void record() {} }\n");
+
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(moduleSource)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null, files, null, List.of("--release", "17", "-d", moduleClasses.toString()), null,
+          units).call());
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        moduleClasses, descriptors, new java.util.HashSet<>(), state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals("module_info", descriptors.get(0).kind());
+    assertEquals("demo.Provider", descriptors.get(0).serviceType());
+    assertEquals(List.of("demo.DefaultProvider"), descriptors.get(0).providers());
   }
 
   @Test

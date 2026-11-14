@@ -43,7 +43,7 @@ final class ServiceLoaderCallSiteParser {
         continue;
       }
       List<String> arguments = splitArguments(structuralSource.substring(matcher.end(), closing));
-      if (arguments.isEmpty()) {
+      if (arguments.isEmpty() || arguments.size() > 2) {
         continue;
       }
       String serviceType = classLiteralType(arguments.get(0));
@@ -99,21 +99,49 @@ final class ServiceLoaderCallSiteParser {
 
   private static List<String> splitArguments(String source) {
     List<String> result = new ArrayList<>();
+    ArgumentDepth depth = new ArgumentDepth();
     int start = 0;
-    int depth = 0;
     for (int index = 0; index < source.length(); index++) {
-      char current = source.charAt(index);
-      if (current == '(' || current == '[' || current == '{') {
-        depth++;
-      } else if (current == ')' || current == ']' || current == '}') {
-        depth--;
-      } else if (current == ',' && depth == 0) {
+      if (depth.accept(source, index)) {
         result.add(source.substring(start, index));
         start = index + 1;
       }
     }
     result.add(source.substring(start));
     return result.stream().map(String::trim).filter(item -> !item.isEmpty()).toList();
+  }
+
+  private static boolean startsExplicitTypeArguments(String source, int index) {
+    int previous = index - 1;
+    while (previous >= 0 && Character.isWhitespace(source.charAt(previous))) {
+      previous--;
+    }
+    return previous >= 0 && source.charAt(previous) == '.';
+  }
+
+  private static final class ArgumentDepth {
+    private int delimiters;
+    private int genericTypes;
+
+    boolean accept(String source, int index) {
+      char current = source.charAt(index);
+      switch (current) {
+        case '(', '[', '{' -> delimiters++;
+        case ')', ']', '}' -> delimiters--;
+        case '<' -> {
+          if (startsExplicitTypeArguments(source, index)) {
+            genericTypes++;
+          }
+        }
+        case '>' -> {
+          if (genericTypes > 0) {
+            genericTypes--;
+          }
+        }
+        default -> { }
+      }
+      return current == ',' && delimiters == 0 && genericTypes == 0;
+    }
   }
 
   private static int lineAt(String source, int offset) {

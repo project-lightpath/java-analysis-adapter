@@ -1,6 +1,7 @@
 package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -21,6 +22,56 @@ class ServiceLoaderCallSiteSourceTest {
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
     assertEquals(1, sites.size());
     assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
-        source, sites.get(0), "record"));
+        source, sites.get(0), "record", 6, "value"));
+  }
+
+  @Test
+  void usesReceiverIdentityForSameLineInvocations() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".ifPresent(p -> { p.record(); other.record(); });\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "p"));
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "other"));
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2));
+  }
+
+  @Test
+  void filtersEveryTargetOccurrenceByRequestedLine() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(p -> {\n"
+        + "  p.record();\n"
+        + "  p.record();\n"
+        + "});\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record", 3, "p"));
+    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record", 4, "p"));
+  }
+
+  @Test
+  void doesNotCarryProviderProvenanceThroughReplacingMapLambda() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".map(p -> other).ifPresent(q -> q.record());\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "q"));
+  }
+
+  @Test
+  void allowsKeywordBeforeBareProviderReceiver() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "return ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".ifPresent(p -> { return p.record(); });\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "p"));
   }
 }

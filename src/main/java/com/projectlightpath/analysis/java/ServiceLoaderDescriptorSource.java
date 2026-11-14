@@ -6,6 +6,7 @@ import java.lang.module.InvalidModuleDescriptorException;
 import java.lang.module.ModuleDescriptor;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
+import java.nio.file.DirectoryIteratorException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -40,6 +41,7 @@ final class ServiceLoaderDescriptorSource {
     if (Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
       scanServiceDirectory(normalized.resolve(SERVICES_DIRECTORY), normalized.toString(),
           descriptors, visited, state);
+      scanModuleInfo(normalized, descriptors, state);
     } else if (Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
       ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
     }
@@ -71,6 +73,10 @@ final class ServiceLoaderDescriptorSource {
     } catch (IOException error) {
       state.diagnostic(
           "service_directory_read_error", normalized.toString(), message(error));
+    } catch (DirectoryIteratorException error) {
+      state.diagnostic(
+          "service_directory_read_error", normalized.toString(), message(error));
+      return;
     }
     if (!complete) {
       return;
@@ -118,6 +124,31 @@ final class ServiceLoaderDescriptorSource {
           parsed.malformedEntries()));
     } catch (IOException error) {
       state.diagnostic("descriptor_read_error", normalized.toString(), message(error));
+    }
+  }
+
+  private static void scanModuleInfo(
+      Path classpathDirectory,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ScanState state) {
+    Path module = classpathDirectory.resolve(MODULE_INFO);
+    if (!Files.isRegularFile(module, LinkOption.NOFOLLOW_LINKS)) {
+      return;
+    }
+    String path = module.toAbsolutePath().normalize().toString();
+    if (!state.hasDecompressedBudget()) {
+      state.diagnostic(
+          "archive_decompression_limit", path,
+          "module-info.class could not be read after the descriptor decompression budget was exhausted");
+      return;
+    }
+    try (var input = Files.newInputStream(module)) {
+      byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(input, state, path);
+      if (bytes != null) {
+        addModuleBytes(bytes, path, descriptors, state);
+      }
+    } catch (IOException error) {
+      state.diagnostic("descriptor_read_error", path, message(error));
     }
   }
 

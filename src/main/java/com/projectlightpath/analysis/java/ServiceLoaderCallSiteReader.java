@@ -25,8 +25,14 @@ final class ServiceLoaderCallSiteReader {
       return false;
     }
     String targetMethod = MethodSymbol.fromSootSignature(call.targetMethodSignature().toString()).name();
-    return selectedSites(cachedSource.get().sourceText(), cachedSource.get().sites(),
-        call.getLineNumber(), targetMethod).size() == 1;
+    String targetReceiver = call.invokableStmt().getInvokeExpr()
+        .filter(sootup.core.jimple.common.expr.AbstractInstanceInvokeExpr.class::isInstance)
+        .map(sootup.core.jimple.common.expr.AbstractInstanceInvokeExpr.class::cast)
+        .map(expression -> expression.getBase().getName())
+        .orElse(null);
+    return selectedSites(
+        cachedSource.get().sourceText(), cachedSource.get().sites(),
+        call.getLineNumber(), targetMethod, targetReceiver).size() == 1;
   }
 
   static ServiceLoadHints read(
@@ -44,7 +50,7 @@ final class ServiceLoaderCallSiteReader {
     String source = cachedSource.get().sourceText();
     List<ServiceLoaderCallSite> sites = cachedSource.get().sites();
     List<ServiceLoaderCallSite> selected = selectedSites(
-        source, sites, edge.line(), edge.callee().name());
+        source, sites, edge.line(), edge.callee().name(), edge.invocationReceiver());
     if (selected.isEmpty()) {
       return ServiceLoadHints.empty();
     }
@@ -63,7 +69,8 @@ final class ServiceLoaderCallSiteReader {
       String source,
       List<ServiceLoaderCallSite> sites,
       int line,
-      String targetMethod) {
+      String targetMethod,
+      String targetReceiver) {
     if (line <= 0) {
       return sites.size() == 1 ? sites : List.of();
     }
@@ -71,7 +78,7 @@ final class ServiceLoaderCallSiteReader {
         .filter(site -> site.line() <= line)
         .filter(site -> ServiceLoaderCallSiteSource.sameStatement(source, site, line))
         .filter(site -> ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
-            source, site, targetMethod, line))
+            source, site, targetMethod, line, targetReceiver))
         .toList();
   }
 

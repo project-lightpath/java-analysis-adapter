@@ -42,13 +42,16 @@ final class ServiceLoaderSourceCache {
       SourceMetadataScanner scanner, SourceMetadataScanner.SourceFile file) {
     String source = file.source();
     String structuralSource = ServiceLoaderSourceMasker.mask(source);
-    boolean sourceTypeOwned = !SERVICE_LOADER_TYPE_DECLARATION.matcher(structuralSource).find()
-        && scanner.files().stream()
-            .noneMatch(candidate -> candidate.packageName().equals(file.packageName())
-                && candidate.simpleTypeName().equals("ServiceLoader"));
+    boolean localTypeDeclared = SERVICE_LOADER_TYPE_DECLARATION.matcher(structuralSource).find();
+    boolean samePackageTypeShadow = scanner.files().stream()
+        .anyMatch(candidate -> candidate.packageName().equals(file.packageName())
+            && candidate.simpleTypeName().equals("ServiceLoader"));
     return new CachedSource(
         source,
-        ServiceLoaderCallSiteParser.parse(source, sourceTypeOwned, sourceTypeOwned));
+        ServiceLoaderCallSiteParser.parse(
+            source,
+            !localTypeDeclared && !samePackageTypeShadow,
+            !localTypeDeclared));
   }
 
   record CachedSource(String sourceText, List<ServiceLoaderCallSite> sites) {

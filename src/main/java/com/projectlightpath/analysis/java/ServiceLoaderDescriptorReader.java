@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.DirectoryIteratorException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -103,7 +104,7 @@ final class ServiceLoaderDescriptorReader {
               candidates, path, ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES);
         }
       }
-    } catch (IOException error) {
+    } catch (IOException | DirectoryIteratorException error) {
       state.diagnostic("descriptor_directory_read_error",
           directory.toAbsolutePath().normalize().toString(),
           ServiceLoaderDescriptorSource.message(error));

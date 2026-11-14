@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import sootup.callgraph.CallGraph;
 import sootup.core.frontend.SootClassSource;
 import sootup.core.inputlocation.AnalysisInputLocation;
+import sootup.core.jimple.common.expr.AbstractInstanceInvokeExpr;
 import sootup.core.jimple.common.expr.JInterfaceInvokeExpr;
 import sootup.core.jimple.common.expr.JVirtualInvokeExpr;
 import sootup.core.model.SootClass;
@@ -101,7 +102,16 @@ final class SootUpCallGraphExtractor {
         sourcePath(context, caller.owner()),
         certainty(call, view, relationshipType, targetContext),
         relationshipType,
-        targetContext));
+        targetContext,
+        invocationReceiver(call)));
+  }
+
+  private static String invocationReceiver(CallGraph.Call call) {
+    return call.invokableStmt().getInvokeExpr()
+        .filter(AbstractInstanceInvokeExpr.class::isInstance)
+        .map(AbstractInstanceInvokeExpr.class::cast)
+        .map(expression -> expression.getBase().getName())
+        .orElse(null);
   }
 
   private static CallEdge.TargetContext targetContext(
