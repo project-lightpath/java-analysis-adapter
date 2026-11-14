@@ -93,7 +93,7 @@ final class SootUpCallGraphExtractor {
     if (targetContext == null) {
       return Optional.empty();
     }
-    String relationshipType = relationshipType(call, caller, callee, scanner);
+    String relationshipType = relationshipType(call, caller, callee, scanner, context);
     return Optional.of(new CallEdge(
         caller,
         callee,
@@ -115,8 +115,12 @@ final class SootUpCallGraphExtractor {
   }
 
   private static String relationshipType(
-      CallGraph.Call call, MethodSymbol caller, MethodSymbol callee, SourceMetadataScanner scanner) {
-    boolean serviceLoaderCall = serviceLoaderCall(call, caller, scanner);
+      CallGraph.Call call,
+      MethodSymbol caller,
+      MethodSymbol callee,
+      SourceMetadataScanner scanner,
+      AnalysisContext context) {
+    boolean serviceLoaderCall = serviceLoaderCall(call, caller, context, scanner);
     boolean interfaceDispatch = interfaceDispatch(call, callee, scanner);
     if (serviceLoaderCall) {
       return "service_loader";
@@ -128,13 +132,12 @@ final class SootUpCallGraphExtractor {
   }
 
   private static boolean serviceLoaderCall(
-      CallGraph.Call call, MethodSymbol caller, SourceMetadataScanner scanner) {
-    if (call.getLineNumber() > 0) {
-      return scanner.sourceLineContains(caller, call.getLineNumber(), "ServiceLoader.load");
-    }
-    return scanner.methodSource(caller, call.getLineNumber())
-        .map(source -> source.contains("ServiceLoader.load"))
-        .orElse(false);
+      CallGraph.Call call,
+      MethodSymbol caller,
+      AnalysisContext context,
+      SourceMetadataScanner scanner) {
+    return ServiceLoaderCallSiteReader.hasJavaServiceLoaderCall(
+        context, caller, call, scanner);
   }
 
   private static boolean interfaceDispatch(
