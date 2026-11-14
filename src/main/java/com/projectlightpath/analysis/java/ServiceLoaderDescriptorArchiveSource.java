@@ -3,10 +3,7 @@ package com.projectlightpath.analysis.java;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -64,9 +61,11 @@ final class ServiceLoaderDescriptorArchiveSource {
             entries, normalized, state);
       }
     } catch (ZipException error) {
-      state.diagnostic("invalid_archive", normalized.toString(), message(error));
+      state.diagnostic("invalid_archive", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
     } catch (IOException error) {
-      state.diagnostic("archive_read_error", normalized.toString(), message(error));
+      state.diagnostic("archive_read_error", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
     }
   }
 
@@ -93,11 +92,12 @@ final class ServiceLoaderDescriptorArchiveSource {
           serviceType,
           parsed.providers(),
           path,
-          sha256(bytes),
+          ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
           parsed.malformedEntries()));
     } catch (IOException error) {
-      state.diagnostic("archive_entry_read_error", path, message(error));
+      state.diagnostic(
+          "archive_entry_read_error", path, ServiceLoaderDescriptorSource.message(error));
     }
   }
 
@@ -113,7 +113,8 @@ final class ServiceLoaderDescriptorArchiveSource {
     try (InputStream input = zip.getInputStream(entry)) {
       return readEntry(input, state, path);
     } catch (IOException error) {
-      state.diagnostic("archive_entry_read_error", path, message(error));
+      state.diagnostic(
+          "archive_entry_read_error", path, ServiceLoaderDescriptorSource.message(error));
       return null;
     }
   }
@@ -150,22 +151,4 @@ final class ServiceLoaderDescriptorArchiveSource {
     return output.toByteArray();
   }
 
-  private static String sha256(byte[] bytes) {
-    try {
-      byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
-      StringBuilder result = new StringBuilder(digest.length * 2);
-      for (byte value : digest) {
-        result.append(Character.forDigit((value >>> 4) & 0x0f, 16));
-        result.append(Character.forDigit(value & 0x0f, 16));
-      }
-      return result.toString();
-    } catch (NoSuchAlgorithmException error) {
-      throw new IllegalStateException("SHA-256 is unavailable", error);
-    }
-  }
-
-  private static String message(Exception error) {
-    return error.getMessage() == null || error.getMessage().isBlank()
-        ? error.getClass().getSimpleName() : error.getMessage();
-  }
 }

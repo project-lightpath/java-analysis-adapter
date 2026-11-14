@@ -10,6 +10,8 @@ final class ServiceLoaderCallSiteSource {
   private static final String EXPRESSION_BOUNDARIES = ",;)]}?=+-*/%";
   private static final Pattern LAMBDA = Pattern.compile(
       "\\(([^()]*)\\)\\s*->|([A-Za-z_$][\\w$]*)\\s*->");
+  private static final Pattern PARAMETER_NAME = Pattern.compile(
+      "([A-Za-z_$][\\w$]*)\\s*$");
 
   private ServiceLoaderCallSiteSource() {}
 
@@ -22,53 +24,69 @@ final class ServiceLoaderCallSiteSource {
   /** Correlates a target invocation using its source line when bytecode provides one. */
   static boolean invokeIsLexicallyBound(
       String sourceText, ServiceLoaderCallSite site, String targetMethod, int targetLine) {
-    if (targetMethod == null || targetMethod.isBlank() || targetMethod.equals("<init>")) {
+    if (!validTargetMethod(targetMethod)) {
       return false;
     }
+    SourceBounds bounds = loadBounds(sourceText, site);
+    if (bounds == null) {
+      return false;
+    }
+    List<Integer> targetOffsets = targetOffsets(sourceText, targetMethod, bounds);
+    List<Integer> scopedTargets = targetsOnRequestedLine(sourceText, targetOffsets, targetLine);
+    List<Integer> providerTargets = providerTargets(
+        sourceText, scopedTargets, bounds.expressionStart());
+    return providerTargets.size() == 1
+        && !hasExpressionBoundary(sourceText, bounds.expressionStart(), providerTargets.get(0));
+  }
+
+  private static boolean validTargetMethod(String targetMethod) {
+    return targetMethod != null && !targetMethod.isBlank() && !targetMethod.equals("<init>");
+  }
+
+  private static SourceBounds loadBounds(String sourceText, ServiceLoaderCallSite site) {
     int loadWord = sourceText.indexOf("load", site.offset());
-    if (loadWord < 0) {
-      return false;
-    }
-    int opening = sourceText.indexOf('(', loadWord + "load".length());
-    if (opening < 0) {
-      return false;
-    }
-    int closing = matchingDelimiter(sourceText, opening, '(', ')');
-    if (closing < 0) {
-      return false;
-    }
-    int end = statementEnd(sourceText, site.offset());
-    if (end <= closing) {
-      return false;
-    }
+    int opening = loadWord < 0 ? -1 : sourceText.indexOf('(', loadWord + "load".length());
+    int closing = opening < 0 ? -1 : matchingDelimiter(sourceText, opening, '(', ')');
+    int end = closing < 0 ? -1 : statementEnd(sourceText, site.offset());
+    return end > closing ? new SourceBounds(closing + 1, end) : null;
+  }
+
+  private static List<Integer> targetOffsets(
+      String sourceText, String targetMethod, SourceBounds bounds) {
     String methodPattern = "(?:\\.|::)\\s*"
         + Pattern.quote(targetMethod)
         + "(?=\\s*(?:\\(|[;,.)}]))";
     Matcher matcher = Pattern.compile(methodPattern).matcher(sourceText);
-    matcher.region(closing + 1, end);
-    List<Integer> targetOffsets = new ArrayList<>();
+    matcher.region(bounds.expressionStart(), bounds.expressionEnd());
+    List<Integer> offsets = new ArrayList<>();
     while (matcher.find()) {
-      targetOffsets.add(matcher.start());
+      offsets.add(matcher.start());
     }
-    if (targetLine > 0
-        && (targetOffsets.isEmpty() || lineAt(sourceText, targetOffsets.get(0)) != targetLine)) {
-      return false;
+    return offsets;
+  }
+
+  private static List<Integer> targetsOnRequestedLine(
+      String sourceText, List<Integer> offsets, int targetLine) {
+    if (targetLine <= 0) {
+      return offsets;
     }
-    boolean hasTargetOnRequestedLine = targetLine > 0;
-    List<Integer> providerTargets = new ArrayList<>();
-    for (int targetOffset : targetOffsets) {
-      if (hasTargetOnRequestedLine && lineAt(sourceText, targetOffset) != targetLine) {
-        continue;
+    if (offsets.isEmpty() || lineAt(sourceText, offsets.get(0)) != targetLine) {
+      return List.of();
+    }
+    return offsets.stream()
+        .filter(offset -> lineAt(sourceText, offset) == targetLine)
+        .toList();
+  }
+
+  private static List<Integer> providerTargets(
+      String sourceText, List<Integer> offsets, int expressionStart) {
+    List<Integer> owned = new ArrayList<>();
+    for (int targetOffset : offsets) {
+      if (isProviderOwnedTarget(sourceText, expressionStart, targetOffset)) {
+        owned.add(targetOffset);
       }
-      if (isProviderOwnedTarget(sourceText, closing + 1, targetOffset)) {
-        providerTargets.add(targetOffset);
-      }
     }
-    if (providerTargets.size() != 1) {
-      return false;
-    }
-    int targetOffset = providerTargets.get(0);
-    return !hasExpressionBoundary(sourceText, closing + 1, targetOffset);
+    return owned;
   }
 
   private static boolean isProviderOwnedTarget(String sourceText, int start, int targetOffset) {
@@ -103,9 +121,6 @@ final class ServiceLoaderCallSiteSource {
     while (start >= 0 && Character.isJavaIdentifierPart(sourceText.charAt(start))) {
       start--;
     }
-    if (start >= 0 && Character.isJavaIdentifierStart(sourceText.charAt(start))) {
-      return sourceText.substring(start, end + 1);
-    }
     return sourceText.substring(start + 1, end + 1);
   }
 
@@ -114,7 +129,7 @@ final class ServiceLoaderCallSiteSource {
       return false;
     }
     for (String parameter : parameters.split(",")) {
-      Matcher name = Pattern.compile("([A-Za-z_$][\\w$]*)\\s*$").matcher(parameter.trim());
+      Matcher name = PARAMETER_NAME.matcher(parameter.trim());
       if (name.find() && name.group(1).equals(receiver)) {
         return true;
       }
@@ -294,4 +309,6 @@ final class ServiceLoaderCallSiteSource {
       return depth == 0 ? 0 : depth - 1;
     }
   }
+
+  private record SourceBounds(int expressionStart, int expressionEnd) {}
 }

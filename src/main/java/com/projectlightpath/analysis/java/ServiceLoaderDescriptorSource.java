@@ -136,7 +136,7 @@ final class ServiceLoaderDescriptorSource {
     return comment < 0 ? line : line.substring(0, comment);
   }
 
-  private static String sha256(byte[] bytes) {
+  static String sha256(byte[] bytes) {
     try {
       byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
       StringBuilder result = new StringBuilder(digest.length * 2);
@@ -150,7 +150,7 @@ final class ServiceLoaderDescriptorSource {
     }
   }
 
-  private static String message(Exception error) {
+  static String message(Exception error) {
     return error.getMessage() == null || error.getMessage().isBlank()
         ? error.getClass().getSimpleName() : error.getMessage();
   }
