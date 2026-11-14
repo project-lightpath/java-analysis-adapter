@@ -355,3 +355,20 @@ Evidence hashes:
   `;` and `}` made raw statement-boundary matching reject a valid ServiceLoader call.
 - `GREEN_30`: commit `dfb1e9c95e59dd2e0d5eeaec685dae8504c2ba22`; statement-boundary checks now
   use the offset-preserving masked source. The focused regression passes `1/1`.
+
+### final-authoritative-gates-after-source-aware-boundary-fixes
+
+- Final validation measured at `901239d1f75864619edc34db379255cea04d9884`, with effective
+  production commit `dfb1e9c95e59dd2e0d5eeaec685dae8504c2ba22`; the full suite passes `104/104`
+  and the unit-only suite passes `92/92`.
+- Changed-production JaCoCo coverage is `882/964 = 91.49%` full-suite and
+  `875/964 = 90.77%` unit-only, both above the `90%` threshold, using Eclipse Adoptium
+  Temurin `21.0.13` and JaCoCo `0.8.13`.
+- `make evidence-validate` passes all `10` criteria; the TDD ledger validator passes `30/30`.
+  Java lint-plugin tests pass `16/16`; production lint reports `0` new PMD findings and
+  `0` new CPD duplications. Engram diagnostics report no warning-or-higher findings in
+  the three changed production files.
+- The final regressions cover source-aware wildcard ownership (`RED_28`/`GREEN_28` and
+  `RED_29`/`GREEN_29`) and offset-preserving comment masking (`RED_30`/`GREEN_30`).
+- Machine-readable details and artifact hashes are in
+  `docs/flpath-5078-tdd/final-validation.json`.
