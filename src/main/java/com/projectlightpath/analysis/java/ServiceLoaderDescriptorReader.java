@@ -46,7 +46,7 @@ final class ServiceLoaderDescriptorReader {
         scanDirectory(resolved, context, descriptors, visited);
       }
     }
-    for (Path dependency : context.dependencyClasspath()) {
+    for (Path dependency : SootUpInputLocationFactory.resolvedDependencyEntries(context)) {
       ServiceLoaderDescriptorSource.scanClasspathEntry(dependency, descriptors, visited, state);
     }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));

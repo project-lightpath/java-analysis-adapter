@@ -70,6 +70,12 @@ final class ServiceLoaderDescriptorScanner {
       descriptorAttributes.put("providers", String.join(",", descriptor.providers()));
       descriptorAttributes.put("descriptorKind", descriptor.kind());
       descriptorAttributes.put("descriptorFingerprint", descriptor.fingerprint());
+      descriptorAttributes.put(
+          "descriptorStatus", descriptor.malformed() ? "malformed" : "observed");
+      if (!descriptor.malformedEntries().isEmpty()) {
+        descriptorAttributes.put(
+            "malformedProviderEntries", String.join("|", descriptor.malformedEntries()));
+      }
       descriptorAttributes.put("selection", selection);
       if (descriptor.moduleInfo()) {
         descriptorAttributes.put("moduleVisibility", "not_proven");

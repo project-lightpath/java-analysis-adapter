@@ -43,6 +43,20 @@ final class SootUpInputLocationFactory {
     return new Inputs(view, dependencyEntries);
   }
 
+  /** Returns the concrete dependency entries selected from the analysis classpath. */
+  static List<Path> resolvedDependencyEntries(AnalysisContext context) {
+    Set<Path> resolved = new LinkedHashSet<>();
+    for (Path dependency : context.dependencyClasspath()) {
+      for (Path expanded : expandDependencyPath(dependency)) {
+        Path normalized = expanded.toAbsolutePath().normalize();
+        if (isValidInputLocation(normalized)) {
+          resolved.add(normalized);
+        }
+      }
+    }
+    return List.copyOf(resolved);
+  }
+
   private static void addDependencyLocations(
       Path dependency,
       List<AnalysisInputLocation> locations,
