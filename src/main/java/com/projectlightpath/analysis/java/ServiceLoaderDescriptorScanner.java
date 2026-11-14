@@ -99,6 +99,8 @@ final class ServiceLoaderDescriptorScanner {
         : blockingDiagnostics
             ? "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
                 .map(Diagnostic::code).distinct().sorted().collect(Collectors.joining(", ")) + "."
+            : descriptors.stream().anyMatch(Descriptor::malformed)
+                ? "Selected ServiceLoader descriptor contains malformed provider metadata; runtime selection is not proven unique."
             : !moduleVisibilityProven
                 ? "module-info provides evidence is possible; selected loader module visibility is not explicit."
             : "ServiceLoader registration or runtime classloader selection is not unique.";
