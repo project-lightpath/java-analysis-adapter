@@ -101,6 +101,67 @@ class SootUpBaseGraphProviderIntegrationTest {
         fact.evidence().get(0).attributes().get("calleeSignature").startsWith("(")));
   }
 
+  /** Keeps every provider edge visible when one source owns many ServiceLoader sites. */
+  @Test
+  void classifiesMultipleProviderEdges() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-many/src/main/java");
+    Path classes = temp.resolve("service-loader-many/target/classes");
+    Path resources = temp.resolve("service-loader-many/resources");
+    StringBuilder methods = new StringBuilder();
+    for (int index = 0; index < 128; index++) {
+      methods.append("  public String call").append(index).append("() {\n")
+          .append("    return ServiceLoader.load(Provider.class).findFirst()\n")
+          .append("        .map(value -> value.record()).orElse(\"\");\n")
+          .append("  }\n");
+    }
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "public final class App {\n"
+        + methods
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { String record(); }\n");
+    write(sourceRoot, "demo/DefaultProvider.java", "package demo;\n"
+        + "final class DefaultProvider implements Provider {\n"
+        + "  public String record() { return \"provider\"; }\n"
+        + "}\n");
+    write(resources, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+    compile(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-many")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-many/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+    List<SemanticCallFacts.Fact> serviceFacts = facts.providerFacts().stream()
+        .filter(fact -> fact.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertEquals(128, serviceFacts.size(), facts.providerFacts().toString());
+    assertEquals(128, serviceFacts.stream().map(SemanticCallFacts.Fact::caller).distinct().count());
+    assertTrue(serviceFacts.stream().allMatch(fact ->
+        fact.callee().equals("demo.DefaultProvider#record")
+            && fact.evidence().stream().anyMatch(evidence ->
+                evidence.kind().equals("service_loader_descriptor")
+                    && evidence.attributes().get("serviceType").equals("demo.Provider"))));
+  }
+
   private static void compile(Path sourceRoot, Path classes) throws IOException {
     Files.createDirectories(classes);
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
