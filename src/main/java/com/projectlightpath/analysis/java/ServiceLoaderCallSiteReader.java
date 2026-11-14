@@ -72,11 +72,20 @@ final class ServiceLoaderCallSiteReader {
 
   private static boolean sameStatement(String source, ServiceLoaderCallSite site, int line) {
     int lineStart = lineStart(source, line);
-    if (lineStart < 0 || site.offset() >= lineStart) {
-      return site.offset() < lineStart || site.line() == line;
+    if (lineStart < 0 || site.line() > line) {
+      return false;
     }
-    int statementEnd = source.indexOf(';', site.offset());
-    return statementEnd < 0 || lineStart <= statementEnd;
+    DelimiterDepth depth = new DelimiterDepth();
+    for (int index = site.offset(); index < lineStart; index++) {
+      char value = source.charAt(index);
+      if (depth.atTopLevel()
+          && (value == ',' || value == ';' || value == ')' || value == ']'
+              || value == '}' || value == '{')) {
+        return false;
+      }
+      depth.accept(value);
+    }
+    return true;
   }
 
   private static boolean statementContainsMethod(
@@ -88,10 +97,7 @@ final class ServiceLoaderCallSiteReader {
     if (loadEnd < 0) {
       return false;
     }
-    int statementEnd = source.indexOf(';', loadEnd);
-    if (statementEnd < 0) {
-      statementEnd = source.length();
-    }
+    int statementEnd = statementEnd(source, loadEnd + 1);
     java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
         "\\.\\s*" + java.util.regex.Pattern.quote(targetMethod) + "\\s*\\(")
         .matcher(source);
@@ -123,5 +129,43 @@ final class ServiceLoaderCallSiteReader {
       }
     }
     return line;
+  }
+
+  private static int statementEnd(String source, int start) {
+    DelimiterDepth depth = new DelimiterDepth();
+    for (int index = start; index < source.length(); index++) {
+      char value = source.charAt(index);
+      if (value == ';' && depth.atTopLevel()) {
+        return index;
+      }
+      depth.accept(value);
+    }
+    return source.length();
+  }
+
+  private static final class DelimiterDepth {
+    private int parentheses;
+    private int brackets;
+    private int braces;
+
+    boolean atTopLevel() {
+      return parentheses == 0 && brackets == 0 && braces == 0;
+    }
+
+    void accept(char value) {
+      switch (value) {
+        case '(' -> parentheses++;
+        case ')' -> parentheses = decrement(parentheses);
+        case '[' -> brackets++;
+        case ']' -> brackets = decrement(brackets);
+        case '{' -> braces++;
+        case '}' -> braces = decrement(braces);
+        default -> { }
+      }
+    }
+
+    private static int decrement(int depth) {
+      return depth == 0 ? 0 : depth - 1;
+    }
   }
 }
