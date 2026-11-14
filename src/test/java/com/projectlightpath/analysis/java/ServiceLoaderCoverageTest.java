@@ -90,6 +90,16 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void sameStatementIgnoresTrailingCommentDelimiters() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(demo.Provider.class).findFirst(); // comment has ; and }\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSource.sameStatement(source, site, 2),
+        "comment delimiters must not terminate the source statement");
+  }
+
+  @Test
   void sourceOwnershipIgnoresCommentsStringsAndTextBlocks() {
     String source = "import java.util.ServiceLoader;\n"
         + "return ServiceLoader.load(demo.Provider.class)"
