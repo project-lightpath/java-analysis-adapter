@@ -234,3 +234,12 @@ Evidence hashes:
   enumeration helpers without changing the `GREEN_20`/`GREEN_21` behavior. Focused
   ServiceLoader tests pass `7/7`; the direct Java lint gate reports `0` new PMD findings
   and `0` CPD duplications. Coverage was remeasured on this exact post-refactor HEAD.
+
+### independent-review-safety-gaps
+
+- `RED_22`: commit `7365409871dcf606ca56c20a013afa7f9960c050`; independent review regressions
+  reproduced method-reference false attribution, symlink traversal, invalid declared-path failure,
+  and unbounded wildcard dependency expansion.
+- `GREEN_22`: commit `f52ea0514148957ade9ff2da4ebae13d2d3c6fa9`; unsupported method references now
+  abstain, descriptor authorization uses real-path containment, malformed paths are diagnosed and
+  skipped, and cached wildcard dependency expansion is bounded with a diagnostic.
