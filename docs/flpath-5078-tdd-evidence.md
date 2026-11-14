@@ -178,19 +178,19 @@ Evidence hashes:
 
 ## Final gate evidence
 
-- The authoritative JaCoCo run at corrected production `HEAD f52ea0514148957ade9ff2da4ebae13d2d3c6fa9`
+- The authoritative JaCoCo run at corrected production `HEAD 73e303905280098d47b18a15096b0d4b2c483e16`
   used Temurin 21.0.13 (Eclipse Adoptium), JaCoCo 0.8.13, and the pinned no-zero-test
-  Surefire flags; all `92` full-suite tests passed.
+  Surefire flags; all `95` full-suite tests passed.
 - The changed-production threshold intentionally uses the complete adapter suite,
   including its SootUp integration tests. Full-suite changed-production coverage passed
-  at `92.09%` (`792/860` executable changed lines), above the required `90%` threshold.
+  at `91.82%` (`819/892` executable changed lines), above the required `90%` threshold.
   The canonical report SHA-256 is
-  `40387901436d2374c22b1383832210bd7d046cfe8e31058e247f7fc5b11e1763`; the raw report
-  SHA-256 is `ad7843761420852ae32ce505b6164d7bf180a4817ab30bdd1fd49b241a84e9d8`.
-- Additional unit-only evidence passed `80/80` tests at `91.28%` changed-production
-  coverage (`785/860`). Its canonical report SHA-256 is
-  `482ffa8919b36f63bdde4164416b50fa06751d2832bddd14dcd03a4e3d9bb3e1`; the raw report
-  SHA-256 is `f598104248067c823f3b80946a00af2ec692ffc432cd298a65b5d785b96ad332`.
+  `26bbdb4484176ab0ce19f64239bd46840ab6832e14be683c18cb94ef2338aab3`; the raw report
+  SHA-256 is `49e1a72b0a6bb1b98e65c5eddc2745a8063f0d9019eae31f9c9d2e39e505b163`.
+- Additional unit-only evidence passed `83/83` tests at `91.03%` changed-production
+  coverage (`812/892`). Its canonical report SHA-256 is
+  `e7e8ccb3e9aceb75c6c1970a83b8fb818042c3c2a7262b739d135d3ba66b1738`; the raw report
+  SHA-256 is `937bb1a5803e6d4dfbae1877934d3ed7205dc910460412a31c6797fc8e0a9b13`.
   Complete machine-readable evidence is in `docs/flpath-5078-tdd/changed-coverage.json`
   and `docs/flpath-5078-tdd/unit-coverage.json`.
 
@@ -235,8 +235,7 @@ Evidence hashes:
   ServiceLoader tests pass `7/7`; the direct Java lint gate reports `0` new PMD findings
   and `0` CPD duplications.
 - `f52ea0514148957ade9ff2da4ebae13d2d3c6fa9` records the independent-review fixes in
-  `EVIDENCE_22`; focused ServiceLoader tests pass `9/9`, the full suite passes `92/92`,
-  and coverage was remeasured on this corrected production HEAD.
+  `EVIDENCE_22`; focused ServiceLoader tests pass `9/9` and the full suite passes `92/92`.
 
 ### independent-review-safety-gaps
 
@@ -255,3 +254,6 @@ Evidence hashes:
   and literals, identical descriptors are deduplicated for uniqueness, bounded subsets retain the
   deterministic smallest entries, and dependency/SootUp and descriptor scanning share a no-follow
   symlink policy with cached wildcard-limit diagnostics and fail-fast propagation.
+- Final follow-up evidence at this production HEAD passes `95/95` full-suite tests and `83/83`
+  unit-only tests; changed-production coverage was remeasured at `91.82%` (`819/892`) full-suite
+  and `91.03%` (`812/892`) unit-only.
