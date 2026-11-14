@@ -1,0 +1,60 @@
+Property settings:
+    file.encoding = UTF-8
+    file.separator = /
+    ftp.nonProxyHosts = local|*.local|169.254/16|*.169.254/16
+    http.nonProxyHosts = local|*.local|169.254/16|*.169.254/16
+    java.class.path = 
+    java.class.version = 65.0
+    java.home = /Users/jgil/.cache/project-lightpath/jdk/jdk-21.0.13+9/Contents/Home
+    java.io.tmpdir = /var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/
+    java.library.path = /Users/jgil/Library/Java/Extensions
+        /Library/Java/Extensions
+        /Network/Library/Java/Extensions
+        /System/Library/Java/Extensions
+        /usr/lib/java
+        .
+    java.runtime.name = OpenJDK Runtime Environment
+    java.runtime.version = 21.0.13+9-LTS
+    java.specification.name = Java Platform API Specification
+    java.specification.vendor = Oracle Corporation
+    java.specification.version = 21
+    java.vendor = Eclipse Adoptium
+    java.vendor.url = https://adoptium.net/
+    java.vendor.url.bug = https://github.com/adoptium/adoptium-support/issues
+    java.vendor.version = Temurin-21.0.13+9
+    java.version = 21.0.13
+    java.version.date = 2026-10-20
+    java.vm.compressedOopsMode = Non-zero based
+    java.vm.info = mixed mode, sharing
+    java.vm.name = OpenJDK 64-Bit Server VM
+    java.vm.specification.name = Java Virtual Machine Specification
+    java.vm.specification.vendor = Oracle Corporation
+    java.vm.specification.version = 21
+    java.vm.vendor = Eclipse Adoptium
+    java.vm.version = 21.0.13+9-LTS
+    jdk.debug = release
+    line.separator = \n 
+    native.encoding = UTF-8
+    os.arch = aarch64
+    os.name = Mac OS X
+    os.version = 27.2.1
+    path.separator = :
+    socksNonProxyHosts = local|*.local|169.254/16|*.169.254/16
+    stderr.encoding = UTF-8
+    stdout.encoding = UTF-8
+    sun.arch.data.model = 64
+    sun.boot.library.path = /Users/jgil/.cache/project-lightpath/jdk/jdk-21.0.13+9/Contents/Home/lib
+    sun.cpu.endian = little
+    sun.io.unicode.encoding = UnicodeBig
+    sun.java.launcher = SUN_STANDARD
+    sun.jnu.encoding = UTF-8
+    sun.management.compiler = HotSpot 64-Bit Tiered Compilers
+    user.country = US
+    user.dir = /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd
+    user.home = /Users/jgil
+    user.language = en
+    user.name = jgil
+
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)

@@ -1,12 +1,11 @@
 package com.projectlightpath.analysis.java;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -30,7 +29,7 @@ final class ServiceLoaderDescriptorReader {
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
       Path parent = root.path().getParent();
       if (parent != null) {
-        scanDirectory(parent.resolve("resources").resolve(SERVICES), context, descriptors, visited);
+        scanDirectory(parent.resolve("resources").resolve(SERVICES), context, descriptors, visited, state);
       }
     }
     for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
@@ -42,9 +41,9 @@ final class ServiceLoaderDescriptorReader {
       Path declared = Path.of(metadata.declaredPath());
       Path resolved = declared.isAbsolute() ? declared : context.repositoryRoot().resolve(declared);
       if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
-        addFile(resolved, context, descriptors, visited);
+        addFile(resolved, context, descriptors, visited, state);
       } else {
-        scanDirectory(resolved, context, descriptors, visited);
+        scanDirectory(resolved, context, descriptors, visited, state);
       }
     }
     for (Path dependency : SootUpInputLocationFactory.resolvedDependencyEntries(context)) {
@@ -58,14 +57,15 @@ final class ServiceLoaderDescriptorReader {
       Path directory,
       AnalysisContext context,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited) {
+      Set<String> visited,
+      ServiceLoaderDescriptorSource.ScanState state) {
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
     try (Stream<Path> paths = Files.list(directory)) {
       paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
           .sorted()
-          .forEach(path -> addFile(path, context, descriptors, visited));
+          .forEach(path -> addFile(path, context, descriptors, visited, state));
     } catch (IOException error) {
       throw new IllegalStateException("cannot scan ServiceLoader descriptor directory: " + directory, error);
     }
@@ -75,15 +75,21 @@ final class ServiceLoaderDescriptorReader {
       Path file,
       AnalysisContext context,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited) {
+      Set<String> visited,
+      ServiceLoaderDescriptorSource.ScanState state) {
     Path normalized = file.toAbsolutePath().normalize();
     if (!visited.add("descriptor:" + normalized) || normalized.getFileName() == null) {
       return;
     }
-    try {
+    try (InputStream input = Files.newInputStream(normalized)) {
+      byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(
+          input, state, normalized.toString());
+      if (bytes == null) {
+        return;
+      }
       Set<String> providers = new LinkedHashSet<>();
       List<String> malformed = new ArrayList<>();
-      for (String line : Files.readAllLines(normalized, StandardCharsets.UTF_8)) {
+      for (String line : new String(bytes, StandardCharsets.UTF_8).lines().toList()) {
         String candidate = line.split("#", 2)[0].trim();
         if (candidate.isEmpty()) {
           continue;
@@ -99,7 +105,7 @@ final class ServiceLoaderDescriptorReader {
           serviceType,
           List.copyOf(providers),
           displayPath(context, normalized),
-          fingerprint(normalized),
+          ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
           malformed));
     } catch (IOException error) {
@@ -114,16 +120,4 @@ final class ServiceLoaderDescriptorReader {
         : path.toString();
   }
 
-  private static String fingerprint(Path path) {
-    try {
-      byte[] bytes = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path));
-      StringBuilder result = new StringBuilder(bytes.length * 2);
-      for (byte value : bytes) {
-        result.append(String.format("%02x", value));
-      }
-      return result.toString();
-    } catch (IOException | NoSuchAlgorithmException error) {
-      throw new IllegalStateException("cannot fingerprint ServiceLoader descriptor: " + path, error);
-    }
-  }
 }

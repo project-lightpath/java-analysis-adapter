@@ -119,7 +119,7 @@ final class ServiceLoaderDescriptorArchiveSource {
     }
   }
 
-  private static byte[] readEntry(
+  static byte[] readEntry(
       InputStream input,
       ServiceLoaderDescriptorSource.ScanState state,
       String path) throws IOException {
