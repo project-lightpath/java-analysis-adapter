@@ -19,32 +19,6 @@ and Spring lifecycle callbacks. Provider and framework facts preserve
 not prove route absence; open-world reflection and dynamic proxies remain
 `unresolved`/`abstained`.
 
-Provider normalization preserves concrete callback and `ServiceLoader` edges
-reported by SootUp. For `ServiceLoader` edges, the adapter scans only the
-selected application output/resources and dependency classpath for
-`META-INF/services` files and `module-info.class` provider declarations. Each
-descriptor is carried as evidence with a SHA-256 fingerprint. A single,
-well-formed descriptor-backed provider may be `definite`; malformed provider
-entries, duplicate descriptor sources, multiple providers, missing descriptors,
-or non-unique classloader selection remain `possible` with an explicit
-limitation. Descriptor matching is bound to the owning source method, lexical
-receiver scope, and exact resolved service type; exact single-type and
-unambiguous wildcard imports are supported, while ambiguous wildcard imports
-and line-only sibling calls abstain. The source selector only binds a target
-invoke when the target method occurrence is lexically rooted in the load
-expression; SootUp's lack of source columns is never treated as proof of a
-same-line sibling relationship.
-Explicit classloader overloads remain `possible` unless the selected runtime
-loader is proven. The adapter never creates a provider solely from an unbounded
-interface or descriptor set. Source metadata is loaded once per analysis phase
-and reused across graph edges; descriptor archives are scanned only when the
-graph contains a `service_loader` edge. Descriptor files are capped at 1 MiB,
-module descriptors at 4 MiB, archives at 128 MiB/4,096 entries, service
-directories at 4,096 entries, and archive decompression at 4 MiB per entry and
-16 MiB per scan. Limit violations, unreadable archives, and malformed
-`module-info.class` files are emitted as scan-diagnostic evidence and keep
-resolution possible unless an independently valid descriptor remains provable.
-
 `AnalysisContext` can carry the versioned `frameworkBindingMetadata` payload
 defined in `spike/contracts/framework-binding-metadata.json`. It records CDI and
 Spring candidates, resolved injection rows, and proxy targets. The scanner

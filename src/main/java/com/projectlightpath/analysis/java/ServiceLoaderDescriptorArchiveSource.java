@@ -1,22 +1,18 @@
 package com.projectlightpath.analysis.java;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashSet;
+import java.util.Enumeration;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Stream;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
-/** Reads bounded ServiceLoader metadata from dependency archives and files. */
+/** Reads root-level ServiceLoader metadata from a dependency archive. */
 final class ServiceLoaderDescriptorArchiveSource {
   private ServiceLoaderDescriptorArchiveSource() {}
 
@@ -25,109 +21,134 @@ final class ServiceLoaderDescriptorArchiveSource {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state) {
     Path normalized = archive.toAbsolutePath().normalize();
-    if (!state.acceptPath(normalized) || !state.reserveArchive(normalized)) {
-      return;
-    }
-    try {
-      if (Files.size(normalized) > ServiceLoaderDescriptorSource.MAX_ARCHIVE_BYTES) {
-        state.diagnostic(
-            "archive_too_large", normalized.toString(),
-            "archive exceeds " + ServiceLoaderDescriptorSource.MAX_ARCHIVE_BYTES + " bytes");
-        return;
-      }
-    } catch (IOException error) {
-      state.diagnostic("archive_read_error", normalized.toString(), message(error));
-      return;
-    }
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
-      List<? extends ZipEntry> entries;
-      try (Stream<? extends ZipEntry> stream = zip.stream()) {
-        entries = stream.limit(ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRIES + 1L).toList();
-      }
-      if (entries.size() > ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRIES) {
-        state.diagnostic(
-            "archive_entry_limit", normalized.toString(),
-            "archive exceeds " + ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRIES + " entries");
-        entries = entries.subList(0, ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRIES);
-      }
-      Set<String> entryNames = new HashSet<>();
-      List<? extends ZipEntry> serviceEntries = entries.stream()
-          .filter(entry -> !entry.isDirectory())
-          .filter(entry -> entry.getName().startsWith(
-              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/"))
-          .filter(entry -> entryNames.add(entry.getName()))
-          .sorted(java.util.Comparator.comparing(ZipEntry::getName))
-          .toList();
-      for (ZipEntry entry : serviceEntries) {
-        if (!state.hasDecompressedBudget()) {
-          state.diagnostic(
-              "archive_decompression_limit", normalized.toString(),
-              "archive decompression budget exhausted before all entries were read");
-          break;
-        }
-        byte[] bytes = readEntry(zip, entry, state, normalized + "!/" + entry.getName());
-        if (bytes == null) {
-          continue;
-        }
-        ServiceLoaderDescriptorSource.ProviderEntries parsed =
-            ServiceLoaderDescriptorSource.providers(bytes);
-        String serviceType = entry.getName().substring(
-            ServiceLoaderDescriptorSource.SERVICES_DIRECTORY.length() + 1);
-        if (ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(serviceType).matches()) {
-          descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
-              serviceType,
-              parsed.providers(),
-              archive + "!/" + entry.getName(),
-              sha256(bytes),
-              "meta_inf_services",
-              parsed.malformedEntries()));
-        }
-      }
-      if (state.hasDecompressedBudget()) {
-        entries.stream()
-            .filter(entry -> !entry.isDirectory()
-                && entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO))
-            .findFirst()
-            .ifPresent(entry -> {
-              byte[] bytes = readEntry(zip, entry, state, normalized + "!/" + entry.getName());
-              if (bytes != null) {
-                ServiceLoaderDescriptorSource.addModuleBytes(
-                    bytes, normalized + "!/" + entry.getName(), descriptors, state);
-              }
-            });
-      }
+      ArchiveEntries entries = enumerate(zip, normalized, state);
+      readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
+      readModule(zip, normalized, entries.module(), descriptors, state);
     } catch (ZipException error) {
-      state.diagnostic("invalid_archive", normalized.toString(), message(error));
+      state.diagnostic("invalid_archive", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
     } catch (IOException error) {
-      state.diagnostic("archive_read_error", normalized.toString(), message(error));
+      state.diagnostic("archive_read_error", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
     }
   }
 
-  static byte[] readFile(
-      Path path,
-      ServiceLoaderDescriptorSource.ScanState state,
-      String tooLargeCode,
-      String readErrorCode,
-      long maximumBytes) {
-    try {
-      if (!state.acceptPath(path)) {
-        return null;
+  private static ArchiveEntries enumerate(
+      ZipFile zip, Path archive, ServiceLoaderDescriptorSource.ScanState state) {
+    NavigableMap<String, ZipEntry> descriptors = new TreeMap<>();
+    ZipEntry module = null;
+    boolean complete = true;
+    Enumeration<? extends ZipEntry> entries = zip.entries();
+    while (entries.hasMoreElements()) {
+      ZipEntry entry = entries.nextElement();
+      String entryPath = archive + "!/" + entry.getName();
+      if (!state.tryEnumerate(entryPath)) {
+        complete = false;
+        break;
       }
-      if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-        state.diagnostic(readErrorCode, path.toString(), "path is not a regular file");
-        return null;
+      if (entry.isDirectory()) {
+        continue;
       }
-      if (Files.size(path) > maximumBytes) {
+      if (ServiceLoaderDescriptorNestedArchiveSource.isWar(archive)) {
+        ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
+            entry.getName(), archive, state);
+      }
+      if (entry.getName().startsWith(
+              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")) {
+        retainDescriptor(descriptors, entry);
+      }
+      if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
+        module = entry;
+      }
+    }
+    return complete
+        ? new ArchiveEntries(List.copyOf(descriptors.values()), module)
+        : new ArchiveEntries(List.of(), null);
+  }
+
+  private static void retainDescriptor(
+      NavigableMap<String, ZipEntry> descriptors, ZipEntry entry) {
+    String name = entry.getName();
+    if (descriptors.containsKey(name)) {
+      return;
+    }
+    if (descriptors.size() < ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES) {
+      descriptors.put(name, entry);
+    } else if (name.compareTo(descriptors.lastKey()) < 0) {
+      descriptors.pollLastEntry();
+      descriptors.put(name, entry);
+    }
+  }
+
+  private static void readDescriptors(
+      ZipFile zip,
+      Path archive,
+      List<ZipEntry> entries,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    for (ZipEntry entry : entries) {
+      if (!state.hasDecompressedBudget()) {
         state.diagnostic(
-            tooLargeCode, path.toString(), "file exceeds " + maximumBytes + " bytes");
-        return null;
+            "archive_decompression_limit", archive.toString(),
+            "archive decompression budget exhausted before all entries were read");
+        break;
       }
-      try (InputStream input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
-        return readBounded(input, maximumBytes, state, tooLargeCode, path.toString());
+      addDescriptor(zip, archive, entry, descriptors, state);
+    }
+  }
+
+  private static void readModule(
+      ZipFile zip,
+      Path archive,
+      ZipEntry module,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    if (module == null) {
+      return;
+    }
+    String modulePath = archive + "!/" + module.getName();
+    if (!state.hasDecompressedBudget()) {
+      state.diagnostic(
+          "archive_decompression_limit", modulePath,
+          "module-info.class could not be read after the archive decompression budget was exhausted");
+      return;
+    }
+    byte[] bytes = readEntry(zip, module, state, modulePath);
+    if (bytes != null) {
+      ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
+    }
+  }
+
+  private static void addDescriptor(
+      ZipFile zip,
+      Path archive,
+      ZipEntry entry,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    String serviceType = entry.getName().substring(
+        ServiceLoaderDescriptorSource.SERVICES_DIRECTORY.length() + 1);
+    if (!ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(serviceType).matches()) {
+      return;
+    }
+    String path = archive + "!/" + entry.getName();
+    try (InputStream input = zip.getInputStream(entry)) {
+      byte[] bytes = readEntry(input, state, path);
+      if (bytes == null) {
+        return;
       }
+      ServiceLoaderDescriptorSource.ProviderEntries parsed =
+          ServiceLoaderDescriptorSource.providers(bytes);
+      descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
+          serviceType,
+          parsed.providers(),
+          path,
+          ServiceLoaderDescriptorSource.sha256(bytes),
+          "meta_inf_services",
+          parsed.malformedEntries()));
     } catch (IOException error) {
-      state.diagnostic(readErrorCode, path.toString(), message(error));
-      return null;
+      state.diagnostic(
+          "archive_entry_read_error", path, ServiceLoaderDescriptorSource.message(error));
     }
   }
 
@@ -136,38 +157,26 @@ final class ServiceLoaderDescriptorArchiveSource {
       ZipEntry entry,
       ServiceLoaderDescriptorSource.ScanState state,
       String path) {
-    long declaredSize = entry.getSize();
-    long compressedSize = entry.getCompressedSize();
-    if (declaredSize > ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRY_BYTES
-        || compressedSize > ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRY_BYTES) {
-      state.diagnostic(
-          "archive_entry_too_large", path,
-          "archive entry exceeds " + ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRY_BYTES
-              + " bytes");
-      return null;
-    }
     long remaining = state.remainingDecompressed();
     if (remaining <= 0) {
       return null;
     }
-    long maximumBytes = Math.min(
-        ServiceLoaderDescriptorSource.MAX_ARCHIVE_ENTRY_BYTES, remaining);
     try (InputStream input = zip.getInputStream(entry)) {
-      return readArchiveEntry(input, maximumBytes, state, path);
+      return readEntry(input, state, path);
     } catch (IOException error) {
-      state.diagnostic("archive_entry_read_error", path, message(error));
+      state.diagnostic(
+          "archive_entry_read_error", path, ServiceLoaderDescriptorSource.message(error));
       return null;
     }
   }
 
-  private static byte[] readArchiveEntry(
+  static byte[] readEntry(
       InputStream input,
-      long maximumBytes,
       ServiceLoaderDescriptorSource.ScanState state,
       String path) throws IOException {
-    ByteArrayOutputStream output = new ByteArrayOutputStream(
-        (int) Math.min(maximumBytes, 8_192));
-    byte[] buffer = new byte[8_192];
+    long maximumBytes = state.remainingDecompressed();
+    ByteArrayOutputStream output = new ByteArrayOutputStream(8192);
+    byte[] buffer = new byte[8192];
     long total = 0;
     while (total < maximumBytes) {
       int requested = (int) Math.min(buffer.length, maximumBytes - total);
@@ -193,44 +202,6 @@ final class ServiceLoaderDescriptorArchiveSource {
     return output.toByteArray();
   }
 
-  private static byte[] readBounded(
-      InputStream input,
-      long maximumBytes,
-      ServiceLoaderDescriptorSource.ScanState state,
-      String limitCode,
-      String path) throws IOException {
-    ByteArrayOutputStream output = new ByteArrayOutputStream(
-        (int) Math.min(maximumBytes, 8_192));
-    byte[] buffer = new byte[8_192];
-    long total = 0;
-    int count;
-    while ((count = input.read(buffer)) >= 0) {
-      total += count;
-      if (total > maximumBytes) {
-        state.diagnostic(limitCode, path, "read exceeds " + maximumBytes + " bytes");
-        return null;
-      }
-      output.write(buffer, 0, count);
-    }
-    return output.toByteArray();
-  }
+  private record ArchiveEntries(List<ZipEntry> descriptors, ZipEntry module) {}
 
-  static String message(Exception error) {
-    return error.getMessage() == null || error.getMessage().isBlank()
-        ? error.getClass().getSimpleName() : error.getMessage();
-  }
-
-  static String sha256(byte[] bytes) {
-    try {
-      byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
-      StringBuilder result = new StringBuilder(digest.length * 2);
-      for (byte value : digest) {
-        result.append(Character.forDigit((value >>> 4) & 0x0f, 16));
-        result.append(Character.forDigit(value & 0x0f, 16));
-      }
-      return result.toString();
-    } catch (NoSuchAlgorithmException error) {
-      throw new IllegalStateException("SHA-256 is unavailable", error);
-    }
-  }
 }

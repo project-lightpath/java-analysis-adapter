@@ -1,112 +1,122 @@
 package com.projectlightpath.analysis.java;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Parses ServiceLoader source invocations and resolves their service types. */
+/** Parses the bounded ServiceLoader.load source shape used by provider evidence. */
 final class ServiceLoaderCallSiteParser {
-  private static final Pattern SERVICE_LOAD = Pattern.compile(
-      "\\b((?:[A-Za-z_$][A-Za-z0-9_$]*\\.)*[A-Za-z_$][A-Za-z0-9_$]*)\\s*\\.\\s*load"
-          + "\\s*\\(\\s*([A-Za-z_$][A-Za-z0-9_$.]*)\\s*\\.\\s*class\\b");
+  private static final Pattern LOAD = Pattern.compile(
+      "(?<![\\w$.])(?:(java\\.util)\\.)?ServiceLoader\\s*\\.\\s*load\\s*\\(");
   private static final Pattern PACKAGE = Pattern.compile(
-      "\\bpackage\\s+([A-Za-z_$][A-Za-z0-9_$.]*)\\s*;");
-  private static final Pattern IMPORT = Pattern.compile(
-      "\\bimport\\s+(?!static\\s+)([A-Za-z_$][A-Za-z0-9_$.]*)(\\.\\*)?\\s*;");
+      "\\bpackage\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
+  private static final Pattern EXPLICIT_IMPORT = Pattern.compile(
+      "(?m)^\\s*import\\s+java\\.util\\.ServiceLoader\\s*;");
+  private static final Pattern ON_DEMAND_IMPORT = Pattern.compile(
+      "(?m)^\\s*import\\s+java\\.util\\.\\*\\s*;");
 
   private ServiceLoaderCallSiteParser() {}
 
-  static List<ServiceLoaderCallSite> parse(String sourceText) {
-    String packageName = match(PACKAGE, sourceText);
-    Imports imports = imports(sourceText);
+  static List<ServiceLoaderCallSite> parse(String source) {
+    return parse(source, false);
+  }
+
+  static List<ServiceLoaderCallSite> parse(String source, boolean wildcardImportOwned) {
+    return parse(source, wildcardImportOwned, true);
+  }
+
+  /** Parses calls with source-proven ownership for imported ServiceLoader types. */
+  static List<ServiceLoaderCallSite> parse(
+      String source, boolean wildcardImportOwned, boolean serviceLoaderTypeOwned) {
     List<ServiceLoaderCallSite> result = new ArrayList<>();
-    Matcher matcher = SERVICE_LOAD.matcher(sourceText);
+    String structuralSource = ServiceLoaderSourceMasker.mask(source == null ? "" : source);
+    Matcher matcher = LOAD.matcher(structuralSource);
     while (matcher.find()) {
-      if (!isJavaServiceLoader(matcher.group(1), imports)) {
+      if (matcher.group(1) == null
+          && !isJavaUtilServiceLoader(
+              structuralSource, wildcardImportOwned, serviceLoaderTypeOwned)) {
         continue;
       }
-      String rawServiceType = matcher.group(2);
+      int closing = matchingParenthesis(structuralSource, matcher.end() - 1);
+      if (closing < 0) {
+        continue;
+      }
+      List<String> arguments = splitArguments(structuralSource.substring(matcher.end(), closing));
+      if (arguments.isEmpty()) {
+        continue;
+      }
+      String serviceType = classLiteralType(arguments.get(0));
+      if (serviceType == null) {
+        continue;
+      }
       result.add(new ServiceLoaderCallSite(
-           matcher.group(1),
-           rawServiceType,
-           fallbackServiceType(rawServiceType, packageName, imports),
-           hasExplicitClassLoader(sourceText, matcher.end()),
+           serviceType,
+           serviceType,
+           arguments.size() == 2,
            matcher.start(),
-           lineAt(sourceText, matcher.start())));
+           lineAt(structuralSource, matcher.start())));
     }
     return List.copyOf(result);
   }
 
-  private static boolean isJavaServiceLoader(String receiver, Imports imports) {
-    return receiver.equals("java.util.ServiceLoader")
-        || (receiver.equals("ServiceLoader")
-            && javaServiceLoaderImport(imports));
-  }
-
-  private static boolean javaServiceLoaderImport(Imports imports) {
-    String exact = imports.exact().get("ServiceLoader");
-    if (exact != null) {
-      return exact.equals("java.util.ServiceLoader");
+  private static boolean isJavaUtilServiceLoader(
+      String source, boolean wildcardImportOwned, boolean serviceLoaderTypeOwned) {
+    if (!serviceLoaderTypeOwned) {
+      return false;
     }
-    return imports.wildcards().size() == 1 && imports.wildcards().contains("java.util");
-  }
-
-  private static boolean hasExplicitClassLoader(String sourceText, int afterServiceType) {
-    int index = afterServiceType;
-    while (index < sourceText.length() && Character.isWhitespace(sourceText.charAt(index))) {
-      index++;
+    if (EXPLICIT_IMPORT.matcher(source).find()) {
+      return true;
     }
-    return index < sourceText.length() && sourceText.charAt(index) == ',';
+    if (wildcardImportOwned && ON_DEMAND_IMPORT.matcher(source).find()) {
+      return true;
+    }
+    Matcher packageMatcher = PACKAGE.matcher(source);
+    return packageMatcher.find() && packageMatcher.group(1).equals("java.util");
   }
 
-  private static int lineAt(String sourceText, int offset) {
-    int line = 1;
-    for (int index = 0; index < offset; index++) {
-      if (sourceText.charAt(index) == '\n') {
-        line++;
+  private static String classLiteralType(String argument) {
+    String normalized = argument.trim();
+    if (!normalized.endsWith(".class")) {
+      return null;
+    }
+    String type = normalized.substring(0, normalized.length() - ".class".length()).trim();
+    return type.matches("[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*") ? type : null;
+  }
+
+  private static int matchingParenthesis(String source, int opening) {
+    int depth = 0;
+    for (int index = opening; index < source.length(); index++) {
+      char current = source.charAt(index);
+      if (current == '(') {
+        depth++;
+      } else if (current == ')' && --depth == 0) {
+        return index;
       }
     }
-    return line;
+    return -1;
   }
 
-  private static Imports imports(String sourceText) {
-    Map<String, String> exact = new HashMap<>();
-    Set<String> wildcards = new HashSet<>();
-    Matcher importMatcher = IMPORT.matcher(sourceText);
-    while (importMatcher.find()) {
-      String imported = importMatcher.group(1);
-      if (importMatcher.group(2) == null) {
-        exact.put(imported.substring(imported.lastIndexOf('.') + 1), imported);
-      } else {
-        wildcards.add(imported);
+  private static List<String> splitArguments(String source) {
+    List<String> result = new ArrayList<>();
+    int start = 0;
+    int depth = 0;
+    for (int index = 0; index < source.length(); index++) {
+      char current = source.charAt(index);
+      if (current == '(' || current == '[' || current == '{') {
+        depth++;
+      } else if (current == ')' || current == ']' || current == '}') {
+        depth--;
+      } else if (current == ',' && depth == 0) {
+        result.add(source.substring(start, index));
+        start = index + 1;
       }
     }
-    return new Imports(Map.copyOf(exact), Set.copyOf(wildcards));
+    result.add(source.substring(start));
+    return result.stream().map(String::trim).filter(item -> !item.isEmpty()).toList();
   }
 
-  private static String fallbackServiceType(
-      String raw, String packageName, Imports imports) {
-    if (raw.contains(".")) {
-      return raw;
-    }
-    if (imports.exact().containsKey(raw)) {
-      return imports.exact().get(raw);
-    }
-    if (imports.wildcards().stream().anyMatch(item -> !item.equals("java.util"))) {
-      return raw;
-    }
-    return packageName.isBlank() ? raw : packageName + "." + raw;
+  private static int lineAt(String source, int offset) {
+    return (int) source.substring(0, offset).chars().filter(value -> value == '\n').count() + 1;
   }
-
-  private static String match(Pattern pattern, String value) {
-    Matcher matcher = pattern.matcher(value);
-    return matcher.find() ? matcher.group(1) : "";
-  }
-
-  private record Imports(Map<String, String> exact, Set<String> wildcards) {}
 }

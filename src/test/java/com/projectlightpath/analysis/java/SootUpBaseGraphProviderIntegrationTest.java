@@ -1,20 +1,15 @@
 package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
-import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
@@ -109,270 +104,147 @@ class SootUpBaseGraphProviderIntegrationTest {
         fact.evidence().get(0).attributes().get("calleeSignature").startsWith("(")));
   }
 
-  /** Covers compiled call-site binding, explicit loaders, wildcard inputs, and bad metadata. */
+  /** Keeps every provider edge visible when one source owns many ServiceLoader sites. */
   @Test
-  void analyzesCompiledServiceLoaderEdgesWithSelectedWildcardMetadata() throws IOException {
-    Path dependencySource = temp.resolve("service-dependency/src/main/java");
-    Path dependencyClasses = temp.resolve("service-dependency/target/classes");
-    write(dependencySource, "demo/AuditProvider.java", """
-        package demo;
-        public interface AuditProvider { String record(); }
-        """);
-    write(dependencySource, "demo/OtherProvider.java", """
-        package demo;
-        public interface OtherProvider { String record(); }
-        """);
-    write(dependencySource, "demo/DefaultAuditProvider.java", """
-        package demo;
-        public final class DefaultAuditProvider implements AuditProvider {
-          public String record() { return "audit"; }
-        }
-        """);
-    write(dependencySource, "demo/DefaultOtherProvider.java", """
-        package demo;
-        public final class DefaultOtherProvider implements OtherProvider {
-          public String record() { return "other"; }
-        }
-        """);
-    compile(dependencySource, dependencyClasses, List.of());
-    Path dependencyJar = jar(
-        dependencyClasses,
-        temp.resolve("service-dependency/provider.jar"),
-        Map.of(
-            "META-INF/services/demo.AuditProvider",
-            "demo.DefaultAuditProvider\nnot a binary provider name\n",
-            "META-INF/services/demo.OtherProvider",
-            "demo.DefaultOtherProvider\n",
-            "META-INF/services/demo.Malformed",
-            "not a binary provider name\n",
-            "module-info.class",
-            "not a valid module descriptor"));
+  void classifiesMultipleProviderEdges() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-many/src/main/java");
+    Path classes = temp.resolve("service-loader-many/target/classes");
+    Path resources = temp.resolve("service-loader-many/resources");
+    StringBuilder methods = new StringBuilder();
+    for (int index = 0; index < 128; index++) {
+      methods.append("  public String call").append(index).append("() {\n")
+          .append("    return ServiceLoader.load(Provider.class).findFirst()\n")
+          .append("        .map(value -> value.record()).orElse(\"\");\n")
+          .append("  }\n");
+    }
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "public final class App {\n"
+        + methods
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { String record(); }\n");
+    write(sourceRoot, "demo/DefaultProvider.java", "package demo;\n"
+        + "final class DefaultProvider implements Provider {\n"
+        + "  public String record() { return \"provider\"; }\n"
+        + "}\n");
+    write(resources, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+    compile(sourceRoot, classes);
 
-    Path applicationSource = temp.resolve("service-application/src/main/java");
-    Path applicationClasses = temp.resolve("service-application/target/classes");
-    write(applicationSource, "demo/App.java", """
-        package demo;
-        import java.util.ServiceLoader;
-        public final class App {
-          public String audit() {
-            return ServiceLoader.load(AuditProvider.class).findFirst()
-                .map(provider -> provider.record()).orElse("");
-          }
-          public String other() {
-            return ServiceLoader.load(OtherProvider.class).findFirst()
-                .map(provider -> provider.record()).orElse("");
-          }
-          public String auditWithLoader(ClassLoader loader) {
-            return ServiceLoader.load(AuditProvider.class , loader).findFirst()
-                .map(provider -> provider.record()).orElse("");
-          }
-          public String unrelated(AuditProvider provider) {
-            ServiceLoader.load(AuditProvider.class); return ((java.util.function.Supplier<String>) () -> new DefaultAuditProvider().record()).get();
-          }
-          public String unrelatedSameServiceType(AuditProvider provider) {
-            return consume(ServiceLoader.load(AuditProvider.class), provider.record());
-          }
-          public String unrelatedSameStatement() {
-            return ServiceLoader.load(OtherProvider.class).findFirst()
-                .map(provider -> new DefaultOtherProvider().record()).orElse("");
-          }
-          private static String consume(Object ignored, String value) { return value; }
-        }
-        """);
-    write(applicationSource, "demo/ServiceLoader.java", """
-        package demo;
-        public final class ServiceLoader {
-          public static <S> void load(Class<S> service) {}
-        }
-        """);
-    write(applicationSource, "demo/CustomApp.java", """
-        package demo;
-        import java.util.*;
-        public final class CustomApp {
-          public void load() { ServiceLoader.load(AuditProvider.class); }
-        }
-        """);
-    write(applicationSource, "demo/CustomLoader.java", """
-        package demo;
-        public final class CustomLoader {
-          public <S> void load(Class<S> service) {}
-        }
-        """);
-    write(applicationSource, "demo/ShadowApp.java", """
-        package demo;
-        import java.util.ServiceLoader;
-        public final class ShadowApp {
-          public void load(CustomLoader ServiceLoader) {
-            ServiceLoader.load(AuditProvider.class);
-          }
-        }
-        """);
-    compile(applicationSource, applicationClasses, List.of(dependencyJar));
-
-    Path wildcardDirectory = temp.resolve("service-application/dependencies");
-    Files.createDirectories(wildcardDirectory);
-    Path selectedJar = wildcardDirectory.resolve("01-provider.jar");
-    Files.copy(dependencyJar, selectedJar);
     AnalysisContext context = AnalysisContext.builder()
-        .id("service-loader-production")
+        .id("service-loader-many")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-many/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+    List<SemanticCallFacts.Fact> serviceFacts = facts.providerFacts().stream()
+        .filter(fact -> fact.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertEquals(128, serviceFacts.size(), facts.providerFacts().toString());
+    assertEquals(128, serviceFacts.stream().map(SemanticCallFacts.Fact::caller).distinct().count());
+    assertTrue(serviceFacts.stream().allMatch(fact ->
+        fact.callee().equals("demo.DefaultProvider#record")
+            && fact.evidence().stream().anyMatch(evidence ->
+                evidence.kind().equals("service_loader_descriptor")
+                    && evidence.attributes().get("serviceType").equals("demo.Provider"))));
+  }
+
+  /** Keeps a clean explicit-loader provider possible and preserves malformed sibling evidence. */
+  @Test
+  void explicitLoaderWithCleanProviderRemainsPossible() throws IOException {
+    Path sourceRoot = temp.resolve("explicit-loader/src/main/java");
+    Path dependencyDirectory = temp.resolve("explicit-loader/dependencies");
+    Path first = dependencyDirectory.resolve("01-audit.jar");
+    Path second = dependencyDirectory.resolve("02-other.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit(ClassLoader loader) {"
+        + " ServiceLoader.load(AuditProvider.class, loader).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "  void other(ClassLoader loader) {"
+        + " ServiceLoader.load(OtherProvider.class, loader).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/AuditProvider.java", "package demo;\n"
+        + "interface AuditProvider { void record(); }\n");
+    write(sourceRoot, "demo/OtherProvider.java", "package demo;\n"
+        + "interface OtherProvider { void record(); }\n");
+    writeArchive(first, "META-INF/services/demo.AuditProvider",
+        "demo.DefaultAuditProvider\nnot a binary provider name\n");
+    writeArchive(second, "META-INF/services/demo.OtherProvider", "demo.DefaultOtherProvider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("explicit-loader")
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
         .fixtureId("sootup-service-loader-integration")
         .javaRelease(17)
         .repositoryRoot(temp)
-        .applicationClasses(applicationClasses)
+        .applicationClasses(temp.resolve("explicit-loader/classes"))
         .selectedProfile("production")
         .analysisScope(AnalysisContext.Scope.PRODUCTION)
-        .sourceRoot("src/main/java", applicationSource, AnalysisContext.Scope.PRODUCTION, true)
-        .dependencyClasspath(List.of(wildcardDirectory.resolve("*")))
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependencyDirectory.resolve("*")))
         .dependencyClasspathRequired(true)
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
 
-    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
-    SemanticCallFacts.Fact audit = concreteServiceFact(facts, "lambda$audit$", "demo.DefaultAuditProvider");
-    SemanticCallFacts.Fact other = concreteServiceFact(facts, "lambda$other$", "demo.DefaultOtherProvider");
-    SemanticCallFacts.Fact explicit = concreteServiceFact(
-        facts, "lambda$auditWithLoader$", "demo.DefaultAuditProvider");
-    SemanticCallFacts.Fact unrelated = facts.providerFacts().stream()
-        .filter(fact -> fact.caller().contains("lambda$unrelated$"))
-        .filter(fact -> fact.callee().equals("demo.DefaultAuditProvider#record"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
-     SemanticCallFacts.Fact unrelatedSameStatement = facts.providerFacts().stream()
-         .filter(fact -> fact.caller().contains("lambda$unrelatedSameStatement$"))
-         .filter(fact -> fact.callee().equals("demo.DefaultOtherProvider#record"))
-         .findFirst()
-         .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
-     SemanticCallFacts.Fact unrelatedSameServiceType = facts.providerFacts().stream()
-         .filter(fact -> fact.caller().equals("demo.App#unrelatedSameServiceType"))
-         .filter(fact -> fact.callee().equals("demo.DefaultAuditProvider#record"))
-         .findFirst()
-         .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
-    SemanticCallFacts.Fact customLoader = facts.providerFacts().stream()
-        .filter(fact -> fact.caller().equals("demo.CustomApp#load"))
-        .filter(fact -> fact.callee().equals("demo.ServiceLoader#load"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
-    SemanticCallFacts.Fact shadowLoader = facts.providerFacts().stream()
-        .filter(fact -> fact.caller().equals("demo.ShadowApp#load"))
-        .filter(fact -> fact.callee().equals("demo.CustomLoader#load"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    CallEdge auditEdge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "(Ljava/lang/ClassLoader;)V"),
+        new MethodSymbol("demo.DefaultAuditProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    CallEdge otherEdge = new CallEdge(
+        new MethodSymbol("demo.App", "other", "(Ljava/lang/ClassLoader;)V"),
+        new MethodSymbol("demo.DefaultOtherProvider", "record", "()V"),
+        5,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    ServiceLoaderDescriptorScanner.Resolution audit = ServiceLoaderDescriptorScanner.resolve(
+        context, auditEdge, scan, scanner);
+    ServiceLoaderDescriptorScanner.Resolution other = ServiceLoaderDescriptorScanner.resolve(
+        context, otherEdge, scan, scanner);
 
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, audit.certainty());
-    assertEquals("demo.AuditProvider", descriptorServiceType(audit));
-    assertEquals("demo.DefaultAuditProvider", descriptorProviders(audit));
-    assertEquals(selectedJar.toAbsolutePath().normalize().toString(), descriptorPath(audit).split("!/", 2)[0]);
-     assertEquals("malformed", resolution(audit).attributes().get("descriptorStatus"));
-     assertTrue(audit.evidence().stream()
-         .anyMatch(evidence -> evidence.kind().equals("service_loader_scan_diagnostic")
-             && evidence.attributes().get("diagnosticCode").equals("malformed_module_info")));
-    assertEquals("not a binary provider name",
-        audit.evidence().stream()
-            .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
-            .findFirst()
-            .orElseThrow()
-            .attributes()
-            .get("malformedProviderEntries"));
-    assertEquals(SemanticCallFacts.Certainty.DEFINITE, other.certainty());
-    assertEquals("demo.OtherProvider", descriptorServiceType(other));
-    assertEquals("demo.DefaultOtherProvider", descriptorProviders(other));
-    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, explicit.certainty());
-    assertEquals("explicit", resolution(explicit).attributes().get("classLoaderSelection"));
-    assertTrue(explicit.limitation().contains("malformed provider metadata"), explicit.toString());
-    assertTrue(!unrelated.relationshipType().equals("service_loader"), unrelated.toString());
-     assertEquals("callback", unrelatedSameStatement.relationshipType(), unrelatedSameStatement.toString());
-     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, unrelatedSameStatement.certainty());
-     assertEquals("interface_dispatch", unrelatedSameServiceType.relationshipType(),
-         unrelatedSameServiceType.toString());
-     assertNotEquals(SemanticCallFacts.Certainty.DEFINITE, unrelatedSameServiceType.certainty());
-    assertEquals("invokes", customLoader.relationshipType());
-    assertEquals("invokes", shadowLoader.relationshipType());
-  }
-
-  private static SemanticCallFacts.Fact concreteServiceFact(
-      SemanticCallFacts facts, String callerFragment, String callee) {
-    return facts.providerFacts().stream()
-        .filter(fact -> fact.relationshipType().equals("service_loader"))
-        .filter(fact -> fact.caller().contains(callerFragment))
-        .filter(fact -> fact.callee().equals(callee + "#record"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
-  }
-
-  private static String descriptorServiceType(SemanticCallFacts.Fact fact) {
-    return fact.evidence().stream()
-        .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
-        .findFirst()
-        .orElseThrow()
-        .attributes()
-        .get("serviceType");
-  }
-
-  private static String descriptorProviders(SemanticCallFacts.Fact fact) {
-    return fact.evidence().stream()
-        .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
-        .findFirst()
-        .orElseThrow()
-        .attributes()
-        .get("providers");
-  }
-
-  private static String descriptorPath(SemanticCallFacts.Fact fact) {
-    return fact.evidence().stream()
-        .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
-        .findFirst()
-        .orElseThrow()
-        .path();
-  }
-
-  private static SemanticCallFacts.Evidence resolution(SemanticCallFacts.Fact fact) {
-    return fact.evidence().stream()
-        .filter(evidence -> evidence.kind().equals("service_loader_resolution"))
-        .findFirst()
-        .orElseThrow();
-  }
-
-  private static Path jar(Path classes, Path jar, Map<String, String> resources) throws IOException {
-    Files.createDirectories(jar.getParent());
-    try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar));
-        var paths = Files.walk(classes)) {
-      paths.filter(path -> path.toString().endsWith(".class"))
-          .sorted()
-          .forEach(path -> writeJarEntry(output, classes.relativize(path).toString(),
-              readBytes(path)));
-      resources.entrySet().stream()
-          .sorted(Map.Entry.comparingByKey())
-          .forEach(entry -> writeJarEntry(
-              output, entry.getKey(), entry.getValue().getBytes(StandardCharsets.UTF_8)));
-    }
-    return jar;
-  }
-
-  private static void writeJarEntry(JarOutputStream output, String name, byte[] bytes) {
-    try {
-      output.putNextEntry(new JarEntry(name.replace('\\', '/')));
-      output.write(bytes);
-      output.closeEntry();
-    } catch (IOException error) {
-      throw new IllegalStateException("cannot write integration JAR entry " + name, error);
-    }
-  }
-
-  private static byte[] readBytes(Path path) {
-    try {
-      return Files.readAllBytes(path);
-    } catch (IOException error) {
-      throw new IllegalStateException("cannot read integration fixture " + path, error);
-    }
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, other.certainty());
+    assertTrue(other.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_descriptor")
+            && evidence.attributes().get("serviceType").equals("demo.OtherProvider")),
+        other.evidence().toString());
+    assertTrue(other.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_resolution")
+            && evidence.attributes().get("classLoaderSelection").equals("explicit")),
+        other.evidence().toString());
+    assertTrue(audit.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_descriptor")
+            && evidence.attributes().get("descriptorStatus").equals("malformed")),
+        audit.evidence().toString());
   }
 
   private static void compile(Path sourceRoot, Path classes) throws IOException {
-    compile(sourceRoot, classes, List.of());
-  }
-
-  private static void compile(Path sourceRoot, Path classes, List<Path> classpath) throws IOException {
     Files.createDirectories(classes);
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
     if (compiler == null) {
@@ -385,19 +257,11 @@ class SootUpBaseGraphProviderIntegrationTest {
           .toList();
       var units = fileManager.getJavaFileObjectsFromFiles(
           sources.stream().map(Path::toFile).toList());
-      List<String> options = new ArrayList<>(List.of(
-          "--release", "17", "-d", classes.toString()));
-      if (!classpath.isEmpty()) {
-        options.add("--class-path");
-        options.add(classpath.stream()
-            .map(Path::toString)
-            .collect(Collectors.joining(File.pathSeparator)));
-      }
       boolean compiled = compiler.getTask(
           null,
           fileManager,
           null,
-          options,
+          List.of("--release", "17", "-d", classes.toString()),
           null,
           units).call();
       assertTrue(compiled, "integration fixture compilation failed");
@@ -408,5 +272,14 @@ class SootUpBaseGraphProviderIntegrationTest {
     Path path = root.resolve(relative);
     Files.createDirectories(path.getParent());
     Files.writeString(path, source);
+  }
+
+  private static void writeArchive(Path archive, String entryName, String value) throws IOException {
+    Files.createDirectories(archive.getParent());
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry(entryName));
+      output.write(value.getBytes(StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
   }
 }

@@ -1,0 +1,206 @@
+MAVEN_BIN="$(bash spike/scripts/bootstrap-maven.sh)" && \
+	"${MAVEN_BIN}" -B -ntp test -f tools/java-lint-maven-plugin/pom.xml
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------< org.projectlightpath:java-lint-maven-plugin >-------------
+[INFO] Building Project Lightpath Java lint Maven plugin 0.1.0
+[INFO]   from pom.xml
+[INFO] ----------------------------[ maven-plugin ]----------------------------
+[INFO] 
+[INFO] --- plugin:3.15.1:helpmojo (help-goal) @ java-lint-maven-plugin ---
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ java-lint-maven-plugin ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/tools/java-lint-maven-plugin/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ java-lint-maven-plugin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- plugin:3.15.1:descriptor (default-descriptor) @ java-lint-maven-plugin ---
+[INFO] Using 'UTF-8' encoding to read mojo source files.
+[INFO] java-annotations mojo extractor found 2 mojo descriptors.
+[INFO] java-javadoc mojo extractor found 0 mojo descriptor.
+[INFO] ant mojo extractor found 0 mojo descriptor.
+[INFO] bsh mojo extractor found 0 mojo descriptor.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ java-lint-maven-plugin ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/tools/java-lint-maven-plugin/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ java-lint-maven-plugin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.0:test (default-test) @ java-lint-maven-plugin ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running org.projectlightpath.javalint.ValidateJavaLintMojoTest
+[info] PMD enforced findings: 1
+[info]   CyclomaticComplexity: 1
+[info] PMD enforced files with findings:
+[info]   src/main/java/Fixture.java: 1
+[info] CPD enforced duplications: 0
+[info] PMD baseline findings allowed: 0
+[info] PMD new findings: 1; resolved baseline findings: 0
+[info] CPD baseline duplications allowed: 0
+[info] CPD new duplications: 0; resolved baseline duplications: 0
+[info] PMD findings outside baseline:
+[info]   {"class":"Fixture","file":"src/main/java/Fixture.java","message":"new finding","method":"run","rule":"CyclomaticComplexity","variable":""}
+[info] production suppression inventory: 0
+[info] placeholder-comment inventory: 0
+[info] java lint gate: FAIL (1 new finding(s))
+[info] PMD report-only findings: 1
+[info]   CyclomaticComplexity: 1
+[info] PMD report-only files with findings:
+[info]   src/main/java/Fixture.java: 1
+[info] CPD report-only duplications: 0
+[info] PMD baseline findings allowed: 0
+[info] PMD new findings: 1; resolved baseline findings: 0
+[info] CPD baseline duplications allowed: 0
+[info] CPD new duplications: 0; resolved baseline duplications: 0
+[info] PMD findings outside baseline:
+[info]   {"class":"Fixture","file":"src/main/java/Fixture.java","message":"new finding","method":"run","rule":"CyclomaticComplexity","variable":""}
+[info] production suppression inventory: 0
+[info] placeholder-comment inventory: 0
+[info] java lint report-only: PASS (baseline comparison was not enforced)
+[info] PMD enforced findings: 0
+[info] CPD enforced duplications: 0
+[info] PMD baseline findings allowed: 0
+[info] PMD new findings: 0; resolved baseline findings: 0
+[info] CPD baseline duplications allowed: 0
+[info] CPD new duplications: 0; resolved baseline duplications: 0
+[info] production suppression inventory: 1
+[info] placeholder-comment inventory: 0
+[info]   suppressions for manual review: src/main/java/Fixture.java:1
+[info] java lint gate: PASS (no findings outside the reviewed baseline)
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.148 s -- in org.projectlightpath.javalint.ValidateJavaLintMojoTest
+[INFO] Running org.projectlightpath.javalint.JavaLintValidatorTest
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.032 s -- in org.projectlightpath.javalint.JavaLintValidatorTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.149 s
+[INFO] Finished at: 2026-11-14T03:04:11-05:00
+[INFO] ------------------------------------------------------------------------
+MAVEN_BIN="$(bash spike/scripts/bootstrap-maven.sh)" && \
+	"${MAVEN_BIN}" -B -ntp install -DskipTests -f tools/java-lint-maven-plugin/pom.xml && \
+	"${MAVEN_BIN}" -B -ntp help:effective-pom -Doutput=target/java-lint-effective-pom.xml -f pom.xml && \
+	"${MAVEN_BIN}" -B -ntp pmd:pmd pmd:cpd -f pom.xml && \
+	"${MAVEN_BIN}" -B -ntp org.projectlightpath:java-lint-maven-plugin:0.1.0:validate -DjavaLint.enforce=true -f pom.xml
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------< org.projectlightpath:java-lint-maven-plugin >-------------
+[INFO] Building Project Lightpath Java lint Maven plugin 0.1.0
+[INFO]   from pom.xml
+[INFO] ----------------------------[ maven-plugin ]----------------------------
+[INFO] 
+[INFO] --- plugin:3.15.1:helpmojo (help-goal) @ java-lint-maven-plugin ---
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ java-lint-maven-plugin ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/tools/java-lint-maven-plugin/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ java-lint-maven-plugin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- plugin:3.15.1:descriptor (default-descriptor) @ java-lint-maven-plugin ---
+[INFO] Using 'UTF-8' encoding to read mojo source files.
+[INFO] java-annotations mojo extractor found 2 mojo descriptors.
+[INFO] java-javadoc mojo extractor found 0 mojo descriptor.
+[INFO] ant mojo extractor found 0 mojo descriptor.
+[INFO] bsh mojo extractor found 0 mojo descriptor.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ java-lint-maven-plugin ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/tools/java-lint-maven-plugin/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ java-lint-maven-plugin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.0:test (default-test) @ java-lint-maven-plugin ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ java-lint-maven-plugin ---
+[INFO] 
+[INFO] --- install:3.1.2:install (default-install) @ java-lint-maven-plugin ---
+[INFO] Installing /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/tools/java-lint-maven-plugin/pom.xml to /Users/jgil/.m2/repository/org/projectlightpath/java-lint-maven-plugin/0.1.0/java-lint-maven-plugin-0.1.0.pom
+[INFO] Installing /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/tools/java-lint-maven-plugin/target/java-lint-maven-plugin-0.1.0.jar to /Users/jgil/.m2/repository/org/projectlightpath/java-lint-maven-plugin/0.1.0/java-lint-maven-plugin-0.1.0.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.790 s
+[INFO] Finished at: 2026-11-14T03:04:12-05:00
+[INFO] ------------------------------------------------------------------------
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------< org.projectlightpath:flpath-java-analysis-adapter >----------
+[INFO] Building FLPATH Java analysis adapter 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- help:3.5.2:effective-pom (default-cli) @ flpath-java-analysis-adapter ---
+[INFO] Effective-POM written to: /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/target/java-lint-effective-pom.xml
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.269 s
+[INFO] Finished at: 2026-11-14T03:04:13-05:00
+[INFO] ------------------------------------------------------------------------
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------< org.projectlightpath:flpath-java-analysis-adapter >----------
+[INFO] Building FLPATH Java analysis adapter 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] Parameter 'pmdVersion' is unknown for plugin 'maven-pmd-plugin:3.28.0:pmd (default-cli)'
+[WARNING] Parameter 'pmdVersion' is unknown for plugin 'maven-pmd-plugin:3.28.0:cpd (default-cli)'
+[INFO] 
+[INFO] --- pmd:3.28.0:pmd (default-cli) @ flpath-java-analysis-adapter ---
+[INFO] PMD version: 7.17.0
+[INFO] Rendering content with org.apache.maven.skins:maven-fluido-skin:jar:2.0.0-M9 skin
+[INFO] 
+[INFO] --- pmd:3.28.0:cpd (default-cli) @ flpath-java-analysis-adapter ---
+[INFO] Rendering content with org.apache.maven.skins:maven-fluido-skin:jar:2.0.0-M9 skin
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.792 s
+[INFO] Finished at: 2026-11-14T03:04:16-05:00
+[INFO] ------------------------------------------------------------------------
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------< org.projectlightpath:flpath-java-analysis-adapter >----------
+[INFO] Building FLPATH Java analysis adapter 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- java-lint:0.1.0:validate (default-cli) @ flpath-java-analysis-adapter ---
+[INFO] PMD enforced findings: 69
+[INFO]   AvoidCatchingGenericException: 1
+[INFO]   CognitiveComplexity: 24
+[INFO]   CyclomaticComplexity: 26
+[INFO]   GodClass: 3
+[INFO]   NPathComplexity: 14
+[INFO]   NcssCount: 1
+[INFO] PMD enforced files with findings:
+[INFO]   src/main/java/com/projectlightpath/analysis/java/AnalysisContextLoader.java: 3
+[INFO]   src/main/java/com/projectlightpath/analysis/java/BoundedFrameworkModel.java: 9
+[INFO]   src/main/java/com/projectlightpath/analysis/java/ManualAnalysisMain.java: 1
+[INFO]   src/main/java/com/projectlightpath/analysis/java/SourceMetadataScanner.java: 56
+[INFO] CPD enforced duplications: 0
+[INFO] PMD baseline findings allowed: 69
+[INFO] PMD new findings: 0; resolved baseline findings: 2
+[INFO] CPD baseline duplications allowed: 0
+[INFO] CPD new duplications: 0; resolved baseline duplications: 0
+[INFO] production suppression inventory: 0
+[INFO] placeholder-comment inventory: 0
+[INFO] java lint gate: PASS (no findings outside the reviewed baseline)
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.252 s
+[INFO] Finished at: 2026-11-14T03:04:17-05:00
+[INFO] ------------------------------------------------------------------------

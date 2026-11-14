@@ -25,11 +25,11 @@ final class ProviderFactNormalizer {
         .anyMatch(ref -> ref.edge().relationshipType().equals("service_loader"));
     SourceMetadataScanner sourceScanner = hasServiceLoaderEdges
         ? new SourceMetadataScanner(context) : null;
-    ServiceLoaderDescriptorScanner.Scan serviceLoaderDescriptors = hasServiceLoaderEdges
+    ServiceLoaderDescriptorScanner.Scan descriptors = hasServiceLoaderEdges
         ? ServiceLoaderDescriptorScanner.scan(context)
         : new ServiceLoaderDescriptorScanner.Scan(List.of());
     List<SemanticCallFacts.Fact> facts = callFacts(
-        context, references.edges(), callIds, serviceLoaderDescriptors, sourceScanner);
+        context, references.edges(), callIds, descriptors, sourceScanner);
     facts.addAll(dynamicFacts(context, graph.dynamicFeatures(), ids));
     return List.copyOf(facts);
   }
@@ -76,12 +76,11 @@ final class ProviderFactNormalizer {
       AnalysisContext context,
       List<EdgeRef> edgeRefs,
       Map<Integer, String> callIds,
-      ServiceLoaderDescriptorScanner.Scan serviceLoaderDescriptors,
+      ServiceLoaderDescriptorScanner.Scan descriptors,
       SourceMetadataScanner sourceScanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     for (EdgeRef ref : edgeRefs) {
-      facts.add(callFact(
-          context, ref.edge(), callIds.get(ref.index()), serviceLoaderDescriptors, sourceScanner));
+      facts.add(callFact(context, ref.edge(), callIds.get(ref.index()), descriptors, sourceScanner));
     }
     return facts;
   }
@@ -91,25 +90,22 @@ final class ProviderFactNormalizer {
       AnalysisContext context,
       CallEdge edge,
       String id,
-      ServiceLoaderDescriptorScanner.Scan serviceLoaderDescriptors,
+      ServiceLoaderDescriptorScanner.Scan descriptors,
       SourceMetadataScanner sourceScanner) {
     boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
         edge.relationshipType());
-    ServiceLoaderDescriptorScanner.Resolution serviceLoaderResolution = edge.relationshipType().equals("service_loader")
-        ? ServiceLoaderDescriptorScanner.resolve(
-            context, edge, serviceLoaderDescriptors, sourceScanner)
-        : null;
+    ServiceLoaderDescriptorScanner.Resolution serviceResolution =
+        edge.relationshipType().equals("service_loader")
+            ? ServiceLoaderDescriptorScanner.resolve(context, edge, descriptors, sourceScanner)
+            : null;
     SemanticCallFacts.Certainty certainty = openWorldDynamic
         ? SemanticCallFacts.Certainty.UNRESOLVED
-        : serviceLoaderResolution == null ? edge.certaintyHint() : serviceLoaderResolution.certainty();
+        : serviceResolution == null ? edge.certaintyHint() : serviceResolution.certainty();
     List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
     evidence.add(sootupEvidence(edge));
-    if (serviceLoaderResolution != null) {
-      evidence.addAll(serviceLoaderResolution.evidence());
+    if (serviceResolution != null) {
+      evidence.addAll(serviceResolution.evidence());
     }
-    String limitation = serviceLoaderResolution == null
-        ? limitation(openWorldDynamic, certainty, edge.relationshipType())
-        : serviceLoaderResolution.limitation();
     return SemanticCallFacts.Fact.provider(
         id,
         context,
@@ -118,7 +114,7 @@ final class ProviderFactNormalizer {
         edge.relationshipType(),
         certainty,
         List.copyOf(evidence),
-        limitation);
+        serviceResolution == null ? limitation(openWorldDynamic, certainty) : serviceResolution.limitation());
   }
 
   /** Normalizes source-backed dynamic observations after ordinary call IDs exist. */
@@ -166,17 +162,12 @@ final class ProviderFactNormalizer {
   }
 
   /** Applies open-world abstention and bounded-candidate limitations. */
-  private static String limitation(
-      boolean openWorldDynamic,
-      SemanticCallFacts.Certainty certainty,
-      String relationshipType) {
+  private static String limitation(boolean openWorldDynamic, SemanticCallFacts.Certainty certainty) {
     if (openWorldDynamic) {
       return DynamicCertaintyPolicy.LIMITATION;
     }
     return certainty == SemanticCallFacts.Certainty.POSSIBLE
-        ? relationshipType.equals("callback")
-            ? "CHA exposes a concrete callback candidate; runtime registration or selection is not unique."
-            : "CHA exposes a bounded implementation candidate; runtime selection is not unique."
+        ? "CHA exposes a bounded implementation/callback candidate; runtime selection is not unique."
         : null;
   }
 
@@ -230,11 +221,7 @@ final class ProviderFactNormalizer {
 
   private static SemanticCallFacts.Evidence sootupEvidence(CallEdge edge) {
     Map<String, String> attributes = new LinkedHashMap<>();
-    attributes.put("basis", switch (edge.relationshipType()) {
-      case "callback" -> "SootUp CHA concrete callback implementation edge";
-      case "service_loader" -> "SootUp CHA ServiceLoader candidate edge";
-      default -> "SootUp CHA application call";
-    });
+    attributes.put("basis", "SootUp CHA application call");
     attributes.put("caller", edge.caller().displayName());
     attributes.put("callee", edge.callee().displayName());
     attributes.put("callerSignature", edge.caller().descriptor());

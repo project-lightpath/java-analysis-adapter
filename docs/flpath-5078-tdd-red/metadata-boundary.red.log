@@ -1,0 +1,79 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------< org.projectlightpath:flpath-java-analysis-adapter >----------
+[INFO] Building FLPATH Java analysis adapter 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ flpath-java-analysis-adapter ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ flpath-java-analysis-adapter ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ flpath-java-analysis-adapter ---
+[INFO] skip non existing resourceDirectory /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ flpath-java-analysis-adapter ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.0:test (default-test) @ flpath-java-analysis-adapter ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.projectlightpath.analysis.java.ServiceLoaderCoverageTest
+[ERROR] Tests run: 6, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.340 s <<< FAILURE! -- in com.projectlightpath.analysis.java.ServiceLoaderCoverageTest
+[ERROR] com.projectlightpath.analysis.java.ServiceLoaderCoverageTest.readerUsesObservedFilesInsideAndOutsideRepository -- Time elapsed: 0.083 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:31)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:183)
+	at com.projectlightpath.analysis.java.ServiceLoaderCoverageTest.readerUsesObservedFilesInsideAndOutsideRepository(ServiceLoaderCoverageTest.java:172)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+[ERROR] com.projectlightpath.analysis.java.ServiceLoaderCoverageTest.descriptorEnumerationStopsForDirectoriesAndArchives -- Time elapsed: 0.225 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:31)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:183)
+	at com.projectlightpath.analysis.java.ServiceLoaderCoverageTest.descriptorEnumerationStopsForDirectoriesAndArchives(ServiceLoaderCoverageTest.java:195)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   ServiceLoaderCoverageTest.descriptorEnumerationStopsForDirectoriesAndArchives:195 expected: <true> but was: <false>
+[ERROR]   ServiceLoaderCoverageTest.readerUsesObservedFilesInsideAndOutsideRepository:172 expected: <true> but was: <false>
+[INFO] 
+[ERROR] Tests run: 6, Failures: 2, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.938 s
+[INFO] Finished at: 2026-11-14T01:44:31-05:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.0:test (default-test) on project flpath-java-analysis-adapter: There are test failures.
+[ERROR] 
+[ERROR] Please refer to /Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/target/surefire-reports for the individual test results.
+[ERROR] Please refer to dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

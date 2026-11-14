@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "0.1.0",
+  "recordedAt": "2026-11-14T18:02:03.842728+00:00",
+  "base": "a87b6fcb20f001e0722d8d951ba66f4aafca6e75",
+  "measuredHead": "901239d1f75864619edc34db379255cea04d9884",
+  "effectiveProductionCommit": "dfb1e9c95e59dd2e0d5eeaec685dae8504c2ba22",
+  "toolchain": {
+    "javaVersionFile": "docs/flpath-5078-tdd/java-version-final-source-aware-boundary.txt",
+    "javaVersionSha256": "b8046fd5bc7f6b1d2541037719dbee012cb9a1db0a9cd765d3fa3b877d11380c",
+    "requiredRuntime": "Eclipse Adoptium Temurin 21.0.13",
+    "maven": "spike/scripts/bootstrap-maven.sh",
+    "jacoco": "0.8.13"
+  },
+  "fullSuite": {
+    "testsPassed": 104,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "docs/flpath-5078-tdd/full-suite-final-source-aware-boundary.log",
+    "logSha256": "580ff15b3adddfe70918b37c0b6389d2db088bdee89cad58a7fe2cc9fbf186ae",
+    "coverageEvidence": "docs/flpath-5078-tdd/changed-coverage.json",
+    "coverageEvidenceSha256": "54b49a124793e6c291d8599895cfb945a578d02c43e9d55cb83ed9241951fa95",
+    "changedExecutableLines": 964,
+    "coveredExecutableLines": 882,
+    "coveragePercentage": 91.49377593360995,
+    "threshold": 90.0,
+    "reportPath": "target/jacoco-full-source-aware-boundary.xml",
+    "reportSha256": "345398b474202d14b16296f28931196f4eb4e2cc325011e367c9c7cb9cec460e",
+    "reportRawSha256": "c58ddad8395c4bc124412308fcc6fb6f9fedeba5e28704d2d96a9f394feb2614"
+  },
+  "unitOnlySuite": {
+    "testsPassed": 92,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "docs/flpath-5078-tdd/unit-suite-final-source-aware-boundary.log",
+    "logSha256": "01d489dd9f80e16969db0999802cb9c0157dc76e8d272a44d68bc8f7edafc255",
+    "coverageEvidence": "docs/flpath-5078-tdd/unit-coverage.json",
+    "coverageEvidenceSha256": "c77b52e1dc5c082cb0790be8f9ee911c63baffd197ffcc2e296159455d00c443",
+    "changedExecutableLines": 964,
+    "coveredExecutableLines": 875,
+    "coveragePercentage": 90.76763485477179,
+    "threshold": 90.0,
+    "reportPath": "target/jacoco-unit-source-aware-boundary.xml",
+    "reportSha256": "80ba964327592ccbdf784110d28753cbe3dcebcc787d88b6b1cb5a177a4cad22",
+    "reportRawSha256": "99a516309f8ac84d422cd359890dd9a43484db46648f20ca745f5bea8623d960",
+    "integrationTestsExcluded": [
+      "SootUpBaseGraphProviderIntegrationTest",
+      "SootUpDependencyBoundaryIntegrationTest"
+    ]
+  },
+  "lint": {
+    "testCount": 16,
+    "testLog": "docs/flpath-5078-tdd/java-lint-test-final-source-aware-boundary.log",
+    "testLogSha256": "5e197d6672f62e22e61b2ec1ac6763a17449e41ddc8606a683ec1c75eb16183d",
+    "gateLog": "docs/flpath-5078-tdd/java-lint-final-source-aware-boundary.log",
+    "gateLogSha256": "a30b97eba44303aae093dbe8726f31141fa079cadb9c3e302eaaa24dca88759a",
+    "baselinePmdFindings": 69,
+    "newPmdFindings": 0,
+    "newCpdDuplications": 0
+  },
+  "evidence": {
+    "tddLedgerEntries": 30,
+    "tddLedgerValidation": "validate_tdd_evidence: 30 entries passed",
+    "spikeValidation": "validated 10 acceptance criteria, 3 candidates, 10 capability cases, 21 expected relationships, and 10 observed results",
+    "log": "docs/flpath-5078-tdd/evidence-validate-final-source-aware-boundary.log",
+    "logSha256": "f3fec842eab3256d904bf20637173c9657253d065142927f678587525f52287f"
+  },
+  "diagnostics": {
+    "severityAtMostWarning": 0,
+    "files": [
+      "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteParser.java",
+      "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderCallSiteSource.java",
+      "src/main/java/com/projectlightpath/analysis/java/ServiceLoaderSourceCache.java"
+    ]
+  },
+  "diffCheck": "passed"
+}

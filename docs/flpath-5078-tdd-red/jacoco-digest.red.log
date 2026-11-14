@@ -1,0 +1,15 @@
+E....
+======================================================================
+ERROR: test_jacoco_digest_ignores_volatile_session_metadata (spike.scripts.tests.test_validate_changed_coverage.ValidateChangedCoverageTest.test_jacoco_digest_ignores_volatile_session_metadata)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/spike/scripts/tests/test_validate_changed_coverage.py", line 60, in test_jacoco_digest_ignores_volatile_session_metadata
+    validate_changed_coverage.jacoco_digest(first),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'validate_changed_coverage' has no attribute 'jacoco_digest'. Did you mean: 'jacoco_lines'?
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.002s
+
+FAILED (errors=1)
+validate_changed_coverage self-test: 1 fixture passed

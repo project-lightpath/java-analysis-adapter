@@ -1,0 +1,2 @@
+python3 spike/scripts/validate_spike.py
+validated 10 acceptance criteria, 3 candidates, 10 capability cases, 21 expected relationships, and 10 observed results

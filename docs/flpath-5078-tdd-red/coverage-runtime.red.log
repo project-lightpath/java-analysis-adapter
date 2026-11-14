@@ -1,0 +1,22 @@
+E...
+======================================================================
+ERROR: test_java_version_reads_adoptium_vendor_from_settings (spike.scripts.tests.test_validate_changed_coverage.ValidateChangedCoverageTest.test_java_version_reads_adoptium_vendor_from_settings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1439, in patched
+    return func(*newargs, **newkeywargs)
+  File "/Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/spike/scripts/tests/test_validate_changed_coverage.py", line 39, in test_java_version_reads_adoptium_vendor_from_settings
+    self.assertIn("Eclipse Adoptium", validate_changed_coverage.java21_version())
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/spike/scripts/validate_changed_coverage.py", line 114, in java21_version
+    require('version "21.0.13"' in output, "coverage must run on Temurin 21.0.13")
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/spike/scripts/validate_changed_coverage.py", line 25, in require
+    raise SystemExit(f"changed coverage validation failed: {message}")
+SystemExit: changed coverage validation failed: coverage must run on Temurin 21.0.13
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+FAILED (errors=1)
+validate_changed_coverage self-test: 1 fixture passed

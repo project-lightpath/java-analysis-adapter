@@ -1,161 +1,173 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.NavigableSet;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.TreeSet;
 
-/** Collects ServiceLoader descriptors from selected application and dependency inputs. */
+/** Reads selected META-INF/services files for the first bounded ServiceLoader path. */
 final class ServiceLoaderDescriptorReader {
+  private static final String SERVICES = "META-INF/services";
+  private static final Pattern PROVIDER = Pattern.compile("[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*");
+
   private ServiceLoaderDescriptorReader() {}
 
-  /** Reads application output, source resources, metadata paths, and selected dependencies. */
   static ServiceLoaderDescriptorScanner.Scan scan(AnalysisContext context) {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
-    List<Path> dependencyEntries = SootUpInputLocationFactory.resolvedDependencyEntries(context);
-    ServiceLoaderDescriptorSource.ScanState state =
-        new ServiceLoaderDescriptorSource.ScanState(authorizedRoots(context, dependencyEntries));
-    scanApplicationOutput(context, descriptors, visited, state);
-    scanSourceResources(context, descriptors, visited, state);
-    scanFrameworkMetadata(context, descriptors, visited, state);
-    scanDependencies(dependencyEntries, descriptors, visited, state);
-    descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path)
-        .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::kind)
-        .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::serviceType));
-    return new ServiceLoaderDescriptorScanner.Scan(
-        List.copyOf(descriptors), state.diagnostics());
-  }
-
-  private static void scanApplicationOutput(
-      AnalysisContext context,
-      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
-    ServiceLoaderDescriptorSource.scanClassDirectory(
-        context.applicationClasses(), context.applicationClasses().toString(), descriptors, visited, state);
-  }
-
-  private static void scanSourceResources(
-      AnalysisContext context,
-      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    SootUpInputLocationFactory.DependencyResolution dependencyResolution =
+        SootUpInputLocationFactory.dependencyResolution(context);
+    for (Path wildcard : dependencyResolution.truncatedWildcards()) {
+      state.diagnostic(
+          "dependency_enumeration_limit", wildcard.toString(),
+          "dependency wildcard expansion exceeds "
+              + SootUpInputLocationFactory.MAX_DEPENDENCY_ENTRIES + " entries");
+    }
+    List<Path> dependencyEntries = dependencyResolution.entries();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        context.applicationClasses(), descriptors, visited, state);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
       Path parent = root.path().getParent();
       if (parent != null) {
-        Path resources = parent.resolve("resources");
-        ServiceLoaderDescriptorSource.scanServiceDirectory(
-            resources.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY),
-            displayPath(context, resources), descriptors, visited, state);
+        scanDirectory(parent.resolve("resources").resolve(SERVICES), context, descriptors, visited, state);
       }
     }
-  }
-
-  private static void scanFrameworkMetadata(
-      AnalysisContext context,
-      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
     for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
-      if (isObservedServiceDescriptor(metadata)) {
-        scanMetadataPath(context, Path.of(metadata.declaredPath()), descriptors, visited, state);
+      if (metadata.status() != AnalysisContext.MetadataStatus.OBSERVED
+          || !"service_loader_descriptor".equals(metadata.kind())
+          || metadata.declaredPath() == null) {
+        continue;
+      }
+      Path declared;
+      try {
+        declared = Path.of(metadata.declaredPath());
+      } catch (InvalidPathException error) {
+        state.diagnostic(
+            "descriptor_path_invalid", metadata.declaredPath(),
+            ServiceLoaderDescriptorSource.message(error));
+        continue;
+      }
+      Path resolved = declared.isAbsolute() ? declared : context.repositoryRoot().resolve(declared);
+      if (!ServiceLoaderDescriptorAuthorization.authorizedPath(
+          context, resolved, dependencyEntries)) {
+        state.diagnostic(
+            "descriptor_path_outside_context", resolved.toAbsolutePath().normalize().toString(),
+            "observed descriptor metadata path is outside the selected analysis inputs");
+        continue;
+      }
+      if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
+        addFile(resolved, context, descriptors, visited, state);
+      } else {
+        scanDirectory(resolved, context, descriptors, visited, state);
       }
     }
+    for (Path dependency : dependencyEntries) {
+      ServiceLoaderDescriptorSource.scanClasspathEntry(dependency, descriptors, visited, state);
+    }
+    descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));
+    return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics());
   }
 
-  private static boolean isObservedServiceDescriptor(AnalysisContext.FrameworkMetadata metadata) {
-    return metadata.kind().equals("service_loader_descriptor")
-        && metadata.status() == AnalysisContext.MetadataStatus.OBSERVED
-        && metadata.declaredPath() != null;
-  }
-
-  private static void scanMetadataPath(
+  private static void scanDirectory(
+      Path directory,
       AnalysisContext context,
-      Path declared,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ServiceLoaderDescriptorSource.ScanState state) {
-    Path resolved = declared.isAbsolute()
-        ? declared.normalize()
-        : context.repositoryRoot().resolve(declared).normalize();
-    if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
-      scanMetadataFile(context, resolved, descriptors, visited, state);
+    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
-    Path servicesDirectory = servicesDirectory(resolved);
-    Path classpathRoot = classpathRoot(servicesDirectory, resolved);
-    ServiceLoaderDescriptorSource.scanServiceDirectory(
-        servicesDirectory, displayPath(context, classpathRoot), descriptors, visited, state);
-  }
-
-  private static void scanMetadataFile(
-      AnalysisContext context,
-      Path descriptor,
-      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
-    Path servicesDirectory = descriptor.getParent();
-    Path classpathRoot = classpathRoot(servicesDirectory, descriptor);
-    ServiceLoaderDescriptorSource.addServiceFile(
-        descriptor, displayPath(context, classpathRoot), descriptors, state, visited);
-  }
-
-  private static Path servicesDirectory(Path resolved) {
-    Path filename = resolved.getFileName();
-    return filename != null && filename.toString().equals("services")
-        ? resolved
-        : resolved.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
-  }
-
-  private static Path classpathRoot(Path servicesDirectory, Path fallback) {
-    if (servicesDirectory == null) {
-      return fallback;
-    }
-    Path metaInf = servicesDirectory.getParent();
-    if (metaInf == null || metaInf.getParent() == null) {
-      return fallback;
-    }
-    return metaInf.getParent();
-  }
-
-  private static void scanDependencies(
-      List<Path> dependencyEntries,
-      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
-    for (Path entry : dependencyEntries) {
-      ServiceLoaderDescriptorSource.scanClasspathEntry(entry, descriptors, visited, state);
-    }
-  }
-
-  private static List<Path> authorizedRoots(
-      AnalysisContext context, List<Path> dependencyEntries) {
-    List<Path> roots = new ArrayList<>();
-    roots.add(context.repositoryRoot());
-    roots.add(context.applicationClasses());
-    roots.addAll(dependencyEntries);
-    for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
-      roots.add(root.path());
-      Path parent = root.path().getParent();
-      if (parent != null) {
-        roots.add(parent.resolve("resources"));
+    NavigableSet<Path> candidates = new TreeSet<>();
+    boolean complete = true;
+    try (var paths = Files.newDirectoryStream(directory)) {
+      for (Path path : paths) {
+        if (!state.tryEnumerate(path.toString())) {
+          complete = false;
+          break;
+        }
+        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+          ServiceLoaderDescriptorSource.retainSmallest(
+              candidates, path, ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES);
+        }
       }
+    } catch (IOException error) {
+      state.diagnostic("descriptor_directory_read_error",
+          directory.toAbsolutePath().normalize().toString(),
+          ServiceLoaderDescriptorSource.message(error));
+      return;
     }
-    return roots.stream().map(path -> path.toAbsolutePath().normalize()).distinct().toList();
+    if (!complete) {
+      return;
+    }
+    for (Path path : candidates) {
+      addFile(path, context, descriptors, visited, state);
+    }
   }
 
-  static String displayPath(AnalysisContext context, Path path) {
-    Path normalized = path.toAbsolutePath().normalize();
-    if (normalized.startsWith(context.repositoryRoot())) {
-      return context.repositoryRoot().relativize(normalized).toString()
-          .replace(normalized.getFileSystem().getSeparator(), "/");
+  private static void addFile(
+      Path file,
+      AnalysisContext context,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    Path normalized = file.toAbsolutePath().normalize();
+    if (!visited.add("descriptor:" + normalized)
+        || normalized.getFileName() == null
+        || !ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(
+            normalized.getFileName().toString()).matches()) {
+      return;
     }
-    return normalized.toString();
+    try (InputStream input = Files.newInputStream(normalized)) {
+      byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(
+          input, state, normalized.toString());
+      if (bytes == null) {
+        return;
+      }
+      Set<String> providers = new LinkedHashSet<>();
+      List<String> malformed = new ArrayList<>();
+      for (String line : new String(bytes, StandardCharsets.UTF_8).lines().toList()) {
+        String candidate = line.split("#", 2)[0].trim();
+        if (candidate.isEmpty()) {
+          continue;
+        }
+        if (PROVIDER.matcher(candidate).matches()) {
+          providers.add(candidate);
+        } else {
+          malformed.add(candidate);
+        }
+      }
+      String serviceType = normalized.getFileName().toString();
+      descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
+          serviceType,
+          List.copyOf(providers),
+          displayPath(context, normalized),
+          ServiceLoaderDescriptorSource.sha256(bytes),
+          "meta_inf_services",
+          malformed));
+    } catch (IOException error) {
+      state.diagnostic("descriptor_read_error", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
+    }
+  }
+
+  private static String displayPath(AnalysisContext context, Path path) {
+    Path root = context.repositoryRoot().toAbsolutePath().normalize();
+    return path.startsWith(root)
+        ? root.relativize(path).toString().replace(path.getFileSystem().getSeparator(), "/")
+        : path.toString();
   }
 
 }

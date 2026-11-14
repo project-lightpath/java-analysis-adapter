@@ -1,8 +1,7 @@
 package com.projectlightpath.analysis.java;
 
-/** One source-level ServiceLoader invocation candidate. */
+/** One source-level ServiceLoader.load invocation. */
 record ServiceLoaderCallSite(
-    String receiver,
     String serviceType,
     String fallbackServiceType,
     boolean explicitClassLoader,

@@ -1,7 +1,6 @@
 package com.projectlightpath.analysis.java;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -12,54 +11,58 @@ import java.util.stream.Collectors;
 final class ServiceLoaderDescriptorScanner {
   private ServiceLoaderDescriptorScanner() {}
 
-  /** Scans only the selected application and dependency inputs. */
   static Scan scan(AnalysisContext context) {
     return ServiceLoaderDescriptorReader.scan(context);
   }
 
-  /** Resolves one graph edge without promoting an unresolved provider claim. */
   static Resolution resolve(
       AnalysisContext context,
       CallEdge edge,
       Scan scan,
       SourceMetadataScanner scanner) {
-    ServiceLoaderCallSiteReader.ServiceLoadHints loadHints =
+    ServiceLoaderCallSiteReader.ServiceLoadHints hints =
         ServiceLoaderCallSiteReader.read(context, edge, scan, scanner);
-    Set<String> hints = loadHints.serviceTypes();
-    List<Descriptor> descriptors = matchingDescriptors(scan.descriptors(), hints);
-    Set<String> providers = descriptors.stream()
+    List<Descriptor> descriptors = selectedDescriptors(hints, scan);
+    Set<String> providers = providerNames(descriptors);
+    boolean moduleVisibilityProven = descriptors.stream().noneMatch(Descriptor::moduleInfo);
+    boolean unique = isUnique(hints, edge, scan, descriptors, providers, moduleVisibilityProven);
+    String selection = selection(descriptors, unique);
+    return new Resolution(
+        certainty(edge, unique),
+        evidence(edge, hints, scan, descriptors, providers, selection),
+        limitation(unique, scan, descriptors, moduleVisibilityProven));
+  }
+
+  private static List<Descriptor> selectedDescriptors(
+      ServiceLoaderCallSiteReader.ServiceLoadHints hints, Scan scan) {
+    Set<DescriptorIdentity> seen = new LinkedHashSet<>();
+    return scan.descriptors().stream()
+        .filter(item -> hints.serviceTypes().contains(item.serviceType()))
+        .filter(item -> seen.add(DescriptorIdentity.from(item)))
+        .toList();
+  }
+
+  private static Set<String> providerNames(List<Descriptor> descriptors) {
+    return descriptors.stream()
         .flatMap(item -> item.providers().stream())
         .collect(Collectors.toCollection(LinkedHashSet::new));
-    boolean malformed = descriptors.stream().anyMatch(Descriptor::malformed);
-    boolean blockingDiagnostics = scan.diagnostics().stream().anyMatch(Diagnostic::blocking);
-    boolean unique = !loadHints.explicitClassLoader()
-        && loadHints.callSiteBound()
+  }
+
+  private static boolean isUnique(
+      ServiceLoaderCallSiteReader.ServiceLoadHints hints,
+      CallEdge edge,
+      Scan scan,
+      List<Descriptor> descriptors,
+      Set<String> providers,
+      boolean moduleVisibilityProven) {
+    return !hints.explicitClassLoader()
+        && hints.callSiteBound()
         && descriptors.size() == 1
         && providers.size() == 1
-        && !malformed
-        && !blockingDiagnostics
+        && !descriptors.get(0).malformed()
+        && scan.diagnostics().isEmpty()
+        && moduleVisibilityProven
         && providers.contains(edge.callee().owner());
-    SemanticCallFacts.Certainty certainty = certainty(edge, unique);
-    String selection = selection(descriptors, unique);
-    Map<String, String> attributes = resolutionAttributes(
-        descriptors, providers, hints, selection, loadHints, scan);
-    List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
-    evidence.add(new SemanticCallFacts.Evidence(
-        "service_loader_resolution",
-        edge.sourcePath(),
-        List.of(edge.callee().displayName()),
-        edge.line() > 0 ? edge.line() : null,
-        attributes));
-    for (Descriptor descriptor : descriptors) {
-      evidence.add(descriptorEvidence(descriptor, selection));
-    }
-    for (Diagnostic diagnostic : scan.diagnostics()) {
-      evidence.add(diagnosticEvidence(diagnostic));
-    }
-    return new Resolution(
-        certainty,
-        List.copyOf(evidence),
-        limitation(certainty, unique, descriptors, loadHints, scan));
   }
 
   private static SemanticCallFacts.Certainty certainty(CallEdge edge, boolean unique) {
@@ -76,107 +79,55 @@ final class ServiceLoaderDescriptorScanner {
     return unique ? "unique" : "ambiguous";
   }
 
-  private static Map<String, String> resolutionAttributes(
+  private static List<SemanticCallFacts.Evidence> evidence(
+      CallEdge edge,
+      ServiceLoaderCallSiteReader.ServiceLoadHints hints,
+      Scan scan,
       List<Descriptor> descriptors,
       Set<String> providers,
-      Set<String> hints,
-      String selection,
-      ServiceLoaderCallSiteReader.ServiceLoadHints loadHints,
-      Scan scan) {
-    Map<String, String> attributes = new LinkedHashMap<>();
+      String selection) {
+    List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
+    evidence.add(resolutionEvidence(edge, hints, descriptors, providers, selection));
+    descriptors.stream()
+        .map(descriptor -> descriptorEvidence(descriptor, selection))
+        .forEach(evidence::add);
+    scan.diagnostics().stream()
+        .map(ServiceLoaderDescriptorScanner::diagnosticEvidence)
+        .forEach(evidence::add);
+    return List.copyOf(evidence);
+  }
+
+  private static SemanticCallFacts.Evidence resolutionEvidence(
+      CallEdge edge,
+      ServiceLoaderCallSiteReader.ServiceLoadHints hints,
+      List<Descriptor> descriptors,
+      Set<String> providers,
+      String selection) {
+    Map<String, String> attributes = new java.util.LinkedHashMap<>();
     attributes.put("basis", "selected classpath ServiceLoader metadata");
-    attributes.put("descriptorStatus", descriptorStatus(descriptors, scan));
+    attributes.put("descriptorStatus", descriptors.isEmpty() ? "not_observed" : "observed");
     attributes.put("descriptorCount", Integer.toString(descriptors.size()));
-    attributes.put("descriptorSources", descriptors.stream()
-        .map(Descriptor::path)
-        .sorted()
-        .collect(Collectors.joining("|")));
     attributes.put("providerCount", Integer.toString(providers.size()));
-    attributes.put("providerCandidates", String.join(",", providers.stream().sorted().toList()));
+    attributes.put("providerCandidates", String.join(",", providers));
     attributes.put("selection", selection);
-    attributes.put("callSiteBound", Boolean.toString(loadHints.callSiteBound()));
-    attributes.put("classLoaderSelection",
-        loadHints.explicitClassLoader() ? "explicit" : "default_context");
-    attributes.put("scanStatus", scan.diagnostics().isEmpty() ? "complete" : "incomplete");
-    attributes.put("scanDiagnosticCount", Integer.toString(scan.diagnostics().size()));
-    attributes.put("scanDiagnostics", scan.diagnostics().stream()
-        .map(Diagnostic::code)
-        .distinct()
-        .sorted()
-        .collect(Collectors.joining("|")));
-    String serviceType = serviceType(descriptors, hints);
+    attributes.put("callSiteBound", Boolean.toString(hints.callSiteBound()));
+    attributes.put("classLoaderSelection", hints.explicitClassLoader() ? "explicit" : "default_context");
+    String serviceType = descriptors.stream().map(Descriptor::serviceType).distinct().findFirst()
+        .orElse(hints.serviceTypes().size() == 1 ? hints.serviceTypes().iterator().next() : null);
     if (serviceType != null) {
       attributes.put("serviceType", serviceType);
     }
-    return attributes;
-  }
-
-  private static String descriptorStatus(List<Descriptor> descriptors, Scan scan) {
-    if (scan.diagnostics().stream().anyMatch(item -> item.code().equals("malformed_module_info"))) {
-      return "malformed";
-    }
-    if (descriptors.isEmpty()) {
-      return scan.diagnostics().isEmpty() ? "not_observed" : "incomplete";
-    }
-    if (descriptors.stream().anyMatch(Descriptor::malformed)) {
-      return "malformed";
-    }
-    return scan.diagnostics().isEmpty() ? "observed" : "incomplete";
-  }
-
-  private static String limitation(
-      SemanticCallFacts.Certainty certainty,
-      boolean unique,
-      List<Descriptor> descriptors,
-      ServiceLoaderCallSiteReader.ServiceLoadHints loadHints,
-      Scan scan) {
-    if (certainty == SemanticCallFacts.Certainty.UNRESOLVED) {
-      return DynamicCertaintyPolicy.LIMITATION;
-    }
-    if (descriptors.stream().anyMatch(Descriptor::malformed)) {
-      return "Selected ServiceLoader descriptor contains malformed provider metadata; runtime selection is not proven unique.";
-    }
-    if (unique) {
-      return scanLimitation(scan);
-    }
-    String scanLimitation = scanLimitation(scan);
-    if (scanLimitation != null) {
-      return scanLimitation;
-    }
-    if (loadHints.explicitClassLoader()) {
-      return "ServiceLoader uses an explicit classloader whose provider selection is not proven unique.";
-    }
-    if (!loadHints.callSiteBound()) {
-      return "The ServiceLoader call site or exact service type is not uniquely identified.";
-    }
-    return descriptors.isEmpty()
-        ? "No selected classpath ServiceLoader descriptor identifies the runtime provider."
-        : "ServiceLoader registration or runtime classloader selection is not unique.";
-  }
-
-  private static String scanLimitation(Scan scan) {
-    if (scan.diagnostics().isEmpty()) {
-      return null;
-    }
-    return "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
-        .map(Diagnostic::code)
-        .distinct()
-        .sorted()
-        .collect(Collectors.joining(", ")) + ".";
-  }
-
-  private static List<Descriptor> matchingDescriptors(
-      List<Descriptor> descriptors, Set<String> hints) {
-    return descriptors.stream()
-        .filter(descriptor -> hints.contains(descriptor.serviceType()))
-        .toList();
+    return new SemanticCallFacts.Evidence(
+        "service_loader_resolution", edge.sourcePath(), List.of(edge.callee().displayName()),
+        edge.line() > 0 ? edge.line() : null, attributes);
   }
 
   private static SemanticCallFacts.Evidence descriptorEvidence(
       Descriptor descriptor, String selection) {
-    Map<String, String> attributes = new LinkedHashMap<>();
-    attributes.put("basis", descriptor.kind().equals("module_info")
-        ? "module-info provides declaration" : "META-INF/services descriptor");
+    Map<String, String> attributes = new java.util.LinkedHashMap<>();
+    attributes.put(
+        "basis", descriptor.moduleInfo()
+            ? "module-info provides declaration" : "META-INF/services descriptor");
     attributes.put("serviceType", descriptor.serviceType());
     attributes.put("providerCount", Integer.toString(descriptor.providers().size()));
     attributes.put("providers", String.join(",", descriptor.providers()));
@@ -187,33 +138,42 @@ final class ServiceLoaderDescriptorScanner {
       attributes.put("malformedProviderEntries", String.join("|", descriptor.malformedEntries()));
     }
     attributes.put("selection", selection);
+    if (descriptor.moduleInfo()) {
+      attributes.put("moduleVisibility", "not_proven");
+    }
     return new SemanticCallFacts.Evidence(
-        "service_loader_descriptor",
-        descriptor.path(),
-        List.of(descriptor.serviceType()),
-        null,
+        "service_loader_descriptor", descriptor.path(), List.of(descriptor.serviceType()), null,
         attributes);
   }
 
   private static SemanticCallFacts.Evidence diagnosticEvidence(Diagnostic diagnostic) {
-    Map<String, String> attributes = new LinkedHashMap<>();
-    attributes.put("diagnosticCode", diagnostic.code());
-    attributes.put("diagnostic", diagnostic.code());
-    attributes.put("status", diagnostic.status());
-    attributes.put("detail", diagnostic.detail());
-    attributes.put("scanStatus", "incomplete");
     return new SemanticCallFacts.Evidence(
-        "service_loader_scan_diagnostic", diagnostic.path(), List.of(), null, attributes);
+        "service_loader_scan_diagnostic", diagnostic.path(), List.of(), null,
+        Map.of(
+            "diagnosticCode", diagnostic.code(),
+            "detail", diagnostic.detail(),
+            "scanStatus", "incomplete"));
   }
 
-  private static String serviceType(List<Descriptor> descriptors, Set<String> hints) {
-    Set<String> types = descriptors.stream()
-        .map(Descriptor::serviceType)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    if (types.size() == 1) {
-      return types.iterator().next();
+  private static String limitation(
+      boolean unique,
+      Scan scan,
+      List<Descriptor> descriptors,
+      boolean moduleVisibilityProven) {
+    if (unique) {
+      return null;
     }
-    return hints.size() == 1 ? hints.iterator().next() : null;
+    if (!scan.diagnostics().isEmpty()) {
+      return "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
+          .map(Diagnostic::code).distinct().sorted().collect(Collectors.joining(", ")) + ".";
+    }
+    if (descriptors.stream().anyMatch(Descriptor::malformed)) {
+      return "Selected ServiceLoader descriptor contains malformed provider metadata; runtime selection is not proven unique.";
+    }
+    if (!moduleVisibilityProven) {
+      return "module-info provides evidence is possible; selected loader module visibility is not explicit.";
+    }
+    return "ServiceLoader registration or runtime classloader selection is not unique.";
   }
 
   record Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics) {
@@ -227,25 +187,7 @@ final class ServiceLoaderDescriptorScanner {
     }
   }
 
-  record Diagnostic(String code, String path, String detail) {
-    Diagnostic {
-      if (code == null || code.isBlank()) {
-        throw new IllegalArgumentException("ServiceLoader diagnostic code must not be blank");
-      }
-      if (path == null || path.isBlank()) {
-        throw new IllegalArgumentException("ServiceLoader diagnostic path must not be blank");
-      }
-      detail = detail == null || detail.isBlank() ? code : detail;
-    }
-
-    String status() {
-      return code.equals("malformed_module_info") ? "malformed" : "incomplete";
-    }
-
-    boolean blocking() {
-      return !code.equals("malformed_module_info");
-    }
-  }
+  record Diagnostic(String code, String path, String detail) {}
 
   record Resolution(
       SemanticCallFacts.Certainty certainty,
@@ -266,6 +208,26 @@ final class ServiceLoaderDescriptorScanner {
 
     boolean malformed() {
       return !malformedEntries.isEmpty();
+    }
+
+    boolean moduleInfo() {
+      return kind.equals("module_info");
+    }
+  }
+
+  private record DescriptorIdentity(
+      String serviceType,
+      List<String> providers,
+      String fingerprint,
+      String kind,
+      List<String> malformedEntries) {
+    static DescriptorIdentity from(Descriptor descriptor) {
+      return new DescriptorIdentity(
+          descriptor.serviceType(),
+          descriptor.providers(),
+          descriptor.fingerprint(),
+          descriptor.kind(),
+          descriptor.malformedEntries());
     }
   }
 }

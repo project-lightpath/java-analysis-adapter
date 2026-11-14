@@ -149,8 +149,7 @@ final class SourceMetadataScanner {
       "java.lang.reflect.InvocationHandler",
       "java.lang.reflect.Proxy",
       "java.net.URLClassLoader",
-      "java.security.SecureClassLoader",
-      "java.util.ServiceLoader");
+      "java.security.SecureClassLoader");
   private static final Set<String> JAVA_PRIMITIVE_TYPES = Set.of(
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
   private static final Set<String> CDI_PRODUCER_ANNOTATIONS = Set.of(
@@ -1531,7 +1530,7 @@ final class SourceMetadataScanner {
     };
   }
 
-  boolean hasVisibleValueNamed(SourceFile file, String variable, int offset) {
+  private boolean hasVisibleValueNamed(SourceFile file, String variable, int offset) {
     MethodInfo owner = methodContaining(file, offset);
     return (!owner.name().equals("<unknown>") && hasParameter(owner, variable))
         || (!owner.name().equals("<unknown>")
@@ -5059,7 +5058,7 @@ final class SourceMetadataScanner {
   }
 
   /** Replaces comments with whitespace without changing source offsets or literals. */
-  static String stripComments(String source) {
+  private static String stripComments(String source) {
     StringBuilder result = new StringBuilder(source.length());
     boolean lineComment = false;
     boolean blockComment = false;
@@ -5141,7 +5140,7 @@ final class SourceMetadataScanner {
   }
 
   /** Masks string and character literal contents while preserving source offsets. */
-  static String maskStringLiterals(String source) {
+  private static String maskStringLiterals(String source) {
     char[] masked = source.toCharArray();
     boolean stringLiteral = false;
     boolean textBlock = false;

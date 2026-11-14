@@ -1,0 +1,7 @@
+docs/flpath-5078-tdd-red/*.log whitespace=-trailing-space
+docs/flpath-5078-tdd-red/*.txt whitespace=-trailing-space
+docs/flpath-5078-tdd-green/*.log whitespace=-trailing-space
+docs/flpath-5078-tdd-green/*.txt whitespace=-trailing-space
+docs/flpath-5078-tdd/baseline-test.log whitespace=-trailing-space
+docs/flpath-5078-tdd/*.txt whitespace=-trailing-space
+docs/flpath-5078-tdd/*.log whitespace=-trailing-space
