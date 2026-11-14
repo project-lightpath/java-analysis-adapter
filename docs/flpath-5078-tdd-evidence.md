@@ -123,3 +123,11 @@ Evidence hashes:
   metadata was not observed.
 - `GREEN_10`: commit `c12fa3b4e4a34a24af8dc9fe5ad7a2b297738c2f`; module provides
   declarations are retained as `POSSIBLE` with `moduleVisibility=not_proven`.
+
+### 5896913850 — explicit-loader wildcard dependency evidence
+
+- `RED_11`: commit `512b6f461f81fd27409a0aa3bf83f7aee49f3121`; wildcard dependency
+  metadata was not scanned, so clean explicit-loader evidence was absent.
+- `GREEN_11`: commit `c1b06e807038d65d54b20c202d864c1e044b7507`; descriptor scanning
+  uses the same resolved wildcard dependency entries as SootUp and retains explicit-loader
+  results as `POSSIBLE`.
