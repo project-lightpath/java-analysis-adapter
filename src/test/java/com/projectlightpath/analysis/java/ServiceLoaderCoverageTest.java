@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -241,6 +242,8 @@ class ServiceLoaderCoverageTest {
         .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
     assertTrue(archiveDescriptors.stream()
         .anyMatch(item -> item.serviceType().equals("demo.Archive")));
+    assertEquals(ENUMERATION_LIMIT, enumeratedEntries(directoryState));
+    assertEquals(ENUMERATION_LIMIT, enumeratedEntries(archiveState));
   }
 
   @Test
@@ -356,6 +359,17 @@ class ServiceLoaderCoverageTest {
     assertTrue(resolved.stream().noneMatch(path -> path.equals(linkedArchive.toAbsolutePath().normalize())));
     assertTrue(scan.descriptors().stream()
         .noneMatch(item -> item.path().contains("linked.jar")));
+  }
+
+  private static int enumeratedEntries(ServiceLoaderDescriptorSource.ScanState state) {
+    try {
+      Field field = ServiceLoaderDescriptorSource.ScanState.class
+          .getDeclaredField("enumeratedEntries");
+      field.setAccessible(true);
+      return field.getInt(state);
+    } catch (ReflectiveOperationException error) {
+      throw new AssertionError("scan budget state is not observable", error);
+    }
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {

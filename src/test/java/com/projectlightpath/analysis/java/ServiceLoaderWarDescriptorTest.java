@@ -124,6 +124,31 @@ class ServiceLoaderWarDescriptorTest {
         resolution.evidence().toString());
   }
 
+  @Test
+  void capsDiagnosticsForLargeWarMetadata() throws IOException {
+    Path war = temp.resolve("large-metadata.war");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(war))) {
+      for (int index = 0; index < 3000; index++) {
+        put(output, "WEB-INF/classes/META-INF/services/demo.Provider" + index,
+            "demo.Provider\n");
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new java.util.ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(war, descriptors, state);
+
+    long skipped = state.diagnostics().stream()
+        .filter(item -> item.code().equals("war_nested_service_metadata_skipped"))
+        .count();
+    long suppressed = state.diagnostics().stream()
+        .filter(item -> item.code().equals("war_nested_service_metadata_skipped_limit"))
+        .count();
+    assertEquals(1, skipped, state.diagnostics().toString());
+    assertEquals(1, suppressed, state.diagnostics().toString());
+    assertTrue(state.diagnostics().size() <= 3, state.diagnostics().toString());
+  }
+
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
     output.putNextEntry(new ZipEntry(name));
     output.write(value.getBytes(StandardCharsets.UTF_8));
