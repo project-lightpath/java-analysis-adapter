@@ -132,6 +132,8 @@ class ServiceLoaderCoverageTest {
     Files.createDirectories(declaredDirectory);
     Path inside = declaredDirectory.resolve("demo.Inside");
     Files.writeString(inside, "demo.InsideProvider\n");
+    Path oversized = declaredDirectory.resolve("large.Provider");
+    Files.write(oversized, new byte[(int) ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES + 1]);
     Path outside = Files.createTempFile("service-loader-outside", ".Provider");
     Files.writeString(outside, "demo.OutsideProvider\n");
 
@@ -148,11 +150,11 @@ class ServiceLoaderCoverageTest {
         .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
         .dependencyClasspathRequired(false)
         .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
-            "directory", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
-            declaredDirectory.toString()))
-        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
             "file", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
             outside.toString()))
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "directory", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            declaredDirectory.toString()))
         .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
             "ignored", "service_loader_descriptor", AnalysisContext.MetadataStatus.NOT_CAPTURED,
             outside.toString()))
@@ -163,6 +165,8 @@ class ServiceLoaderCoverageTest {
     assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
     assertTrue(scan.descriptors().stream().anyMatch(item -> item.path().equals("declared-services/demo.Inside")));
     assertTrue(scan.descriptors().stream().anyMatch(item -> item.path().equals(outside.toString())));
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")));
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
