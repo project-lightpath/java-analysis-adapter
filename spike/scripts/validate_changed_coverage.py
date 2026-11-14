@@ -126,9 +126,14 @@ def main() -> int:
     changed = {
         path: lines
         for path, lines in changed_lines(root, args.base, args.head, ".java", args.evidence).items()
-        if lines
     }
     source_root = "/".join(part for part in (args.path.strip("/"), "src/main/java") if part)
+    production_prefix = source_root.rstrip("/") + "/"
+    changed = {
+        path: lines
+        for path, lines in changed.items()
+        if lines and path.startswith(production_prefix)
+    }
     executable, covered = jacoco_lines(args.report, source_root)
     missing_files = sorted(path for path in changed if path not in executable)
     allowed_missing = sorted(set(args.allow_missing))

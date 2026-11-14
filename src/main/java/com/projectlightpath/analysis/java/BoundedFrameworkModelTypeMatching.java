@@ -95,14 +95,14 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       String contract,
       SourceMetadataScannerState.SourceFile contractFile,
       SourceMetadataScanner scanner) {
-    Optional<String> candidate = canonicalType(contract, contractFile, scanner);
-    if (!candidate.isPresent()) {
-      return false;
-    }
     if (!hasGenericArguments(requestedType)) {
       Optional<String> candidateRaw = canonicalType(
           eraseGenericArguments(contract), contractFile, scanner);
       return candidateRaw.isPresent() && candidateRaw.get().equals(requested.get());
+    }
+    Optional<String> candidate = canonicalType(contract, contractFile, scanner);
+    if (candidate.isEmpty()) {
+      return false;
     }
     return hasGenericArguments(contract) && candidate.get().equals(requested.get());
   }

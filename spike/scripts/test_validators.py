@@ -59,6 +59,7 @@ class ChangedCoverageValidatorTest(unittest.TestCase):
             changed = {
                 "src/main/java/demo/Missing.java": {10},
                 "src/main/java/demo/Present.java": {11},
+                "src/test/java/demo/MainTest.java": {12},
             }
             executable = {"src/main/java/demo/Present.java": {11}}
             covered = {"src/main/java/demo/Present.java": {11}}

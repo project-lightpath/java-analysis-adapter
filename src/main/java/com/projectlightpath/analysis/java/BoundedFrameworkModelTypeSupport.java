@@ -127,13 +127,12 @@ abstract class BoundedFrameworkModelTypeSupport extends BoundedFrameworkModelTyp
     if (bothGeneric) {
       return metadata.isPresent() && source.isPresent() && metadata.get().equals(source.get());
     }
-    if (metadata.isPresent() && source.isPresent()) {
-      Optional<String> metadataRaw = canonicalType(
-          eraseGenericArguments(metadataType), sourceFile, scanner);
-      Optional<String> sourceRaw = canonicalType(
-          eraseGenericArguments(sourceType), sourceFile, scanner);
-      return metadataRaw.isPresent() && sourceRaw.isPresent()
-          && metadataRaw.get().equals(sourceRaw.get());
+    Optional<String> metadataRaw = canonicalType(
+        eraseGenericArguments(metadataType), sourceFile, scanner);
+    Optional<String> sourceRaw = canonicalType(
+        eraseGenericArguments(sourceType), sourceFile, scanner);
+    if (metadataRaw.isPresent() && sourceRaw.isPresent()) {
+      return metadataRaw.get().equals(sourceRaw.get());
     }
     return !bothGeneric && metadataTypeMatches(scanner, metadataType, sourceType);
   }

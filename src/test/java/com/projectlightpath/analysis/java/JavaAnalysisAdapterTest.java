@@ -2131,6 +2131,8 @@ class JavaAnalysisAdapterTest {
           @Resource(name = "missing") OtherService missing;
           @Resource(name = "fastPaymentService") PaymentService suppressedDefault;
           @Resource(name = "qualifier-only") QualifierOnlyService qualifierOnly;
+          @Resource(name = "unnamedNamedService") OtherService unnamedNamed;
+          @Resource(name = "factoryClock") FactoryClock factoryClock;
           @Resource void setURL(UrlService service) { }
         }
         """);
@@ -2163,6 +2165,20 @@ class JavaAnalysisAdapterTest {
         import org.springframework.stereotype.Service;
         @Service @Qualifier("qualifier-only")
         public class QualifierOnlyService implements OtherService { }
+        """);
+    write(sourceRoot, "demo/UnnamedNamedService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @Named public class UnnamedNamedService implements OtherService { }
+        """);
+    write(sourceRoot, "demo/FactoryClock.java", "package demo; public class FactoryClock { }\n");
+    write(sourceRoot, "demo/FactoryConfiguration.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration("factory") public class FactoryConfiguration {
+          @Bean public FactoryClock factoryClock() { return new FactoryClock(); }
+        }
         """);
     write(sourceRoot, "demo/UrlService.java", "package demo; public interface UrlService { }\n");
     write(sourceRoot, "demo/UpperUrlService.java", """
@@ -2213,6 +2229,16 @@ class JavaAnalysisAdapterTest {
             "spring:injection:demo.ResourceConsumer#qualifierOnly(QualifierOnlyService)"))
         .findFirst().orElseThrow();
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, qualifierOnlyName.certainty());
+    SemanticCallFacts.Fact unnamedNamed = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#unnamedNamed(OtherService)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.UnnamedNamedService#<init>", unnamedNamed.callee());
+    SemanticCallFacts.Fact factoryClock = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#factoryClock(FactoryClock)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.FactoryConfiguration#factoryClock", factoryClock.callee());
     SemanticCallFacts.Fact acronymSetter = facts.stream()
         .filter(item -> item.caller().equals("spring:injection:demo.ResourceConsumer#setURL(UrlService)"))
         .findFirst().orElseThrow();
@@ -2452,6 +2478,21 @@ class JavaAnalysisAdapterTest {
           @Autowired public Consumer(Port<Integer> port) { }
         }
         """);
+    write(sourceRoot, "demo/ArrayPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayPort implements Port<java.util.List<String>[]> { }
+        """);
+    write(sourceRoot, "demo/ArrayConsumer.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayConsumer {
+          @Autowired public ArrayConsumer(Port<java.util.List<String>[]> port) { }
+        }
+        """);
     AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
         "0.1.0",
         List.of(
@@ -2474,9 +2515,27 @@ class JavaAnalysisAdapterTest {
             "src/main/java")),
         metadata);
 
+    AnalysisContext sourceOnlyContext = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    List<SemanticCallFacts.Fact> sourceOnlyInjections = new JavaAnalysisAdapter()
+        .analyze(sourceOnlyContext, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, sourceOnlyInjections.size());
+    assertTrue(sourceOnlyInjections.stream().anyMatch(item ->
+        item.caller().contains("demo.Consumer") && item.callee().equals("demo.IntegerPort#<init>")));
+    assertTrue(sourceOnlyInjections.stream().anyMatch(item -> item.caller().contains("demo.ArrayConsumer")
+        && item.callee().equals("demo.ArrayPort#<init>")));
+
     List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
         .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("spring:injection:demo.Consumer"))
         .toList();
 
     assertEquals(1, injections.size());

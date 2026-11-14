@@ -46,9 +46,15 @@ abstract class SourceMetadataScannerTextLayer22 extends SourceMetadataScannerTex
   /** Resolves a contract spelling while retaining concrete arguments and raw fallback. */
   Optional<String> resolveContractExpression(String type, SourceFile sourceFile) {
     String normalized = compactGenericWhitespace(type == null ? "" : type).trim();
+    String arraySuffix = "";
+    while (normalized.endsWith("[]")) {
+      arraySuffix += "[]";
+      normalized = normalized.substring(0, normalized.length() - 2).trim();
+    }
+    final String suffix = arraySuffix;
     int opening = normalized.indexOf('<');
     if (opening < 0) {
-      return resolveContractType(normalized, sourceFile);
+      return resolveContractType(normalized, sourceFile).map(value -> value + suffix);
     }
     int closing = matchingDelimiter(normalized, opening, '<', '>');
     if (closing != normalized.length() - 1) {
@@ -62,11 +68,11 @@ abstract class SourceMetadataScannerTextLayer22 extends SourceMetadataScannerTex
     for (String argument : splitArguments(normalized.substring(opening + 1, closing))) {
       Optional<String> resolved = resolveContractExpression(argument, sourceFile);
       if (resolved.isEmpty()) {
-        return raw;
+        return Optional.of(raw.get() + suffix);
       }
       arguments.add(resolved.get());
     }
-    return Optional.of(raw.get() + "<" + String.join(",", arguments) + ">");
+    return Optional.of(raw.get() + "<" + String.join(",", arguments) + ">" + suffix);
   }
 
   /** Splits contract declarations without erasing their generic arguments. */

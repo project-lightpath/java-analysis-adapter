@@ -134,7 +134,7 @@ final class FrameworkBeanScanning {
           "producer",
           candidateId,
           producerType,
-          mergeAnnotationValues(scanner, framework, file, block, method, "qualifier"),
+          producerQualifiers(scanner, framework, file, block, method),
           mergeAnnotationValues(scanner, framework, file, block, method, "profile"),
           mergeAnnotationValues(scanner, framework, file, block, method, "condition"),
           scanner.hasAnnotation(block, "Alternative")
@@ -143,6 +143,22 @@ final class FrameworkBeanScanning {
           method.name(),
           method.returnType(),
           method.parameters());
+    }
+
+    /** Keeps a configuration class's bean name separate from its produced bean. */
+    private static List<String> producerQualifiers(
+        SourceMetadataScanner scanner,
+        AnalysisContext.Framework framework,
+        SourceFile file,
+        String classBlock,
+        MethodInfo method) {
+      List<String> factoryQualifiers = annotationValues(scanner, framework, file, classBlock, "qualifier")
+          .stream()
+          .filter(value -> !value.startsWith("BeanName:"))
+          .toList();
+      return scanner.mergeValues(
+          factoryQualifiers,
+          annotationValues(scanner, framework, file, method.annotationBlock(), "qualifier"));
     }
 
     private static List<String> mergeAnnotationValues(

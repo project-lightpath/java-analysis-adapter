@@ -116,9 +116,8 @@ abstract class BoundedFrameworkModelQualifierSupport extends BoundedFrameworkMod
       SourceMetadataScannerState.BeanCandidate candidate) {
     Set<String> names = new LinkedHashSet<>();
     List<String> qualifiers = candidateQualifiers(context, scanner, candidate);
-    boolean explicitName = qualifiers.stream()
-        .anyMatch(qualifier -> qualifier.startsWith("BeanName:")
-            || qualifier.startsWith("Named:"));
+    boolean explicitName = qualifiers.stream().anyMatch(
+        BoundedFrameworkModelQualifierSupport::isCandidateNameQualifier);
     String defaultName = candidate.producer()
         ? candidate.producerMethod()
         : decapitalize(candidate.file().simpleTypeName());
@@ -126,11 +125,17 @@ abstract class BoundedFrameworkModelQualifierSupport extends BoundedFrameworkMod
       names.add(defaultName);
     }
     qualifiers.stream()
-        .filter(qualifier -> qualifier.startsWith("BeanName:")
-            || qualifier.startsWith("Named:"))
+        .filter(BoundedFrameworkModelQualifierSupport::isCandidateNameQualifier)
         .map(qualifier -> qualifier.substring(qualifier.indexOf(':') + 1))
         .forEach(names::add);
     return Set.copyOf(names);
+  }
+
+  /** Treats unnamed Named annotations as convention-based names. */
+  private static boolean isCandidateNameQualifier(String qualifier) {
+    return qualifier.startsWith("BeanName:")
+        || qualifier.startsWith("Named:")
+            && !qualifier.substring("Named:".length()).isBlank();
   }
 
   /** Applies primary or enabled-alternative preference when binding metadata did not select. */
