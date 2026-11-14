@@ -138,3 +138,10 @@ Evidence hashes:
   malformed but the possible-resolution limitation did not explain that metadata failure.
 - `GREEN_12`: commit `fcde3c541a7444d20e002cf9b24ab80e87bca93c`; BOM-prefixed provider
   names remain malformed and the resolution limitation reports malformed metadata.
+
+### 4567751015 — ordered provider normalization
+
+- `RED_13`: commit `912141ae1d536a22fbacd6a2fe2c4653d7f4f0cc`; 100,000 valid provider
+  names exceeded the five-second normalization bound.
+- `GREEN_13`: commit `bb1a249f386195a9efed0014dd9d7ec60feb34d0`; ordered-set normalization
+  preserves encounter order, removes duplicates, and completes within the bound.
