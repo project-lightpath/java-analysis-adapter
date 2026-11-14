@@ -26,10 +26,8 @@ final class ServiceLoaderCallSiteReader {
     }
     String source = sourceFile.get().source();
     String targetMethod = MethodSymbol.fromSootSignature(call.targetMethodSignature().toString()).name();
-    return ServiceLoaderCallSiteParser.parse(source).stream()
-        .filter(site -> site.line() <= call.getLineNumber())
-        .filter(site -> sameStatement(source, site, call.getLineNumber()))
-        .anyMatch(site -> statementContainsMethod(source, site, targetMethod, call.getLineNumber()));
+    return selectedSites(source, ServiceLoaderCallSiteParser.parse(source),
+        call.getLineNumber(), targetMethod).size() == 1;
   }
 
   static ServiceLoadHints read(
@@ -42,10 +40,10 @@ final class ServiceLoaderCallSiteReader {
     if (sourceFile.isEmpty()) {
       return ServiceLoadHints.empty();
     }
-    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(sourceFile.get().source());
-    List<ServiceLoaderCallSite> selected = sites.stream()
-        .filter(site -> site.line() <= edge.line())
-        .toList();
+    String source = sourceFile.get().source();
+    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
+    List<ServiceLoaderCallSite> selected = selectedSites(
+        source, sites, edge.line(), edge.callee().name());
     if (selected.isEmpty()) {
       return ServiceLoadHints.empty();
     }
@@ -58,6 +56,21 @@ final class ServiceLoaderCallSiteReader {
         Set.copyOf(resolved),
         selected.stream().anyMatch(ServiceLoaderCallSite::explicitClassLoader),
         bound);
+  }
+
+  private static List<ServiceLoaderCallSite> selectedSites(
+      String source,
+      List<ServiceLoaderCallSite> sites,
+      int line,
+      String targetMethod) {
+    if (line <= 0) {
+      return sites.size() == 1 ? sites : List.of();
+    }
+    return sites.stream()
+        .filter(site -> site.line() <= line)
+        .filter(site -> sameStatement(source, site, line))
+        .filter(site -> statementContainsMethod(source, site, targetMethod, line))
+        .toList();
   }
 
   record ServiceLoadHints(Set<String> serviceTypes, boolean explicitClassLoader, boolean callSiteBound) {
