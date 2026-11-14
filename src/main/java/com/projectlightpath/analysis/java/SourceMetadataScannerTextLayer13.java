@@ -162,7 +162,15 @@ static boolean springProxyMethod(SourceFile file, MethodInfo method) {
         || hasModifier(method.annotationBlock(), "static")) {
       return false;
     }
-    String prefix = maskAnnotationArguments(stripComments(method.annotationBlock())).trim();
-    return !prefix.matches("(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do)\\b.*");
+    return !proxyMethodBodyStatement(method.annotationBlock());
+  }
+
+  /** Distinguishes method declarations from body statements after source delimiters. */
+  static boolean proxyMethodBodyStatement(String annotationBlock) {
+    String prefix = maskAnnotationArguments(stripComments(annotationBlock))
+        .replaceFirst("^[;{}\\s]+", "");
+    return prefix.matches(
+            "(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do|try|yield)\\b.*")
+        || prefix.matches("(?s)^synchronized\\s*\\(.*");
   }
 }

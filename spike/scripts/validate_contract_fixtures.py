@@ -42,16 +42,27 @@ def main() -> int:
     for path, entry in expected.items():
         candidate = args.vpe_root / path
         try:
-            mode = stat.S_IMODE(candidate.lstat().st_mode)
+            actual_mode = candidate.lstat().st_mode
         except FileNotFoundError as error:
             raise SystemExit(f"VPE tree file is missing: {path}") from error
-        expected_mode = int(entry["mode"], 8) & 0o7777
-        if mode != expected_mode:
+        expected_mode = int(entry["mode"], 8)
+        if stat.S_IFMT(actual_mode) != stat.S_IFMT(expected_mode):
+            raise SystemExit(f"VPE tree file type mismatch: {path}")
+        if (
+            not stat.S_ISLNK(expected_mode)
+            and stat.S_IMODE(actual_mode) != stat.S_IMODE(expected_mode)
+        ):
             raise SystemExit(f"VPE tree mode mismatch: {path}")
-        if git_blob(candidate, candidate.lstat().st_mode) != entry["blob"]:
+        if git_blob(candidate, actual_mode) != entry["blob"]:
             raise SystemExit(f"VPE tree blob mismatch: {path}")
     java_fixture = args.java_root / "spike/contracts/dependency-coordinate-manifest.json"
     vpe_fixture = args.vpe_root / "analysiscontext/testdata/dependency-coordinate-manifest.json"
+    vpe_fixture_path = "analysiscontext/testdata/dependency-coordinate-manifest.json"
+    fixture_entry = expected.get(vpe_fixture_path)
+    if fixture_entry is None:
+        raise SystemExit(f"VPE fixture is not listed in the tree manifest: {vpe_fixture_path}")
+    if git_blob(vpe_fixture, vpe_fixture.lstat().st_mode) != fixture_entry["blob"]:
+        raise SystemExit(f"VPE fixture blob does not match the tree manifest: {vpe_fixture_path}")
     java_bytes = java_fixture.read_bytes()
     vpe_bytes = vpe_fixture.read_bytes()
     if java_bytes != vpe_bytes:

@@ -74,18 +74,36 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
       SourceMetadataScannerState.BeanCandidate candidate) {
-    Optional<String> requested = canonicalType(
-        eraseGenericArguments(requestedType), injectionFile, scanner);
+    Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
     if (requested.isEmpty()) {
       return false;
     }
     boolean sourceContract = candidate.contracts().stream()
-        .map(contract -> canonicalType(contract, candidate.file(), scanner))
-        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+        .anyMatch(contract -> contractMatchesType(
+            requestedType, requested, contract, candidate.file(), scanner));
     boolean metadataContract = matchingCandidateMetadata(context, scanner, candidate).stream()
         .flatMap(row -> row.contracts().stream())
-        .map(contract -> scanner.resolveContractType(contract, candidate.file()))
-        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+        .anyMatch(contract -> contractMatchesType(
+            requestedType, requested, contract, candidate.file(), scanner));
     return sourceContract || metadataContract;
+  }
+
+  /** Compares generic contract arguments whenever either side provides them. */
+  private static boolean contractMatchesType(
+      String requestedType,
+      Optional<String> requested,
+      String contract,
+      SourceMetadataScannerState.SourceFile contractFile,
+      SourceMetadataScanner scanner) {
+    Optional<String> candidate = canonicalType(contract, contractFile, scanner);
+    if (!candidate.isPresent()) {
+      return false;
+    }
+    if (!hasGenericArguments(requestedType)) {
+      Optional<String> candidateRaw = canonicalType(
+          eraseGenericArguments(contract), contractFile, scanner);
+      return candidateRaw.isPresent() && candidateRaw.get().equals(requested.get());
+    }
+    return hasGenericArguments(contract) && candidate.get().equals(requested.get());
   }
 }

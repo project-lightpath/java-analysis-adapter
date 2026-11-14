@@ -115,16 +115,19 @@ abstract class BoundedFrameworkModelQualifierSupport extends BoundedFrameworkMod
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.BeanCandidate candidate) {
     Set<String> names = new LinkedHashSet<>();
+    List<String> qualifiers = candidateQualifiers(context, scanner, candidate);
+    boolean explicitName = qualifiers.stream()
+        .anyMatch(qualifier -> qualifier.startsWith("BeanName:")
+            || qualifier.startsWith("Named:"));
     String defaultName = candidate.producer()
         ? candidate.producerMethod()
         : decapitalize(candidate.file().simpleTypeName());
-    if (defaultName != null && !defaultName.isBlank()) {
+    if (!explicitName && defaultName != null && !defaultName.isBlank()) {
       names.add(defaultName);
     }
-    candidateQualifiers(context, scanner, candidate).stream()
+    qualifiers.stream()
         .filter(qualifier -> qualifier.startsWith("BeanName:")
-            || qualifier.startsWith("Named:")
-            || qualifier.startsWith("Qualifier:"))
+            || qualifier.startsWith("Named:"))
         .map(qualifier -> qualifier.substring(qualifier.indexOf(':') + 1))
         .forEach(names::add);
     return Set.copyOf(names);

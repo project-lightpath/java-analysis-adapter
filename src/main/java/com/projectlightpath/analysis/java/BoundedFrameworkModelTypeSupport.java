@@ -121,12 +121,20 @@ abstract class BoundedFrameworkModelTypeSupport extends BoundedFrameworkModelTyp
       SourceMetadataScannerState.SourceFile sourceFile,
       String metadataType,
       String sourceType) {
-    Optional<String> metadata = canonicalType(
-        eraseGenericArguments(metadataType), sourceFile, scanner);
-    Optional<String> source = canonicalType(
-        eraseGenericArguments(sourceType), sourceFile, scanner);
-    return metadata.isPresent() && source.isPresent()
-        ? metadata.get().equals(source.get())
-        : metadataTypeMatches(scanner, metadataType, sourceType);
+    Optional<String> metadata = canonicalType(metadataType, sourceFile, scanner);
+    Optional<String> source = canonicalType(sourceType, sourceFile, scanner);
+    boolean bothGeneric = hasGenericArguments(metadataType) && hasGenericArguments(sourceType);
+    if (bothGeneric) {
+      return metadata.isPresent() && source.isPresent() && metadata.get().equals(source.get());
+    }
+    if (metadata.isPresent() && source.isPresent()) {
+      Optional<String> metadataRaw = canonicalType(
+          eraseGenericArguments(metadataType), sourceFile, scanner);
+      Optional<String> sourceRaw = canonicalType(
+          eraseGenericArguments(sourceType), sourceFile, scanner);
+      return metadataRaw.isPresent() && sourceRaw.isPresent()
+          && metadataRaw.get().equals(sourceRaw.get());
+    }
+    return !bothGeneric && metadataTypeMatches(scanner, metadataType, sourceType);
   }
 }

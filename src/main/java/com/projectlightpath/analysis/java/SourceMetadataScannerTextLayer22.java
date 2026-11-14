@@ -38,9 +38,43 @@ abstract class SourceMetadataScannerTextLayer22 extends SourceMetadataScannerTex
 
   /** Resolves each comma-separated contract against the declaring source file. */
   void addResolvedContracts(Set<String> contracts, String source, SourceFile file) {
-    for (String type : typeNames(source)) {
-      resolveContractType(type, file).ifPresent(contracts::add);
+    for (String type : contractTypeNames(source)) {
+      resolveContractExpression(type, file).ifPresent(contracts::add);
     }
+  }
+
+  /** Resolves a contract spelling while retaining concrete arguments and raw fallback. */
+  Optional<String> resolveContractExpression(String type, SourceFile sourceFile) {
+    String normalized = compactGenericWhitespace(type == null ? "" : type).trim();
+    int opening = normalized.indexOf('<');
+    if (opening < 0) {
+      return resolveContractType(normalized, sourceFile);
+    }
+    int closing = matchingDelimiter(normalized, opening, '<', '>');
+    if (closing != normalized.length() - 1) {
+      return Optional.empty();
+    }
+    Optional<String> raw = resolveContractType(normalized.substring(0, opening), sourceFile);
+    if (raw.isEmpty()) {
+      return Optional.empty();
+    }
+    List<String> arguments = new ArrayList<>();
+    for (String argument : splitArguments(normalized.substring(opening + 1, closing))) {
+      Optional<String> resolved = resolveContractExpression(argument, sourceFile);
+      if (resolved.isEmpty()) {
+        return raw;
+      }
+      arguments.add(resolved.get());
+    }
+    return Optional.of(raw.get() + "<" + String.join(",", arguments) + ">");
+  }
+
+  /** Splits contract declarations without erasing their generic arguments. */
+  static List<String> contractTypeNames(String source) {
+    return splitArguments(source).stream()
+        .map(type -> compactGenericWhitespace(type.trim()))
+        .filter(type -> !type.isBlank())
+        .toList();
   }
 
   boolean isJdkDeclaredType(
@@ -72,26 +106,24 @@ abstract class SourceMetadataScannerTextLayer22 extends SourceMetadataScannerTex
   /** Extracts resolved implemented interfaces and the direct superclass from one type header. */
   Set<String> contracts(SourceFile file) {
     Set<String> contracts = new LinkedHashSet<>();
-    String header = typeHeader(file);
-    String normalized = stripBalancedGenericArguments(header);
-    int implementsIndex = keywordIndex(normalized, "implements");
-    int extendsIndex = keywordIndex(normalized, "extends");
+    String header = maskStringLiterals(typeHeader(file));
+    int implementsIndex = topLevelKeywordIndex(header, "implements");
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
     if (implementsIndex >= 0) {
-      int end = keywordIndexAfter(normalized, "permits", implementsIndex + "implements".length());
-      String implemented = normalized.substring(
-          implementsIndex + "implements".length(), end >= 0 ? end : normalized.length());
+      int end = topLevelKeywordIndex(header, "permits");
+      String implemented = header.substring(
+          implementsIndex + "implements".length(), end >= 0 ? end : header.length());
       addResolvedContracts(contracts, implemented, file);
     }
     if (extendsIndex >= 0) {
-      int end = implementsIndex >= 0 ? implementsIndex : keywordIndexAfter(
-          normalized, "permits", extendsIndex + "extends".length());
-      String extended = normalized.substring(
-          extendsIndex + "extends".length(), end >= 0 ? end : normalized.length());
-      List<String> extendedTypes = typeNames(extended);
-      if (normalized.matches("(?s).*\\binterface\\s+\\w+.*")) {
+      int end = implementsIndex >= 0 ? implementsIndex : topLevelKeywordIndex(header, "permits");
+      String extended = header.substring(
+          extendsIndex + "extends".length(), end >= 0 ? end : header.length());
+      List<String> extendedTypes = contractTypeNames(extended);
+      if (header.matches("(?s).*\\binterface\\s+\\w+.*")) {
         addResolvedContracts(contracts, String.join(",", extendedTypes), file);
       } else if (!extendedTypes.isEmpty()) {
-        resolveContractType(extendedTypes.get(0), file).ifPresent(contracts::add);
+        resolveContractExpression(extendedTypes.get(0), file).ifPresent(contracts::add);
       }
     }
     return Set.copyOf(contracts);

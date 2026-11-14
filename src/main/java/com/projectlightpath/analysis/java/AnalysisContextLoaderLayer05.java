@@ -35,12 +35,13 @@ abstract class AnalysisContextLoaderLayer05 extends AnalysisContextLoaderLayer04
     if (!resolved.startsWith(repositoryRoot)) {
       throw new IllegalArgumentException("source root must remain inside repository root: " + declaredPath);
     }
+    boolean generated = generatedCollection || root.generated();
+    validateOrdinaryRoot(root, generated, declaredPath);
     if (!existsNoFollow(resolved)
         && (!generatedCollection || root.required() || root.included())) {
       throw new IllegalArgumentException("source root is unavailable: " + declaredPath);
     }
     AnalysisContext.Scope scope = parseScope(root.scope());
-    boolean generated = generatedCollection || root.generated();
     if (generated) {
       builder.generatedSourceRoot(
           declaredPath, resolved, scope, root.included(), root.required(), root.fingerprint());
@@ -49,6 +50,14 @@ abstract class AnalysisContextLoaderLayer05 extends AnalysisContextLoaderLayer04
         throw new IllegalArgumentException("required source root must be included: " + declaredPath);
       }
       builder.sourceRoot(declaredPath, resolved, scope, root.required(), root.fingerprint());
+    }
+  }
+
+  /** Rejects ordinary roots that the builder would include despite an excluded flag. */
+  private static void validateOrdinaryRoot(
+      ResolvedRootDocument root, boolean generated, String declaredPath) {
+    if (!generated && !root.included()) {
+      throw new IllegalArgumentException("ordinary source root must be included: " + declaredPath);
     }
   }
 

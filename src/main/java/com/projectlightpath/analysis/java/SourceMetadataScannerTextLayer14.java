@@ -164,12 +164,4 @@ static List<MethodInfo> executableMethods(SourceFile file) {
         .count() > 1;
   }
 
-  /** Distinguishes method declarations from method-shaped body statements. */
-  private static boolean proxyMethodBodyStatement(String annotationBlock) {
-    String prefix = maskAnnotationArguments(stripComments(annotationBlock))
-        .replaceFirst("^[;{}\\s]+", "");
-    return prefix.matches(
-            "(?s)^(return|throw|if|for|while|switch|catch|new|assert|case|else|do|try|yield)\\b.*")
-        || prefix.matches("(?s)^synchronized\\s*\\(.*");
-  }
 }

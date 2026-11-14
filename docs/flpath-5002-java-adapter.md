@@ -75,6 +75,30 @@ only supplied values as `dependencyGroupId`, `dependencyArtifactId`,
 `dependencyClasspathEntryFingerprint`; absent metadata produces no coordinate
 attributes.
 
+When the manifest is present, including a present-but-empty manifest, the same
+context must also include Maven replay metadata in `build`:
+
+```json
+{
+  "build": {
+    "tool": "maven",
+    "command": ["mvn", "package"],
+    "artifact": "target/application.jar",
+    "fingerprint": "build-fingerprint",
+    "activeMavenProfiles": [],
+    "mavenProfileActivationSources": {},
+    "mavenInvocationFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "effectivePomFingerprint": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  }
+}
+```
+
+`activeMavenProfiles` must be sorted and unique. The activation-source object
+must cover exactly those profiles, and every value must be `"explicit"`.
+`mavenInvocationFingerprint` and `effectivePomFingerprint` must each be a
+lowercase 64-character hexadecimal SHA-256 fingerprint. These fields are
+required even when `activeMavenProfiles` is empty.
+
 ## Java API versioning
 
 The Maven module is currently `0.1.0-SNAPSHOT` and has no production release.

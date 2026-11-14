@@ -41,16 +41,22 @@ abstract class BoundedFrameworkModelMetadataMatching extends BoundedFrameworkMod
         .filter(row -> memberMatches(row.injectionMember(), injection.member()))
         .filter(row -> injectionTypesMatch(scanner, injection.file(), row.injectionType(), parameter.type()))
         .filter(row -> row.parameterIndex() == null || row.parameterIndex() == parameterIndex)
-        .filter(row -> row.qualifiers().isEmpty()
-            || mergeQualifiers(injection.qualifiers(), parameter.qualifiers()).isEmpty()
-            || mergeQualifiers(injection.qualifiers(), parameter.qualifiers()).stream()
-                .anyMatch(requested -> row.qualifiers().stream()
-                    .anyMatch(candidateQualifier -> bindingQualifierEquals(requested, candidateQualifier))))
+        .filter(row -> resolvedQualifiersCompatible(
+            row.qualifiers(), mergeQualifiers(injection.qualifiers(), parameter.qualifiers())))
         .filter(row -> candidates.stream().anyMatch(candidate ->
             row.candidateId().equals(candidate.candidateId())
                 || matchingCandidateMetadata(context, scanner, candidate).stream()
                     .anyMatch(metadata -> row.candidateId().equals(metadata.candidateId()))))
         .toList();
+  }
+
+  /** Rejects conflicting requested qualifiers while preserving empty-list wildcards. */
+  static boolean resolvedQualifiersCompatible(List<String> resolved, List<String> requested) {
+    if (resolved.isEmpty() || requested.isEmpty()) {
+      return true;
+    }
+    return requested.stream().allMatch(requestedQualifier -> resolved.stream()
+        .anyMatch(candidateQualifier -> bindingQualifierEquals(requestedQualifier, candidateQualifier)));
   }
 
   /** Matches qualified owners exactly and permits simple names only in metadata. */

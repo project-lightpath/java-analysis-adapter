@@ -48,7 +48,7 @@ final class FrameworkInjectionScanning {
           "(?s)((?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)*))"
               + "(?:public|protected|private)?\\s*"
               + Pattern.quote(file.simpleTypeName())
-              + "\\s*\\(([^)]*)\\)\\s*\\{");
+              + "\\s*\\(([^)]*)\\)\\s*(?:throws\\s+[^\\{]+)?\\s*\\{");
       String maskedSource = scanner.maskAnnotationArguments(file.structuralSource());
       Matcher matcher = constructor.matcher(maskedSource);
       List<ConstructorInfo> constructors = new ArrayList<>();

@@ -236,6 +236,7 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       try (Stream<Path> paths = Files.walk(root.path())) {
         paths.filter(Files::isRegularFile)
             .filter(path -> path.toString().endsWith(".java"))
+            .filter(path -> !isDescriptorSource(path))
             .sorted()
             .forEach(path -> selectedRoots.putIfAbsent(path.toAbsolutePath().normalize(), root));
       } catch (IOException error) {
@@ -249,6 +250,12 @@ static final List<String> SUPPORTED_HTTP_METHODS =
     result.sort(Comparator.comparing(SourceFile::displayPath));
     files = List.copyOf(result);
     return files;
+  }
+
+  /** Excludes Java compilation descriptors that do not declare a top-level type. */
+  private static boolean isDescriptorSource(Path path) {
+    String name = path.getFileName().toString();
+    return name.equals("package-info.java") || name.equals("module-info.java");
   }
 
   record DynamicSite(int offset, String symbol, String target) {}
