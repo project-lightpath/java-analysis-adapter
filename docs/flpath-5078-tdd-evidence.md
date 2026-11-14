@@ -80,3 +80,10 @@ Evidence hashes:
   was missed after an inner block statement.
 - `GREEN_4`: commit `d1217b940ac97f0af4cce850b41cb068ac0822be`; nested delimiter
   depth preserves the callback and rejects the outer statement.
+
+### 4567750966 — nested custom-loader ServiceLoader evidence
+
+- `RED_5`: commit `56ade83cab157c9df61861989f1e8ee70687a50e`; the inner
+  custom-loader fact incorrectly borrowed the sibling descriptor.
+- `GREEN_5`: commit `1357f0d1ec1055c59dd25ff41e3a2b3b24f7442c`; site selection
+  keeps the fact possible and removes unrelated descriptor evidence.
