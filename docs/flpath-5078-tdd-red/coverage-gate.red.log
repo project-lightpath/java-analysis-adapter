@@ -1,0 +1,15 @@
+..E
+======================================================================
+ERROR: test_unmapped_changed_lines_are_excluded_from_executable_denominator (spike.scripts.tests.test_validate_changed_coverage.ValidateChangedCoverageTest.test_unmapped_changed_lines_are_excluded_from_executable_denominator)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jgil/.local/share/opencode/worktree/5f61fb6a47e5eba5153364f3f7d20508c9a38ad6/flpath-5078-tdd/spike/scripts/tests/test_validate_changed_coverage.py", line 23, in test_unmapped_changed_lines_are_excluded_from_executable_denominator
+    executable, non_executable = validate_changed_coverage.partition_changed_lines(
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'validate_changed_coverage' has no attribute 'partition_changed_lines'
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+FAILED (errors=1)
+validate_changed_coverage self-test: 1 fixture passed

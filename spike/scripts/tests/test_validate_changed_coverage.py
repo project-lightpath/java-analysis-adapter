@@ -19,6 +19,12 @@ class ValidateChangedCoverageTest(unittest.TestCase):
     def test_threshold_is_ninety_percent(self) -> None:
         self.assertEqual(validate_changed_coverage.THRESHOLD, 90.0)
 
+    def test_unmapped_changed_lines_are_excluded_from_executable_denominator(self) -> None:
+        executable, non_executable = validate_changed_coverage.partition_changed_lines(
+            {10, 11, 12}, {10: (1, 0), 11: (0, 1)})
+        self.assertEqual(executable, {10, 11})
+        self.assertEqual(non_executable, {12})
+
 
 if __name__ == "__main__":
     unittest.main()
