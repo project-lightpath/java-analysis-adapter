@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,8 +42,8 @@ class ServiceLoaderSourceCacheTest {
           "com.projectlightpath.analysis.java.ServiceLoaderSourceCache");
       Method sourceModel = cache.getDeclaredMethod(
           "source", SourceMetadataScanner.class, MethodSymbol.class);
-      Object first = sourceModel.invoke(null, scanner, owner);
-      Object second = sourceModel.invoke(null, scanner, owner);
+      Object first = ((Optional<?>) sourceModel.invoke(null, scanner, owner)).orElseThrow();
+      Object second = ((Optional<?>) sourceModel.invoke(null, scanner, owner)).orElseThrow();
       assertSame(first, second, "repeated edges must reuse the source model");
     } catch (ReflectiveOperationException error) {
       fail("per-scanner ServiceLoader source cache is missing", error);

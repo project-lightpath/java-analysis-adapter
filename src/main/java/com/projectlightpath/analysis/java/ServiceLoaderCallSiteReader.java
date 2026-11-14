@@ -20,13 +20,13 @@ final class ServiceLoaderCallSiteReader {
     if (call.getLineNumber() <= 0) {
       return false;
     }
-    Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(caller.owner());
-    if (sourceFile.isEmpty()) {
+    Optional<ServiceLoaderSourceCache.CachedSource> cachedSource =
+        ServiceLoaderSourceCache.source(scanner, caller);
+    if (cachedSource.isEmpty()) {
       return false;
     }
-    String source = sourceFile.get().source();
     String targetMethod = MethodSymbol.fromSootSignature(call.targetMethodSignature().toString()).name();
-    return selectedSites(source, ServiceLoaderCallSiteParser.parse(source),
+    return selectedSites(cachedSource.get().sourceText(), cachedSource.get().sites(),
         call.getLineNumber(), targetMethod).size() == 1;
   }
 
@@ -36,12 +36,14 @@ final class ServiceLoaderCallSiteReader {
       ServiceLoaderDescriptorScanner.Scan descriptorScan,
       SourceMetadataScanner scanner) {
     Objects.requireNonNull(context, "analysis context");
+    Optional<ServiceLoaderSourceCache.CachedSource> cachedSource =
+        ServiceLoaderSourceCache.source(scanner, edge.caller());
     Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(edge.caller().owner());
-    if (sourceFile.isEmpty()) {
+    if (cachedSource.isEmpty() || sourceFile.isEmpty()) {
       return ServiceLoadHints.empty();
     }
-    String source = sourceFile.get().source();
-    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
+    String source = cachedSource.get().sourceText();
+    List<ServiceLoaderCallSite> sites = cachedSource.get().sites();
     List<ServiceLoaderCallSite> selected = selectedSites(
         source, sites, edge.line(), edge.callee().name());
     if (selected.isEmpty()) {
