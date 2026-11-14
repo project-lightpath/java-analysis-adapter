@@ -5,12 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -1710,6 +1712,47 @@ class JavaAnalysisAdapterTest {
         context, edge, scan, new SourceMetadataScanner(context));
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
     assertTrue(resolution.limitation().toLowerCase().contains("malformed"), resolution.toString());
+  }
+
+  /** Keeps a bounded descriptor ordered and deduplicated without quadratic normalization work. */
+  @Test
+  void smallProviderDescriptorIsOrderedAndDeduplicated() throws IOException {
+    Path fixture = temp.resolve("provider-order");
+    Path sourceRoot = fixture.resolve("src/main/java");
+    Path descriptor = fixture.resolve("resources/META-INF/services/demo.Provider");
+    write(sourceRoot, "demo/App.java", "package demo; class App {}\n");
+    Files.createDirectories(descriptor.getParent());
+    StringBuilder contents = new StringBuilder();
+    for (int index = 0; index < 100_000; index++) {
+      contents.append("p.P").append(index).append('\n');
+    }
+    contents.append("p.P0\n");
+    Files.writeString(descriptor, contents.toString());
+    AnalysisContext context = AnalysisContext.builder()
+        .id("provider-order")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(fixture.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "provider-order", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "provider-order/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = assertTimeoutPreemptively(
+        Duration.ofSeconds(5), () -> ServiceLoaderDescriptorReader.scan(context));
+    assertEquals(1, scan.descriptors().size());
+    List<String> providers = scan.descriptors().get(0).providers();
+    assertEquals(100_000, providers.size());
+    assertEquals("p.P0", providers.get(0));
+    assertEquals("p.P99999", providers.get(providers.size() - 1));
   }
 
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
