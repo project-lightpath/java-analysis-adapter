@@ -1,7 +1,10 @@
-.PHONY: test package adapter-test adapter-package java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis
+.PHONY: test package adapter-test adapter-package validator-test java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis
 
 adapter-test test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp test -f pom.xml
+
+validator-test:
+	python3 -m unittest spike/scripts/test_validators.py
 
 manual-analysis:
 	@test -n "$(CONTEXT)" || (echo 'CONTEXT is required' >&2; exit 2)

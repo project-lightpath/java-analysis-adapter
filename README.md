@@ -38,12 +38,11 @@ make java-lint
 ```
 
 It runs the pinned PMD/CPD configuration against production Java sources,
-compares normalized findings and the effective Maven CPD configuration with
-[`config/java-lint-baseline.json`](config/java-lint-baseline.json), and fails
-on new findings, changed lint configuration, or partial PMD/CPD reports. For
-exploratory reports without enforcement, use `make java-lint-report`. See
-[`docs/java-lint.md`](docs/java-lint.md) for the rule rationale, baseline,
-limitations, and review process.
+requires zero normalized PMD/CPD findings, and fails on findings, changed lint
+configuration, or partial PMD/CPD reports. The retired baseline is not
+vendored. For exploratory reports without enforcement, use
+`make java-lint-report`. See [`docs/java-lint.md`](docs/java-lint.md) for the
+rule rationale, limitations, and review process.
 
 ## FLPATH-5000 spike and findings
 

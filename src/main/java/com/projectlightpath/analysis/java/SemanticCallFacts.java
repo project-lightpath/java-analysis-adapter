@@ -372,8 +372,10 @@ public final class SemanticCallFacts {
     private final String providerVersion;
     private final int graphMethodCount;
     private final int graphCallCount;
+    private final java.nio.file.Path repositoryRoot;
     private final AnalysisContext.Provenance provenance;
     private final AnalysisContext.Handoff handoff;
+    private final AnalysisContext.DependencyCoordinateManifest dependencyCoordinateManifest;
     private final List<AnalysisContext.SourceRoot> generatedSourceRoots;
     private final List<AnalysisContext.SourceRoot> sourceRoots;
 
@@ -389,8 +391,10 @@ public final class SemanticCallFacts {
       providerVersion = graph.providerVersion();
       graphMethodCount = graph.methodCount();
       graphCallCount = graph.callCount();
+      repositoryRoot = context.repositoryRoot();
       provenance = context.provenance();
       handoff = context.handoff();
+      dependencyCoordinateManifest = context.dependencyCoordinateManifest();
       generatedSourceRoots = List.copyOf(context.generatedSourceRoots());
       sourceRoots = List.copyOf(context.sourceRoots());
     }
@@ -450,8 +454,16 @@ public final class SemanticCallFacts {
       return provenance;
     }
 
+    public java.nio.file.Path repositoryRoot() {
+      return repositoryRoot;
+    }
+
     public AnalysisContext.Handoff handoff() {
       return handoff;
+    }
+
+    public AnalysisContext.DependencyCoordinateManifest dependencyCoordinateManifest() {
+      return dependencyCoordinateManifest;
     }
 
     public List<AnalysisContext.SourceRoot> generatedSourceRoots() {
@@ -478,12 +490,14 @@ public final class SemanticCallFacts {
           && Objects.equals(frameworkVersion, other.frameworkVersion)
           && Objects.equals(fixtureId, other.fixtureId)
           && Objects.equals(selectedProfile, other.selectedProfile)
-          && Objects.equals(analysisScope, other.analysisScope)
-          && Objects.equals(providerName, other.providerName)
-          && Objects.equals(providerVersion, other.providerVersion)
-          && Objects.equals(provenance, other.provenance)
-          && Objects.equals(handoff, other.handoff)
-          && Objects.equals(generatedSourceRoots, other.generatedSourceRoots)
+           && Objects.equals(analysisScope, other.analysisScope)
+           && Objects.equals(providerName, other.providerName)
+           && Objects.equals(providerVersion, other.providerVersion)
+           && Objects.equals(repositoryRoot, other.repositoryRoot)
+           && Objects.equals(provenance, other.provenance)
+           && Objects.equals(handoff, other.handoff)
+           && Objects.equals(dependencyCoordinateManifest, other.dependencyCoordinateManifest)
+           && Objects.equals(generatedSourceRoots, other.generatedSourceRoots)
           && Objects.equals(sourceRoots, other.sourceRoots);
     }
 
@@ -498,12 +512,14 @@ public final class SemanticCallFacts {
           analysisScope,
           javaRelease,
           providerName,
-          providerVersion,
-          graphMethodCount,
-          graphCallCount,
-          provenance,
-          handoff,
-          generatedSourceRoots,
+           providerVersion,
+           graphMethodCount,
+           graphCallCount,
+           repositoryRoot,
+           provenance,
+           handoff,
+           dependencyCoordinateManifest,
+           generatedSourceRoots,
           sourceRoots);
     }
 
@@ -517,11 +533,13 @@ public final class SemanticCallFacts {
           + ", analysisScope=" + analysisScope
           + ", javaRelease=" + javaRelease
           + ", providerName=" + providerName
-          + ", providerVersion=" + providerVersion
-          + ", graphMethodCount=" + graphMethodCount
-          + ", graphCallCount=" + graphCallCount
-          + ", provenance=" + provenance
-          + ", handoff=" + handoff
+           + ", providerVersion=" + providerVersion
+           + ", graphMethodCount=" + graphMethodCount
+           + ", graphCallCount=" + graphCallCount
+           + ", repositoryRoot=" + repositoryRoot
+           + ", provenance=" + provenance
+           + ", handoff=" + handoff
+           + ", dependencyCoordinateManifest=" + dependencyCoordinateManifest
           + ", generatedSourceRoots=" + generatedSourceRoots
           + ", sourceRoots=" + sourceRoots
           + "]";

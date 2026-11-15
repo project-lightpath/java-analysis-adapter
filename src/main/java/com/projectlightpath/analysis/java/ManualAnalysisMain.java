@@ -23,7 +23,7 @@ public final class ManualAnalysisMain {
           facts.providerFacts().size(),
           facts.frameworkFacts().size(),
           outputPath);
-    } catch (IOException | RuntimeException error) {
+    } catch (IOException | IllegalArgumentException error) {
       System.err.println("manual Java analysis failed: " + error.getMessage());
       System.exit(1);
     }

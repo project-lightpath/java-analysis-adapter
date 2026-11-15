@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,7 +32,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-/** Baseline-aware PMD/CPD report validation used by the Maven lint goal. */
+/** PMD/CPD report validation used by the Maven lint goal. */
 public final class JavaLintValidator {
   /** Reviewed CPD policy threshold in tokens. */
   public static final int CPD_MINIMUM_TOKENS = 100;
@@ -40,6 +41,12 @@ public final class JavaLintValidator {
   private static final String PMD_PLUGIN_GROUP_ID = "org.apache.maven.plugins";
   private static final int DEFAULT_PMD_MINIMUM_PRIORITY = 5;
   private static final boolean DEFAULT_PMD_INCLUDE_TESTS = false;
+  private static final int ENFORCED_PMD_MINIMUM_PRIORITY = 3;
+  private static final String ENFORCED_PMD_VERSION = "7.17.0";
+  private static final String ENFORCED_RULESET_SHA256 =
+      "780ee85ac689a3a9b651d08bda79ac36ac2f6983156510322e099a683e71f83f";
+  private static final List<String> ENFORCED_RULESETS = List.of("config/pmd-production.xml");
+  private static final List<String> ENFORCED_SOURCE_SCOPE = List.of("src/main/java");
   private static final Pattern LOCATION_MESSAGE =
       Pattern.compile("\\bat line [0-9][0-9,]*\\b");
   private static final Pattern PMD_SUPPRESSION_MARKER = Pattern.compile("\\bNOPMD\\b");
@@ -68,7 +75,7 @@ public final class JavaLintValidator {
     this.root = root.toAbsolutePath().normalize();
   }
 
-  /** Validates generated reports against the checked-in baseline. */
+  /** Validates generated reports against the checked-in baseline, when present. */
   public ValidationReport validate(boolean enforce) throws IOException {
     Path ruleset = root.resolve("config/pmd-production.xml");
     Path baselineFile = root.resolve("config/java-lint-baseline.json");
@@ -89,7 +96,8 @@ public final class JavaLintValidator {
     requireFile(pmdReport);
     requireFile(cpdReport);
 
-    JsonNode baseline = loadBaseline(baselineFile);
+    boolean baselinePresent = Files.exists(baselineFile);
+    JsonNode baseline = baselinePresent ? loadBaseline(baselineFile) : emptyBaseline();
     Document pmd = parseXml(pmdReport);
     Document cpd = parseXml(cpdReport);
     EffectivePmdConfiguration effectivePmd = effectivePmdConfiguration(effectivePom, root);
@@ -100,7 +108,7 @@ public final class JavaLintValidator {
     Comparison cpdComparison = compareFingerprints(
         fingerprints(cpdFindings), baselineFingerprints(baseline, "cpd"));
     List<String> metadataErrors = validateMetadata(
-        pmd, cpd, baseline, rulesetText, effectivePmd);
+        pmd, cpd, baseline, rulesetText, effectivePmd, baselinePresent);
     List<String> reportErrors = new ArrayList<>();
     reportErrors.addAll(reportProcessingErrors(pmd, "PMD"));
     reportErrors.addAll(reportProcessingErrors(cpd, "CPD"));
@@ -109,11 +117,12 @@ public final class JavaLintValidator {
     String mode = enforce ? "enforced" : "report-only";
     summarizePmd(messages, pmdFindings, mode);
     summarizeCpd(messages, cpdFindings, mode);
-    messages.add("PMD baseline findings allowed: "
+    String baselineLabel = baselinePresent ? "baseline" : "empty baseline (no baseline file)";
+    messages.add("PMD " + baselineLabel + " findings allowed: "
         + (pmdFindings.size() - pmdComparison.newFingerprints().size()));
     messages.add("PMD new findings: " + pmdComparison.newFingerprints().size()
         + "; resolved baseline findings: " + pmdComparison.resolvedFingerprints().size());
-    messages.add("CPD baseline duplications allowed: "
+    messages.add("CPD " + baselineLabel + " duplications allowed: "
         + (cpdFindings.size() - cpdComparison.newFingerprints().size()));
     messages.add("CPD new duplications: " + cpdComparison.newFingerprints().size()
         + "; resolved baseline duplications: " + cpdComparison.resolvedFingerprints().size());
@@ -133,7 +142,9 @@ public final class JavaLintValidator {
     } else if (enforce && findingFailures > 0) {
       messages.add("java lint gate: FAIL (" + findingFailures + " new finding(s))");
     } else if (enforce) {
-      messages.add("java lint gate: PASS (no findings outside the reviewed baseline)");
+      messages.add(baselinePresent
+          ? "java lint gate: PASS (no findings outside the reviewed baseline)"
+          : "java lint gate: PASS (no PMD/CPD findings)");
     } else {
       messages.add("java lint report-only: PASS (baseline comparison was not enforced)");
     }
@@ -393,14 +404,18 @@ public final class JavaLintValidator {
     return findings;
   }
 
-  /** Compares report and effective-POM metadata with reviewed baseline metadata. */
+  /** Compares report and effective-POM metadata with the active lint contract. */
   private List<String> validateMetadata(
       Document pmd,
       Document cpd,
       JsonNode baseline,
       String rulesetText,
-      EffectivePmdConfiguration effectivePmd) {
+      EffectivePmdConfiguration effectivePmd,
+      boolean baselinePresent) {
     List<String> errors = new ArrayList<>();
+    if (!baselinePresent) {
+      return validateNoBaselineMetadata(pmd, cpd, effectivePmd, rulesetText);
+    }
     JsonNode pmdBaseline = baseline.path("pmd");
     JsonNode cpdBaseline = baseline.path("cpd");
     String reportPmdVersion = pmd.getDocumentElement().getAttribute("version");
@@ -446,6 +461,40 @@ public final class JavaLintValidator {
       errors.add("CPD minimum token configuration is inconsistent with the reviewed baseline: "
           + "effective Maven=" + effectiveMinimumTokens + "; baseline="
           + cpdBaseline.path("minimumTokens").asText());
+    }
+    return errors;
+  }
+
+  /** Enforces the production lint contract when no historical baseline remains. */
+  private static List<String> validateNoBaselineMetadata(
+      Document pmd,
+      Document cpd,
+      EffectivePmdConfiguration effectivePmd,
+      String rulesetText) {
+    List<String> errors = new ArrayList<>();
+    if (!ENFORCED_PMD_VERSION.equals(pmd.getDocumentElement().getAttribute("version"))) {
+      errors.add("PMD version must be " + quote(ENFORCED_PMD_VERSION));
+    }
+    if (!ENFORCED_PMD_VERSION.equals(cpd.getDocumentElement().getAttribute("pmdVersion"))) {
+      errors.add("CPD version must be " + quote(ENFORCED_PMD_VERSION));
+    }
+    if (effectivePmd.minimumPriority() != ENFORCED_PMD_MINIMUM_PRIORITY) {
+      errors.add("PMD minimum priority must be " + ENFORCED_PMD_MINIMUM_PRIORITY);
+    }
+    if (effectivePmd.includeTests() != DEFAULT_PMD_INCLUDE_TESTS) {
+      errors.add("PMD test-source scope must exclude tests");
+    }
+    if (!ENFORCED_RULESETS.equals(effectivePmd.rulesets())) {
+      errors.add("PMD rule selection must use " + ENFORCED_RULESETS);
+    }
+    if (!ENFORCED_SOURCE_SCOPE.equals(effectivePmd.sourceScope())) {
+      errors.add("PMD source scope must be " + ENFORCED_SOURCE_SCOPE);
+    }
+    if (!ENFORCED_RULESET_SHA256.equals(sha256(rulesetText))) {
+      errors.add("PMD ruleset content changed; review the enforced ruleset");
+    }
+    if (effectivePmd.minimumTokens() != CPD_MINIMUM_TOKENS) {
+      errors.add("CPD minimum token configuration must be " + CPD_MINIMUM_TOKENS);
     }
     return errors;
   }
@@ -504,6 +553,14 @@ public final class JavaLintValidator {
     JsonNode cpd = baseline.path("cpd");
     requireBaselineText(cpd, "pmdVersion");
     requireBaselineInteger(cpd, "minimumTokens");
+    return baseline;
+  }
+
+  /** Supplies an empty fingerprint inventory after the reviewed baseline is retired. */
+  private static JsonNode emptyBaseline() {
+    ObjectNode baseline = JSON.createObjectNode();
+    baseline.putObject("pmd").putArray("findings");
+    baseline.putObject("cpd").putArray("findings");
     return baseline;
   }
 
