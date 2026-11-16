@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.WeakHashMap;
 import sootup.core.inputlocation.AnalysisInputLocation;
 import sootup.core.inputlocation.FileType;
 import sootup.core.model.SourceType;
@@ -26,18 +25,19 @@ import sootup.java.core.views.JavaView;
 /** Builds SootUp input locations while retaining exact dependency ownership. */
 final class SootUpInputLocationFactory {
   static final int MAX_DEPENDENCY_ENTRIES = 1024;
-  private static final Map<AnalysisContext, DependencyResolution> DEPENDENCY_CACHE =
-      new WeakHashMap<>();
 
   private SootUpInputLocationFactory() {}
 
   static Inputs createView(AnalysisContext context) {
+    return createView(context, dependencyResolution(context));
+  }
+
+  static Inputs createView(AnalysisContext context, DependencyResolution resolution) {
     List<AnalysisInputLocation> locations = new ArrayList<>();
     locations.add(new JavaClassPathAnalysisInputLocation(
         context.applicationClasses().toString(), SourceType.Application));
     Map<AnalysisInputLocation, Path> dependencyEntries = new IdentityHashMap<>();
     Set<Path> dependencyPaths = new LinkedHashSet<>();
-    DependencyResolution resolution = dependencyResolution(context);
     if (!resolution.truncatedWildcards().isEmpty()) {
       throw new IllegalArgumentException(
           "dependency_enumeration_limit: dependency wildcard expansion exceeds "
@@ -61,12 +61,9 @@ final class SootUpInputLocationFactory {
     return dependencyResolution(context).entries();
   }
 
-  /** Returns cached, bounded dependency entries and wildcard-limit diagnostics. */
+  /** Resolves a fresh immutable membership snapshot for one invocation. */
   static DependencyResolution dependencyResolution(AnalysisContext context) {
-    synchronized (DEPENDENCY_CACHE) {
-      return DEPENDENCY_CACHE.computeIfAbsent(context,
-          SootUpInputLocationFactory::resolveDependencies);
-    }
+    return resolveDependencies(context);
   }
 
   private static void addDependencyLocation(

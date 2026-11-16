@@ -12,12 +12,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** Converts provider graph observations into provider-only SemanticCallFacts. */
 final class ProviderFactNormalizer {
   private ProviderFactNormalizer() {}
 
   static List<SemanticCallFacts.Fact> normalize(AnalysisContext context, AnalysisGraph graph) {
+    return normalize(context, graph, () -> SootUpInputLocationFactory.dependencyResolution(context));
+  }
+
+  static List<SemanticCallFacts.Fact> normalize(
+      AnalysisContext context,
+      AnalysisGraph graph,
+      Supplier<SootUpInputLocationFactory.DependencyResolution> dependencies) {
     Set<String> ids = new HashSet<>();
     CallReferences references = collectCallReferences(graph);
     Map<Integer, String> callIds = callIds(references, ids);
@@ -26,7 +34,7 @@ final class ProviderFactNormalizer {
     SourceMetadataScanner sourceScanner = hasServiceLoaderEdges
         ? new SourceMetadataScanner(context) : null;
     ServiceLoaderDescriptorScanner.Scan descriptors = hasServiceLoaderEdges
-        ? ServiceLoaderDescriptorScanner.scan(context)
+        ? ServiceLoaderDescriptorScanner.scan(context, dependencies.get())
         : new ServiceLoaderDescriptorScanner.Scan(List.of());
     List<SemanticCallFacts.Fact> facts = callFacts(
         context, references.edges(), callIds, descriptors, sourceScanner);

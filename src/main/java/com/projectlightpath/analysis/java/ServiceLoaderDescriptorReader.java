@@ -22,11 +22,14 @@ final class ServiceLoaderDescriptorReader {
   private ServiceLoaderDescriptorReader() {}
 
   static ServiceLoaderDescriptorScanner.Scan scan(AnalysisContext context) {
+    return scan(context, SootUpInputLocationFactory.dependencyResolution(context));
+  }
+
+  static ServiceLoaderDescriptorScanner.Scan scan(
+      AnalysisContext context, SootUpInputLocationFactory.DependencyResolution dependencyResolution) {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
     ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
-    SootUpInputLocationFactory.DependencyResolution dependencyResolution =
-        SootUpInputLocationFactory.dependencyResolution(context);
     for (Path wildcard : dependencyResolution.truncatedWildcards()) {
       state.diagnostic(
           "dependency_enumeration_limit", wildcard.toString(),
@@ -38,7 +41,8 @@ final class ServiceLoaderDescriptorReader {
         context.applicationClasses(), descriptors, visited, state);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
       Path parent = root.path().getParent();
-      if (parent != null) {
+      if (parent != null && ServiceLoaderDescriptorAuthorization.derivedDirectory(
+          parent, "resources/" + SERVICES, state)) {
         scanDirectory(parent.resolve("resources").resolve(SERVICES), context, descriptors, visited, state);
       }
     }
@@ -84,7 +88,7 @@ final class ServiceLoaderDescriptorReader {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ServiceLoaderDescriptorSource.ScanState state) {
-    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+    if (!ServiceLoaderDescriptorAuthorization.readableDirectory(directory, state)) {
       return;
     }
     NavigableSet<Path> candidates = new TreeSet<>();
@@ -95,12 +99,12 @@ final class ServiceLoaderDescriptorReader {
           complete = false;
           break;
         }
-        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+        if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)) {
           ServiceLoaderDescriptorSource.retainSmallest(
               candidates, path, ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES);
         }
       }
-    } catch (IOException | DirectoryIteratorException error) {
+    } catch (IOException | DirectoryIteratorException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_directory_read_error",
           directory.toAbsolutePath().normalize().toString(),
           ServiceLoaderDescriptorSource.message(error));
@@ -127,7 +131,7 @@ final class ServiceLoaderDescriptorReader {
             normalized.getFileName().toString()).matches()) {
       return;
     }
-    try (InputStream input = Files.newInputStream(normalized)) {
+    try (InputStream input = Files.newInputStream(normalized, LinkOption.NOFOLLOW_LINKS)) {
       byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(
           input, state, normalized.toString());
       if (bytes == null) {
@@ -143,7 +147,7 @@ final class ServiceLoaderDescriptorReader {
           ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
           parsed.malformedEntries()));
-    } catch (IOException error) {
+    } catch (IOException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_read_error", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
     }

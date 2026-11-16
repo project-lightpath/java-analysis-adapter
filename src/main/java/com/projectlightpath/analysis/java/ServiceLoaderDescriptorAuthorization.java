@@ -11,6 +11,50 @@ import java.util.List;
 final class ServiceLoaderDescriptorAuthorization {
   private ServiceLoaderDescriptorAuthorization() {}
 
+  /** Anchors before appending derived components; canonical paths are authorization only. */
+  static boolean derivedDirectory(
+      Path anchor, String relative, ServiceLoaderDescriptorSource.ScanState state) {
+    Path candidate = anchor.resolve(relative);
+    if (Files.notExists(candidate, LinkOption.NOFOLLOW_LINKS)) {
+      return false;
+    }
+    try {
+      Path expected = anchor.toRealPath().resolve(relative);
+      if (!Files.isSymbolicLink(candidate) && candidate.toRealPath().equals(expected)) {
+        return true;
+      }
+      state.diagnostic("descriptor_path_outside_context", candidate.toString(),
+          "derived metadata directory escapes its selected input anchor or is a symbolic link");
+    } catch (IOException | UnsupportedOperationException | SecurityException error) {
+      state.diagnostic("descriptor_directory_read_error", candidate.toString(),
+          ServiceLoaderDescriptorSource.message(error));
+    }
+    return false;
+  }
+
+  static boolean readableDirectory(Path directory, ServiceLoaderDescriptorSource.ScanState state) {
+    if (Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+      return true;
+    }
+    if (!Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) {
+      state.diagnostic("descriptor_directory_read_error", directory.toString(),
+          "selected metadata directory is not a non-symbolic directory");
+    }
+    return false;
+  }
+
+  static boolean serviceFileCandidate(Path path, ServiceLoaderDescriptorSource.ScanState state) {
+    if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+      return true;
+    }
+    if (path.getFileName() != null
+        && ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(path.getFileName().toString()).matches()) {
+      state.diagnostic("descriptor_read_error", path.toString(),
+          "service descriptor is not a non-symbolic regular file");
+    }
+    return false;
+  }
+
   static boolean authorizedPath(
       AnalysisContext context, Path path, List<Path> dependencyEntries) {
     Path normalized = path.toAbsolutePath().normalize();

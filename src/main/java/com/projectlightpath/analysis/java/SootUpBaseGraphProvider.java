@@ -13,6 +13,11 @@ public final class SootUpBaseGraphProvider {
   public static final String VERSION = "3.0.1";
 
   public AnalysisGraph analyze(AnalysisContext context) {
+    return analyze(context, SootUpInputLocationFactory.dependencyResolution(context));
+  }
+
+  AnalysisGraph analyze(
+      AnalysisContext context, SootUpInputLocationFactory.DependencyResolution dependencies) {
     if (!Files.isDirectory(context.applicationClasses())) {
       throw new IllegalArgumentException(
           "application classes must be a compiled classes directory: " + context.applicationClasses());
@@ -22,7 +27,7 @@ public final class SootUpBaseGraphProvider {
           "dependency classpath is required by AnalysisContext " + context.id());
     }
 
-    SootUpInputLocationFactory.Inputs inputs = SootUpInputLocationFactory.createView(context);
+    SootUpInputLocationFactory.Inputs inputs = SootUpInputLocationFactory.createView(context, dependencies);
     JavaView view = inputs.view();
     Set<String> applicationClasses = SootUpCallGraphExtractor.discoverApplicationClasses(
         context.applicationClasses());

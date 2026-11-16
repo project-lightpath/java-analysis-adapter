@@ -125,6 +125,26 @@ class SootUpDependencyBoundaryIntegrationTest {
   }
 
   @Test
+  void repeatedFullAndStandaloneProviderRunsRefreshWildcardGraphOwnership() throws IOException {
+    Fixture fixture = fixture();
+    AnalysisContext context = contextWithDependencies(fixture, List.of(temp.resolve("*")));
+    JavaAnalysisAdapter adapter = new JavaAnalysisAdapter();
+    assertEquals(fixture.vulnerableJar().toString(), fact(adapter.analyze(context),
+        "app.Application#dependencyCall").evidence().get(0).attributes().get("dependencyClasspathEntry"));
+    Path renamed = temp.resolve("renamed-dependency.jar");
+    Files.move(fixture.vulnerableJar(), renamed);
+    assertEquals(renamed.toString(), fact(adapter.analyze(context),
+        "app.Application#dependencyCall").evidence().get(0).attributes().get("dependencyClasspathEntry"));
+    AnalysisGraph standalone = new SootUpBaseGraphProvider().analyze(context);
+    assertTrue(standalone.calls().stream().anyMatch(item ->
+        item.callee().owner().equals("vulnerable.api.VulnerableApi")
+            && renamed.toString().equals(item.targetContext().dependencyClasspathEntry())));
+    Files.delete(renamed);
+    assertFalse(adapter.analyze(context).providerFacts().stream()
+        .anyMatch(item -> item.caller().equals("app.Application#dependencyCall")));
+  }
+
+  @Test
   void retainsPossibleVirtualDependencyDispatchWithoutPromotingCertainty() throws IOException {
     Fixture fixture = fixture();
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(fixture.context());

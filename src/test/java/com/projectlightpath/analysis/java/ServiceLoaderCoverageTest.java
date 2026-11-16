@@ -200,6 +200,38 @@ class ServiceLoaderCoverageTest {
     assertEquals("module_info", descriptors.get(0).kind());
     assertEquals("demo.Provider", descriptors.get(0).serviceType());
     assertEquals(List.of("demo.DefaultProvider"), descriptors.get(0).providers());
+
+    // Directory module scanning is independent of an incomplete services listing.
+    Path services = Files.createDirectories(moduleClasses.resolve("META-INF/services"));
+    for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+      Files.writeString(services.resolve("noise" + index), "");
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> boundedDirectory = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState directoryState = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        moduleClasses, boundedDirectory, new java.util.HashSet<>(), directoryState);
+    assertEquals(List.of("module_info"), boundedDirectory.stream()
+        .map(ServiceLoaderDescriptorScanner.Descriptor::kind).toList());
+    assertTrue(directoryState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+
+    // Archive candidates, including module-info, require complete archive enumeration.
+    Path archive = temp.resolve("module-overflow.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(Files.readAllBytes(moduleClasses.resolve("module-info.class")));
+      output.closeEntry();
+      put(output, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+      for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+        put(output, "noise/entry-" + index, "");
+      }
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> boundedArchive = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState archiveState = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, boundedArchive, archiveState);
+    assertTrue(boundedArchive.isEmpty(), boundedArchive.toString());
+    assertTrue(archiveState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
   }
 
   @Test

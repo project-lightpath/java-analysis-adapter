@@ -316,6 +316,93 @@ output and runtime snapshots are not retained.
 - Machine-readable validation JSON was transient and is not retained; the
   final gate result is documented above.
 
+### PR-7 amended safety and invocation-lifetime batch (uncommitted)
+
+- Baseline: `0213fdf91bba4af69072796bfe8fbcc0dcc7a28b`. Before production edits,
+  `-Dtest=ServiceLoaderSafetyLifetimeTest test` ran 8 tests with 5 assertion
+  failures, 0 errors, and 0 skips (Maven 27.819 s, test class 12.95 s).
+  Escaping derived resources and application/dependency `META-INF` parents leaked
+  sentinel providers; rejected descriptor/module symlink leaves produced no
+  diagnostics; reused contexts retained renamed/removed JAR membership and stale
+  wildcard truncation. The same selector passed 8/8 after the production edits
+  (Maven 47.246 s, test class 23.73 s).
+- The expanded focused selector
+  `-Dtest=ServiceLoaderSafetyLifetimeTest,ServiceLoaderCoverageTest,SootUpDependencyBoundaryIntegrationTest#repeatedFullAndStandaloneProviderRunsRefreshWildcardGraphOwnership test`
+  passed 28/28, 0 errors/skips (19.401 s). This includes selected symlink ancestors,
+  lexical source-parent anchoring, included/generated/scope filtering, external
+  dependency directories and unchanged displayed provenance; fresh full/prebuilt
+  enrichment and standalone graph ownership; explicit immutable snapshot sharing
+  and concurrent consumer isolation; and preserved overflow behavior.
+- Derived-resource authorization canonicalizes the selected source path's lexical
+  parent before appending `resources/META-INF/services`. Classpath directory
+  metadata is independently anchored under that selected entry's real directory.
+  Canonical paths are not substituted into ownership, coordinate lookup, or
+  displayed evidence. Existing explicit metadata authorization remains separate.
+- Both service-file readers and exploded `module-info.class` opens use
+  `NOFOLLOW_LINKS`, without a following-open fallback. Missing optional inputs are
+  not errors; rejected existing leaves and failed/unsupported reads emit
+  diagnostics. Failed directory enumeration discards that directory's accumulated
+  candidates. Unrelated complete evidence survives, while any scan diagnostic
+  prevents descriptor-backed `DEFINITE` promotion. These checks do **not** provide
+  immunity to concurrent parent-directory replacement, and archive `ZipFile`
+  behavior is unchanged.
+- Additional deterministic no-follow coverage uses the JDK ZIP filesystem only
+  as a filesystem provider that rejects `NOFOLLOW_LINKS` on input streams. An
+  isolated replay against the baseline reader/source classes fails with 3
+  descriptors instead of 1, including both sentinel providers. The final-source
+  isolated regression passes: both service readers and the module reader emit
+  read diagnostics, with no fallback, while the unrelated safe dependency remains.
+  This adds no production filesystem abstraction or archive-format support.
+- Full adapter calls resolve one immutable dependency **membership** snapshot and
+  explicitly pass it to graph construction and descriptor normalization. There is
+  no context-global dependency cache. Standalone provider/descriptor calls resolve
+  afresh. The public prebuilt-graph overload remains compatible, resolves fresh
+  enrichment inputs only when ServiceLoader edges exist, and leaves graph/input
+  consistency with its caller. Caller-owned source scanners retain their existing
+  ownership and lifetime. This is not a filesystem-content snapshot.
+- The shared 1,024-entry enumeration cap still counts all entries, not only
+  descriptor candidates. An incomplete archive discards its service and module
+  candidates. An incomplete directory service listing discards its service
+  candidates; its separately scanned module remains visible with diagnostics, so
+  certainty remains conservative. Completeness is bounded, not repository-wide.
+- Compiled single-line and multiline enhanced-for loops preserve ordinary provider
+  call edges but abstain from ServiceLoader attribution and descriptor certainty.
+  No loop receiver/dataflow extension was added. The direct package-access cache
+  test nit is addressed; masking reuse/memory and receiver-helper refactors are
+  deferred to avoid unrelated source-correlation changes.
+
+#### Final validation for this uncommitted batch
+
+- Runtime: Eclipse Adoptium Temurin `21.0.13+9-LTS`, pinned with
+  `JAVA_HOME=/Users/jgil/.cache/project-lightpath/jdk/jdk-21.0.13+9/Contents/Home`
+  and its `bin` prepended to `PATH`; Maven comes from
+  `bash spike/scripts/bootstrap-maven.sh`.
+- `make adapter-test`: **161/161**, 0 failures/errors/skips, Maven **7 min 43 s**
+  (465.472 s including the wrapper), completed `2026-11-16T13:06:32-05:00`.
+  To avoid overwriting classes/reports while the earlier full run was active,
+  this final run used a separate validation directory. All **112 source/test
+  input files** were SHA-256 verified byte-identical to the worktree both before
+  and after the run. The earlier worktree run also passed 160/160 (7 min 56 s),
+  before the final unsupported-provider test and path-helper relocation.
+- Final worktree selector
+  `-Dtest=ServiceLoaderSafetyLifetimeTest,ServiceLoaderCoverageTest,ServiceLoaderSourceCacheTest test`:
+  **37/37**, 0 failures/errors/skips, **9.837 s**. The safety/lifetime class has
+  12 passing tests, including the unsupported-provider regression.
+- `make java-lint`: **17/17** plugin tests; **0 PMD**, **0 CPD**, no baseline or
+  suppression changes. The first lint attempt identified one `GodClass` finding
+  after adding filesystem checks to the descriptor source. Moving those checks
+  into the existing descriptor authorization class resolved it without changing
+  behavior or relaxing rules.
+- `make validator-test`: **4/4**. `make evidence-validate`: **10** acceptance
+  criteria, **3** candidates, **10** capability cases, **21** relationships,
+  **10** observed results. `git diff --check` passes.
+
+No hostile parent-directory race immunity is claimed. A deterministic filesystem
+close/iterator failure after partial enumeration was not injected; the source
+reader's exception branch now returns before processing any accumulated candidates.
+No independent regression review, commit, push, or GitHub reply/thread change has
+been performed for this batch.
+
 ### independent-review-wildcard-service-loader-shadowing
 
 - `RED_28`: commit `c8097f59a837f1546c0f237f6c56386710308b43`; a compiled same-package

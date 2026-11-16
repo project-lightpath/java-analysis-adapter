@@ -40,8 +40,10 @@ final class ServiceLoaderDescriptorSource {
       ScanState state) {
     Path normalized = entry.toAbsolutePath().normalize();
     if (Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
-      scanServiceDirectory(normalized.resolve(SERVICES_DIRECTORY), normalized.toString(),
-          descriptors, visited, state);
+      if (ServiceLoaderDescriptorAuthorization.derivedDirectory(normalized, SERVICES_DIRECTORY, state)) {
+        scanServiceDirectory(normalized.resolve(SERVICES_DIRECTORY), normalized.toString(),
+            descriptors, visited, state);
+      }
       scanModuleInfo(normalized, descriptors, state);
     } else if (Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
       ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
@@ -55,7 +57,7 @@ final class ServiceLoaderDescriptorSource {
       Set<String> visited,
       ScanState state) {
     Path normalized = directory.toAbsolutePath().normalize();
-    if (!Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)
+    if (!ServiceLoaderDescriptorAuthorization.readableDirectory(normalized, state)
         || !visited.add("services:" + normalized)) {
       return;
     }
@@ -67,14 +69,11 @@ final class ServiceLoaderDescriptorSource {
           complete = false;
           break;
         }
-        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+        if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)) {
           retainSmallest(candidates, path, MAX_ENUMERATED_ENTRIES);
         }
       }
-    } catch (IOException error) {
-      state.diagnostic(
-          "service_directory_read_error", normalized.toString(), message(error));
-    } catch (DirectoryIteratorException error) {
+    } catch (IOException | DirectoryIteratorException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic(
           "service_directory_read_error", normalized.toString(), message(error));
       return;
@@ -109,7 +108,7 @@ final class ServiceLoaderDescriptorSource {
         || !BINARY_CLASS_NAME.matcher(normalized.getFileName().toString()).matches()) {
       return;
     }
-    try (var input = Files.newInputStream(normalized)) {
+    try (var input = Files.newInputStream(normalized, LinkOption.NOFOLLOW_LINKS)) {
       byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(
           input, state, normalized.toString());
       if (bytes == null) {
@@ -123,7 +122,7 @@ final class ServiceLoaderDescriptorSource {
           sha256(bytes),
           "meta_inf_services",
           parsed.malformedEntries()));
-    } catch (IOException error) {
+    } catch (IOException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_read_error", normalized.toString(), message(error));
     }
   }
@@ -134,6 +133,10 @@ final class ServiceLoaderDescriptorSource {
       ScanState state) {
     Path module = classpathDirectory.resolve(MODULE_INFO);
     if (!Files.isRegularFile(module, LinkOption.NOFOLLOW_LINKS)) {
+      if (!Files.notExists(module, LinkOption.NOFOLLOW_LINKS)) {
+        state.diagnostic("descriptor_read_error", module.toString(),
+            "module-info.class is not a non-symbolic regular file");
+      }
       return;
     }
     String path = module.toAbsolutePath().normalize().toString();
@@ -143,12 +146,12 @@ final class ServiceLoaderDescriptorSource {
           "module-info.class could not be read after the descriptor decompression budget was exhausted");
       return;
     }
-    try (var input = Files.newInputStream(module)) {
+    try (var input = Files.newInputStream(module, LinkOption.NOFOLLOW_LINKS)) {
       byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(input, state, path);
       if (bytes != null) {
         addModuleBytes(bytes, path, descriptors, state);
       }
-    } catch (IOException error) {
+    } catch (IOException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_read_error", path, message(error));
     }
   }
