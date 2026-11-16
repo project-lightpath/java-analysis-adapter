@@ -1,13 +1,14 @@
 package com.projectlightpath.analysis.java;
 
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.WeakHashMap;
-import java.util.regex.Pattern;
 
 /** Caches source text and parsed ServiceLoader sites for one analysis scanner. */
 final class ServiceLoaderSourceCache {
@@ -17,9 +18,6 @@ final class ServiceLoaderSourceCache {
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 
   private ServiceLoaderSourceCache() {}
-
-  private static final Pattern SERVICE_LOADER_TYPE_DECLARATION = Pattern.compile(
-      "\\b(?:class|interface|record|enum)\\s+ServiceLoader\\b");
 
   /** Returns one cached source model for a scanner and method owner. */
   static Optional<CachedSource> source(SourceMetadataScanner scanner, MethodSymbol symbol) {
@@ -42,16 +40,72 @@ final class ServiceLoaderSourceCache {
       SourceMetadataScanner scanner, SourceMetadataScanner.SourceFile file) {
     String source = file.source();
     String structuralSource = ServiceLoaderSourceMasker.mask(source);
-    boolean localTypeDeclared = SERVICE_LOADER_TYPE_DECLARATION.matcher(structuralSource).find();
     boolean samePackageTypeShadow = scanner.files().stream()
         .anyMatch(candidate -> candidate.packageName().equals(file.packageName())
             && candidate.simpleTypeName().equals("ServiceLoader"));
+    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
+        source, !samePackageTypeShadow, true).stream()
+        .filter(site -> !isShadowedAt(file, structuralSource, site.offset()))
+        .toList();
     return new CachedSource(
         source,
-        ServiceLoaderCallSiteParser.parse(
-            source,
-            !localTypeDeclared && !samePackageTypeShadow,
-            !localTypeDeclared));
+        sites);
+  }
+
+  private static boolean isShadowedAt(
+      SourceMetadataScanner.SourceFile file, String source, int offset) {
+    if (source.startsWith("java.util.ServiceLoader", offset)) {
+      return false;
+    }
+    return SourceMetadataScanner.typeDeclarations(file).stream()
+        .filter(type -> type.name().equals("ServiceLoader"))
+        .anyMatch(type -> declarationInScope(file, source, type, offset));
+  }
+
+  private static boolean declarationInScope(
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      SourceMetadataScannerState.TypeInfo type,
+      int offset) {
+    if (!isLocalDeclaration(file, source, type)) {
+      // Member and nested types are in scope throughout their enclosing type,
+      // including source locations that precede the declaration.
+      return true;
+    }
+    if (type.start() > offset) {
+      return false;
+    }
+    int enclosingBlock = enclosingBlockStart(source, type.start());
+    if (enclosingBlock < 0) {
+      return true;
+    }
+    int closing = JavaSourceText.matchingDelimiter(source, enclosingBlock, '{', '}');
+    return closing < 0 || offset < closing;
+  }
+
+  private static boolean isLocalDeclaration(
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      SourceMetadataScannerState.TypeInfo type) {
+    return SourceMetadataScanner.methods(file).stream()
+        .filter(method -> method.start() <= type.start())
+        .filter(method -> method.end() > 0 && method.end() <= source.length())
+        .filter(method -> source.charAt(method.end() - 1) == '{')
+        .anyMatch(method -> JavaSourceText.matchingDelimiter(
+            source, method.end() - 1, '{', '}') >= type.start());
+  }
+
+  private static int enclosingBlockStart(String source, int offset) {
+    Deque<Integer> openings = new ArrayDeque<>();
+    for (int index = 0; index < offset; index++) {
+      char value = source.charAt(index);
+      if (value == '{') {
+        openings.push(index);
+      } else if (value == '}' && !openings.isEmpty()) {
+        openings.pop();
+      }
+    }
+    return openings.isEmpty() ? -1 : openings.peek();
   }
 
   record CachedSource(String sourceText, List<ServiceLoaderCallSite> sites) {

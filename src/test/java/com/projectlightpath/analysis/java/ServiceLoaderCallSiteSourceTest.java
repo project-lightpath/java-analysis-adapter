@@ -65,6 +65,17 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void preservesProviderProvenanceThroughFilteringLambda() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".filter(p -> true).ifPresent(q -> q.record());\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "q"));
+  }
+
+  @Test
   void allowsKeywordBeforeBareProviderReceiver() {
     String source = "import java.util.ServiceLoader;\n"
         + "return ServiceLoader.load(AuditProvider.class).findFirst()"

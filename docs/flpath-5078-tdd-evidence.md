@@ -33,8 +33,10 @@ output and runtime snapshots are not retained.
   rerun of the same selector.
 - An evidence commit appends hashes and provenance without amending red or
   green commits.
-- Performance guards run three times under the pinned toolchain and preserve
-  complete output, test count, and `/usr/bin/time -p` data.
+- Performance guards were run three times under the pinned toolchain during
+  development. Their generated logs and timing sidecars are transient and are
+  not retained; this outcome document does not claim those raw runs as
+  independently reproducible evidence.
 
 ## Completed groups
 

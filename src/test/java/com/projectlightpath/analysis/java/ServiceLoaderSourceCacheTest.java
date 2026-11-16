@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -126,6 +127,21 @@ class ServiceLoaderSourceCacheTest {
           }
         }
         """).isEmpty());
+  }
+
+  @Test
+  void scopesLocalServiceLoaderShadowingToItsEnclosingMethod() throws IOException {
+    assertEquals(1, cachedSites("local-service-loader-shadow-in-helper", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() { ServiceLoader.load(Provider.class); }
+          void helper() {
+            class ServiceLoader<T> { }
+            ServiceLoader.load(Provider.class);
+          }
+        }
+        """).size());
   }
 
   @Test

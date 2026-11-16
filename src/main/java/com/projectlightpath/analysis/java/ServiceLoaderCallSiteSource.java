@@ -136,9 +136,32 @@ final class ServiceLoaderCallSiteSource {
         // parameter ownership to a ServiceLoader edge.
         return !priorLambda && containsParameter(parameters, receiver);
       }
-      priorLambda = true;
+      // Optional.filter returns the same provider value when its predicate
+      // matches. Unlike map, it cannot replace the value flowing to the next
+      // operation, so retain ServiceLoader ownership through that predicate.
+      priorLambda = priorLambda || !isValuePreservingLambda(sourceText, lambda.start());
     }
     return false;
+  }
+
+  private static boolean isValuePreservingLambda(String sourceText, int lambdaStart) {
+    int opening = lambdaStart - 1;
+    while (opening >= 0 && Character.isWhitespace(sourceText.charAt(opening))) {
+      opening--;
+    }
+    if (opening < 0 || sourceText.charAt(opening) != '(') {
+      return false;
+    }
+    int end = opening - 1;
+    while (end >= 0 && Character.isWhitespace(sourceText.charAt(end))) {
+      end--;
+    }
+    int start = end;
+    while (start >= 0 && Character.isJavaIdentifierPart(sourceText.charAt(start))) {
+      start--;
+    }
+    return end >= start + 1
+        && sourceText.substring(start + 1, end + 1).equals("filter");
   }
 
   private static String receiverName(String sourceText, int targetOffset) {
