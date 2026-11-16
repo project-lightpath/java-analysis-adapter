@@ -28,7 +28,8 @@ final class ServiceLoaderDescriptorSource {
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
   static final int MAX_ENUMERATED_ENTRIES = 1024;
   static final Pattern BINARY_CLASS_NAME = Pattern.compile(
-      "[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*");
+      "\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*"
+          + "(?:\\.\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*)*");
 
   private ServiceLoaderDescriptorSource() {}
 

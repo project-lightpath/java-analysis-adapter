@@ -74,7 +74,7 @@ class ServiceLoaderWarDescriptorTest {
   }
 
   @Test
-  void identicalOutputAndResourceDescriptorsRemainUnique() throws IOException {
+  void equivalentOutputAndResourceDescriptorsRemainUnique() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     Path resources = temp.resolve("src/main/resources/META-INF/services");
     Path classes = temp.resolve("target/classes/META-INF/services");
@@ -87,7 +87,7 @@ class ServiceLoaderWarDescriptorTest {
         + ".ifPresent(value -> value.record()); } }\n");
     Files.writeString(sourceRoot.resolve("demo/Provider.java"),
         "package demo; interface Provider { void record(); }\n");
-    Files.writeString(resources.resolve("demo.Provider"), "demo.DefaultProvider\n");
+    Files.writeString(resources.resolve("demo.Provider"), "# resource copy\ndemo.DefaultProvider\n");
     Files.writeString(classes.resolve("demo.Provider"), "demo.DefaultProvider\n");
 
     AnalysisContext context = AnalysisContext.builder()
@@ -120,7 +120,7 @@ class ServiceLoaderWarDescriptorTest {
     assertEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
     assertTrue(resolution.evidence().stream()
         .filter(evidence -> evidence.kind().equals("service_loader_resolution"))
-        .anyMatch(evidence -> evidence.attributes().get("descriptorCount").equals("1")),
+        .anyMatch(evidence -> evidence.attributes().get("descriptorCount").equals("2")),
         resolution.evidence().toString());
   }
 

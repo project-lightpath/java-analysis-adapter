@@ -21,7 +21,7 @@ import java.util.TreeSet;
 /** Reads selected META-INF/services files for the first bounded ServiceLoader path. */
 final class ServiceLoaderDescriptorReader {
   private static final String SERVICES = "META-INF/services";
-  private static final Pattern PROVIDER = Pattern.compile("[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*");
+  private static final Pattern PROVIDER = ServiceLoaderDescriptorSource.BINARY_CLASS_NAME;
 
   private ServiceLoaderDescriptorReader() {}
 

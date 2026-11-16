@@ -57,9 +57,8 @@ final class ServiceLoaderDescriptorScanner {
       boolean moduleVisibilityProven) {
     return !hints.explicitClassLoader()
         && hints.callSiteBound()
-        && descriptors.size() == 1
         && providers.size() == 1
-        && !descriptors.get(0).malformed()
+        && descriptors.stream().noneMatch(Descriptor::malformed)
         && scan.diagnostics().isEmpty()
         && moduleVisibilityProven
         && providers.contains(edge.callee().owner());

@@ -12,6 +12,8 @@ final class ServiceLoaderCallSiteSource {
       "\\(([^()]*)\\)\\s*->|([A-Za-z_$][\\w$]*)\\s*->");
   private static final Pattern PARAMETER_NAME = Pattern.compile(
       "([A-Za-z_$][\\w$]*)\\s*$");
+  private static final Pattern DIRECT_PROVIDER_CHAIN = Pattern.compile(
+      "\\s*\\.\\s*findFirst\\s*\\(\\s*\\)\\s*\\.\\s*orElseThrow\\s*\\(\\s*\\)\\s*");
 
   private ServiceLoaderCallSiteSource() {}
 
@@ -123,7 +125,7 @@ final class ServiceLoaderCallSiteSource {
     }
     String receiver = receiverName(sourceText, targetOffset);
     if (receiver == null) {
-      return false;
+      return isDirectProviderOwnedTarget(sourceText, start, targetOffset);
     }
     Matcher lambda = LAMBDA.matcher(sourceText);
     lambda.region(start, targetOffset);
@@ -134,7 +136,9 @@ final class ServiceLoaderCallSiteSource {
         // The first lambda whose body contains the target is the outermost
         // lexical owner. Do not let an unrelated nested lambda lend its
         // parameter ownership to a ServiceLoader edge.
-        return !priorLambda && containsParameter(parameters, receiver);
+        return !priorLambda
+            && containsParameter(parameters, receiver)
+            && !parameterReassigned(sourceText, lambda.end(), targetOffset, receiver);
       }
       // Optional.filter returns the same provider value when its predicate
       // matches. Unlike map, it cannot replace the value flowing to the next
@@ -162,6 +166,27 @@ final class ServiceLoaderCallSiteSource {
     }
     return end >= start + 1
         && sourceText.substring(start + 1, end + 1).equals("filter");
+  }
+
+  private static boolean isDirectProviderOwnedTarget(
+      String sourceText, int expressionStart, int targetOffset) {
+    return DIRECT_PROVIDER_CHAIN.matcher(sourceText.substring(expressionStart, targetOffset))
+        .matches();
+  }
+
+  private static boolean parameterReassigned(
+      String sourceText, int lambdaEnd, int targetOffset, String receiver) {
+    Matcher writes = parameterWritePattern(receiver).matcher(sourceText);
+    writes.region(lambdaEnd, targetOffset);
+    return writes.find();
+  }
+
+  private static Pattern parameterWritePattern(String receiver) {
+    String name = Pattern.quote(receiver);
+    return Pattern.compile(
+        "(?<![A-Za-z0-9_$.])" + name
+            + "\\s*(?:=(?!=)|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=|>>>=|\\+\\+|--)"
+            + "|(?:\\+\\+|--)\\s*" + name);
   }
 
   private static String receiverName(String sourceText, int targetOffset) {

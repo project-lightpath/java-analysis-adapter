@@ -131,16 +131,21 @@ class ServiceLoaderCoverageTest {
     Files.createDirectories(services);
     Files.writeString(services.resolve("demo.Provider"),
         "# comment\ndemo.DefaultProvider\nbad-name\ndemo.DefaultProvider\n");
+    Files.writeString(services.resolve("demo.ÉService"), "demo.ÉProvider\n");
     Files.writeString(services.resolve("bad-name"), "ignored");
 
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
     Set<String> visited = new java.util.HashSet<>();
     ServiceLoaderDescriptorSource.scanClasspathEntry(root, descriptors, visited, state);
-    assertEquals(1, descriptors.size());
+    assertEquals(2, descriptors.size());
     assertEquals(List.of("demo.DefaultProvider"), descriptors.get(0).providers());
+    assertTrue(descriptors.stream()
+        .anyMatch(item -> item.serviceType().equals("demo.ÉService")
+            && item.providers().equals(List.of("demo.ÉProvider"))),
+        descriptors.toString());
     ServiceLoaderDescriptorSource.scanClasspathEntry(root, descriptors, visited, state);
-    assertEquals(1, descriptors.size());
+    assertEquals(2, descriptors.size());
 
     ServiceLoaderDescriptorSource.ScanState limited = new ServiceLoaderDescriptorSource.ScanState(1);
     assertFalse(limited.consumeDecompressed(-1, "memory"));
@@ -241,6 +246,8 @@ class ServiceLoaderCoverageTest {
     Files.createDirectories(declaredDirectory);
     Path inside = declaredDirectory.resolve("demo.Inside");
     Files.writeString(inside, "demo.InsideProvider\n");
+    Path unicode = declaredDirectory.resolve("demo.ÉInside");
+    Files.writeString(unicode, "demo.ÉInsideProvider\n");
     Path oversized = declaredDirectory.resolve("large.Provider");
     Files.write(oversized, new byte[(int) ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES + 1]);
     Path outside = Files.createTempFile("service-loader-outside", ".Provider");
@@ -271,10 +278,14 @@ class ServiceLoaderCoverageTest {
         .build();
 
     ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
-    assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(3, scan.descriptors().size(), scan.descriptors().toString());
     assertTrue(scan.descriptors().stream()
         .anyMatch(item -> item.serviceType().equals("demo.Output")));
     assertTrue(scan.descriptors().stream().anyMatch(item -> item.path().equals("declared-services/demo.Inside")));
+    assertTrue(scan.descriptors().stream()
+        .anyMatch(item -> item.serviceType().equals("demo.ÉInside")
+            && item.providers().equals(List.of("demo.ÉInsideProvider"))),
+        scan.descriptors().toString());
     assertTrue(scan.descriptors().stream().noneMatch(item -> item.path().equals(outside.toString())));
     assertTrue(scan.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_path_outside_context")));

@@ -85,4 +85,25 @@ class ServiceLoaderCallSiteSourceTest {
     assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
         source, site, "record", 2, "p"));
   }
+
+  @Test
+  void bindsDirectProviderCallThroughOrElseThrow() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst().orElseThrow().record();\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2));
+  }
+
+  @Test
+  void rejectsReassignedProviderLambdaParameter() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".ifPresent(p -> { p = other; p.record(); });\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "p"));
+  }
 }
