@@ -106,4 +106,26 @@ class ServiceLoaderCallSiteSourceTest {
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
         source, site, "record", 2, "p"));
   }
+
+  @Test
+  void prefixUpdatesOnlyRejectCompleteProviderParameterNames() {
+    for (String update : List.of("++processed", "--processed", "++pÉ", "--p$")) {
+      String source = "import java.util.ServiceLoader;\n"
+          + "ServiceLoader.load(AuditProvider.class).findFirst()"
+          + ".ifPresent(p -> { " + update + "; p.record(); });\n";
+      ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+      assertTrue(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+          source, site, "record", 2, "p"), update);
+    }
+    for (String update : List.of("++p", "--p", "p++", "p--")) {
+      String source = "import java.util.ServiceLoader;\n"
+          + "ServiceLoader.load(AuditProvider.class).findFirst()"
+          + ".ifPresent(p -> { " + update + "; p.record(); });\n";
+      ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+      assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+          source, site, "record", 2, "p"), update);
+    }
+  }
 }

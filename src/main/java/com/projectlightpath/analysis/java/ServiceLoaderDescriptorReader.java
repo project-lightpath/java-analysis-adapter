@@ -3,7 +3,6 @@ package com.projectlightpath.analysis.java;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.DirectoryIteratorException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
@@ -11,17 +10,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.TreeSet;
 
 /** Reads selected META-INF/services files for the first bounded ServiceLoader path. */
 final class ServiceLoaderDescriptorReader {
   private static final String SERVICES = "META-INF/services";
-  private static final Pattern PROVIDER = ServiceLoaderDescriptorSource.BINARY_CLASS_NAME;
 
   private ServiceLoaderDescriptorReader() {}
 
@@ -137,27 +133,16 @@ final class ServiceLoaderDescriptorReader {
       if (bytes == null) {
         return;
       }
-      Set<String> providers = new LinkedHashSet<>();
-      List<String> malformed = new ArrayList<>();
-      for (String line : new String(bytes, StandardCharsets.UTF_8).lines().toList()) {
-        String candidate = line.split("#", 2)[0].trim();
-        if (candidate.isEmpty()) {
-          continue;
-        }
-        if (PROVIDER.matcher(candidate).matches()) {
-          providers.add(candidate);
-        } else {
-          malformed.add(candidate);
-        }
-      }
+      ServiceLoaderDescriptorSource.ProviderEntries parsed =
+          ServiceLoaderDescriptorSource.providers(bytes);
       String serviceType = normalized.getFileName().toString();
       descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
           serviceType,
-          List.copyOf(providers),
+          parsed.providers(),
           displayPath(context, normalized),
           ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
-          malformed));
+          parsed.malformedEntries()));
     } catch (IOException error) {
       state.diagnostic("descriptor_read_error", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));

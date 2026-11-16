@@ -247,7 +247,8 @@ class ServiceLoaderCoverageTest {
     Path inside = declaredDirectory.resolve("demo.Inside");
     Files.writeString(inside, "demo.InsideProvider\n");
     Path unicode = declaredDirectory.resolve("demo.ÉInside");
-    Files.writeString(unicode, "demo.ÉInsideProvider\n");
+    Files.writeString(unicode, "demo.ÉInsideProvider\n\u2003\n"
+        + "demo.ÉInsideProvider # duplicate\nbad/name\n");
     Path oversized = declaredDirectory.resolve("large.Provider");
     Files.write(oversized, new byte[(int) ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES + 1]);
     Path outside = Files.createTempFile("service-loader-outside", ".Provider");
@@ -284,7 +285,8 @@ class ServiceLoaderCoverageTest {
     assertTrue(scan.descriptors().stream().anyMatch(item -> item.path().equals("declared-services/demo.Inside")));
     assertTrue(scan.descriptors().stream()
         .anyMatch(item -> item.serviceType().equals("demo.ÉInside")
-            && item.providers().equals(List.of("demo.ÉInsideProvider"))),
+            && item.providers().equals(List.of("demo.ÉInsideProvider"))
+            && item.malformedEntries().equals(List.of("bad/name"))),
         scan.descriptors().toString());
     assertTrue(scan.descriptors().stream().noneMatch(item -> item.path().equals(outside.toString())));
     assertTrue(scan.diagnostics().stream()
@@ -428,6 +430,31 @@ class ServiceLoaderCoverageTest {
     assertTrue(archiveDescriptors.isEmpty(), archiveDescriptors.toString());
     assertEquals(ENUMERATION_LIMIT, enumeratedEntries(directoryState));
     assertEquals(ENUMERATION_LIMIT, enumeratedEntries(archiveState));
+  }
+
+  @Test
+  void sharedEnumerationLimitReportsEverySkippedArchive() throws IOException {
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    List<Path> archives = List.of(temp.resolve("first.jar"), temp.resolve("second.jar"),
+        temp.resolve("third.jar"));
+    for (Path archive : archives) {
+      try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+        put(output, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+        for (int index = 0; index < ENUMERATION_LIMIT / 2; index++) {
+          put(output, "noise/entry-" + index, "ignored");
+        }
+      }
+      ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+    }
+
+    assertEquals(ENUMERATION_LIMIT, enumeratedEntries(state));
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    for (Path archive : archives.subList(1, archives.size())) {
+      assertTrue(state.diagnostics().stream()
+          .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")
+              && item.path().contains(archive.toString())), state.diagnostics().toString());
+    }
   }
 
   @Test

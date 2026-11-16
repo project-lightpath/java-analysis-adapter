@@ -186,7 +186,7 @@ final class ServiceLoaderCallSiteSource {
     return Pattern.compile(
         "(?<![A-Za-z0-9_$.])" + name
             + "\\s*(?:=(?!=)|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=|>>>=|\\+\\+|--)"
-            + "|(?:\\+\\+|--)\\s*" + name);
+            + "|(?:\\+\\+|--)\\s*" + name + "(?!\\p{javaJavaIdentifierPart})");
   }
 
   private static String receiverName(String sourceText, int targetOffset) {

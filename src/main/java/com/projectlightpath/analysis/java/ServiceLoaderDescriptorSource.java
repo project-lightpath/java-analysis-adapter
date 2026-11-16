@@ -223,7 +223,6 @@ final class ServiceLoaderDescriptorSource {
     private final List<ServiceLoaderDescriptorScanner.Diagnostic> diagnostics = new ArrayList<>();
     private final long maxDecompressedBytes;
     private long decompressedBytes;
-    private boolean enumerationLimitReported;
     private boolean warMetadataLimitReported;
     private int warMetadataDiagnostics;
 
@@ -272,12 +271,9 @@ final class ServiceLoaderDescriptorSource {
 
     boolean tryEnumerate(String path) {
       if (enumeratedEntries >= MAX_ENUMERATED_ENTRIES) {
-        if (!enumerationLimitReported) {
-          enumerationLimitReported = true;
-          diagnostic(
-              "descriptor_enumeration_limit", path,
-              "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
-        }
+        diagnostic(
+            "descriptor_enumeration_limit", path,
+            "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
         return false;
       }
       enumeratedEntries++;
