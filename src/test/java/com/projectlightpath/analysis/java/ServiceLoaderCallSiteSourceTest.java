@@ -87,6 +87,17 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void interveningNonLambdaMethodCallAbstains() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".replacement().ifPresent(q -> q.record());\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "q"));
+  }
+
+  @Test
   void bindsDirectProviderCallThroughOrElseThrow() {
     String source = "import java.util.ServiceLoader;\n"
         + "ServiceLoader.load(AuditProvider.class).findFirst().orElseThrow().record();\n";
