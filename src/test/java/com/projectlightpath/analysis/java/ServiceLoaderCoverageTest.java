@@ -847,6 +847,65 @@ class ServiceLoaderCoverageTest {
         rootedState.diagnostics().toString());
   }
 
+  @Test
+  void malformedVersionedModulePathDoesNotAbortScan() throws IOException {
+    // Boundary probe set per AGENTS.md: prefix/suffix overlap, empty version
+    // component, and the valid single-digit form.
+    Path overlap = temp.resolve("versioned-overlap-module.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(overlap))) {
+      put(output, "META-INF/services/demo.Provider", "demo.OverlapProvider\n");
+      output.putNextEntry(new ZipEntry("META-INF/versions/module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> overlapDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState overlapState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(overlap, overlapDescriptors, overlapState);
+    assertTrue(overlapDescriptors.stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Provider")),
+        overlapDescriptors.toString());
+    assertTrue(overlapDescriptors.stream()
+        .noneMatch(ServiceLoaderDescriptorScanner.Descriptor::moduleInfo),
+        overlapDescriptors.toString());
+    assertTrue(overlapState.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("versioned_module_info_unsupported")),
+        overlapState.diagnostics().toString());
+
+    Path emptyComponent = temp.resolve("versioned-empty-module.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(emptyComponent))) {
+      put(output, "META-INF/services/demo.Provider", "demo.EmptyProvider\n");
+      output.putNextEntry(new ZipEntry("META-INF/versions//module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> emptyDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState emptyState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(emptyComponent, emptyDescriptors, emptyState);
+    assertTrue(emptyDescriptors.stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Provider")),
+        emptyDescriptors.toString());
+    assertTrue(emptyState.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("versioned_module_info_unsupported")),
+        emptyState.diagnostics().toString());
+
+    Path valid = temp.resolve("versioned-valid-module.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(valid))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ValidProvider\n");
+      output.putNextEntry(new ZipEntry("META-INF/versions/9/module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> validDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState validState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(valid, validDescriptors, validState);
+    assertTrue(validState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("versioned_module_info_unsupported")),
+        validState.diagnostics().toString());
+  }
+
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
     output.putNextEntry(new ZipEntry(name));
     output.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
