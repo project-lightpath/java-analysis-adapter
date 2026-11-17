@@ -153,9 +153,26 @@ final class ServiceLoaderSourceCache {
     }
     Matcher inferred = INFERRED_LAMBDA_PARAMETER.matcher(source);
     while (inferred.find()) {
-      addValueScope(file, source, inferred.start(2), scopes);
+      // Arrow-form switch labels (case ServiceLoader -> doX();) also match the
+      // lambda pattern; exclude them exactly like the typed pattern's keywords.
+      if (!DECLARATION_TYPE_KEYWORDS.contains(
+          precedingIdentifier(source, inferred.start()))) {
+        addValueScope(file, source, inferred.start(2), scopes);
+      }
     }
     return scopes;
+  }
+
+  private static String precedingIdentifier(String source, int matchStart) {
+    int index = matchStart - 1;
+    while (index >= 0 && Character.isWhitespace(source.charAt(index))) {
+      index--;
+    }
+    int end = index + 1;
+    while (index >= 0 && Character.isJavaIdentifierPart(source.charAt(index))) {
+      index--;
+    }
+    return source.substring(index + 1, end);
   }
 
   private static String leadingIdentifier(String type) {

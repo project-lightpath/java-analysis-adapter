@@ -341,6 +341,24 @@ class ServiceLoaderSourceCacheTest {
         """).size());
   }
 
+  @Test
+  void allowsRealServiceLoaderInLaterSwitchArm() throws IOException {
+    assertEquals(1, cachedSites("value-shadow-arrow-case-label", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Mode mode) {
+            switch (mode) {
+              case ServiceLoader -> doX();
+              case Other -> ServiceLoader.load(Provider.class);
+            }
+          }
+          void doX() { }
+          enum Mode { ServiceLoader, Other }
+        }
+        """).size());
+  }
+
   private List<ServiceLoaderCallSite> cachedSites(String id, String sourceText) throws IOException {
     Path sourceRoot = temp.resolve(id).resolve("src/main/java");
     Path source = sourceRoot.resolve("demo/Bridge.java");
