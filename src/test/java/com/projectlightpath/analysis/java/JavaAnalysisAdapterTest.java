@@ -1932,6 +1932,53 @@ class JavaAnalysisAdapterTest {
         evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
   }
 
+  /** Keeps the file-wide sole-site fallback unbound for lineless edges. */
+  @Test
+  void linelessEdgeDoesNotBindFileWideFallback() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-lineless/src/main/java");
+    Path classes = temp.resolve("service-loader-lineless/target/classes");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "  void other(Class<?> type) { ServiceLoader.load(type).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    Files.createDirectories(classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-lineless")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "other", "(Ljava/lang/Class;)V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        0,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderCallSiteReader.ServiceLoadHints hints = ServiceLoaderCallSiteReader.read(
+        context, edge, ServiceLoaderDescriptorScanner.scan(context),
+        new SourceMetadataScanner(context));
+    assertFalse(hints.serviceTypes().isEmpty(),
+        "the sole parsed site's service types must stay available for POSSIBLE resolution");
+    assertFalse(hints.callSiteBound(),
+        "a lineless edge must not bind a site parsed in a different method");
+  }
+
   /** Blocks definite promotion when a selected dependency entry vanishes before the scan. */
   @Test
   void vanishedSelectedDependencyBlocksDefinitePromotion() throws IOException {
