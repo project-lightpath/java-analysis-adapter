@@ -533,6 +533,15 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void unicodeWhitespaceOnlyLineIsMalformed() {
+    ServiceLoaderDescriptorSource.ProviderEntries parsed = ServiceLoaderDescriptorSource.providers(
+        "\u2003\ndemo.Provider\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    assertEquals(List.of("demo.Provider"), parsed.providers());
+    assertEquals(List.of("\u2003"), parsed.malformedEntries());
+  }
+
+  @Test
   void binaryClassNameValidationSemanticsArePreserved() throws IOException {
     // Provider-line semantics: accepted, duplicated, and rejected provider lines.
     ServiceLoaderDescriptorSource.ProviderEntries parsed = ServiceLoaderDescriptorSource.providers(
