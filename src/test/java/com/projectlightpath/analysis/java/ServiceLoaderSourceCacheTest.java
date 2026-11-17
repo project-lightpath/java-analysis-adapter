@@ -183,6 +183,164 @@ class ServiceLoaderSourceCacheTest {
     assertFalse(sites.isEmpty());
   }
 
+  @Test
+  void abstainsForParameterNamedServiceLoader() throws IOException {
+    assertTrue(cachedSites("parameter-service-loader-shadow", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Helper ServiceLoader) { ServiceLoader.load(Provider.class); }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void abstainsForLocalVariableNamedServiceLoader() throws IOException {
+    assertTrue(cachedSites("local-variable-service-loader-shadow", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            Helper ServiceLoader = helper();
+            ServiceLoader.load(Provider.class);
+          }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+          static Helper helper() { return null; }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void abstainsForFieldNamedServiceLoader() throws IOException {
+    assertTrue(cachedSites("field-service-loader-shadow", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          private final Helper ServiceLoader;
+          Bridge() { this.ServiceLoader = new Helper(); }
+          void audit() { ServiceLoader.load(Provider.class); }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void abstainsForLambdaParameterNamedServiceLoader() throws IOException {
+    assertTrue(cachedSites("lambda-parameter-service-loader-shadow", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            accept((Helper ServiceLoader) -> ServiceLoader.load(Provider.class));
+          }
+          void accept(Object action) { }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void abstainsForGenericAndArrayTypedServiceLoaderVariables() throws IOException {
+    assertTrue(cachedSites("generic-array-service-loader-shadow", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Helper[] ServiceLoader) {
+            ServiceLoader.load(Provider.class);
+          }
+          void other() {
+            java.util.Map<String, String> ServiceLoader = new java.util.HashMap<>();
+            ServiceLoader.load(Provider.class);
+          }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void allowsRealServiceLoaderInOtherMethod() throws IOException {
+    assertEquals(1, cachedSites("value-shadow-other-method", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() { Helper ServiceLoader = helper(); }
+          void other() { ServiceLoader.load(Provider.class); }
+          static Helper helper() { return null; }
+        }
+        """).size());
+  }
+
+  @Test
+  void allowsRealServiceLoaderBeforeLocalDeclaration() throws IOException {
+    assertEquals(1, cachedSites("value-shadow-before-declaration", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(Provider.class);
+            Helper ServiceLoader = helper();
+          }
+          static Helper helper() { return null; }
+        }
+        """).size());
+  }
+
+  @Test
+  void allowsRealServiceLoaderOutsideCatchBlock() throws IOException {
+    assertEquals(1, cachedSites("value-shadow-outside-catch", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            try { int count = 1; }
+            catch (java.io.IOException ServiceLoader) { ServiceLoader.toString(); }
+            ServiceLoader.load(Provider.class);
+          }
+        }
+        """).size());
+  }
+
+  @Test
+  void allowsRealServiceLoaderWithCaseLabel() throws IOException {
+    assertEquals(1, cachedSites("value-shadow-case-label", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          enum Mode { ServiceLoader, Other }
+          void audit(Mode mode) {
+            switch (mode) {
+              case ServiceLoader: break;
+            }
+            ServiceLoader.load(Provider.class);
+          }
+        }
+        """).size());
+  }
+
+  @Test
+  void allowsRealServiceLoaderWithGenericTypeArgument() throws IOException {
+    assertEquals(1, cachedSites("value-shadow-generic-argument", """
+        package demo;
+        import java.util.ServiceLoader;
+        import java.util.List;
+        class Bridge {
+          private final List<ServiceLoader> loaders;
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """).size());
+  }
+
   private List<ServiceLoaderCallSite> cachedSites(String id, String sourceText) throws IOException {
     Path sourceRoot = temp.resolve(id).resolve("src/main/java");
     Path source = sourceRoot.resolve("demo/Bridge.java");
