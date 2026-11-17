@@ -491,6 +491,48 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void moduleInfoWithMultipleProvidesSharesOneFingerprint() throws IOException {
+    Path moduleSource = temp.resolve("fingerprint-module-src");
+    Path moduleClasses = Files.createDirectories(temp.resolve("fingerprint-module-classes"));
+    Files.createDirectories(moduleSource.resolve("demo"));
+    StringBuilder module = new StringBuilder("module demo.provider {\n");
+    for (String name : List.of("One", "Two", "Three")) {
+      Files.writeString(moduleSource.resolve("demo/" + name + ".java"),
+          "package demo; public interface " + name + " { void record(); }\n");
+      Files.writeString(moduleSource.resolve("demo/" + name + "Impl.java"),
+          "package demo; public final class " + name + "Impl implements " + name
+              + " { public void record() {} }\n");
+      module.append("  provides demo.").append(name).append(" with demo.")
+          .append(name).append("Impl;\n");
+    }
+    Files.writeString(moduleSource.resolve("module-info.java"), module + "}\n");
+
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(moduleSource)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null, files, null, List.of("--release", "17", "-d", moduleClasses.toString()), null,
+          units).call());
+    }
+
+    byte[] bytes = Files.readAllBytes(moduleClasses.resolve("module-info.class"));
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.addModuleBytes(bytes, "fingerprint-module-info", descriptors,
+        state);
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+    assertEquals(3, descriptors.size(), descriptors.toString());
+    String fingerprint = ServiceLoaderDescriptorSource.sha256(bytes);
+    assertTrue(descriptors.stream()
+        .allMatch(item -> item.fingerprint().equals(fingerprint)), descriptors.toString());
+  }
+
+  @Test
   void binaryClassNameValidationSemanticsArePreserved() throws IOException {
     // Provider-line semantics: accepted, duplicated, and rejected provider lines.
     ServiceLoaderDescriptorSource.ProviderEntries parsed = ServiceLoaderDescriptorSource.providers(
