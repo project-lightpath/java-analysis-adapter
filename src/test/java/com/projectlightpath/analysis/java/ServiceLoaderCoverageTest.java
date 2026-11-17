@@ -319,7 +319,7 @@ class ServiceLoaderCoverageTest {
     assertTrue(scan.descriptors().stream()
         .anyMatch(item -> item.serviceType().equals("demo.ÉInside")
             && item.providers().equals(List.of("demo.ÉInsideProvider"))
-            && item.malformedEntries().equals(List.of("bad/name"))),
+            && item.malformedEntries().equals(List.of("\u2003", "bad/name"))),
         scan.descriptors().toString());
     assertTrue(scan.descriptors().stream().noneMatch(item -> item.path().equals(outside.toString())));
     assertTrue(scan.diagnostics().stream()

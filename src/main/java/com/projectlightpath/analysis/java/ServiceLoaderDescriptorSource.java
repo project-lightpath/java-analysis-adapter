@@ -159,7 +159,7 @@ final class ServiceLoaderDescriptorSource {
     new String(bytes, StandardCharsets.UTF_8).lines()
         .map(ServiceLoaderDescriptorSource::withoutComment)
         .map(String::trim)
-        .filter(value -> !value.isBlank())
+        .filter(value -> !value.isEmpty())
         .forEach(value -> {
           if (ServiceLoaderDescriptorAuthorization.isBinaryClassName(value)) {
             providers.add(value);
