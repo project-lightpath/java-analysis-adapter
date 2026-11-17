@@ -91,6 +91,9 @@ final class ServiceLoaderDescriptorReader {
     if (!ServiceLoaderDescriptorAuthorization.readableDirectory(directory, state)) {
       return;
     }
+    if (!visited.add("services:" + directory.toAbsolutePath().normalize())) {
+      return;
+    }
     NavigableSet<Path> candidates = new TreeSet<>();
     boolean complete = true;
     try (var paths = Files.newDirectoryStream(directory)) {
