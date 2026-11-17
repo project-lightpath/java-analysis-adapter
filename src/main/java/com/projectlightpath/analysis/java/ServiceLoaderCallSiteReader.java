@@ -58,7 +58,10 @@ final class ServiceLoaderCallSiteReader {
         .map(site -> scanner.resolveReferenceType(site.serviceType(), sourceFile.get(), site.offset())
             .orElse(site.fallbackServiceType()))
         .toList();
-    boolean bound = selected.size() == 1;
+    // A lineless edge (line <= 0) keeps the sole-site service-type hints for
+    // POSSIBLE resolution but must never count as a bound call site: the
+    // file-wide fallback cannot verify the caller or receiver.
+    boolean bound = edge.line() > 0 && selected.size() == 1;
     return new ServiceLoadHints(
         Set.copyOf(resolved),
         selected.stream().anyMatch(ServiceLoaderCallSite::explicitClassLoader),
