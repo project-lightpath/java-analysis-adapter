@@ -76,6 +76,30 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void localClassInsideLambdaDoesNotInheritParameterOwnership() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".ifPresent(p -> { class Local { void run(AuditProvider p) { p.record(); } }"
+        + " new Local().run(other); });\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "p"));
+  }
+
+  @Test
+  void anonymousClassInsideLambdaDoesNotInheritParameterOwnership() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".ifPresent(p -> { new Runnable() { void run(AuditProvider p) { p.record(); } }"
+        + ".run(); });\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "p"));
+  }
+
+  @Test
   void preservesProviderProvenanceThroughFilteringLambda() {
     String source = "import java.util.ServiceLoader;\n"
         + "ServiceLoader.load(AuditProvider.class).findFirst()"
