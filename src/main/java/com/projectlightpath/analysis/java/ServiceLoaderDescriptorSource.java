@@ -177,13 +177,14 @@ final class ServiceLoaderDescriptorSource {
       ScanState state) {
     try {
       ModuleDescriptor module = ModuleDescriptor.read(new ByteArrayInputStream(bytes));
+      String digest = sha256(bytes);
       for (ModuleDescriptor.Provides provides : module.provides()) {
         if (!provides.providers().isEmpty()) {
           descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
               provides.service(),
               List.copyOf(provides.providers()),
               path,
-              sha256(bytes),
+              digest,
               "module_info",
               List.of()));
         }
