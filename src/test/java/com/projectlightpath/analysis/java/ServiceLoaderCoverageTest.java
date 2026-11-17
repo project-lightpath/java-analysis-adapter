@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -487,6 +488,22 @@ class ServiceLoaderCoverageTest {
           .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")
               && item.path().contains(archive.toString())), state.diagnostics().toString());
     }
+  }
+
+  @Test
+  void oversizedArchiveIsRejectedBeforeCentralDirectoryIndex() throws IOException {
+    Path archive = temp.resolve("oversized.jar");
+    try (RandomAccessFile sparse = new RandomAccessFile(archive.toFile(), "rw")) {
+      sparse.setLength(512L * 1024 * 1024 + 1);
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, state.diagnostics().size(), state.diagnostics().toString());
+    assertEquals("archive_size_limit", state.diagnostics().get(0).code());
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
   }
 
   @Test
