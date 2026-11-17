@@ -149,7 +149,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       ServiceLoaderDescriptorSource.ScanState state) {
     String serviceType = entry.getName().substring(
         ServiceLoaderDescriptorSource.SERVICES_DIRECTORY.length() + 1);
-    if (!ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(serviceType).matches()) {
+    if (!ServiceLoaderDescriptorAuthorization.isBinaryClassName(serviceType)) {
       return;
     }
     String path = archive + "!/" + entry.getName();

@@ -127,8 +127,8 @@ final class ServiceLoaderDescriptorReader {
     Path normalized = file.toAbsolutePath().normalize();
     if (!visited.add("descriptor:" + normalized)
         || normalized.getFileName() == null
-        || !ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(
-            normalized.getFileName().toString()).matches()) {
+        || !ServiceLoaderDescriptorAuthorization.isBinaryClassName(
+            normalized.getFileName().toString())) {
       return;
     }
     try (InputStream input = Files.newInputStream(normalized, LinkOption.NOFOLLOW_LINKS)) {

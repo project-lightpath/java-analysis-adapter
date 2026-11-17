@@ -11,6 +11,29 @@ import java.util.List;
 final class ServiceLoaderDescriptorAuthorization {
   private ServiceLoaderDescriptorAuthorization() {}
 
+  /**
+   * Linear binary class-name validation. Replaces a nested-repetition Pattern
+   * whose per-segment recursion stack-overflowed on deeply dotted names
+   * (CWE-674); the same semantics are evaluated without backtracking.
+   */
+  static boolean isBinaryClassName(String value) {
+    for (String segment : value.split("\\.", -1)) {
+      if (segment.isEmpty()) {
+        return false;
+      }
+      int[] codePoints = segment.codePoints().toArray();
+      if (!Character.isJavaIdentifierStart(codePoints[0])) {
+        return false;
+      }
+      for (int index = 1; index < codePoints.length; index++) {
+        if (!Character.isJavaIdentifierPart(codePoints[index])) {
+          return false;
+        }
+      }
+    }
+    return !value.isEmpty();
+  }
+
   /** Anchors before appending derived components; canonical paths are authorization only. */
   static boolean derivedDirectory(
       Path anchor, String relative, ServiceLoaderDescriptorSource.ScanState state) {
@@ -48,7 +71,7 @@ final class ServiceLoaderDescriptorAuthorization {
       return true;
     }
     if (path.getFileName() != null
-        && ServiceLoaderDescriptorSource.BINARY_CLASS_NAME.matcher(path.getFileName().toString()).matches()) {
+        && isBinaryClassName(path.getFileName().toString())) {
       state.diagnostic("descriptor_read_error", path.toString(),
           "service descriptor is not a non-symbolic regular file");
     }

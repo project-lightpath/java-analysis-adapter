@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.regex.Pattern;
 
 /** Reads ServiceLoader metadata from selected classpath directories and archives. */
 final class ServiceLoaderDescriptorSource {
@@ -27,9 +26,6 @@ final class ServiceLoaderDescriptorSource {
   static final String MODULE_INFO = "module-info.class";
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
   static final int MAX_ENUMERATED_ENTRIES = 1024;
-  static final Pattern BINARY_CLASS_NAME = Pattern.compile(
-      "\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*"
-          + "(?:\\.\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*)*");
 
   private ServiceLoaderDescriptorSource() {}
 
@@ -105,7 +101,8 @@ final class ServiceLoaderDescriptorSource {
     Path normalized = path.toAbsolutePath().normalize();
     if (!visited.add("descriptor:" + normalized)
         || normalized.getFileName() == null
-        || !BINARY_CLASS_NAME.matcher(normalized.getFileName().toString()).matches()) {
+        || !ServiceLoaderDescriptorAuthorization.isBinaryClassName(
+            normalized.getFileName().toString())) {
       return;
     }
     try (var input = Files.newInputStream(normalized, LinkOption.NOFOLLOW_LINKS)) {
@@ -164,7 +161,7 @@ final class ServiceLoaderDescriptorSource {
         .map(String::trim)
         .filter(value -> !value.isBlank())
         .forEach(value -> {
-          if (BINARY_CLASS_NAME.matcher(value).matches()) {
+          if (ServiceLoaderDescriptorAuthorization.isBinaryClassName(value)) {
             providers.add(value);
           } else {
             malformed.add(value);
