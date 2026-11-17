@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,16 +35,7 @@ final class ServiceLoaderDescriptorSource {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ScanState state) {
-    Path normalized = entry.toAbsolutePath().normalize();
-    if (Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
-      if (ServiceLoaderDescriptorAuthorization.derivedDirectory(normalized, SERVICES_DIRECTORY, state)) {
-        scanServiceDirectory(normalized.resolve(SERVICES_DIRECTORY), normalized.toString(),
-            descriptors, visited, state);
-      }
-      scanModuleInfo(normalized, descriptors, state);
-    } else if (Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
-      ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
-    }
+    scanClasspathEntry(entry, descriptors, visited, state, false);
   }
 
   static void scanClasspathEntry(
@@ -52,9 +44,10 @@ final class ServiceLoaderDescriptorSource {
       Set<String> visited,
       ScanState state,
       boolean diagnoseUnavailable) {
-    // RED_37 stub: the unavailable-entry diagnosis lands in GREEN_37. The
-    // overload exists so the RED tests compile and fail behaviorally.
-    scanClasspathEntry(entry, descriptors, visited, state);
+    // PMD GodClass forces the file-kind probing to live in
+    // ServiceLoaderDescriptorReader; behavior is identical.
+    ServiceLoaderDescriptorReader.scanSelectedEntry(
+        entry, descriptors, visited, state, diagnoseUnavailable);
   }
 
   static void scanServiceDirectory(
@@ -135,7 +128,7 @@ final class ServiceLoaderDescriptorSource {
     }
   }
 
-  private static void scanModuleInfo(
+  static void scanModuleInfo(
       Path classpathDirectory,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ScanState state) {

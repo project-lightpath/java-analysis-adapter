@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -76,10 +77,46 @@ final class ServiceLoaderDescriptorReader {
       }
     }
     for (Path dependency : dependencyEntries) {
-      ServiceLoaderDescriptorSource.scanClasspathEntry(dependency, descriptors, visited, state);
+      ServiceLoaderDescriptorSource.scanClasspathEntry(
+          dependency, descriptors, visited, state, true);
     }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));
     return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics());
+  }
+
+  /** Scans one selected classpath entry, diagnosing unavailable entries on request. */
+  static void scanSelectedEntry(
+      Path entry,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ServiceLoaderDescriptorSource.ScanState state,
+      boolean diagnoseUnavailable) {
+    Path normalized = entry.toAbsolutePath().normalize();
+    BasicFileAttributes attributes;
+    try {
+      attributes = Files.readAttributes(
+          normalized, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    } catch (IOException error) {
+      if (diagnoseUnavailable) {
+        state.diagnostic("descriptor_entry_unavailable", normalized.toString(),
+            ServiceLoaderDescriptorSource.message(error));
+      }
+      return;
+    }
+    if (attributes.isDirectory()) {
+      if (ServiceLoaderDescriptorAuthorization.derivedDirectory(
+          normalized, ServiceLoaderDescriptorSource.SERVICES_DIRECTORY, state)) {
+        ServiceLoaderDescriptorSource.scanServiceDirectory(
+            normalized.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY),
+            normalized.toString(), descriptors, visited, state);
+      }
+      ServiceLoaderDescriptorSource.scanModuleInfo(normalized, descriptors, state);
+    } else if (attributes.isRegularFile()) {
+      ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
+    } else if (diagnoseUnavailable) {
+      state.diagnostic("descriptor_entry_unavailable", normalized.toString(),
+          "entry is neither a non-symbolic directory nor a regular file");
+    }
   }
 
   private static void scanDirectory(
