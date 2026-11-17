@@ -203,20 +203,33 @@ final class ServiceLoaderSourceCache {
    * over-approximation; abstention is the safe direction.
    */
   private static int valueScopeEnd(String source, int nameStart) {
+    int afterName = skipWhitespace(source, nameStart + "ServiceLoader".length());
+    if (source.startsWith("->", afterName)) {
+      // Unparenthesized lambda parameter or arrow-form switch pattern
+      // variable: the scope is the lambda body or switch arm only.
+      return lambdaBodyEnd(source, afterName + 2, nameStart);
+    }
     int headerClose = enclosingHeaderClose(source, nameStart);
     if (headerClose >= 0) {
       int cursor = skipWhitespace(source, headerClose + 1);
       if (source.startsWith("->", cursor)) {
-        int body = skipWhitespace(source, cursor + 2);
-        return body < source.length() && source.charAt(body) == '{'
-            ? blockEnd(source, body)
-            : statementEnd(source, headerClose, nameStart);
+        return lambdaBodyEnd(source, cursor + 2, nameStart);
       }
       if (cursor < source.length() && source.charAt(cursor) == '{') {
         return blockEnd(source, cursor);
       }
     }
     return blockEnd(source, enclosingBlockStart(source, nameStart));
+  }
+
+  private static int lambdaBodyEnd(String source, int afterArrow, int nameStart) {
+    int body = skipWhitespace(source, afterArrow);
+    if (body < source.length() && source.charAt(body) == '{') {
+      return blockEnd(source, body);
+    }
+    // Expression-bodied lambda or arrow switch arm: the scope ends with the
+    // enclosing statement.
+    return statementEnd(source, afterArrow, nameStart);
   }
 
   private static int statementEnd(String source, int after, int nameStart) {
