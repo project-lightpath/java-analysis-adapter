@@ -166,6 +166,30 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void vanishedSelectedDependencyIsDiagnosed() {
+    Path missing = temp.resolve("vanished/dependency.jar");
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        missing, descriptors, new java.util.HashSet<>(), state, true);
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_entry_unavailable")),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void applicationClassesPathStaysSilentForMissingDirectories() {
+    Path missing = temp.resolve("missing/application-classes");
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        missing, descriptors, new java.util.HashSet<>(), state, false);
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+  }
+
+  @Test
   void explodedDirectoriesIncludeModuleInfoProviders() throws IOException {
     Path moduleSource = temp.resolve("module-src");
     Path moduleClasses = temp.resolve("module-classes");

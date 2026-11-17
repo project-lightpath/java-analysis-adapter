@@ -1932,6 +1932,57 @@ class JavaAnalysisAdapterTest {
         evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
   }
 
+  /** Blocks definite promotion when a selected dependency entry vanishes before the scan. */
+  @Test
+  void vanishedSelectedDependencyBlocksDefinitePromotion() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-vanished/src/main/java");
+    Path classes = temp.resolve("service-loader-vanished/target/classes");
+    Path archive = temp.resolve("service-loader-vanished/provider.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    Files.createDirectories(classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-vanished")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(archive))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context,
+        new SootUpInputLocationFactory.DependencyResolution(List.of(archive), List.of()));
+    assertTrue(scan.diagnostics().stream().anyMatch(item ->
+        item.code().equals("descriptor_entry_unavailable")), scan.diagnostics().toString());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertNotEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
+    assertTrue(resolution.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
+  }
+
   /** Keeps module-info provider evidence possible when module visibility is not proven. */
   @Test
   void moduleInfoProviderIsPossibleWithoutModuleVisibility() throws IOException {

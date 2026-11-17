@@ -46,6 +46,17 @@ final class ServiceLoaderDescriptorSource {
     }
   }
 
+  static void scanClasspathEntry(
+      Path entry,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ScanState state,
+      boolean diagnoseUnavailable) {
+    // RED_37 stub: the unavailable-entry diagnosis lands in GREEN_37. The
+    // overload exists so the RED tests compile and fail behaviorally.
+    scanClasspathEntry(entry, descriptors, visited, state);
+  }
+
   static void scanServiceDirectory(
       Path directory,
       String label,
