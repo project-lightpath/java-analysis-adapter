@@ -45,7 +45,7 @@ final class ServiceLoaderDescriptorArchiveSource {
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
       ArchiveEntries entries = enumerate(zip, normalized, state);
       readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
-      readModule(zip, normalized, entries.module(), descriptors, state);
+      readModule(zip, normalized, entries.module(), entries.versionedModule(), descriptors, state);
     } catch (ZipException error) {
       state.diagnostic("invalid_archive", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
@@ -59,6 +59,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       ZipFile zip, Path archive, ServiceLoaderDescriptorSource.ScanState state) {
     NavigableMap<String, ZipEntry> descriptors = new TreeMap<>();
     ZipEntry module = null;
+    String versionedModule = null;
     boolean complete = true;
     Enumeration<? extends ZipEntry> entries = zip.entries();
     while (entries.hasMoreElements()) {
@@ -82,10 +83,23 @@ final class ServiceLoaderDescriptorArchiveSource {
       if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
         module = entry;
       }
+      if (versionedModule == null && isVersionedModuleInfo(entry.getName())) {
+        versionedModule = entry.getName();
+      }
     }
     return complete
-        ? new ArchiveEntries(List.copyOf(descriptors.values()), module)
-        : new ArchiveEntries(List.of(), null);
+        ? new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule)
+        : new ArchiveEntries(List.of(), null, null);
+  }
+
+  private static boolean isVersionedModuleInfo(String name) {
+    String prefix = "META-INF/versions/";
+    String suffix = "/" + ServiceLoaderDescriptorSource.MODULE_INFO;
+    if (!name.startsWith(prefix) || !name.endsWith(suffix)) {
+      return false;
+    }
+    String version = name.substring(prefix.length(), name.length() - suffix.length());
+    return !version.isEmpty() && version.chars().allMatch(Character::isDigit);
   }
 
   private static void retainDescriptor(
@@ -123,9 +137,16 @@ final class ServiceLoaderDescriptorArchiveSource {
       ZipFile zip,
       Path archive,
       ZipEntry module,
+      String versionedModule,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state) {
     if (module == null) {
+      if (versionedModule != null) {
+        // Diagnostic-only variant: reading versioned descriptors with version
+        // selection is a recorded follow-up. One per archive, name check only.
+        state.diagnostic(
+            "versioned_module_info_unsupported", archive.toString(), versionedModule);
+      }
       return;
     }
     String modulePath = archive + "!/" + module.getName();
@@ -223,6 +244,6 @@ final class ServiceLoaderDescriptorArchiveSource {
     return output.toByteArray();
   }
 
-  private record ArchiveEntries(List<ZipEntry> descriptors, ZipEntry module) {}
+  private record ArchiveEntries(List<ZipEntry> descriptors, ZipEntry module, String versionedModule) {}
 
 }

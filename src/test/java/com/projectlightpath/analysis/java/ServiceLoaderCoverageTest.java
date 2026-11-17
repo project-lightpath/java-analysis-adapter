@@ -838,8 +838,9 @@ class ServiceLoaderCoverageTest {
     ServiceLoaderDescriptorSource.ScanState rootedState =
         new ServiceLoaderDescriptorSource.ScanState();
     ServiceLoaderDescriptorArchiveSource.scan(rooted, rootedDescriptors, rootedState);
-    assertEquals(List.of("module_info"), rootedDescriptors.stream()
-        .map(ServiceLoaderDescriptorScanner.Descriptor::kind).toList(),
+    assertEquals(List.of("demo.VersionedProvider"), rootedDescriptors.stream()
+        .filter(ServiceLoaderDescriptorScanner.Descriptor::moduleInfo)
+        .map(ServiceLoaderDescriptorScanner.Descriptor::providers).findFirst().orElseThrow(),
         rootedDescriptors.toString());
     assertTrue(rootedState.diagnostics().stream()
         .noneMatch(item -> item.code().equals("versioned_module_info_unsupported")),
