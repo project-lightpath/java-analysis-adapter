@@ -329,6 +329,50 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void observedServicesDirectoryIsEnumeratedOnce() throws IOException {
+    Path sourceRoot = temp.resolve("src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("classes");
+    Path applicationServices = Files.createDirectories(
+        applicationClasses.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    for (int index = 0; index < 600; index++) {
+      Files.writeString(applicationServices.resolve("demo.Service" + index),
+          "demo.Provider" + index + "\n");
+    }
+    Path dependencies = temp.resolve("deps");
+    Files.createDirectories(dependencies);
+    Path dependency = dependencies.resolve("dependency.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(dependency))) {
+      put(output, "META-INF/services/demo.Dependency", "demo.DependencyProvider\n");
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("services-dedup")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("services-dedup")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(applicationClasses)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependency))
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "directory", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            applicationServices.toString()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+    assertTrue(scan.diagnostics().stream().noneMatch(
+        item -> item.code().equals("descriptor_enumeration_limit")), scan.diagnostics().toString());
+    assertTrue(scan.descriptors().stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Dependency")), scan.descriptors().toString());
+  }
+
+  @Test
   void readerRejectsRepositoryRootAsAnUnselectedMetadataInput() throws IOException {
     Path sourceRoot = temp.resolve("root-authorization/src/main/java");
     Files.createDirectories(sourceRoot);
