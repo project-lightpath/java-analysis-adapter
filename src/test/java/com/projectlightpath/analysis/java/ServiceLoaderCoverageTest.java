@@ -778,6 +778,74 @@ class ServiceLoaderCoverageTest {
     }
   }
 
+  @Test
+  void versionedOnlyModuleInfoIsDiagnosed() throws IOException {
+    Path archive = temp.resolve("versioned-only-module.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.VersionedProvider\n");
+      output.putNextEntry(new ZipEntry("META-INF/versions/9/module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+    assertTrue(descriptors.stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Provider")), descriptors.toString());
+    assertTrue(descriptors.stream()
+        .noneMatch(ServiceLoaderDescriptorScanner.Descriptor::moduleInfo), descriptors.toString());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("versioned_module_info_unsupported")),
+        state.diagnostics().toString());
+
+    // Control: a root module-info plus a versioned one still uses the root
+    // one with no versioned-only diagnostic.
+    Path moduleSource = temp.resolve("versioned-module-src");
+    Path moduleClasses = temp.resolve("versioned-module-classes");
+    Files.createDirectories(moduleClasses);
+    Files.createDirectories(moduleSource.resolve("demo"));
+    Files.writeString(moduleSource.resolve("module-info.java"),
+        "module demo.versioned { provides demo.Provider with demo.VersionedProvider; }\n");
+    Files.writeString(moduleSource.resolve("demo/Provider.java"),
+        "package demo; public interface Provider { void record(); }\n");
+    Files.writeString(moduleSource.resolve("demo/VersionedProvider.java"),
+        "package demo; public final class VersionedProvider implements Provider {"
+            + " public void record() {} }\n");
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(moduleSource)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null, files, null, List.of("--release", "17", "-d", moduleClasses.toString()), null,
+          units).call());
+    }
+    Path rooted = temp.resolve("rooted-with-versioned-module.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(rooted))) {
+      put(output, "META-INF/services/demo.Provider", "demo.RootedProvider\n");
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(Files.readAllBytes(moduleClasses.resolve("module-info.class")));
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry("META-INF/versions/9/module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> rootedDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState rootedState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(rooted, rootedDescriptors, rootedState);
+    assertEquals(List.of("module_info"), rootedDescriptors.stream()
+        .map(ServiceLoaderDescriptorScanner.Descriptor::kind).toList(),
+        rootedDescriptors.toString());
+    assertTrue(rootedState.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("versioned_module_info_unsupported")),
+        rootedState.diagnostics().toString());
+  }
+
   private static void put(ZipOutputStream output, String name, String value) throws IOException {
     output.putNextEntry(new ZipEntry(name));
     output.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
