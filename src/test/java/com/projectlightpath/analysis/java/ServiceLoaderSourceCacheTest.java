@@ -402,6 +402,84 @@ class ServiceLoaderSourceCacheTest {
     assertTrue(sites.isEmpty(), sites.toString());
   }
 
+  @Test
+  void inferredLambdaParameterScopeEndsAtLambdaBody() throws IOException {
+    assertEquals(1, cachedSites("inferred-lambda-scope", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            helpers.forEach(ServiceLoader -> ServiceLoader.load(Provider.class));
+            ServiceLoader.load(Provider.class);
+          }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+          java.util.List<Helper> helpers = new java.util.ArrayList<>();
+        }
+        """).size());
+  }
+
+  @Test
+  void switchLabelPatternVariableInArrowArmScopesToTheArm() throws IOException {
+    assertEquals(1, cachedSites("arrow-arm-pattern-scope", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Object value) {
+            switch (value) {
+              case Helper ServiceLoader -> ServiceLoader.load(Provider.class);
+              default -> ServiceLoader.load(Provider.class);
+            }
+          }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).size());
+  }
+
+  @Test
+  void colonSwitchLabelPatternVariableOverApproximatesToTheBlock() throws IOException {
+    assertEquals(0, cachedSites("colon-arm-pattern-scope", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Object value) {
+            switch (value) {
+              case Helper ServiceLoader:
+                ServiceLoader.touch();
+                break;
+              default:
+                ServiceLoader.load(Provider.class);
+            }
+          }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).size());
+  }
+
+  @Test
+  void multiPatternSwitchLabelOverApproximatesToTheBlock() throws IOException {
+    assertEquals(0, cachedSites("multi-pattern-arm-scope", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Object value) {
+            switch (value) {
+              case Helper ServiceLoader, Other b -> ServiceLoader.touch();
+              default -> ServiceLoader.load(Provider.class);
+            }
+          }
+          static class Helper {
+            static <T> T load(Class<T> type) { return null; }
+          }
+        }
+        """).size());
+  }
+
   private List<ServiceLoaderCallSite> cachedSites(String id, String sourceText) throws IOException {
     Path sourceRoot = temp.resolve(id).resolve("src/main/java");
     Path source = sourceRoot.resolve("demo/Bridge.java");
