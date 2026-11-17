@@ -2,18 +2,49 @@ package com.projectlightpath.analysis.java;
 
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Caches source text and parsed ServiceLoader sites for one analysis scanner. */
 final class ServiceLoaderSourceCache {
   private static final Map<SourceMetadataScanner, ServiceLoaderSourceCache> CACHES =
       new WeakHashMap<>();
+
+  /**
+   * Typed value declarations named ServiceLoader. The type side allows
+   * qualified names, generic arguments, arrays, and varargs but never ends in
+   * a dot, whitespace between type and name is mandatory (so the
+   * {@code import java.util.ServiceLoader;} line cannot match), and the name
+   * must be followed by a declarator context ({@code = ; , ) : ]}) but never
+   * {@code >}, which excludes generic type-argument usages such as
+   * {@code List<ServiceLoader>}.
+   */
+  private static final Pattern TYPED_VALUE_DECLARATION = Pattern.compile(
+      "(?:^|[^\\w$.])"
+          + "([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*"
+          + "(?:<[<>,\\w$.\\s]*>)?"
+          + "(?:\\[\\s*\\]|\\.\\.\\.)*)"
+          + "\\s+(ServiceLoader)(?=\\s*[=;,):\\]])");
+
+  /** Single-inferred-parameter lambdas that bind the name ServiceLoader. */
+  private static final Pattern INFERRED_LAMBDA_PARAMETER = Pattern.compile(
+      "(?:^|[^\\w$.])(\\(?)(ServiceLoader)(\\)?)(?=\\s*->)");
+
+  /** Keywords that may precede the name without declaring it. */
+  private static final Set<String> DECLARATION_TYPE_KEYWORDS = Set.of(
+      "assert", "break", "case", "catch", "continue", "do", "else", "extends",
+      "for", "if", "implements", "import", "instanceof", "new", "package",
+      "permits", "return", "super", "switch", "throw", "throws", "try",
+      "while", "yield");
 
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 
@@ -43,9 +74,11 @@ final class ServiceLoaderSourceCache {
     boolean samePackageTypeShadow = scanner.files().stream()
         .anyMatch(candidate -> candidate.packageName().equals(file.packageName())
             && candidate.simpleTypeName().equals("ServiceLoader"));
+    List<int[]> valueScopes = valueDeclarationScopes(file, structuralSource);
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
         source, !samePackageTypeShadow, true).stream()
         .filter(site -> !isShadowedAt(file, structuralSource, site.offset()))
+        .filter(site -> !valueDeclarationShadowsAt(structuralSource, valueScopes, site.offset()))
         .toList();
     return new CachedSource(
         source,
@@ -106,6 +139,130 @@ final class ServiceLoaderSourceCache {
       }
     }
     return openings.isEmpty() ? -1 : openings.peek();
+  }
+
+  /** Returns the masked-source scope ranges of value declarations named ServiceLoader. */
+  private static List<int[]> valueDeclarationScopes(
+      SourceMetadataScanner.SourceFile file, String source) {
+    List<int[]> scopes = new ArrayList<>();
+    Matcher typed = TYPED_VALUE_DECLARATION.matcher(source);
+    while (typed.find()) {
+      if (!DECLARATION_TYPE_KEYWORDS.contains(leadingIdentifier(typed.group(1)))) {
+        addValueScope(file, source, typed.start(2), scopes);
+      }
+    }
+    Matcher inferred = INFERRED_LAMBDA_PARAMETER.matcher(source);
+    while (inferred.find()) {
+      addValueScope(file, source, inferred.start(2), scopes);
+    }
+    return scopes;
+  }
+
+  private static String leadingIdentifier(String type) {
+    return type.split("[^A-Za-z0-9_$]", 2)[0];
+  }
+
+  private static void addValueScope(
+      SourceMetadataScanner.SourceFile file, String source, int nameStart, List<int[]> scopes) {
+    int end = valueScopeEnd(source, nameStart);
+    if (end <= nameStart) {
+      return;
+    }
+    int start = nameStart;
+    if (enclosingHeaderClose(source, nameStart) < 0 && !insideMethodBody(file, source, nameStart)) {
+      // JLS 6.3: a field is in scope for its entire enclosing type body,
+      // including source locations that precede the declaration.
+      start = Math.max(enclosingBlockStart(source, nameStart), 0);
+    }
+    scopes.add(new int[] {start, end});
+  }
+
+  /**
+   * JLS 6.3 scope end. Header-declared forms (method, catch, try-with-resources,
+   * for, and lambda parameters) are governed by the block that follows their
+   * enclosing closing parenthesis, so that block is scanned forward; block
+   * declarations (locals and instanceof pattern variables) end with their
+   * enclosing block. The instanceof flow-scoping is a block-end
+   * over-approximation; abstention is the safe direction.
+   */
+  private static int valueScopeEnd(String source, int nameStart) {
+    int headerClose = enclosingHeaderClose(source, nameStart);
+    if (headerClose >= 0) {
+      int cursor = skipWhitespace(source, headerClose + 1);
+      if (source.startsWith("->", cursor)) {
+        int body = skipWhitespace(source, cursor + 2);
+        return body < source.length() && source.charAt(body) == '{'
+            ? blockEnd(source, body)
+            : statementEnd(source, headerClose, nameStart);
+      }
+      if (cursor < source.length() && source.charAt(cursor) == '{') {
+        return blockEnd(source, cursor);
+      }
+    }
+    return blockEnd(source, enclosingBlockStart(source, nameStart));
+  }
+
+  private static int statementEnd(String source, int after, int nameStart) {
+    int semicolon = source.indexOf(';', after);
+    int end = blockEnd(source, enclosingBlockStart(source, nameStart));
+    if (end >= 0 && (semicolon < 0 || semicolon > end)) {
+      return end;
+    }
+    return semicolon < 0 ? source.length() : semicolon;
+  }
+
+  private static int blockEnd(String source, int blockStart) {
+    if (blockStart < 0) {
+      return -1;
+    }
+    int closing = JavaSourceText.matchingDelimiter(source, blockStart, '{', '}');
+    return closing < 0 ? source.length() : closing;
+  }
+
+  private static int enclosingHeaderClose(String source, int nameStart) {
+    int depth = 0;
+    for (int index = nameStart - 1; index >= 0; index--) {
+      char value = source.charAt(index);
+      if (value == ')') {
+        depth++;
+      } else if (value == '(') {
+        if (depth == 0) {
+          return JavaSourceText.matchingDelimiter(source, index, '(', ')');
+        }
+        depth--;
+      }
+    }
+    return -1;
+  }
+
+  private static int skipWhitespace(String source, int index) {
+    while (index < source.length() && Character.isWhitespace(source.charAt(index))) {
+      index++;
+    }
+    return index;
+  }
+
+  private static boolean insideMethodBody(
+      SourceMetadataScanner.SourceFile file, String source, int offset) {
+    return SourceMetadataScanner.methods(file).stream()
+        .filter(method -> method.start() <= offset)
+        .filter(method -> method.end() > 0 && method.end() <= source.length())
+        .filter(method -> source.charAt(method.end() - 1) == '{')
+        .anyMatch(method -> JavaSourceText.matchingDelimiter(
+            source, method.end() - 1, '{', '}') >= offset);
+  }
+
+  private static boolean valueDeclarationShadowsAt(
+      String source, List<int[]> scopes, int offset) {
+    if (source.startsWith("java.util.ServiceLoader", offset)) {
+      return false;
+    }
+    for (int[] scope : scopes) {
+      if (offset >= scope[0] && offset < scope[1]) {
+        return true;
+      }
+    }
+    return false;
   }
 
   record CachedSource(String sourceText, List<ServiceLoaderCallSite> sites) {
