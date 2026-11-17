@@ -137,6 +137,8 @@ final class ServiceLoaderCallSiteSource {
         // lexical owner. Do not let an unrelated nested lambda lend its
         // parameter ownership to a ServiceLoader edge.
         return !priorLambda
+            && !ServiceLoaderCallSiteParser.hasInterveningReplacingCall(
+                sourceText, start, lambda.start())
             && containsParameter(parameters, receiver)
             && !parameterReassigned(sourceText, lambda.end(), targetOffset, receiver);
       }

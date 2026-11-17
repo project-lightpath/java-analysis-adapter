@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,6 +16,13 @@ final class ServiceLoaderCallSiteParser {
       "(?m)^\\s*import\\s+java\\.util\\.ServiceLoader\\s*;");
   private static final Pattern ON_DEMAND_IMPORT = Pattern.compile(
       "(?m)^\\s*import\\s+java\\.util\\.\\*\\s*;");
+  /**
+   * Non-lambda chained calls that cannot replace the flowing provider value.
+   * Enumerated from the green chained call-site tests: every Optional chain
+   * uses findFirst; orElseThrow appears only on the receiver==null direct
+   * path, which the abstain rule in ServiceLoaderCallSiteSource must not touch.
+   */
+  private static final Set<String> VALUE_PRESERVING_CALLS = Set.of("findFirst", "orElseThrow");
 
   private ServiceLoaderCallSiteParser() {}
 
@@ -95,6 +103,47 @@ final class ServiceLoaderCallSiteParser {
       }
     }
     return -1;
+  }
+
+  /**
+   * Detects a non-lambda method call between the load expression and the owning
+   * lambda that can replace the flowing provider value (for example
+   * {@code .replacement()}). Calls whose arguments introduce a lambda are
+   * governed by the lambda walk in ServiceLoaderCallSiteSource; only
+   * value-preserving calls stay attributed.
+   */
+  static boolean hasInterveningReplacingCall(String sourceText, int start, int lambdaStart) {
+    int depth = 0;
+    for (int index = start; index < lambdaStart; index++) {
+      char value = sourceText.charAt(index);
+      if (value == '(') {
+        depth++;
+      } else if (value == ')') {
+        depth--;
+      } else if (depth == 0 && value == '.' && replacesFlowingValue(sourceText, index, lambdaStart)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean replacesFlowingValue(String sourceText, int dot, int lambdaStart) {
+    int nameEnd = dot + 1;
+    while (nameEnd < lambdaStart && Character.isJavaIdentifierPart(sourceText.charAt(nameEnd))) {
+      nameEnd++;
+    }
+    int opening = nameEnd;
+    while (opening < lambdaStart && Character.isWhitespace(sourceText.charAt(opening))) {
+      opening++;
+    }
+    if (nameEnd == dot + 1 || opening == lambdaStart || sourceText.charAt(opening) != '(') {
+      return false;
+    }
+    String name = sourceText.substring(dot + 1, nameEnd);
+    int closing = matchingParenthesis(sourceText, opening);
+    int argumentEnd = closing > opening ? closing : lambdaStart;
+    return !sourceText.substring(opening, argumentEnd).contains("->")
+        && !VALUE_PRESERVING_CALLS.contains(name);
   }
 
   private static List<String> splitArguments(String source) {
