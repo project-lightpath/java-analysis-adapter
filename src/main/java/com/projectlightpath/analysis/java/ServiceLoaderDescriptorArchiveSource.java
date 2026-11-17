@@ -3,6 +3,7 @@ package com.projectlightpath.analysis.java;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.List;
@@ -14,6 +15,13 @@ import java.util.zip.ZipFile;
 
 /** Reads root-level ServiceLoader metadata from a dependency archive. */
 final class ServiceLoaderDescriptorArchiveSource {
+  /**
+   * Bounds the eager central-directory allocation performed by {@link ZipFile}
+   * construction. A mitigation, not the cure: the durable fix for eager-CEN
+   * indexing is FLPATH-5124 (see also FLPATH-5123).
+   */
+  static final long MAX_ARCHIVE_BYTES = 512L * 1024 * 1024;
+
   private ServiceLoaderDescriptorArchiveSource() {}
 
   static void scan(
@@ -21,6 +29,19 @@ final class ServiceLoaderDescriptorArchiveSource {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state) {
     Path normalized = archive.toAbsolutePath().normalize();
+    try {
+      long size = Files.size(normalized);
+      if (size > MAX_ARCHIVE_BYTES) {
+        state.diagnostic("archive_size_limit", normalized.toString(),
+            "archive is " + size + " bytes, above the " + MAX_ARCHIVE_BYTES
+                + " byte archive size limit");
+        return;
+      }
+    } catch (IOException error) {
+      state.diagnostic("archive_read_error", normalized.toString(),
+          ServiceLoaderDescriptorSource.message(error));
+      return;
+    }
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
       ArchiveEntries entries = enumerate(zip, normalized, state);
       readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
