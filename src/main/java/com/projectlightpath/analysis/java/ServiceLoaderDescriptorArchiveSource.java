@@ -95,11 +95,15 @@ final class ServiceLoaderDescriptorArchiveSource {
   private static boolean isVersionedModuleInfo(String name) {
     String prefix = "META-INF/versions/";
     String suffix = "/" + ServiceLoaderDescriptorSource.MODULE_INFO;
-    if (!name.startsWith(prefix) || !name.endsWith(suffix)) {
+    // Bounds first: a path whose prefix and suffix overlap (for example
+    // META-INF/versions/module-info.class) has no room for a version
+    // component, and an exactly-boundary path has an empty one.
+    if (name.length() <= prefix.length() + suffix.length()
+        || !name.startsWith(prefix) || !name.endsWith(suffix)) {
       return false;
     }
     String version = name.substring(prefix.length(), name.length() - suffix.length());
-    return !version.isEmpty() && version.chars().allMatch(Character::isDigit);
+    return version.chars().allMatch(Character::isDigit);
   }
 
   private static void retainDescriptor(
