@@ -20,9 +20,11 @@ final class ServiceLoaderCallSiteParser {
    * Non-lambda chained calls that cannot replace the flowing provider value.
    * Enumerated from the green chained call-site tests: every Optional chain
    * uses findFirst; orElseThrow appears only on the receiver==null direct
-   * path, which the abstain rule in ServiceLoaderCallSiteSource must not touch.
+   * path, which DIRECT_PROVIDER_CHAIN in ServiceLoaderCallSiteSource covers
+   * without this whitelist (and a whitelisted orElseThrow before a lambda
+   * call such as configure(q -> q.record()) fabricates attribution).
    */
-  private static final Set<String> VALUE_PRESERVING_CALLS = Set.of("findFirst", "orElseThrow");
+  private static final Set<String> VALUE_PRESERVING_CALLS = Set.of("findFirst");
 
   private ServiceLoaderCallSiteParser() {}
 
