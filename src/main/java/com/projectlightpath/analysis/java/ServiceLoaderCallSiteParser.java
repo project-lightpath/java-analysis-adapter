@@ -17,6 +17,17 @@ final class ServiceLoaderCallSiteParser {
   private static final Pattern ON_DEMAND_IMPORT = Pattern.compile(
       "(?m)^\\s*import\\s+java\\.util\\.\\*\\s*;");
   /**
+   * A single-type import of ServiceLoader from any package other than
+   * java.util. JLS 6.4.1: a single-type import shadows a type-import-on-demand,
+   * so its presence defeats wildcard ownership of the simple name. Static
+   * imports (import static p.Q.ServiceLoader;) are deliberately not matched:
+   * the qualified-name side accepts no spaces, and treating them as foreign
+   * would over-abstain (safe direction) per the plan's regex-edge disposition.
+   */
+  private static final Pattern FOREIGN_SINGLE_TYPE_IMPORT = Pattern.compile(
+      "(?m)^\\s*import\\s+(?!java\\.util\\.ServiceLoader\\s*;)"
+          + "[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*\\.ServiceLoader\\s*;");
+  /**
    * Non-lambda chained calls that cannot replace the flowing provider value.
    * Enumerated from the green chained call-site tests: every Optional chain
    * uses findFirst; orElseThrow appears only on the receiver==null direct
@@ -78,7 +89,9 @@ final class ServiceLoaderCallSiteParser {
     if (EXPLICIT_IMPORT.matcher(source).find()) {
       return true;
     }
-    if (wildcardImportOwned && ON_DEMAND_IMPORT.matcher(source).find()) {
+    if (wildcardImportOwned
+        && ON_DEMAND_IMPORT.matcher(source).find()
+        && !FOREIGN_SINGLE_TYPE_IMPORT.matcher(source).find()) {
       return true;
     }
     Matcher packageMatcher = PACKAGE.matcher(source);
