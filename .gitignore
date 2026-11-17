@@ -1,0 +1,13 @@
+# Bulky generated artifacts stay out of git; evidence locations documented in notes.
+bench-fixtures/
+fixtures/
+classes/
+classes-perf/
+no-source/
+child-*/
+bench-*/
+__pycache__/
+*.jar
+results-*.json
+bench-memory*.json
+*.log
