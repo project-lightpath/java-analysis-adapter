@@ -491,6 +491,33 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void binaryClassNameValidationSemanticsArePreserved() throws IOException {
+    // Provider-line semantics: accepted, duplicated, and rejected provider lines.
+    ServiceLoaderDescriptorSource.ProviderEntries parsed = ServiceLoaderDescriptorSource.providers(
+        ("demo.Provider\n$a$b.C$d\n\u00C9nicode.Provider\n\n.leading\ntrailing.\nbad/name\n")
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    assertEquals(List.of("demo.Provider", "$a$b.C$d", "\u00C9nicode.Provider"), parsed.providers());
+    assertEquals(List.of(".leading", "trailing.", "bad/name"), parsed.malformedEntries());
+
+    // Filename semantics at the serviceFileCandidate/addServiceFile sites.
+    Path root = temp.resolve("filename-classes");
+    Path services = Files.createDirectories(
+        root.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.Filename"), "demo.FilenameProvider\n");
+    Files.writeString(services.resolve("$dollar.Name"), "demo.DollarProvider\n");
+    Files.writeString(services.resolve("bad-name"), "ignored");
+    Files.writeString(services.resolve("trailing.dot."), "ignored");
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        root, descriptors, new java.util.HashSet<>(), state);
+    assertEquals(Set.of("demo.Filename", "$dollar.Name"), Set.copyOf(
+        descriptors.stream().map(ServiceLoaderDescriptorScanner.Descriptor::serviceType).toList()),
+        descriptors.toString());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+  }
+
+  @Test
   void oversizedArchiveIsRejectedBeforeCentralDirectoryIndex() throws IOException {
     Path archive = temp.resolve("oversized.jar");
     try (RandomAccessFile sparse = new RandomAccessFile(archive.toFile(), "rw")) {

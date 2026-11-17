@@ -335,6 +335,22 @@ class ServiceLoaderSafetyLifetimeTest {
     }
   }
 
+  @Test
+  void deeplyDottedInvalidNameIsRejectedWithoutStackOverflow() {
+    StringBuilder deep = new StringBuilder("demo");
+    for (int index = 0; index < 5_000; index++) {
+      deep.append(".Provider");
+    }
+    deep.append(".9invalid");
+    String line = deep.toString();
+
+    ServiceLoaderDescriptorSource.ProviderEntries parsed = ServiceLoaderDescriptorSource.providers(
+        (line + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    assertEquals(List.of(), parsed.providers());
+    assertEquals(List.of(line), parsed.malformedEntries());
+  }
+
   private static AnalysisContext context(Path repository, Path source, Path classes, List<Path> dependencies) {
     return builder(repository, source, classes, dependencies).build();
   }
