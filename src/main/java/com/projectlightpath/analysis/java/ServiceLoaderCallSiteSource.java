@@ -14,7 +14,6 @@ final class ServiceLoaderCallSiteSource {
       "([A-Za-z_$][\\w$]*)\\s*$");
   private static final Pattern DIRECT_PROVIDER_CHAIN = Pattern.compile(
       "\\s*\\.\\s*findFirst\\s*\\(\\s*\\)\\s*\\.\\s*orElseThrow\\s*\\(\\s*\\)\\s*");
-
   private ServiceLoaderCallSiteSource() {}
 
   /** Correlates a line-only bytecode call with the ServiceLoader expression that can own it. */
@@ -139,6 +138,8 @@ final class ServiceLoaderCallSiteSource {
         return !priorLambda
             && !ServiceLoaderCallSiteParser.hasInterveningReplacingCall(
                 sourceText, start, lambda.start())
+            && !ServiceLoaderCallSiteParser.insideTypeBodyDeclaredInLambda(
+                sourceText, lambda.end(), targetOffset)
             && containsParameter(parameters, receiver)
             && !parameterReassigned(sourceText, lambda.end(), targetOffset, receiver);
       }
@@ -150,8 +151,7 @@ final class ServiceLoaderCallSiteSource {
     return false;
   }
 
-  private static boolean isValuePreservingLambda(String sourceText, int lambdaStart) {
-    int opening = lambdaStart - 1;
+  private static boolean isValuePreservingLambda(String sourceText, int lambdaStart) {    int opening = lambdaStart - 1;
     while (opening >= 0 && Character.isWhitespace(sourceText.charAt(opening))) {
       opening--;
     }

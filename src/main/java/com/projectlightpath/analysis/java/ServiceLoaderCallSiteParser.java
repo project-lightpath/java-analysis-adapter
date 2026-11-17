@@ -161,6 +161,68 @@ final class ServiceLoaderCallSiteParser {
         && !VALUE_PRESERVING_CALLS.contains(name);
   }
 
+  /** A type declaration heading a brace: annotations, modifiers, keyword. */
+  private static final Pattern TYPE_DECLARATION_HEADER = Pattern.compile(
+      "^\\s*(?:@[\\w$.]+(?:\\([^{}]*\\))?\\s+)*"
+          + "(?:(?:public|private|protected|static|final|abstract|sealed|non-sealed|strictfp)\\s+)*"
+          + "(?:class|interface|enum|record)\\b");
+  /** An anonymous-class constructor invocation heading a brace. */
+  private static final Pattern ANONYMOUS_CLASS_PREFIX = Pattern.compile(
+      "\\bnew\\s+[A-Za-z_$][\\w$.]*(?:<[^()]*>)?\\s*$");
+
+
+  /**
+   * True when the target sits inside a type body (local, anonymous, or nested
+   * declaration) that opens within the owning lambda: the inner same-named
+   * parameter is a different variable, so the lambda's ownership must not
+   * reach it. Covers both declaration-keyword bodies and anonymous-class
+   * bodies (which have no declaration keyword).
+   */
+  static boolean insideTypeBodyDeclaredInLambda(
+      String sourceText, int lambdaEnd, int targetOffset) {
+    for (int index = lambdaEnd; index < targetOffset; index++) {
+      if (sourceText.charAt(index) != '{' || !isTypeBodyOpening(sourceText, index)) {
+        continue;
+      }
+      int closing = JavaSourceText.matchingDelimiter(sourceText, index, '{', '}');
+      if (closing < 0 || closing >= targetOffset) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean isTypeBodyOpening(String sourceText, int brace) {
+    int boundary = Math.max(sourceText.lastIndexOf(';', brace - 1),
+        Math.max(sourceText.lastIndexOf('{', brace - 1), sourceText.lastIndexOf('}', brace - 1)));
+    String header = sourceText.substring(boundary + 1, brace).trim();
+    if (TYPE_DECLARATION_HEADER.matcher(header).find()) {
+      return true;
+    }
+    return isAnonymousClassHeader(header);
+  }
+
+  private static boolean isAnonymousClassHeader(String header) {
+    if (!header.endsWith(")")) {
+      return false;
+    }
+    int open = matchingParenthesisBackward(header, header.length() - 1);
+    return open > 0 && ANONYMOUS_CLASS_PREFIX.matcher(header.substring(0, open).trim()).find();
+  }
+
+  private static int matchingParenthesisBackward(String sourceText, int closing) {
+    int depth = 0;
+    for (int index = closing; index >= 0; index--) {
+      char value = sourceText.charAt(index);
+      if (value == ')') {
+        depth++;
+      } else if (value == '(' && --depth == 0) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
   private static List<String> splitArguments(String source) {
     List<String> result = new ArrayList<>();
     ArgumentDepth depth = new ArgumentDepth();
