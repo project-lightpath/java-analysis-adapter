@@ -51,9 +51,14 @@ class, lambda x switch, catch x nested type, import x declaration. Features
 green in isolation do not prove their composition.
 
 ## TDD and gates
-- RED_nn / GREEN_nn / EVIDENCE_nn commit triples. RED commits contain the
-  failing tests (plus, if unavoidable, a behavior-neutral compile stub —
-  documented in the message). GREEN commits contain the minimal fix only.
+- TDD methodology is red -> green -> refactor: write the failing test (red),
+  make it pass with the minimal change (green), then refactor with the tests
+  green. The repository records this as RED_nn / GREEN_nn / EVIDENCE_nn
+  commit triples: RED commits contain the failing tests (plus, if
+  unavoidable, a behavior-neutral compile stub — documented in the message);
+  GREEN commits contain the minimal fix; refactoring (e.g. hoisting a
+  repeated hash computation) happens under green characterization tests and
+  is documented in the EVIDENCE commit.
 - Gates after every item, mandatory: `make adapter-test` (execution count
   must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
 - Zero edits to existing tests unless the plan sanctions one explicitly.
@@ -61,6 +66,7 @@ green in isolation do not prove their composition.
   document the placement in the commit message.
 
 ## Before pushing
-Run `coderabbit review` (or request a review) on the local diff before
-pushing. Front-load findings instead of paying one public review cycle per
-batch.
+Post `@coderabbitai full review` on the pull request after pushing, and
+verify the findings are dispositioned before merging. Front-load review
+findings (plan -> adversarial plan review -> implement -> independent change
+review) instead of paying one public review cycle per batch.
