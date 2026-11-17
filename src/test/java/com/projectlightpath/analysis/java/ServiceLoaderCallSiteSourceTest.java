@@ -65,6 +65,17 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void orElseThrowBeforeLambdaMethodAbstains() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".orElseThrow().configure(q -> q.record());\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "q"));
+  }
+
+  @Test
   void preservesProviderProvenanceThroughFilteringLambda() {
     String source = "import java.util.ServiceLoader;\n"
         + "ServiceLoader.load(AuditProvider.class).findFirst()"
