@@ -53,7 +53,7 @@ final class ServiceLoaderSourceCache {
 
   /** Any single-type or on-demand import in a compilation unit. */
   private static final Pattern ANY_IMPORT = Pattern.compile(
-      "(?m)^\\s*import\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
+      "(?m)^\\s*import\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*(?:\\.\\*)?)\\s*;");
 
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 

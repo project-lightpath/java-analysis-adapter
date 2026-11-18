@@ -44,32 +44,10 @@ final class ServiceLoaderDescriptorReader {
       }
     }
     for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
-      if (metadata.status() != AnalysisContext.MetadataStatus.OBSERVED
-          || !"service_loader_descriptor".equals(metadata.kind())
-          || metadata.declaredPath() == null) {
-        continue;
-      }
-      Path declared;
-      try {
-        declared = Path.of(metadata.declaredPath());
-      } catch (InvalidPathException error) {
-        state.diagnostic(
-            "descriptor_path_invalid", metadata.declaredPath(),
-            ServiceLoaderDescriptorSource.message(error));
-        continue;
-      }
-      Path resolved = declared.isAbsolute() ? declared : context.repositoryRoot().resolve(declared);
-      if (!ServiceLoaderDescriptorAuthorization.authorizedPath(
-          context, resolved, dependencyEntries)) {
-        state.diagnostic(
-            "descriptor_path_outside_context", resolved.toAbsolutePath().normalize().toString(),
-            "observed descriptor metadata path is outside the selected analysis inputs");
-        continue;
-      }
-      if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
-        addFile(resolved, context, descriptors, visited, state);
-      } else {
-        scanDirectory(resolved, context, descriptors, visited, state);
+      if (metadata.status() == AnalysisContext.MetadataStatus.OBSERVED
+          && "service_loader_descriptor".equals(metadata.kind())
+          && metadata.declaredPath() != null) {
+        scanObservedMetadata(metadata, context, dependencyEntries, descriptors, visited, state);
       }
     }
     for (Path dependency : dependencyEntries) {
@@ -78,6 +56,49 @@ final class ServiceLoaderDescriptorReader {
     }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));
     return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics());
+  }
+
+  /** Handles one observed metadata selection: one file, or one directory tree. */
+  private static void scanObservedMetadata(
+      AnalysisContext.FrameworkMetadata metadata,
+      AnalysisContext context,
+      List<Path> dependencyEntries,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    Path declared;
+    try {
+      declared = Path.of(metadata.declaredPath());
+    } catch (InvalidPathException error) {
+      state.diagnostic(
+          "descriptor_path_invalid", metadata.declaredPath(),
+          ServiceLoaderDescriptorSource.message(error));
+      return;
+    }
+    Path normalizedDeclared = (declared.isAbsolute()
+        ? declared
+        : context.repositoryRoot().resolve(declared)).toAbsolutePath().normalize();
+    if (!ServiceLoaderDescriptorAuthorization.authorizedPath(
+        context, normalizedDeclared, dependencyEntries)) {
+      state.diagnostic(
+          "descriptor_path_outside_context", normalizedDeclared.toString(),
+          "observed descriptor metadata path is outside the selected analysis inputs");
+      return;
+    }
+    if (!Files.isRegularFile(normalizedDeclared, LinkOption.NOFOLLOW_LINKS)) {
+      scanDirectory(normalizedDeclared, context, descriptors, visited, state);
+      return;
+    }
+    if (validDescriptorFilename(normalizedDeclared)) {
+      addFile(normalizedDeclared, context, descriptors, visited, state);
+      return;
+    }
+    // An explicitly selected input must not vanish silently: the diagnostic
+    // is scan-global (it blocks DEFINITE promotion for the whole scan), while
+    // incidental files found during directory discovery stay ignored.
+    state.diagnostic(
+        "descriptor_filename_invalid", displayPath(context, normalizedDeclared),
+        "explicitly selected service descriptor filename is not a binary class name");
   }
 
   /** Scans one selected classpath entry, diagnosing unavailable entries on request. */
@@ -146,6 +167,11 @@ final class ServiceLoaderDescriptorReader {
         descriptors,
         visited,
         state);
+  }
+
+  private static boolean validDescriptorFilename(Path file) {
+    return file.getFileName() != null
+        && ServiceLoaderDescriptorAuthorization.isBinaryClassName(file.getFileName().toString());
   }
 
   private static String displayPath(AnalysisContext context, Path path) {

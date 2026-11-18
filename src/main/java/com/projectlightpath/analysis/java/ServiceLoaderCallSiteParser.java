@@ -54,6 +54,9 @@ final class ServiceLoaderCallSiteParser {
     String structuralSource = ServiceLoaderSourceMasker.mask(source == null ? "" : source);
     Matcher matcher = LOAD.matcher(structuralSource);
     while (matcher.find()) {
+      if (!identifierBoundary(structuralSource, matcher.start())) {
+        continue;
+      }
       if (matcher.group(1) == null
           && !isJavaUtilServiceLoader(
               structuralSource, wildcardImportOwned, serviceLoaderTypeOwned)) {
@@ -79,6 +82,19 @@ final class ServiceLoaderCallSiteParser {
            lineAt(structuralSource, matcher.start())));
     }
     return List.copyOf(result);
+  }
+
+  /**
+   * Java identifier-part boundary: the ASCII regex lookbehind already blocks
+   * ASCII names, so this adds the Unicode cases the JLS treats as one
+   * identifier ({@code 外ServiceLoader}).
+   */
+  private static boolean identifierBoundary(String source, int start) {
+    if (start == 0) {
+      return true;
+    }
+    char previous = source.charAt(start - 1);
+    return previous != '.' && !Character.isJavaIdentifierPart(previous);
   }
 
   private static boolean isJavaUtilServiceLoader(
