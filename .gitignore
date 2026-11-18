@@ -16,3 +16,7 @@ spike/scripts/__pycache__/
 
 # Local files
 .DS_Store
+
+# Local tool caches (never commit)
+.serena/
+.zvec-grep/

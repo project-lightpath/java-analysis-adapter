@@ -1,1 +1,0 @@
-{"embeddings":[{"model":{"provider":"local","name":"potion-code-16m-v2","endpoint":null},"dimension":256,"metric":"cosine","maxBatchSize":256,"maxInputTokens":1024,"maxImageBytes":null}]}
