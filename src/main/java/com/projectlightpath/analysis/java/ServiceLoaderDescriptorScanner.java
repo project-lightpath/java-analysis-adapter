@@ -40,11 +40,14 @@ final class ServiceLoaderDescriptorScanner {
 
   private static List<Descriptor> selectedDescriptors(
       ServiceLoaderCallSiteReader.ServiceLoadHints hints, Scan scan) {
-    Set<DescriptorIdentity> seen = new LinkedHashSet<>();
-    return scan.descriptors().stream()
+    java.util.Map<DescriptorIdentity, Descriptor> selected = new java.util.LinkedHashMap<>();
+    scan.descriptors().stream()
         .filter(item -> hints.serviceTypes().contains(item.serviceType()))
-        .filter(item -> seen.add(DescriptorIdentity.from(item)))
-        .toList();
+        .forEach(item -> selected.merge(
+            DescriptorIdentity.from(item), item,
+            (first, next) -> first.classpathBacked() || !next.classpathBacked()
+                ? first : next));
+    return List.copyOf(selected.values());
   }
 
   private static Set<String> providerNames(List<Descriptor> descriptors) {
@@ -237,14 +240,12 @@ final class ServiceLoaderDescriptorScanner {
       String serviceType,
       List<String> providers,
       String fingerprint,
-      String kind,
       List<String> malformedEntries) {
     static DescriptorIdentity from(Descriptor descriptor) {
       return new DescriptorIdentity(
           descriptor.serviceType(),
           descriptor.providers(),
           descriptor.fingerprint(),
-          descriptor.kind(),
           descriptor.malformedEntries());
     }
   }

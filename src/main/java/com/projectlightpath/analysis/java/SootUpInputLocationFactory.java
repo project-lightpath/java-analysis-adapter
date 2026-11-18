@@ -48,7 +48,8 @@ final class SootUpInputLocationFactory {
     }
     if (!context.dependencyClasspath().isEmpty() && dependencyEntries.isEmpty()) {
       throw new IllegalArgumentException(
-          "dependency classpath contains no valid entries for AnalysisContext " + context.id());
+          "dependency classpath contains no valid entries for AnalysisContext " + context.id()
+              + ": " + resolution.skipped());
     }
     locations.add(new DefaultRuntimeAnalysisInputLocation(SourceType.Library));
     JavaView view = new JavaView(locations);
@@ -125,8 +126,13 @@ final class SootUpInputLocationFactory {
         }
       }
     }
+    List<Skipped> ordered = skipped.stream()
+        .sorted(java.util.Comparator
+            .comparing((Skipped skip) -> skip.path().toString())
+            .thenComparing(Skipped::code))
+        .toList();
     return new DependencyResolution(
-        List.copyOf(resolved), List.copyOf(truncatedWildcards), List.copyOf(skipped));
+        List.copyOf(resolved), List.copyOf(truncatedWildcards), ordered);
   }
 
   private static void report(
@@ -144,8 +150,14 @@ final class SootUpInputLocationFactory {
       return new Expansion(List.of(normalized), false);
     }
 
-    int wildcardIndex = value.indexOf('*');
-    Path directory = normalized.getFileSystem().getPath(value.substring(0, wildcardIndex));
+    // The wildcard must be the whole last element: deps/* expands deps, while
+    // deps/*/* targets the literal directory "deps/*" and deps/foo* is a
+    // literal path, not a prefix expansion of deps.
+    Path name = normalized.getFileName();
+    if (name == null || !"*".equals(name.toString())) {
+      return new Expansion(List.of(normalized), false);
+    }
+    Path directory = normalized.getParent();
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       report(skipped, reported, "dependency_wildcard_directory_unavailable", normalized,
           "dependency wildcard directory does not exist or is not a directory");
@@ -162,7 +174,7 @@ final class SootUpInputLocationFactory {
         }
         enumeratedEntries++;
         String fileName = path.getFileName().toString();
-        boolean jarNamed = fileName.endsWith(".jar") || fileName.endsWith(".JAR");
+        boolean jarNamed = fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".jar");
         if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && jarNamed) {
           ServiceLoaderDescriptorSource.retainSmallest(
               entries, path, MAX_DEPENDENCY_ENTRIES);
