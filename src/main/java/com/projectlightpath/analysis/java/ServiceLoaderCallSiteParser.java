@@ -87,39 +87,58 @@ final class ServiceLoaderCallSiteParser {
     if (!serviceLoaderTypeOwned) {
       return false;
     }
-    boolean explicit = false;
-    boolean wildcard = false;
-    boolean foreign = false;
-    for (JavaImports.Import imported : JavaImports.parse(source)) {
-      if (imported.isStatic()) {
-        // A static import never imports the top-level type java.util.ServiceLoader
-        // itself; a member-type import can supply a lookalike, so abstain.
-        if (imported.onDemand()
-            || imported.simpleName().equals("ServiceLoader")
-            || imported.name().endsWith(".ServiceLoader")) {
-          foreign = true;
-        }
-        continue;
-      }
-      if (imported.onDemand()) {
-        wildcard |= imported.name().equals("java.util");
-      } else if (imported.name().equals("java.util.ServiceLoader")) {
-        explicit = true;
-      } else if (imported.simpleName().equals("ServiceLoader")) {
-        foreign = true;
-      }
-    }
-    if (explicit) {
+    ImportOwnership ownership = importOwnership(source);
+    if (ownership.explicit()) {
       return true;
     }
-    if (wildcard && wildcardImportOwned && !foreign) {
+    if (ownership.wildcard() && wildcardImportOwned && !ownership.foreign()) {
       return true;
     }
-    if (foreign) {
+    if (ownership.foreign()) {
       return false;
     }
     Matcher packageMatcher = PACKAGE.matcher(source);
     return packageMatcher.find() && packageMatcher.group(1).equals("java.util");
+  }
+
+  private record ImportOwnership(boolean explicit, boolean wildcard, boolean foreign) {
+    ImportOwnership withExplicit() {
+      return new ImportOwnership(true, wildcard, foreign);
+    }
+
+    ImportOwnership withWildcard() {
+      return new ImportOwnership(explicit, true, foreign);
+    }
+
+    ImportOwnership withForeign() {
+      return new ImportOwnership(explicit, wildcard, true);
+    }
+  }
+
+  private static ImportOwnership importOwnership(String source) {
+    ImportOwnership result = new ImportOwnership(false, false, false);
+    for (JavaImports.Import imported : JavaImports.parse(source)) {
+      result = classify(result, imported);
+    }
+    return result;
+  }
+
+  private static ImportOwnership classify(ImportOwnership ownership, JavaImports.Import imported) {
+    if (imported.isStatic()) {
+      // A static import never imports the top-level type java.util.ServiceLoader
+      // itself; a static member-type import can supply a lookalike.
+      boolean lookalike = imported.onDemand()
+          || imported.simpleName().equals("ServiceLoader")
+          || imported.name().endsWith(".ServiceLoader");
+      return lookalike ? ownership.withForeign() : ownership;
+    }
+    if (imported.onDemand()) {
+      return imported.name().equals("java.util") ? ownership.withWildcard() : ownership;
+    }
+    if (imported.name().equals("java.util.ServiceLoader")) {
+      return ownership.withExplicit();
+    }
+    return imported.simpleName().equals("ServiceLoader") ? ownership.withForeign() : ownership;
   }
 
   private static String classLiteralType(String argument) {

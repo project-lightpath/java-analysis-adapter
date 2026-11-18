@@ -51,8 +51,26 @@ final class JavaImports {
     if (isStatic) {
       cursor = skipWhitespace(source, cursor + "static".length());
     }
+    QualifiedName name = parseQualifiedName(source, cursor);
+    if (name == null
+        || (!name.onDemand() && name.value().indexOf('.') < 0)) {
+      // A qualified name is mandatory for a single-type import; a dotless
+      // import is malformed Java and must not resolve like a real import.
+      return null;
+    }
+    int end = skipWhitespace(source, name.end());
+    if (end >= source.length() || source.charAt(end) != ';') {
+      return null;
+    }
+    return new ImportHolder(
+        new Import(name.value(), name.onDemand(), isStatic), end + 1);
+  }
+
+  private record QualifiedName(String value, boolean onDemand, int end) {}
+
+  private static QualifiedName parseQualifiedName(String source, int start) {
     StringBuilder name = new StringBuilder();
-    boolean onDemand = false;
+    int cursor = start;
     while (true) {
       if (cursor >= source.length()
           || !Character.isJavaIdentifierStart(source.codePointAt(cursor))) {
@@ -68,30 +86,17 @@ final class JavaImports {
       }
       name.append(source, segmentStart, cursor);
       int afterSegment = skipWhitespace(source, cursor);
-      if (afterSegment < source.length() && source.charAt(afterSegment) == '.') {
-        int afterDot = skipWhitespace(source, afterSegment + 1);
-        if (afterDot < source.length() && source.charAt(afterDot) == '*') {
-          onDemand = true;
-          cursor = skipWhitespace(source, afterDot + 1);
-          break;
-        }
-        name.append('.');
-        cursor = afterDot;
-        continue;
+      if (afterSegment >= source.length() || source.charAt(afterSegment) != '.') {
+        return new QualifiedName(name.toString(), false, afterSegment);
       }
-      cursor = afterSegment;
-      break;
+      int afterDot = skipWhitespace(source, afterSegment + 1);
+      if (afterDot < source.length() && source.charAt(afterDot) == '*') {
+        return new QualifiedName(
+            name.toString(), true, skipWhitespace(source, afterDot + 1));
+      }
+      name.append('.');
+      cursor = afterDot;
     }
-    if (cursor >= source.length() || source.charAt(cursor) != ';') {
-      return null;
-    }
-    if (name.indexOf(".") < 0 && !onDemand) {
-      // A qualified name is mandatory for a single-type import; a dotless
-      // import is malformed Java and must not resolve like a real import.
-      return null;
-    }
-    return new ImportHolder(
-        new Import(name.toString(), onDemand, isStatic), cursor + 1);
   }
 
   private record ImportHolder(Import imported, int end) {}
