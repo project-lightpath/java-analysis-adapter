@@ -30,11 +30,14 @@ JLS and test every cell plus pairwise interactions:
   declaration, so the wildcard import is the weakest form — it does not
   sit above same-package types.
 - Inherited member types (cross-file, single level) are followed at the
-  site filter: the extending type's extends-clause simple name is
-  resolved against the selected files (same package, single-type import,
-  or on-demand import). Residual, not followed: multi-level inheritance
-  chains, qualified or unresolvable superclass names, and superinterfaces
-  — a documented false-attribution residual and follow-up candidate.
+  site filter: the extending type's extends-clause simple name is resolved
+  against the selected files by JLS 6.4.1 precedence (single-type import,
+  then same package, then on-demand import), and the superclass file's
+  top-level type or direct members are checked. Residual, not followed:
+  multi-level inheritance chains, implements clauses and superinterfaces
+  after the first listed extends name, and qualified, nested-type-imported,
+  or otherwise unresolvable superclass names — a documented
+  false-attribution residual and follow-up candidate.
 - When one review finding exposes an open cell, close the remaining cells in
   the same change rather than one finding per review round.
 - Scope rules come from JLS 6.3: parameters span the method body, locals span

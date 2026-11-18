@@ -5,6 +5,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,9 +47,9 @@ final class ServiceLoaderSourceCache {
       "permits", "return", "super", "switch", "throw", "throws", "try",
       "while", "yield");
 
-  /** The extends-clause simple name in a type declaration header. */
-  private static final Pattern EXTENDS_SIMPLE_NAME = Pattern.compile(
-      "\\bextends\\s+([A-Za-z_$][\\w$]*)");
+  /** The name following a top-level extends keyword in a type declaration header. */
+  private static final Pattern EXTENDS_TARGET = Pattern.compile(
+      "extends\\s+([A-Za-z_$][\\w$]*)(?!\\s*\\.)");
 
   /** Any single-type or on-demand import in a compilation unit. */
   private static final Pattern ANY_IMPORT = Pattern.compile(
@@ -109,11 +110,13 @@ final class ServiceLoaderSourceCache {
    * Inherited member types from a superclass in another file (JLS 6.4.1/6.5).
    * BOUNDED, single level: each type declaration enclosing the site contributes
    * its extends-clause simple name, resolved against the selected files by
-   * same package, single-type import, or on-demand import; a resolved
-   * superclass file that declares a ServiceLoader type (nested member type, or
-   * top-level) shadows the site. Multi-level chains, qualified or unresolvable
-   * superclass names, and superinterfaces are not followed (documented
-   * residuals — behavior for them is unchanged).
+   * JLS 6.4.1 precedence (single-type import, then same package, then on-demand
+   * import); a resolved superclass file that declares an inheritable
+   * ServiceLoader type (its top-level type or a direct member) shadows the
+   * site. Multi-level chains, {@code implements} clauses, superinterfaces
+   * listed after the first extends name, and qualified or unresolvable
+   * superclass names (including nested-type imports) are not followed
+   * (documented residuals — behavior for them is unchanged).
    */
   private static boolean inheritedTypeShadowsAt(
       SourceMetadataScanner scanner,
@@ -142,16 +145,30 @@ final class ServiceLoaderSourceCache {
     if (superName == null) {
       return false;
     }
-    for (SourceMetadataScanner.SourceFile candidate : scanner.files()) {
-      if (candidate.simpleTypeName().equals(superName)
-          && (candidate.packageName().equals(file.packageName())
-              || importedBySimpleName(
-                  file.structuralSource(), superName, candidate.packageName()))
-          && declaresServiceLoaderType(candidate)) {
-        return true;
-      }
+    List<SourceMetadataScanner.SourceFile> candidates = scanner.files().stream()
+        .filter(candidate -> candidate.simpleTypeName().equals(superName))
+        .toList();
+    String singleTypeImport = singleTypeImport(source, superName);
+    if (singleTypeImport != null) {
+      // JLS 6.4.1: a single-type import outranks any package member.
+      String importPackage = singleTypeImport.substring(
+          0, singleTypeImport.length() - superName.length() - 1);
+      return candidates.stream()
+          .filter(candidate -> candidate.packageName().equals(importPackage))
+          .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType);
     }
-    return false;
+    List<SourceMetadataScanner.SourceFile> samePackage = candidates.stream()
+        .filter(candidate -> candidate.packageName().equals(file.packageName()))
+        .toList();
+    if (!samePackage.isEmpty()) {
+      // A same-package type shadows every on-demand import (JLS 6.4.1).
+      return samePackage.stream()
+          .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType);
+    }
+    Set<String> onDemandPackages = onDemandImports(source);
+    return candidates.stream()
+        .filter(candidate -> onDemandPackages.contains(candidate.packageName()))
+        .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType);
   }
 
   private static String extendsSimpleName(
@@ -161,29 +178,65 @@ final class ServiceLoaderSourceCache {
     if (limit <= type.start()) {
       return null;
     }
-    Matcher extendsClause = EXTENDS_SIMPLE_NAME.matcher(source);
-    extendsClause.region(type.start(), limit);
-    return extendsClause.find() ? extendsClause.group(1) : null;
+    String header = source.substring(type.start(), limit);
+    int extendsIndex = SourceMetadataScanner.topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return null;
+    }
+    // lookingAt keeps the match anchored after the extends keyword, so a
+    // qualified superclass name is skipped rather than matched on its last
+    // segment (documented residual).
+    Matcher target = EXTENDS_TARGET.matcher(header);
+    target.region(extendsIndex, header.length());
+    return target.lookingAt() ? target.group(1) : null;
   }
 
-  private static boolean importedBySimpleName(
-      String source, String simpleName, String packageName) {
-    String single = packageName + "." + simpleName;
-    String onDemand = packageName + ".*";
-    Matcher imports = ANY_IMPORT.matcher(source);
-    while (imports.find()) {
-      String name = imports.group(1);
-      if (name.equals(single) || name.equals(onDemand)) {
-        return true;
+  /** Returns the single-type import name (pkg.Type) for a simple name, if any. */
+  private static String singleTypeImport(String source, String simpleName) {
+    for (String imported : imports(source)) {
+      if (!imported.endsWith(".*")
+          && imported.substring(imported.lastIndexOf('.') + 1).equals(simpleName)) {
+        return imported;
       }
     }
-    return false;
+    return null;
   }
 
-  private static boolean declaresServiceLoaderType(
+  private static Set<String> onDemandImports(String source) {
+    Set<String> result = new LinkedHashSet<>();
+    for (String imported : imports(source)) {
+      if (imported.endsWith(".*")) {
+        result.add(imported.substring(0, imported.length() - 2));
+      }
+    }
+    return result;
+  }
+
+  private static List<String> imports(String source) {
+    List<String> result = new ArrayList<>();
+    Matcher matcher = ANY_IMPORT.matcher(source);
+    while (matcher.find()) {
+      result.add(matcher.group(1));
+    }
+    return result;
+  }
+
+  /**
+   * True when the candidate declares a ServiceLoader type that its top-level
+   * type owns: the candidate's own top-level type or one of its direct
+   * members. Types nested deeper (a member of a member) and local classes are
+   * not inherited by an extending type, so they must not shadow the site.
+   */
+  private static boolean declaresInheritableServiceLoaderType(
       SourceMetadataScanner.SourceFile candidate) {
-    return SourceMetadataScanner.typeDeclarations(candidate).stream()
-        .anyMatch(type -> type.name().equals("ServiceLoader"));
+    List<SourceMetadataScannerState.TypeInfo> types =
+        SourceMetadataScanner.typeDeclarations(candidate);
+    return types.stream()
+        .filter(type -> type.name().equals("ServiceLoader"))
+        .filter(type -> !SourceMetadataScanner.isLocalType(candidate, type))
+        .anyMatch(type -> types.stream()
+            .filter(other -> other.start() < type.start() && type.end() <= other.end())
+            .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
   }
 
   private static boolean declarationInScope(
