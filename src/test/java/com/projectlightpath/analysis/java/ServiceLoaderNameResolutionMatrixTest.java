@@ -469,12 +469,13 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
-   * Guard (green at head and after item M): qualified superclass names are a
-   * documented residual — not followed, so the site stays attributed.
+   * Qualified superclass name resolving to a selected source file (item N):
+   * {@code Bridge extends demo.Base} inherits demo.Base's member type, so the
+   * custom loader shadows the wildcard import and the site abstains.
    */
   @Test
-  void qualifiedSuperclassNameIsNotFollowed() throws IOException {
-    assertFalse(matrixSites("matrix-cell-qualified-super", """
+  void qualifiedSuperclassNameIsResolved() throws IOException {
+    assertTrue(matrixSites("matrix-cell-qualified-super", """
         package demo;
         import java.util.*;
         class Bridge extends demo.Base {
@@ -483,9 +484,27 @@ class ServiceLoaderNameResolutionMatrixTest {
         """, Map.of("demo/Base.java", """
         package demo;
         class Base {
-          static class ServiceLoader<T> { }
+          static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
         }
         """)).isEmpty());
+  }
+
+  /**
+   * Deferred residual (item N): a qualified superclass whose package has no
+   * selected source file keeps the pre-existing attribution. Removing it is
+   * policy work (FLPATH-5124), not this bounded textual resolution.
+   */
+  @Test
+  void unselectedQualifiedSuperclassNameStaysAttributed() throws IOException {
+    assertFalse(matrixSites("matrix-cell-qualified-external", """
+        package demo;
+        import java.util.*;
+        class Bridge extends external.Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """).isEmpty());
   }
 
   private List<ServiceLoaderCallSite> matrixSites(
