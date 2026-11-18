@@ -28,16 +28,32 @@ final class ServiceLoaderSourceCache {
    * {@code >}, which excludes generic type-argument usages such as
    * {@code List<ServiceLoader>}.
    */
-  private static final Pattern TYPED_VALUE_DECLARATION = Pattern.compile(
-      "(?:^|[^\\p{javaJavaIdentifierPart}$.])"
-          + "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*"
-          + "(?:<[<>,\\p{javaJavaIdentifierPart}$.\\s]*>)?"
-          + "(?:\\[\\s*\\]|\\.\\.\\.)*)"
-          + "\\s+(ServiceLoader)(?=\\s*[=;,):\\]])");
+  /** One declared name with its typed and inferred-lambda patterns. */
+  private record DeclaredName(String value, Pattern typed, Pattern inferred) {}
 
-  /** Single-inferred-parameter lambdas that bind the name ServiceLoader. */
-  private static final Pattern INFERRED_LAMBDA_PARAMETER = Pattern.compile(
-      "(?:^|[^\\w$.])(\\(?)(ServiceLoader)(\\)?)(?=\\s*->)");
+  private static DeclaredName declaredName(String name, boolean arrowTerminator) {
+    return new DeclaredName(name,
+        typedValueDeclaration(name, arrowTerminator), inferredLambdaParameter(name));
+  }
+
+  private static Pattern typedValueDeclaration(String name, boolean arrowTerminator) {
+    String terminator = arrowTerminator ? "[=;,):\\]]|->" : "[=;,):\\]]";
+    return Pattern.compile(
+        "(?:^|[^\\p{javaJavaIdentifierPart}$.])"
+            + "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
+            + "(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*"
+            + "(?:<[<>,\\p{javaJavaIdentifierPart}$.\\s]*>)?"
+            + "(?:\\[\\s*\\]|\\.\\.\\.)*)"
+            + "\\s+(" + Pattern.quote(name) + ")(?=\\s*(?:" + terminator + "))");
+  }
+
+  private static Pattern inferredLambdaParameter(String name) {
+    return Pattern.compile(
+        "(?:^|[^\\w$.])(\\()?(" + Pattern.quote(name) + ")(\\)?)(?=\\s*->)");
+  }
+
+  private static final DeclaredName SERVICE_LOADER = declaredName("ServiceLoader", true);
+  private static final DeclaredName JAVA = declaredName("java", true);
 
   /** Keywords that may precede the name without declaring it. */
   private static final Set<String> DECLARATION_TYPE_KEYWORDS = Set.of(
@@ -76,13 +92,16 @@ final class ServiceLoaderSourceCache {
             && candidate.simpleTypeName().equals("ServiceLoader"));
     boolean staticOnDemandAmbiguous =
         ServiceLoaderInheritance.staticOnDemandAmbiguous(scanner, structuralSource);
-    List<int[]> valueScopes = valueDeclarationScopes(file, structuralSource);
+    List<int[]> serviceLoaderScopes = declarationScopes(file, structuralSource, SERVICE_LOADER);
+    List<int[]> javaScopes = declarationScopes(file, structuralSource, JAVA);
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
         source, !samePackageTypeShadow, true, staticOnDemandAmbiguous).stream()
         .filter(site -> !isShadowedAt(file, structuralSource, site.offset()))
         .filter(site -> !ServiceLoaderInheritance.shadowsAt(
             scanner, file, structuralSource, site.offset()))
-        .filter(site -> !valueDeclarationShadowsAt(structuralSource, valueScopes, site.offset()))
+        .filter(site -> !scopedValueShadowsAt(structuralSource, serviceLoaderScopes, site.offset()))
+        .filter(site -> !javaQualifierShadowedAt(
+            scanner, file, structuralSource, javaScopes, site))
         .toList();
     return new CachedSource(
         source,
@@ -143,23 +162,22 @@ final class ServiceLoaderSourceCache {
     return openings.isEmpty() ? -1 : openings.peek();
   }
 
-  /** Returns the masked-source scope ranges of value declarations named ServiceLoader. */
-  private static List<int[]> valueDeclarationScopes(
-      SourceMetadataScanner.SourceFile file, String source) {
+  /** Scope ranges of declarations of one name (JLS 6.3). */
+  private static List<int[]> declarationScopes(
+      SourceMetadataScanner.SourceFile file, String source, DeclaredName name) {
     List<int[]> scopes = new ArrayList<>();
-    Matcher typed = TYPED_VALUE_DECLARATION.matcher(source);
+    Matcher typed = name.typed().matcher(source);
     while (typed.find()) {
       if (!DECLARATION_TYPE_KEYWORDS.contains(leadingIdentifier(typed.group(1)))) {
-        addValueScope(file, source, typed.start(2), scopes);
+        addValueScope(file, source, typed.start(2), name.value().length(), scopes);
       }
     }
-    Matcher inferred = INFERRED_LAMBDA_PARAMETER.matcher(source);
+    Matcher inferred = name.inferred().matcher(source);
     while (inferred.find()) {
-      // Arrow-form switch labels (case ServiceLoader -> doX();) also match the
-      // lambda pattern; exclude them exactly like the typed pattern's keywords.
-      if (!DECLARATION_TYPE_KEYWORDS.contains(
-          precedingIdentifier(source, inferred.start()))) {
-        addValueScope(file, source, inferred.start(2), scopes);
+      // Arrow-form switch labels also match the lambda pattern; the keyword
+      // filter excludes them exactly like the typed pattern.
+      if (!DECLARATION_TYPE_KEYWORDS.contains(precedingIdentifier(source, inferred.start()))) {
+        addValueScope(file, source, inferred.start(2), name.value().length(), scopes);
       }
     }
     return scopes;
@@ -182,8 +200,12 @@ final class ServiceLoaderSourceCache {
   }
 
   private static void addValueScope(
-      SourceMetadataScanner.SourceFile file, String source, int nameStart, List<int[]> scopes) {
-    int end = valueScopeEnd(source, nameStart);
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      int nameStart,
+      int nameLength,
+      List<int[]> scopes) {
+    int end = valueScopeEnd(source, nameStart, nameLength);
     if (end <= nameStart) {
       return;
     }
@@ -204,8 +226,8 @@ final class ServiceLoaderSourceCache {
    * enclosing block. The instanceof flow-scoping is a block-end
    * over-approximation; abstention is the safe direction.
    */
-  private static int valueScopeEnd(String source, int nameStart) {
-    int afterName = skipWhitespace(source, nameStart + "ServiceLoader".length());
+  private static int valueScopeEnd(String source, int nameStart, int nameLength) {
+    int afterName = skipWhitespace(source, nameStart + nameLength);
     if (source.startsWith("->", afterName)) {
       // Unparenthesized lambda parameter or arrow-form switch pattern
       // variable: the scope is the lambda body or switch arm only.
@@ -284,17 +306,46 @@ final class ServiceLoaderSourceCache {
             source, method.end() - 1, '{', '}') >= offset);
   }
 
-  private static boolean valueDeclarationShadowsAt(
+  private static boolean scopedValueShadowsAt(
       String source, List<int[]> scopes, int offset) {
     if (source.startsWith("java.util.ServiceLoader", offset)) {
       return false;
     }
+    return inScope(scopes, offset);
+  }
+
+  /** True when a declaration scope covers the offset. */
+  private static boolean inScope(List<int[]> scopes, int offset) {
     for (int[] scope : scopes) {
       if (offset >= scope[0] && offset < scope[1]) {
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * A fully qualified {@code java.util.ServiceLoader} is not the JDK class when
+   * a value or type named {@code java} is in scope (JLS 6.5.2). The site is
+   * dropped; bare ServiceLoader references are unaffected.
+   */
+  private static boolean javaQualifierShadowedAt(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      List<int[]> javaScopes,
+      ServiceLoaderCallSite site) {
+    if (!source.startsWith("java.util.ServiceLoader", site.offset())) {
+      return false;
+    }
+    if (inScope(javaScopes, site.offset())) {
+      return true;
+    }
+    boolean sameCompilationUnit = SourceMetadataScanner.typeDeclarations(file).stream()
+        .filter(type -> type.name().equals("java"))
+        .anyMatch(type -> declarationInScope(file, source, type, site.offset()));
+    return sameCompilationUnit
+        || !ServiceLoaderInheritance.resolveSimpleType(scanner, file, source, "java").isEmpty();
   }
 
   record CachedSource(String sourceText, List<ServiceLoaderCallSite> sites) {

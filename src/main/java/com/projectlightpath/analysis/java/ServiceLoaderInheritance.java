@@ -89,30 +89,42 @@ final class ServiceLoaderInheritance {
               && candidate.simpleTypeName().equals(simpleName))
           .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
     }
+    return resolveSimpleType(scanner, file, source, superReference).stream()
+        .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
+  }
+
+  /**
+   * Resolves a simple type name by JLS 6.4.1 precedence: single-type import,
+   * then same-package types, then on-demand imports. Empty when unresolved.
+   */
+  static List<SourceMetadataScanner.SourceFile> resolveSimpleType(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      String simpleName) {
     List<SourceMetadataScanner.SourceFile> candidates = scanner.files().stream()
-        .filter(candidate -> candidate.simpleTypeName().equals(superReference))
+        .filter(candidate -> candidate.simpleTypeName().equals(simpleName))
         .toList();
-    String singleTypeImport = singleTypeImport(source, superReference);
+    String singleTypeImport = singleTypeImport(source, simpleName);
     if (singleTypeImport != null) {
       // JLS 6.4.1: a single-type import outranks any package member.
       String importPackage = singleTypeImport.substring(
-          0, singleTypeImport.length() - superReference.length() - 1);
+          0, singleTypeImport.length() - simpleName.length() - 1);
       return candidates.stream()
           .filter(candidate -> candidate.packageName().equals(importPackage))
-          .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
+          .toList();
     }
     List<SourceMetadataScanner.SourceFile> samePackage = candidates.stream()
         .filter(candidate -> candidate.packageName().equals(file.packageName()))
         .toList();
     if (!samePackage.isEmpty()) {
       // A same-package type shadows every on-demand import (JLS 6.4.1).
-      return samePackage.stream()
-          .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
+      return samePackage;
     }
     Set<String> onDemandPackages = onDemandImports(source);
     return candidates.stream()
         .filter(candidate -> onDemandPackages.contains(candidate.packageName()))
-        .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
+        .toList();
   }
 
   private static String extendsReference(
