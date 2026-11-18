@@ -53,6 +53,7 @@ final class ServiceLoaderDescriptorSource {
   static void scanServiceDirectory(
       Path directory,
       String label,
+      String kind,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ScanState state) {
@@ -65,7 +66,7 @@ final class ServiceLoaderDescriptorSource {
           for (Path path : candidates) {
             addServiceFile(path,
                 label + "/" + SERVICES_DIRECTORY + "/" + path.getFileName(),
-                descriptors, visited, state);
+                kind, descriptors, visited, state);
           }
         });
   }
@@ -113,6 +114,7 @@ final class ServiceLoaderDescriptorSource {
   static void addServiceFile(
       Path path,
       String displayPath,
+      String kind,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ScanState state) {
@@ -135,7 +137,7 @@ final class ServiceLoaderDescriptorSource {
           parsed.providers(),
           displayPath,
           sha256(bytes),
-          "meta_inf_services",
+          kind,
           parsed.malformedEntries()));
     } catch (IOException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_read_error", normalized.toString(), message(error));

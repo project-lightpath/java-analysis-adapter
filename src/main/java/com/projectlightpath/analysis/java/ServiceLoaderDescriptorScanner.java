@@ -64,6 +64,7 @@ final class ServiceLoaderDescriptorScanner {
         && hints.callSiteBound()
         && providers.size() == 1
         && descriptors.stream().noneMatch(Descriptor::malformed)
+        && descriptors.stream().anyMatch(Descriptor::classpathBacked)
         && scan.diagnostics().isEmpty()
         && moduleVisibilityProven
         && providers.contains(edge.callee().owner());
@@ -112,6 +113,9 @@ final class ServiceLoaderDescriptorScanner {
     attributes.put("descriptorStatus", descriptors.isEmpty() ? "not_observed" : "observed");
     attributes.put("descriptorCount", Integer.toString(descriptors.size()));
     attributes.put("providerCount", Integer.toString(providers.size()));
+    attributes.put(
+        "classpathBackedDescriptorCount",
+        Integer.toString((int) descriptors.stream().filter(Descriptor::classpathBacked).count()));
     attributes.put("providerCandidates", String.join(",", providers));
     attributes.put("selection", selection);
     attributes.put("callSiteBound", Boolean.toString(hints.callSiteBound()));
@@ -208,6 +212,16 @@ final class ServiceLoaderDescriptorScanner {
     Descriptor {
       providers = List.copyOf(providers);
       malformedEntries = List.copyOf(malformedEntries);
+    }
+
+    /** True when the descriptor comes only from a source-root resource tree. */
+    boolean sourceOnly() {
+      return "source_meta_inf_services".equals(kind);
+    }
+
+    /** True when the descriptor is backed by output, a dependency, or a selection. */
+    boolean classpathBacked() {
+      return !sourceOnly();
     }
 
     boolean malformed() {

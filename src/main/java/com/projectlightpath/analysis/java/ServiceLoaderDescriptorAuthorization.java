@@ -94,37 +94,10 @@ final class ServiceLoaderDescriptorAuthorization {
         return true;
       }
     }
-    return explicitlySelectedMetadataLocation(context, normalized);
+    return ServiceLoaderDescriptorProvenance.explicitlySelected(context, normalized);
   }
 
-  private static boolean explicitlySelectedMetadataLocation(
-      AnalysisContext context, Path normalized) {
-    Path repositoryRoot = context.repositoryRoot().toAbsolutePath().normalize();
-    for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
-      if (metadata.status() != AnalysisContext.MetadataStatus.OBSERVED
-          || !"service_loader_descriptor".equals(metadata.kind())
-          || metadata.declaredPath() == null) {
-        continue;
-      }
-      Path declared;
-      try {
-        declared = Path.of(metadata.declaredPath());
-      } catch (InvalidPathException error) {
-        continue;
-      }
-      Path selected = (declared.isAbsolute() ? declared : repositoryRoot.resolve(declared))
-          .toAbsolutePath().normalize();
-      if (sameRealPath(selected, repositoryRoot)
-          || !under(selected, repositoryRoot)
-          || !sameRealPath(selected, normalized)) {
-        continue;
-      }
-      return true;
-    }
-    return false;
-  }
-
-  private static boolean sameRealPath(Path left, Path right) {
+  static boolean sameRealPath(Path left, Path right) {
     try {
       return left.toRealPath().equals(right.toRealPath());
     } catch (IOException | SecurityException error) {
@@ -132,7 +105,7 @@ final class ServiceLoaderDescriptorAuthorization {
     }
   }
 
-  private static boolean under(Path path, Path root) {
+  static boolean under(Path path, Path root) {
     try {
       Path realPath = path.toRealPath();
       Path realRoot = root.toRealPath();
