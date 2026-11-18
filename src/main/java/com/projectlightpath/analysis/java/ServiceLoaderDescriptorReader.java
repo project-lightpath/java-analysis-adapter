@@ -1,8 +1,6 @@
 package com.projectlightpath.analysis.java;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.DirectoryIteratorException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
@@ -12,9 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.NavigableSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 /** Reads selected META-INF/services files for the first bounded ServiceLoader path. */
 final class ServiceLoaderDescriptorReader {
@@ -128,34 +124,14 @@ final class ServiceLoaderDescriptorReader {
     if (!ServiceLoaderDescriptorAuthorization.readableDirectory(directory, state)) {
       return;
     }
-    if (!visited.add("services:" + directory.toAbsolutePath().normalize())) {
-      return;
-    }
-    NavigableSet<Path> candidates = new TreeSet<>();
-    boolean complete = true;
-    try (var paths = Files.newDirectoryStream(directory)) {
-      for (Path path : paths) {
-        if (!state.tryEnumerate(path.toString())) {
-          complete = false;
-          break;
-        }
-        if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)) {
-          ServiceLoaderDescriptorSource.retainSmallest(
-              candidates, path, ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES);
-        }
-      }
-    } catch (IOException | DirectoryIteratorException | UnsupportedOperationException | SecurityException error) {
-      state.diagnostic("descriptor_directory_read_error",
-          directory.toAbsolutePath().normalize().toString(),
-          ServiceLoaderDescriptorSource.message(error));
-      return;
-    }
-    if (!complete) {
-      return;
-    }
-    for (Path path : candidates) {
-      addFile(path, context, descriptors, visited, state);
-    }
+    ServiceLoaderDescriptorSource.serviceFileCandidates(
+        directory.toAbsolutePath().normalize(), visited,
+        "descriptor_directory_read_error", state)
+        .ifPresent(candidates -> {
+          for (Path path : candidates) {
+            addFile(path, context, descriptors, visited, state);
+          }
+        });
   }
 
   private static void addFile(
@@ -164,33 +140,12 @@ final class ServiceLoaderDescriptorReader {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ServiceLoaderDescriptorSource.ScanState state) {
-    Path normalized = file.toAbsolutePath().normalize();
-    if (!visited.add("descriptor:" + normalized)
-        || normalized.getFileName() == null
-        || !ServiceLoaderDescriptorAuthorization.isBinaryClassName(
-            normalized.getFileName().toString())) {
-      return;
-    }
-    try (InputStream input = Files.newInputStream(normalized, LinkOption.NOFOLLOW_LINKS)) {
-      byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(
-          input, state, normalized.toString());
-      if (bytes == null) {
-        return;
-      }
-      ServiceLoaderDescriptorSource.ProviderEntries parsed =
-          ServiceLoaderDescriptorSource.providers(bytes);
-      String serviceType = normalized.getFileName().toString();
-      descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
-          serviceType,
-          parsed.providers(),
-          displayPath(context, normalized),
-          ServiceLoaderDescriptorSource.sha256(bytes),
-          "meta_inf_services",
-          parsed.malformedEntries()));
-    } catch (IOException | UnsupportedOperationException | SecurityException error) {
-      state.diagnostic("descriptor_read_error", normalized.toString(),
-          ServiceLoaderDescriptorSource.message(error));
-    }
+    ServiceLoaderDescriptorSource.addServiceFile(
+        file,
+        displayPath(context, file.toAbsolutePath().normalize()),
+        descriptors,
+        visited,
+        state);
   }
 
   private static String displayPath(AnalysisContext context, Path path) {

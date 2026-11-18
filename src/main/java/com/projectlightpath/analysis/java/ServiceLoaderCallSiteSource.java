@@ -151,7 +151,8 @@ final class ServiceLoaderCallSiteSource {
     return false;
   }
 
-  private static boolean isValuePreservingLambda(String sourceText, int lambdaStart) {    int opening = lambdaStart - 1;
+  private static boolean isValuePreservingLambda(String sourceText, int lambdaStart) {
+    int opening = lambdaStart - 1;
     while (opening >= 0 && Character.isWhitespace(sourceText.charAt(opening))) {
       opening--;
     }

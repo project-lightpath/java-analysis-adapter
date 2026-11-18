@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -56,33 +57,46 @@ final class ServiceLoaderDescriptorSource {
       Set<String> visited,
       ScanState state) {
     Path normalized = directory.toAbsolutePath().normalize();
-    if (!ServiceLoaderDescriptorAuthorization.readableDirectory(normalized, state)
-        || !visited.add("services:" + normalized)) {
+    if (!ServiceLoaderDescriptorAuthorization.readableDirectory(normalized, state)) {
       return;
     }
+    serviceFileCandidates(normalized, visited, "service_directory_read_error", state)
+        .ifPresent(candidates -> {
+          for (Path path : candidates) {
+            addServiceFile(path,
+                label + "/" + SERVICES_DIRECTORY + "/" + path.getFileName(),
+                descriptors, visited, state);
+          }
+        });
+  }
+
+  /**
+   * Enumerates the service-file candidates of one already-normalized services
+   * directory in deterministic smallest-first order. Empty when the directory
+   * was already visited, the enumeration budget was exhausted, or the stream
+   * failed (the failure diagnostic is keyed by {@code readErrorKey}, which the
+   * two callers keep distinct for behavior compatibility).
+   */
+  static Optional<List<Path>> serviceFileCandidates(
+      Path normalized, Set<String> visited, String readErrorKey, ScanState state) {
+    if (!visited.add("services:" + normalized)) {
+      return Optional.empty();
+    }
     NavigableSet<Path> candidates = new TreeSet<>();
-    boolean complete = true;
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
       for (Path path : paths) {
         if (!state.tryEnumerate(path.toString())) {
-          complete = false;
-          break;
+          return Optional.empty();
         }
         if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)) {
           retainSmallest(candidates, path, MAX_ENUMERATED_ENTRIES);
         }
       }
     } catch (IOException | DirectoryIteratorException | UnsupportedOperationException | SecurityException error) {
-      state.diagnostic(
-          "service_directory_read_error", normalized.toString(), message(error));
-      return;
+      state.diagnostic(readErrorKey, normalized.toString(), message(error));
+      return Optional.empty();
     }
-    if (!complete) {
-      return;
-    }
-    for (Path path : candidates) {
-      addServiceFile(path, label, descriptors, visited, state);
-    }
+    return Optional.of(List.copyOf(candidates));
   }
 
   static <T extends Comparable<? super T>> void retainSmallest(
@@ -95,9 +109,10 @@ final class ServiceLoaderDescriptorSource {
     }
   }
 
-  private static void addServiceFile(
+  /** Reads one service descriptor file; {@code displayPath} is the reported location. */
+  static void addServiceFile(
       Path path,
-      String label,
+      String displayPath,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ScanState state) {
@@ -118,7 +133,7 @@ final class ServiceLoaderDescriptorSource {
       descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
           normalized.getFileName().toString(),
           parsed.providers(),
-          label + "/" + SERVICES_DIRECTORY + "/" + normalized.getFileName(),
+          displayPath,
           sha256(bytes),
           "meta_inf_services",
           parsed.malformedEntries()));

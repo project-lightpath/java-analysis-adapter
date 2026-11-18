@@ -120,12 +120,9 @@ final class ServiceLoaderSourceCache {
       SourceMetadataScanner.SourceFile file,
       String source,
       SourceMetadataScannerState.TypeInfo type) {
-    return SourceMetadataScanner.methods(file).stream()
-        .filter(method -> method.start() <= type.start())
-        .filter(method -> method.end() > 0 && method.end() <= source.length())
-        .filter(method -> source.charAt(method.end() - 1) == '{')
-        .anyMatch(method -> JavaSourceText.matchingDelimiter(
-            source, method.end() - 1, '{', '}') >= type.start());
+    // Same probe as insideMethodBody (a method body opened at method.end()
+    // still spans type.start()): delegate instead of duplicating the scan.
+    return insideMethodBody(file, source, type.start());
   }
 
   private static int enclosingBlockStart(String source, int offset) {

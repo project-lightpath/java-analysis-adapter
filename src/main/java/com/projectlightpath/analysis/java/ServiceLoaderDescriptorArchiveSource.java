@@ -92,17 +92,19 @@ final class ServiceLoaderDescriptorArchiveSource {
         : new ArchiveEntries(List.of(), null, null);
   }
 
+  private static final String VERSIONED_PREFIX = "META-INF/versions/";
+  private static final String VERSIONED_SUFFIX = "/" + ServiceLoaderDescriptorSource.MODULE_INFO;
+
   private static boolean isVersionedModuleInfo(String name) {
-    String prefix = "META-INF/versions/";
-    String suffix = "/" + ServiceLoaderDescriptorSource.MODULE_INFO;
     // Bounds first: a path whose prefix and suffix overlap (for example
     // META-INF/versions/module-info.class) has no room for a version
     // component, and an exactly-boundary path has an empty one.
-    if (name.length() <= prefix.length() + suffix.length()
-        || !name.startsWith(prefix) || !name.endsWith(suffix)) {
+    if (name.length() <= VERSIONED_PREFIX.length() + VERSIONED_SUFFIX.length()
+        || !name.startsWith(VERSIONED_PREFIX) || !name.endsWith(VERSIONED_SUFFIX)) {
       return false;
     }
-    String version = name.substring(prefix.length(), name.length() - suffix.length());
+    String version = name.substring(
+        VERSIONED_PREFIX.length(), name.length() - VERSIONED_SUFFIX.length());
     return version.chars().allMatch(Character::isDigit);
   }
 
