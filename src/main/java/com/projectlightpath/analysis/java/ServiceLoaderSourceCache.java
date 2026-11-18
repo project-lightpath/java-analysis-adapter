@@ -51,9 +51,14 @@ final class ServiceLoaderSourceCache {
   private static final Pattern EXTENDS_REFERENCE = Pattern.compile(
       "extends\\s+([A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*)");
 
-  /** Any single-type or on-demand import in a compilation unit. */
+  /**
+   * Any single-type or on-demand import in a compilation unit. Java allows
+   * whitespace around dots (JLS 3.6) and Unicode identifiers, so the capture
+   * is normalized before comparison.
+   */
   private static final Pattern ANY_IMPORT = Pattern.compile(
-      "(?m)^\\s*import\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*(?:\\.\\*)?)\\s*;");
+      "(?m)(?U)^\\s*import\\s+([\\p{L}_$][\\w$]*(?:\\s*\\.\\s*[\\p{L}_$][\\w$]*)*"
+          + "(?:\\s*\\.\\s*\\*)?)\\s*;");
 
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 
@@ -207,8 +212,10 @@ final class ServiceLoaderSourceCache {
   /** Returns the single-type import name (pkg.Type) for a simple name, if any. */
   private static String singleTypeImport(String source, String simpleName) {
     for (String imported : imports(source)) {
+      int lastDot = imported.lastIndexOf('.');
       if (!imported.endsWith(".*")
-          && imported.substring(imported.lastIndexOf('.') + 1).equals(simpleName)) {
+          && lastDot > 0
+          && imported.substring(lastDot + 1).equals(simpleName)) {
         return imported;
       }
     }
@@ -229,7 +236,7 @@ final class ServiceLoaderSourceCache {
     List<String> result = new ArrayList<>();
     Matcher matcher = ANY_IMPORT.matcher(source);
     while (matcher.find()) {
-      result.add(matcher.group(1));
+      result.add(matcher.group(1).replaceAll("\\s+", ""));
     }
     return result;
   }

@@ -133,7 +133,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         import java.util.*;
         class Bridge {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
           void audit() { ServiceLoader.load(Provider.class); }
         }
@@ -149,7 +149,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         class Bridge {
           void audit() {
             class ServiceLoader<T> {
-              static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+              public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
             }
             ServiceLoader.load(Provider.class);
           }
@@ -257,7 +257,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         import other.ServiceLoader;
         class Bridge {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
           void audit() { ServiceLoader.load(Provider.class); }
         }
@@ -282,7 +282,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         import other.ServiceLoader;
         class Bridge {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
           void audit() { java.util.ServiceLoader.load(Provider.class); }
         }
@@ -312,7 +312,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package demo;
         class Base {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());
@@ -358,7 +358,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package demo;
         class Unrelated {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());
@@ -377,7 +377,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package demo;
         class Base {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).size());
@@ -493,7 +493,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package demo;
         class Base {
           static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());
@@ -523,7 +523,8 @@ class ServiceLoaderNameResolutionMatrixTest {
    */
   @Test
   void onDemandImportSuperclassNameShadows() throws IOException {
-    assertTrue(matrixSites("matrix-cell-on-demand-super", """
+    String id = "matrix-cell-on-demand-super";
+    assertTrue(matrixSites(id, """
         package demo;
         import java.util.*;
         import support.*;
@@ -533,9 +534,12 @@ class ServiceLoaderNameResolutionMatrixTest {
         """, Map.of("support/Base.java", """
         package support;
         public class Base {
-          public static class ServiceLoader<T> { }
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
         }
         """)).isEmpty());
+    assertCompiles(temp.resolve(id));
   }
 
   /**
@@ -572,7 +576,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package support;
         public class Base {
           public static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());
@@ -595,7 +599,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package suppōrt;
         public class Base {
           public static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());
@@ -623,7 +627,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package other;
         public class Base {
           public static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());
@@ -652,7 +656,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         package support;
         public class Base {
           public static class ServiceLoader<T> {
-            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
           }
         }
         """)).isEmpty());

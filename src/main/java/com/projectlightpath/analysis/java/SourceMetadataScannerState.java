@@ -12,7 +12,7 @@ import java.util.stream.Stream;
 abstract class SourceMetadataScannerState {
 
 
-static final Pattern PACKAGE = Pattern.compile("\\bpackage\\s+([\\w.]+)\\s*;");
+static final Pattern PACKAGE = Pattern.compile("(?U)\\bpackage\\s+([\\w.]+)\\s*;");
 static final Pattern TYPE = Pattern.compile("\\b(?:class|interface|record|enum)\\s+(\\w+)");
 static final Pattern TYPE_DECLARATION = Pattern.compile(
       "\\b(class|interface|record|enum)\\s+(\\w+)");

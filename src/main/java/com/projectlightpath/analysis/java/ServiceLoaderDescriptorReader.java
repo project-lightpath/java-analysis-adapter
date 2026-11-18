@@ -80,9 +80,16 @@ final class ServiceLoaderDescriptorReader {
         : context.repositoryRoot().resolve(declared)).toAbsolutePath().normalize();
     if (!ServiceLoaderDescriptorAuthorization.authorizedPath(
         context, normalizedDeclared, dependencyEntries)) {
-      state.diagnostic(
-          "descriptor_path_outside_context", normalizedDeclared.toString(),
-          "observed descriptor metadata path is outside the selected analysis inputs");
+      if (Files.notExists(normalizedDeclared, LinkOption.NOFOLLOW_LINKS)
+          && withinRepository(context, normalizedDeclared)) {
+        state.diagnostic(
+            "descriptor_entry_unavailable", normalizedDeclared.toString(),
+            "observed descriptor metadata path does not exist in the selected analysis inputs");
+      } else {
+        state.diagnostic(
+            "descriptor_path_outside_context", normalizedDeclared.toString(),
+            "observed descriptor metadata path is outside the selected analysis inputs");
+      }
       return;
     }
     if (!Files.isRegularFile(normalizedDeclared, LinkOption.NOFOLLOW_LINKS)) {
@@ -172,6 +179,10 @@ final class ServiceLoaderDescriptorReader {
   private static boolean validDescriptorFilename(Path file) {
     return file.getFileName() != null
         && ServiceLoaderDescriptorAuthorization.isBinaryClassName(file.getFileName().toString());
+  }
+
+  private static boolean withinRepository(AnalysisContext context, Path path) {
+    return path.startsWith(context.repositoryRoot().toAbsolutePath().normalize());
   }
 
   private static String displayPath(AnalysisContext context, Path path) {

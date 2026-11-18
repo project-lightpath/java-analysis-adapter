@@ -93,7 +93,7 @@ final class ServiceLoaderCallSiteParser {
     if (start == 0) {
       return true;
     }
-    char previous = source.charAt(start - 1);
+    int previous = source.codePointBefore(start);
     return previous != '.' && !Character.isJavaIdentifierPart(previous);
   }
 
