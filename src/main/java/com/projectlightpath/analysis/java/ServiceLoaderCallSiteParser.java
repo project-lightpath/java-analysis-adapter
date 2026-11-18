@@ -35,6 +35,15 @@ final class ServiceLoaderCallSiteParser {
   /** Parses calls with source-proven ownership for imported ServiceLoader types. */
   static List<ServiceLoaderCallSite> parse(
       String source, boolean wildcardImportOwned, boolean serviceLoaderTypeOwned) {
+    return parse(source, wildcardImportOwned, serviceLoaderTypeOwned, false);
+  }
+
+  /** Parses calls; {@code staticOnDemandAmbiguous} blocks wildcard ownership. */
+  static List<ServiceLoaderCallSite> parse(
+      String source,
+      boolean wildcardImportOwned,
+      boolean serviceLoaderTypeOwned,
+      boolean staticOnDemandAmbiguous) {
     List<ServiceLoaderCallSite> result = new ArrayList<>();
     String structuralSource = ServiceLoaderSourceMasker.mask(source == null ? "" : source);
     Matcher matcher = LOAD.matcher(structuralSource);
@@ -44,7 +53,8 @@ final class ServiceLoaderCallSiteParser {
       }
       if (matcher.group(1) == null
           && !isJavaUtilServiceLoader(
-              structuralSource, wildcardImportOwned, serviceLoaderTypeOwned)) {
+              structuralSource, wildcardImportOwned, serviceLoaderTypeOwned,
+              staticOnDemandAmbiguous)) {
         continue;
       }
       int closing = matchingParenthesis(structuralSource, matcher.end() - 1);
@@ -83,11 +93,14 @@ final class ServiceLoaderCallSiteParser {
   }
 
   private static boolean isJavaUtilServiceLoader(
-      String source, boolean wildcardImportOwned, boolean serviceLoaderTypeOwned) {
+      String source,
+      boolean wildcardImportOwned,
+      boolean serviceLoaderTypeOwned,
+      boolean staticOnDemandAmbiguous) {
     if (!serviceLoaderTypeOwned) {
       return false;
     }
-    ImportOwnership ownership = importOwnership(source);
+    ImportOwnership ownership = importOwnership(source, staticOnDemandAmbiguous);
     if (ownership.explicit()) {
       return true;
     }
@@ -115,19 +128,27 @@ final class ServiceLoaderCallSiteParser {
     }
   }
 
-  private static ImportOwnership importOwnership(String source) {
+  private static ImportOwnership importOwnership(
+      String source, boolean staticOnDemandAmbiguous) {
     ImportOwnership result = new ImportOwnership(false, false, false);
     for (JavaImports.Import imported : JavaImports.parse(source)) {
-      result = classify(result, imported);
+      result = classify(result, imported, staticOnDemandAmbiguous);
     }
     return result;
   }
 
-  private static ImportOwnership classify(ImportOwnership ownership, JavaImports.Import imported) {
+  private static ImportOwnership classify(
+      ImportOwnership ownership,
+      JavaImports.Import imported,
+      boolean staticOnDemandAmbiguous) {
     if (imported.onDemand()) {
       // Neither on-demand form shadows anything (JLS 6.4.1); a non-static
-      // java.util wildcard is the only one that can own the simple name.
-      return !imported.isStatic() && imported.name().equals("java.util")
+      // java.util wildcard owns the name unless a static on-demand import of
+      // a type with a member ServiceLoader makes it ambiguous.
+      if (imported.isStatic()) {
+        return staticOnDemandAmbiguous ? ownership.withForeign() : ownership;
+      }
+      return imported.name().equals("java.util")
           ? ownership.withWildcard() : ownership;
     }
     if (imported.isStatic()) {
@@ -149,7 +170,7 @@ final class ServiceLoaderCallSiteParser {
       return null;
     }
     String type = normalized.substring(0, normalized.length() - ".class".length()).trim();
-    return type.matches("[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*") ? type : null;
+    return type.matches("[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*") ? type : null;
   }
 
   private static int matchingParenthesis(String source, int opening) {
@@ -213,7 +234,7 @@ final class ServiceLoaderCallSiteParser {
           + "(?:class|interface|enum|record)\\b");
   /** An anonymous-class constructor invocation heading a brace. */
   private static final Pattern ANONYMOUS_CLASS_PREFIX = Pattern.compile(
-      "\\bnew\\s+[A-Za-z_$][\\w$.]*(?:<[^()]*>)?\\s*$");
+      "\\bnew\\s+[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}$.]*(?:<[^()]*>)?\\s*$");
 
 
   /**

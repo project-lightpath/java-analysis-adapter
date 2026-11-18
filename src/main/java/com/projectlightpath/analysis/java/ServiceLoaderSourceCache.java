@@ -32,7 +32,7 @@ final class ServiceLoaderSourceCache {
   private static final Pattern TYPED_VALUE_DECLARATION = Pattern.compile(
       "(?:^|[^\\p{javaJavaIdentifierPart}$.])"
           + "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*"
-          + "(?:<[<>,\\w$.\\s]*>)?"
+          + "(?:<[<>,\\p{javaJavaIdentifierPart}$.\\s]*>)?"
           + "(?:\\[\\s*\\]|\\.\\.\\.)*)"
           + "\\s+(ServiceLoader)(?=\\s*[=;,):\\]])");
 
@@ -81,9 +81,11 @@ final class ServiceLoaderSourceCache {
     boolean samePackageTypeShadow = scanner.files().stream()
         .anyMatch(candidate -> candidate.packageName().equals(file.packageName())
             && candidate.simpleTypeName().equals("ServiceLoader"));
+    boolean staticOnDemandAmbiguous =
+        staticOnDemandAmbiguous(scanner, structuralSource);
     List<int[]> valueScopes = valueDeclarationScopes(file, structuralSource);
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
-        source, !samePackageTypeShadow, true).stream()
+        source, !samePackageTypeShadow, true, staticOnDemandAmbiguous).stream()
         .filter(site -> !isShadowedAt(file, structuralSource, site.offset()))
         .filter(site -> !inheritedTypeShadowsAt(
             scanner, file, structuralSource, site.offset()))
@@ -92,6 +94,27 @@ final class ServiceLoaderSourceCache {
     return new CachedSource(
         source,
         sites);
+  }
+
+  /**
+   * True when a static on-demand import names a selected type that declares a
+   * member ServiceLoader: that member and java.util.ServiceLoader are then
+   * ambiguous, so the wildcard cannot own the simple name.
+   */
+  private static boolean staticOnDemandAmbiguous(
+      SourceMetadataScanner scanner, String source) {
+    for (JavaImports.Import imported : JavaImports.parse(source)) {
+      if (!imported.isStatic() || !imported.onDemand()) {
+        continue;
+      }
+      String target = imported.simpleName();
+      if (scanner.files().stream()
+          .filter(candidate -> candidate.simpleTypeName().equals(target))
+          .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static boolean isShadowedAt(

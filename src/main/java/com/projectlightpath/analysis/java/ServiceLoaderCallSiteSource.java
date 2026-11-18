@@ -187,7 +187,7 @@ final class ServiceLoaderCallSiteSource {
   private static Pattern parameterWritePattern(String receiver) {
     String name = Pattern.quote(receiver);
     return Pattern.compile(
-        "(?<![A-Za-z0-9_$.])" + name
+        "(?<![\\p{javaJavaIdentifierPart}$.])" + name
             + "\\s*(?:=(?!=)|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=|>>>=|\\+\\+|--)"
             + "|(?:\\+\\+|--)\\s*" + name + "(?!\\p{javaJavaIdentifierPart})");
   }
