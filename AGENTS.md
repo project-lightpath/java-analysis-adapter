@@ -21,10 +21,14 @@ living document: when a review cycle reveals a new failure class, add it here.
 Do not enumerate test cases from examples. When a change touches name
 resolution, call-site classification, or scoping, derive the matrix from the
 JLS and test every cell plus pairwise interactions:
-- JLS 6.5 name-resolution precedence, weakest to strongest: package member <
-  on-demand import < single-type import < same-compilation-unit type <
-  enclosing/nested type < local class < in-scope variable (parameter, local,
-  field) < lambda parameter < catch parameter < instanceof pattern variable.
+- JLS 6.5 name-resolution precedence, weakest to strongest: on-demand
+  import < same-package type declared in another compilation unit <
+  single-type import < same-compilation-unit type and inherited member
+  types < local class < in-scope variable (parameter, local, field) <
+  lambda parameter < catch parameter < instanceof pattern variable.
+  JLS 6.4.1: a type-import-on-demand declaration never shadows any
+  declaration, so the wildcard import is the weakest form — it does not
+  sit above same-package types.
 - When one review finding exposes an open cell, close the remaining cells in
   the same change rather than one finding per review round.
 - Scope rules come from JLS 6.3: parameters span the method body, locals span

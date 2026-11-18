@@ -23,14 +23,15 @@ import org.junit.jupiter.api.io.TempDir;
 class ServiceLoaderNameResolutionMatrixTest {
   @TempDir Path temp;
 
-  /** Cell 1: package member vs on-demand import (JLS 6.5.5, corrected). */
+  /** Cell 1: on-demand import vs same-package type in another file (JLS 6.4.1). */
   @Test
   void onDemandImportVersusSamePackageTypeInAnotherFileAbstains() throws IOException {
-    // JLS 6.5.5: a type-import-on-demand shadows a same-package type declared
-    // in ANOTHER compilation unit, so the simple name resolves to the JDK
-    // class here. The adapter abstains instead: an explicitly pinned accepted
-    // over-approximation in the safe direction. Attribution tightening is a
-    // possible future change and must not ride a matrix pin.
+    // JLS 6.4.1: a type-import-on-demand declaration never shadows any
+    // declaration, so the same-package ServiceLoader declared in ANOTHER
+    // compilation unit wins and the simple name is NOT the JDK class. The
+    // adapter's abstention is therefore exactly correct behavior — the
+    // earlier "accepted over-approximation" label rested on the inverted
+    // rule and is withdrawn.
     assertTrue(matrixSites("matrix-cell-1", """
         package demo;
         import java.util.*;
