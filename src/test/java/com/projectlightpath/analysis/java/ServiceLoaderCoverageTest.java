@@ -552,6 +552,63 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void identicalSourceAndOutputDescriptorsAreMergedPreferringClasspath() throws IOException {
+    Path root = temp.resolve("identical-copies");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path resources = root.resolve("src/main/resources/META-INF/services");
+    Path classes = root.resolve("target/classes/META-INF/services");
+    Files.createDirectories(sourceRoot.resolve("demo"));
+    Files.createDirectories(resources);
+    Files.createDirectories(classes);
+    Files.writeString(sourceRoot.resolve("demo/App.java"), "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App { void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); } }\n");
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"),
+        "package demo; interface Provider { void record(); }\n");
+    Files.writeString(resources.resolve("demo.Provider"), "demo.DefaultProvider\n");
+    Files.writeString(classes.resolve("demo.Provider"), "demo.DefaultProvider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("identical-copies")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("identical-copies")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        3,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+
+    assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
+    assertTrue(resolution.evidence().stream()
+        .filter(evidence -> evidence.kind().equals("service_loader_resolution"))
+        .anyMatch(evidence -> evidence.attributes().get("descriptorCount").equals("1")),
+        resolution.evidence().toString());
+    assertTrue(resolution.evidence().stream()
+        .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
+        .allMatch(evidence -> evidence.attributes().get("descriptorKind")
+            .equals("meta_inf_services")),
+        resolution.evidence().toString());
+  }
+
+  @Test
   void observedServicesDirectoryIsEnumeratedOnce() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     Files.createDirectories(sourceRoot);

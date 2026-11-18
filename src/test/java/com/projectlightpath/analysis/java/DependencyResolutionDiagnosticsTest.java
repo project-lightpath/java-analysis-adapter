@@ -75,6 +75,54 @@ class DependencyResolutionDiagnosticsTest {
   }
 
   @Test
+  void nestedWildcardChainIsNotExpanded() throws IOException {
+    Path deps = Files.createDirectories(temp.resolve("nested-star"));
+    jar(deps.resolve("top.jar"));
+    Files.createDirectories(deps.resolve("nested"));
+    jar(deps.resolve("nested/deep.jar"));
+    AnalysisContext context = context("nested-star-cp", List.of(deps.resolve("*/*")));
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("dependency_wildcard_directory_unavailable")),
+        scan.diagnostics().toString());
+    assertTrue(SootUpInputLocationFactory.resolvedDependencyEntries(context).isEmpty(),
+        SootUpInputLocationFactory.resolvedDependencyEntries(context).toString());
+  }
+
+  @Test
+  void wildcardInAncestorComponentStillExpands() throws IOException {
+    Path deps = Files.createDirectories(temp.resolve("we*ird/deps"));
+    Path only = deps.resolve("only.jar");
+    jar(only);
+    AnalysisContext context = context("ancestor-star", List.of(deps.resolve("*")));
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+
+    assertTrue(scan.diagnostics().isEmpty(), scan.diagnostics().toString());
+    assertEquals(List.of(only.toAbsolutePath().normalize()),
+        SootUpInputLocationFactory.resolvedDependencyEntries(context));
+  }
+
+  @Test
+  void partialStarElementIsNotAPrefixExpansion() throws IOException {
+    Path deps = Files.createDirectories(temp.resolve("prefix-star"));
+    jar(deps.resolve("a.jar"));
+    jar(deps.resolve("b.jar"));
+    AnalysisContext context = context("prefix-star-cp", List.of(deps.resolve("foo*")));
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("dependency_classpath_entry_skipped")
+            && item.path().endsWith("foo*")),
+        scan.diagnostics().toString());
+    assertTrue(SootUpInputLocationFactory.resolvedDependencyEntries(context).isEmpty(),
+        SootUpInputLocationFactory.resolvedDependencyEntries(context).toString());
+  }
+
+  @Test
   void ordinaryClasspathStaysDiagnosticFree() throws IOException {
     Path deps = Files.createDirectories(temp.resolve("clean-deps"));
     jar(deps.resolve("one.jar"));
