@@ -107,8 +107,10 @@ final class SootUpInputLocationFactory {
   private static DependencyResolution resolveDependencies(AnalysisContext context) {
     Set<Path> resolved = new LinkedHashSet<>();
     List<Path> truncatedWildcards = new ArrayList<>();
+    List<Skipped> skipped = new ArrayList<>();
+    Set<String> reported = new LinkedHashSet<>();
     for (Path dependency : context.dependencyClasspath()) {
-      Expansion expansion = expandDependencyPath(dependency);
+      Expansion expansion = expandDependencyPath(dependency, skipped, reported);
       if (expansion.truncated()) {
         truncatedWildcards.add(dependency.toAbsolutePath().normalize());
         continue;
@@ -117,13 +119,25 @@ final class SootUpInputLocationFactory {
         Path normalized = expanded.toAbsolutePath().normalize();
         if (isValidInputLocation(normalized)) {
           resolved.add(normalized);
+        } else {
+          report(skipped, reported, "dependency_classpath_entry_skipped", normalized,
+              "dependency classpath entry is not a usable input location");
         }
       }
     }
-    return new DependencyResolution(List.copyOf(resolved), List.copyOf(truncatedWildcards));
+    return new DependencyResolution(
+        List.copyOf(resolved), List.copyOf(truncatedWildcards), List.copyOf(skipped));
   }
 
-  private static Expansion expandDependencyPath(Path dependency) {
+  private static void report(
+      List<Skipped> skipped, Set<String> reported, String code, Path path, String detail) {
+    if (reported.add(code + "|" + path)) {
+      skipped.add(new Skipped(code, path, detail));
+    }
+  }
+
+  private static Expansion expandDependencyPath(
+      Path dependency, List<Skipped> skipped, Set<String> reported) {
     Path normalized = dependency.toAbsolutePath().normalize();
     String value = normalized.toString();
     if (!value.endsWith("*")) {
@@ -133,6 +147,8 @@ final class SootUpInputLocationFactory {
     int wildcardIndex = value.indexOf('*');
     Path directory = normalized.getFileSystem().getPath(value.substring(0, wildcardIndex));
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+      report(skipped, reported, "dependency_wildcard_directory_unavailable", normalized,
+          "dependency wildcard directory does not exist or is not a directory");
       return new Expansion(List.of(), false);
     }
     NavigableSet<Path> entries = new TreeSet<>();
@@ -146,10 +162,18 @@ final class SootUpInputLocationFactory {
         }
         enumeratedEntries++;
         String fileName = path.getFileName().toString();
-        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-            && (fileName.endsWith(".jar") || fileName.endsWith(".JAR"))) {
+        boolean jarNamed = fileName.endsWith(".jar") || fileName.endsWith(".JAR");
+        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && jarNamed) {
           ServiceLoaderDescriptorSource.retainSmallest(
               entries, path, MAX_DEPENDENCY_ENTRIES);
+        } else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+            && PathUtils.isArchive(path)) {
+          report(skipped, reported, "dependency_wildcard_archive_skipped",
+              path.toAbsolutePath().normalize(),
+              "supported archive is not expanded by the wildcard classpath");
+        } else if (Files.isSymbolicLink(path) && jarNamed) {
+          report(skipped, reported, "dependency_classpath_entry_skipped",
+              path.toAbsolutePath().normalize(), "symbolic link is not followed");
         }
       }
     } catch (IOException error) {
@@ -162,12 +186,24 @@ final class SootUpInputLocationFactory {
 
   record Inputs(JavaView view, Map<AnalysisInputLocation, Path> dependencyEntries) {}
 
-  record DependencyResolution(List<Path> entries, List<Path> truncatedWildcards) {
+  record DependencyResolution(
+      List<Path> entries,
+      List<Path> truncatedWildcards,
+      List<Skipped> skipped) {
     DependencyResolution {
       entries = List.copyOf(entries);
       truncatedWildcards = List.copyOf(truncatedWildcards);
+      skipped = List.copyOf(skipped);
+    }
+
+    /** Backward-compatible shape for callers that only read entries. */
+    DependencyResolution(List<Path> entries, List<Path> truncatedWildcards) {
+      this(entries, truncatedWildcards, List.of());
     }
   }
+
+  /** One classpath input the resolution dropped, with the reason. */
+  record Skipped(String code, Path path, String detail) {}
 
   private record Expansion(List<Path> entries, boolean truncated) {}
 }

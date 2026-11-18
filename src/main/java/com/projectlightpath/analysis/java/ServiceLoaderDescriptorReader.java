@@ -33,6 +33,10 @@ final class ServiceLoaderDescriptorReader {
           "dependency wildcard expansion exceeds "
               + SootUpInputLocationFactory.MAX_DEPENDENCY_ENTRIES + " entries");
     }
+    for (SootUpInputLocationFactory.Skipped skip
+        : dependencyResolution.skipped()) {
+      state.diagnostic(skip.code(), skip.path().toString(), skip.detail());
+    }
     List<Path> dependencyEntries = dependencyResolution.entries();
     ServiceLoaderDescriptorSource.scanClasspathEntry(
         context.applicationClasses(), descriptors, visited, state);
