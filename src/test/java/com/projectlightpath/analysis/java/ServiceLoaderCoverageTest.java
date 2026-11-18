@@ -388,6 +388,41 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void missingExplicitDescriptorPathIsReportedUnavailable() throws IOException {
+    Path sourceRoot = temp.resolve("missing-declared/src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("missing-declared/classes");
+    Files.createDirectories(applicationClasses);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("missing-declared")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("missing-declared")
+        .javaRelease(17)
+        .repositoryRoot(temp.resolve("missing-declared"))
+        .applicationClasses(applicationClasses)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "file", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "descriptors/absent.Descriptor"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_entry_unavailable")),
+        scan.diagnostics().toString());
+    assertTrue(scan.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_path_outside_context")),
+        scan.diagnostics().toString());
+  }
+
+  @Test
   void explicitlySelectedDescriptorWithInvalidFilenameIsDiagnosed() throws IOException {
     Path sourceRoot = temp.resolve("invalid-name/src/main/java");
     Files.createDirectories(sourceRoot);

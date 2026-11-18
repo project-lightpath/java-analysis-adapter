@@ -23,6 +23,15 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void supplementaryCodePointPrefixIsNotServiceLoaderCall() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "class Bridge {\n"
+        + "  void audit() { \uD840\uDC00ServiceLoader.load(AuditProvider.class); }\n"
+        + "}\n";
+    assertTrue(ServiceLoaderCallSiteParser.parse(source).isEmpty());
+  }
+
+  @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
         + "import java.util.ServiceLoader;\n"

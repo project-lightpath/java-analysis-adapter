@@ -539,6 +539,126 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
+   * Malformed-form robustness (review probe): a dotless import
+   * ({@code import ServiceLoader;}) must not abort the scan. It is not a
+   * valid single-type import, so it cannot make the superclass resolvable.
+   */
+  @Test
+  void dotlessImportDoesNotAbortScan() throws IOException {
+    assertFalse(matrixSites("matrix-cell-dotless-import", """
+        package demo;
+        import ServiceLoader;
+        import java.util.*;
+        class Bridge extends ServiceLoader {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """).isEmpty());
+  }
+
+  /**
+   * JLS 3.6/6.4.1 (review probe): whitespace around dots in an import is
+   * legal, so the on-demand superclass resolution must still see it.
+   */
+  @Test
+  void spacedOnDemandImportSuperclassNameShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-spaced-on-demand", """
+        package demo;
+        import java.util.*;
+        import support . * ;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("support/Base.java", """
+        package support;
+        public class Base {
+          public static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Unicode package names are legal identifiers; a wildcard import of one must
+   * be captured like an ASCII import.
+   */
+  @Test
+  void unicodePackageOnDemandImportSuperclassNameShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-unicode-package", """
+        package demo;
+        import java.util.*;
+        import suppōrt.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("suppōrt/Base.java", """
+        package suppōrt;
+        public class Base {
+          public static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * JLS 6.4.1 precedence with spaced imports: the single-type import outranks
+   * the same-package type even when it is written with spaces around the dot.
+   */
+  @Test
+  void spacedSingleTypeImportOutranksSamePackage() throws IOException {
+    assertTrue(matrixSites("matrix-cell-spaced-single-import", """
+        package demo;
+        import java.util.*;
+        import other . Base ;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "demo/Base.java", """
+        package demo;
+        class Base { }
+        """,
+            "other/Base.java", """
+        package other;
+        public class Base {
+          public static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Guard (green at head and after the wildcard fix): a same-package
+   * superclass without the member type outranks an on-demand import whose
+   * Base does declare one, so the site stays attributed.
+   */
+  @Test
+  void samePackageSuperclassWithoutMemberTypeOutranksOnDemandImport() throws IOException {
+    assertFalse(matrixSites("matrix-cell-same-package-wins", """
+        package demo;
+        import java.util.*;
+        import support.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "demo/Base.java", """
+        package demo;
+        class Base { }
+        """,
+            "support/Base.java", """
+        package support;
+        public class Base {
+          public static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.
    */
