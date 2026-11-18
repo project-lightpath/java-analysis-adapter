@@ -54,7 +54,8 @@ final class ServiceLoaderDescriptorReader {
       ServiceLoaderDescriptorSource.scanClasspathEntry(
           dependency, descriptors, visited, state, true);
     }
-    descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path));
+    descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path)
+        .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::serviceType));
     return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics());
   }
 
@@ -182,7 +183,20 @@ final class ServiceLoaderDescriptorReader {
   }
 
   private static boolean withinRepository(AnalysisContext context, Path path) {
-    return path.startsWith(context.repositoryRoot().toAbsolutePath().normalize());
+    Path root = context.repositoryRoot().toAbsolutePath().normalize();
+    if (path.startsWith(root)) {
+      return true;
+    }
+    try {
+      Path realRoot = root.toRealPath();
+      Path existing = path;
+      while (existing != null && Files.notExists(existing, LinkOption.NOFOLLOW_LINKS)) {
+        existing = existing.getParent();
+      }
+      return existing != null && existing.toRealPath().startsWith(realRoot);
+    } catch (IOException error) {
+      return false;
+    }
   }
 
   private static String displayPath(AnalysisContext context, Path path) {

@@ -11,22 +11,7 @@ final class ServiceLoaderCallSiteParser {
   private static final Pattern LOAD = Pattern.compile(
       "(?<![\\w$.])(?:(java\\.util)\\.)?ServiceLoader\\s*\\.\\s*load\\s*\\(");
   private static final Pattern PACKAGE = Pattern.compile(
-      "\\bpackage\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
-  private static final Pattern EXPLICIT_IMPORT = Pattern.compile(
-      "(?m)^\\s*import\\s+java\\.util\\.ServiceLoader\\s*;");
-  private static final Pattern ON_DEMAND_IMPORT = Pattern.compile(
-      "(?m)^\\s*import\\s+java\\.util\\.\\*\\s*;");
-  /**
-   * A single-type import of ServiceLoader from any package other than
-   * java.util. JLS 6.4.1: a single-type import shadows a type-import-on-demand,
-   * so its presence defeats wildcard ownership of the simple name. Static
-   * imports (import static p.Q.ServiceLoader;) are deliberately not matched:
-   * the qualified-name side accepts no spaces, and treating them as foreign
-   * would over-abstain (safe direction) per the plan's regex-edge disposition.
-   */
-  private static final Pattern FOREIGN_SINGLE_TYPE_IMPORT = Pattern.compile(
-      "(?m)^\\s*import\\s+(?!java\\.util\\.ServiceLoader\\s*;)"
-          + "[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*\\.ServiceLoader\\s*;");
+      "(?U)\\bpackage\\s+([\\p{L}_$][\\w$]*(?:\\.[\\p{L}_$][\\w$]*)*)\\s*;");
   /**
    * Non-lambda chained calls that cannot replace the flowing provider value.
    * Enumerated from the green chained call-site tests: every Optional chain
@@ -102,13 +87,36 @@ final class ServiceLoaderCallSiteParser {
     if (!serviceLoaderTypeOwned) {
       return false;
     }
-    if (EXPLICIT_IMPORT.matcher(source).find()) {
+    boolean explicit = false;
+    boolean wildcard = false;
+    boolean foreign = false;
+    for (JavaImports.Import imported : JavaImports.parse(source)) {
+      if (imported.isStatic()) {
+        // A static import never imports the top-level type java.util.ServiceLoader
+        // itself; a member-type import can supply a lookalike, so abstain.
+        if (imported.onDemand()
+            || imported.simpleName().equals("ServiceLoader")
+            || imported.name().endsWith(".ServiceLoader")) {
+          foreign = true;
+        }
+        continue;
+      }
+      if (imported.onDemand()) {
+        wildcard |= imported.name().equals("java.util");
+      } else if (imported.name().equals("java.util.ServiceLoader")) {
+        explicit = true;
+      } else if (imported.simpleName().equals("ServiceLoader")) {
+        foreign = true;
+      }
+    }
+    if (explicit) {
       return true;
     }
-    if (wildcardImportOwned
-        && ON_DEMAND_IMPORT.matcher(source).find()
-        && !FOREIGN_SINGLE_TYPE_IMPORT.matcher(source).find()) {
+    if (wildcard && wildcardImportOwned && !foreign) {
       return true;
+    }
+    if (foreign) {
+      return false;
     }
     Matcher packageMatcher = PACKAGE.matcher(source);
     return packageMatcher.find() && packageMatcher.group(1).equals("java.util");

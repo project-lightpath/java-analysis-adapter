@@ -12,10 +12,12 @@ import java.util.stream.Stream;
 abstract class SourceMetadataScannerState {
 
 
-static final Pattern PACKAGE = Pattern.compile("(?U)\\bpackage\\s+([\\w.]+)\\s*;");
-static final Pattern TYPE = Pattern.compile("\\b(?:class|interface|record|enum)\\s+(\\w+)");
+static final Pattern PACKAGE = Pattern.compile(
+      "(?U)\\bpackage\\s+([\\p{L}_$][\\w$]*(?:\\.[\\p{L}_$][\\w$]*)*)\\s*;");
+static final Pattern TYPE = Pattern.compile(
+      "(?U)\\b(?:class|interface|record|enum)\\s+([\\p{L}_$][\\w$]*)");
 static final Pattern TYPE_DECLARATION = Pattern.compile(
-      "\\b(class|interface|record|enum)\\s+(\\w+)");
+      "(?U)\\b(class|interface|record|enum)\\s+([\\p{L}_$][\\w$]*)");
 static final Pattern NEW_EXPRESSION = Pattern.compile("\\bnew\\b");
 static final Pattern METHOD = Pattern.compile(
       "(?m)(?:^|[;{}\\n])\\s*(?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)|(?:(?:public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\s+))*(?:<[^>{}]+>\\s+)?[\\w.?$<>\\[\\], ]+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*(?:throws [^{;]+)?(?:\\{|;)");

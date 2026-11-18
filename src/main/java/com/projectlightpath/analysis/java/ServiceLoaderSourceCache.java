@@ -49,16 +49,9 @@ final class ServiceLoaderSourceCache {
 
   /** The extends-clause reference in a type declaration header (no generics). */
   private static final Pattern EXTENDS_REFERENCE = Pattern.compile(
-      "extends\\s+([A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*)");
+      "(?U)extends\\s+([\\p{L}_$][\\w$]*(?:\\s*\\.\\s*[\\p{L}_$][\\w$]*)*)");
 
-  /**
-   * Any single-type or on-demand import in a compilation unit. Java allows
-   * whitespace around dots (JLS 3.6) and Unicode identifiers, so the capture
-   * is normalized before comparison.
-   */
-  private static final Pattern ANY_IMPORT = Pattern.compile(
-      "(?m)(?U)^\\s*import\\s+([\\p{L}_$][\\w$]*(?:\\s*\\.\\s*[\\p{L}_$][\\w$]*)*"
-          + "(?:\\s*\\.\\s*\\*)?)\\s*;");
+  private static final Pattern PRIVATE_MODIFIER = Pattern.compile("\\bprivate\\b");
 
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 
@@ -211,12 +204,10 @@ final class ServiceLoaderSourceCache {
 
   /** Returns the single-type import name (pkg.Type) for a simple name, if any. */
   private static String singleTypeImport(String source, String simpleName) {
-    for (String imported : imports(source)) {
-      int lastDot = imported.lastIndexOf('.');
-      if (!imported.endsWith(".*")
-          && lastDot > 0
-          && imported.substring(lastDot + 1).equals(simpleName)) {
-        return imported;
+    for (JavaImports.Import imported : JavaImports.parse(source)) {
+      if (!imported.isStatic() && !imported.onDemand()
+          && imported.simpleName().equals(simpleName)) {
+        return imported.name();
       }
     }
     return null;
@@ -224,19 +215,10 @@ final class ServiceLoaderSourceCache {
 
   private static Set<String> onDemandImports(String source) {
     Set<String> result = new LinkedHashSet<>();
-    for (String imported : imports(source)) {
-      if (imported.endsWith(".*")) {
-        result.add(imported.substring(0, imported.length() - 2));
+    for (JavaImports.Import imported : JavaImports.parse(source)) {
+      if (!imported.isStatic() && imported.onDemand()) {
+        result.add(imported.name());
       }
-    }
-    return result;
-  }
-
-  private static List<String> imports(String source) {
-    List<String> result = new ArrayList<>();
-    Matcher matcher = ANY_IMPORT.matcher(source);
-    while (matcher.find()) {
-      result.add(matcher.group(1).replaceAll("\\s+", ""));
     }
     return result;
   }
@@ -254,9 +236,21 @@ final class ServiceLoaderSourceCache {
     return types.stream()
         .filter(type -> type.name().equals("ServiceLoader"))
         .filter(type -> !SourceMetadataScanner.isLocalType(candidate, type))
+        .filter(type -> !isPrivateMemberType(candidate, type))
         .anyMatch(type -> types.stream()
             .filter(other -> other.start() < type.start() && type.end() <= other.end())
             .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
+  }
+
+  /** A private member type is not inherited by an extending type. */
+  private static boolean isPrivateMemberType(
+      SourceMetadataScanner.SourceFile candidate, SourceMetadataScannerState.TypeInfo type) {
+    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
+    int boundary = type.start() - 1;
+    while (boundary >= 0 && ";{}".indexOf(source.charAt(boundary)) < 0) {
+      boundary--;
+    }
+    return PRIVATE_MODIFIER.matcher(source.substring(boundary + 1, type.start())).find();
   }
 
   private static boolean declarationInScope(
