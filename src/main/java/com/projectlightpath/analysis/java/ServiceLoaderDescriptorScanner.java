@@ -25,6 +25,15 @@ final class ServiceLoaderDescriptorScanner {
       CallEdge edge,
       Scan scan,
       SourceMetadataScanner scanner) {
+    return resolve(context, edge, scan, scanner, new ServiceLoaderDescriptorEvidenceCache());
+  }
+
+  static Resolution resolve(
+      AnalysisContext context,
+      CallEdge edge,
+      Scan scan,
+      SourceMetadataScanner scanner,
+      ServiceLoaderDescriptorEvidenceCache cache) {
     ServiceLoaderCallSiteReader.ServiceLoadHints hints =
         ServiceLoaderCallSiteReader.read(context, edge, scan, scanner);
     List<Descriptor> descriptors = selectedDescriptors(hints, scan);
@@ -34,7 +43,7 @@ final class ServiceLoaderDescriptorScanner {
     String selection = selection(descriptors, unique);
     return new Resolution(
         certainty(edge, unique),
-        evidence(edge, hints, scan, descriptors, providers, selection),
+        evidence(edge, hints, scan, descriptors, providers, selection, cache),
         limitation(unique, scan, descriptors, moduleVisibilityProven));
   }
 
@@ -93,14 +102,15 @@ final class ServiceLoaderDescriptorScanner {
       Scan scan,
       List<Descriptor> descriptors,
       Set<String> providers,
-      String selection) {
+      String selection,
+      ServiceLoaderDescriptorEvidenceCache cache) {
     List<SemanticCallFacts.Evidence> evidence = new ArrayList<>();
     evidence.add(resolutionEvidence(edge, hints, descriptors, providers, selection));
     descriptors.stream()
-        .map(descriptor -> descriptorEvidence(descriptor, selection))
+        .map(descriptor -> cache.descriptor(descriptor, selection))
         .forEach(evidence::add);
     scan.diagnostics().stream()
-        .map(ServiceLoaderDescriptorScanner::diagnosticEvidence)
+        .map(cache::diagnostic)
         .forEach(evidence::add);
     return List.copyOf(evidence);
   }
@@ -133,7 +143,7 @@ final class ServiceLoaderDescriptorScanner {
         edge.line() > 0 ? edge.line() : null, attributes);
   }
 
-  private static SemanticCallFacts.Evidence descriptorEvidence(
+  static SemanticCallFacts.Evidence descriptorEvidence(
       Descriptor descriptor, String selection) {
     Map<String, String> attributes = new java.util.LinkedHashMap<>();
     attributes.put(
@@ -157,7 +167,7 @@ final class ServiceLoaderDescriptorScanner {
         attributes);
   }
 
-  private static SemanticCallFacts.Evidence diagnosticEvidence(Diagnostic diagnostic) {
+  static SemanticCallFacts.Evidence diagnosticEvidence(Diagnostic diagnostic) {
     return new SemanticCallFacts.Evidence(
         "service_loader_scan_diagnostic", diagnostic.path(), List.of(), null,
         Map.of(

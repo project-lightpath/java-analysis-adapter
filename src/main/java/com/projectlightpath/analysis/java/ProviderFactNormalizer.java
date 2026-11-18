@@ -36,8 +36,10 @@ final class ProviderFactNormalizer {
     ServiceLoaderDescriptorScanner.Scan descriptors = hasServiceLoaderEdges
         ? ServiceLoaderDescriptorScanner.scan(context, dependencies.get())
         : new ServiceLoaderDescriptorScanner.Scan(List.of());
+    ServiceLoaderDescriptorEvidenceCache evidenceCache =
+        new ServiceLoaderDescriptorEvidenceCache();
     List<SemanticCallFacts.Fact> facts = callFacts(
-        context, references.edges(), callIds, descriptors, sourceScanner);
+        context, references.edges(), callIds, descriptors, sourceScanner, evidenceCache);
     facts.addAll(dynamicFacts(context, graph.dynamicFeatures(), ids));
     return List.copyOf(facts);
   }
@@ -85,10 +87,12 @@ final class ProviderFactNormalizer {
       List<EdgeRef> edgeRefs,
       Map<Integer, String> callIds,
       ServiceLoaderDescriptorScanner.Scan descriptors,
-      SourceMetadataScanner sourceScanner) {
+      SourceMetadataScanner sourceScanner,
+      ServiceLoaderDescriptorEvidenceCache evidenceCache) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     for (EdgeRef ref : edgeRefs) {
-      facts.add(callFact(context, ref.edge(), callIds.get(ref.index()), descriptors, sourceScanner));
+      facts.add(callFact(context, ref.edge(), callIds.get(ref.index()), descriptors, sourceScanner,
+          evidenceCache));
     }
     return facts;
   }
@@ -99,12 +103,14 @@ final class ProviderFactNormalizer {
       CallEdge edge,
       String id,
       ServiceLoaderDescriptorScanner.Scan descriptors,
-      SourceMetadataScanner sourceScanner) {
+      SourceMetadataScanner sourceScanner,
+      ServiceLoaderDescriptorEvidenceCache evidenceCache) {
     boolean openWorldDynamic = DynamicCertaintyPolicy.isOpenWorldProviderRelationship(
         edge.relationshipType());
     ServiceLoaderDescriptorScanner.Resolution serviceResolution =
         edge.relationshipType().equals("service_loader")
-            ? ServiceLoaderDescriptorScanner.resolve(context, edge, descriptors, sourceScanner)
+            ? ServiceLoaderDescriptorScanner.resolve(
+                context, edge, descriptors, sourceScanner, evidenceCache)
             : null;
     SemanticCallFacts.Certainty certainty = openWorldDynamic
         ? SemanticCallFacts.Certainty.UNRESOLVED
