@@ -2,13 +2,20 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -475,11 +482,12 @@ class ServiceLoaderNameResolutionMatrixTest {
    */
   @Test
   void qualifiedSuperclassNameIsResolved() throws IOException {
-    assertTrue(matrixSites("matrix-cell-qualified-super", """
+    String id = "matrix-cell-qualified-super";
+    assertTrue(matrixSites(id, """
         package demo;
         import java.util.*;
         class Bridge extends demo.Base {
-          void audit() { ServiceLoader.load(Provider.class); }
+          void audit() { ServiceLoader.load(Object.class); }
         }
         """, Map.of("demo/Base.java", """
         package demo;
@@ -489,6 +497,7 @@ class ServiceLoaderNameResolutionMatrixTest {
           }
         }
         """)).isEmpty());
+    assertCompiles(temp.resolve(id));
   }
 
   /**
@@ -505,6 +514,29 @@ class ServiceLoaderNameResolutionMatrixTest {
           void audit() { ServiceLoader.load(Provider.class); }
         }
         """).isEmpty());
+  }
+
+  /**
+   * Compiles every Java source written under the fixture root, proving the
+   * fixture is complete Java rather than a text shape only.
+   */
+  private static void assertCompiles(Path fixtureRoot) throws IOException {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assertNotNull(compiler, "a JDK compiler is required for this fixture");
+    List<Path> sources;
+    try (Stream<Path> paths = Files.walk(fixtureRoot.resolve("src/main/java"))) {
+      sources = paths.filter(path -> path.toString().endsWith(".java")).toList();
+    }
+    Path classes = fixtureRoot.resolve("classes");
+    Files.createDirectories(classes);
+    try (StandardJavaFileManager manager =
+        compiler.getStandardFileManager(null, null, StandardCharsets.UTF_8)) {
+      Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromPaths(sources);
+      boolean compiled = compiler.getTask(
+          null, manager, null,
+          List.of("-proc:none", "-d", classes.toString()), null, units).call();
+      assertTrue(compiled, "fixture compiles: " + sources);
+    }
   }
 
   private List<ServiceLoaderCallSite> matrixSites(
