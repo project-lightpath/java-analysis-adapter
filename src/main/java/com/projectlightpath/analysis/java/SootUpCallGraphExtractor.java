@@ -95,12 +95,18 @@ final class SootUpCallGraphExtractor {
       return Optional.empty();
     }
     String relationshipType = relationshipType(call, caller, callee, scanner, context);
+    SemanticCallFacts.Certainty certainty = certainty(call, view, relationshipType, targetContext);
+    if ("invokes".equals(relationshipType)
+        && ServiceLoaderCallSiteReader.loadStatus(context, caller, call, scanner)
+            == ServiceLoaderCallSiteReader.LoadStatus.UNBOUND) {
+      certainty = SemanticCallFacts.Certainty.POSSIBLE;
+    }
     return Optional.of(new CallEdge(
         caller,
         callee,
         call.getLineNumber(),
         sourcePath(context, caller.owner()),
-        certainty(call, view, relationshipType, targetContext),
+        certainty,
         relationshipType,
         targetContext,
         invocationReceiver(call)));

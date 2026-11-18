@@ -10,19 +10,43 @@ import sootup.callgraph.CallGraph;
 final class ServiceLoaderCallSiteReader {
   private ServiceLoaderCallSiteReader() {}
 
+  /** Three-state classification of the load sites on a call's statement. */
+  enum LoadStatus { ABSENT, BOUND, UNBOUND }
+
   /** Detects a bounded ServiceLoader expression on the statement owning a bytecode call. */
   static boolean hasJavaServiceLoaderCall(
       AnalysisContext context,
       MethodSymbol caller,
       CallGraph.Call call,
       SourceMetadataScanner scanner) {
+    return loadStatus(context, caller, call, scanner) == LoadStatus.BOUND;
+  }
+
+  /**
+   * Classifies the statement that owns a bytecode call: no load site (ABSENT),
+   * exactly one bound site (BOUND), or a site present but not bound (UNBOUND).
+   * A lineless edge carries no statement evidence, so it stays ABSENT.
+   */
+  static LoadStatus loadStatus(
+      AnalysisContext context,
+      MethodSymbol caller,
+      CallGraph.Call call,
+      SourceMetadataScanner scanner) {
     if (call.getLineNumber() <= 0) {
-      return false;
+      return LoadStatus.ABSENT;
     }
     Optional<ServiceLoaderSourceCache.CachedSource> cachedSource =
         ServiceLoaderSourceCache.source(scanner, caller);
     if (cachedSource.isEmpty()) {
-      return false;
+      return LoadStatus.ABSENT;
+    }
+    String source = cachedSource.get().sourceText();
+    List<ServiceLoaderCallSite> sites = cachedSource.get().sites();
+    boolean anyInStatement = sites.stream()
+        .anyMatch(site -> site.line() <= call.getLineNumber()
+            && ServiceLoaderCallSiteSource.sameStatement(source, site, call.getLineNumber()));
+    if (!anyInStatement) {
+      return LoadStatus.ABSENT;
     }
     String targetMethod = MethodSymbol.fromSootSignature(call.targetMethodSignature().toString()).name();
     String targetReceiver = call.invokableStmt().getInvokeExpr()
@@ -30,9 +54,8 @@ final class ServiceLoaderCallSiteReader {
         .map(sootup.core.jimple.common.expr.AbstractInstanceInvokeExpr.class::cast)
         .map(expression -> expression.getBase().getName())
         .orElse(null);
-    return selectedSites(
-        cachedSource.get().sourceText(), cachedSource.get().sites(),
-        call.getLineNumber(), targetMethod, targetReceiver).size() == 1;
+    return selectedSites(source, sites, call.getLineNumber(), targetMethod, targetReceiver).size() == 1
+        ? LoadStatus.BOUND : LoadStatus.UNBOUND;
   }
 
   static ServiceLoadHints read(
