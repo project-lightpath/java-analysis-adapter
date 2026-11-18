@@ -11,7 +11,7 @@ final class ServiceLoaderCallSiteParser {
   private static final Pattern LOAD = Pattern.compile(
       "(?<![\\w$.])(?:(java\\.util)\\.)?ServiceLoader\\s*\\.\\s*load\\s*\\(");
   private static final Pattern PACKAGE = Pattern.compile(
-      "(?U)\\bpackage\\s+([\\p{L}_$][\\w$]*(?:\\.[\\p{L}_$][\\w$]*)*)\\s*;");
+      "(?U)\\bpackage\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*)\\s*;");
   /**
    * Non-lambda chained calls that cannot replace the flowing provider value.
    * Enumerated from the green chained call-site tests: every Optional chain
@@ -124,16 +124,18 @@ final class ServiceLoaderCallSiteParser {
   }
 
   private static ImportOwnership classify(ImportOwnership ownership, JavaImports.Import imported) {
+    if (imported.onDemand()) {
+      // Neither on-demand form shadows anything (JLS 6.4.1); a non-static
+      // java.util wildcard is the only one that can own the simple name.
+      return !imported.isStatic() && imported.name().equals("java.util")
+          ? ownership.withWildcard() : ownership;
+    }
     if (imported.isStatic()) {
-      // A static import never imports the top-level type java.util.ServiceLoader
-      // itself; a static member-type import can supply a lookalike.
-      boolean lookalike = imported.onDemand()
-          || imported.simpleName().equals("ServiceLoader")
+      // A static import cannot import the top-level java.util.ServiceLoader,
+      // but a static single member-type import can supply a lookalike.
+      boolean lookalike = imported.simpleName().equals("ServiceLoader")
           || imported.name().endsWith(".ServiceLoader");
       return lookalike ? ownership.withForeign() : ownership;
-    }
-    if (imported.onDemand()) {
-      return imported.name().equals("java.util") ? ownership.withWildcard() : ownership;
     }
     if (imported.name().equals("java.util.ServiceLoader")) {
       return ownership.withExplicit();

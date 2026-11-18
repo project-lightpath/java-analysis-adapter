@@ -30,8 +30,8 @@ final class ServiceLoaderSourceCache {
    * {@code List<ServiceLoader>}.
    */
   private static final Pattern TYPED_VALUE_DECLARATION = Pattern.compile(
-      "(?:^|[^\\w$.])"
-          + "([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*"
+      "(?:^|[^\\p{javaJavaIdentifierPart}$.])"
+          + "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*"
           + "(?:<[<>,\\w$.\\s]*>)?"
           + "(?:\\[\\s*\\]|\\.\\.\\.)*)"
           + "\\s+(ServiceLoader)(?=\\s*[=;,):\\]])");
@@ -49,7 +49,7 @@ final class ServiceLoaderSourceCache {
 
   /** The extends-clause reference in a type declaration header (no generics). */
   private static final Pattern EXTENDS_REFERENCE = Pattern.compile(
-      "(?U)extends\\s+([\\p{L}_$][\\w$]*(?:\\s*\\.\\s*[\\p{L}_$][\\w$]*)*)");
+      "(?U)extends\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\s*\\.\\s*[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*)");
 
   private static final Pattern PRIVATE_MODIFIER = Pattern.compile("\\bprivate\\b");
 
