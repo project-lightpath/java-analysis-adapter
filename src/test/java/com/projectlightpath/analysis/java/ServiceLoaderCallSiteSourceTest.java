@@ -81,6 +81,17 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void lambdaSuppliedToAnOffChainCallIsNotBound() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(AuditProvider.class).findFirst()"
+        + ".equals(build(q -> q.record()));\n";
+    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
+        source, site, "record", 2, "q"));
+  }
+
+  @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
         + "import java.util.ServiceLoader;\n"
