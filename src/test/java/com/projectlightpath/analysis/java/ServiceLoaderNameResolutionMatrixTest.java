@@ -966,6 +966,49 @@ class ServiceLoaderNameResolutionMatrixTest {
         """).size());
   }
 
+  /** A single-type import of java proves a type named java exists. */
+  @Test
+  void importedTypeJavaWithoutSelectedSourceDropsQualifiedSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-java-type-import-unselected", """
+        package demo;
+        import java.util.*;
+        import other.java;
+        class Bridge {
+          void audit() { java.util.ServiceLoader.load(Object.class); }
+        }
+        """).isEmpty());
+  }
+
+  /** A lambda parameter list element named java is in scope in the body. */
+  @Test
+  void multiParameterLambdaJavaDropsQualifiedSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-java-lambda-list", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            java.util.function.BiConsumer<Util, Util> consumer = (java, other) ->
+                java.util.ServiceLoader.load(Object.class);
+          }
+        }
+        """).isEmpty());
+  }
+
+  /** The same parameter-list gap for a lambda parameter named ServiceLoader. */
+  @Test
+  void multiParameterLambdaServiceLoaderDropsBareSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-service-loader-lambda-list", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            java.util.function.BiConsumer<Util, Util> consumer = (ServiceLoader, other) ->
+                ServiceLoader.load(Object.class);
+          }
+        }
+        """).isEmpty());
+  }
+
   /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.

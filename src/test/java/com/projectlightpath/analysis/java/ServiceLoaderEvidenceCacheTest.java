@@ -86,5 +86,18 @@ class ServiceLoaderEvidenceCacheTest {
             .orElseThrow())
         .toList();
     assertNotSame(resolutions.get(0), resolutions.get(1));
+
+    SemanticCallFacts secondRun = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(first, second), List.of(),
+            Set.of("demo.App", "demo.DefaultProvider"), "SootUp", "3.0.1", 2, 1));
+    SemanticCallFacts.Evidence secondRunEvidence = secondRun.providerFacts().stream()
+        .filter(fact -> fact.relationshipType().equals("service_loader"))
+        .map(fact -> fact.evidence().stream()
+            .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
+            .findFirst()
+            .orElseThrow())
+        .findFirst()
+        .orElseThrow();
+    assertNotSame(descriptors.get(0), secondRunEvidence);
   }
 }
