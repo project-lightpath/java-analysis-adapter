@@ -46,6 +46,14 @@ final class ServiceLoaderSourceCache {
       "permits", "return", "super", "switch", "throw", "throws", "try",
       "while", "yield");
 
+  /** The extends-clause simple name in a type declaration header. */
+  private static final Pattern EXTENDS_SIMPLE_NAME = Pattern.compile(
+      "\\bextends\\s+([A-Za-z_$][\\w$]*)");
+
+  /** Any single-type or on-demand import in a compilation unit. */
+  private static final Pattern ANY_IMPORT = Pattern.compile(
+      "(?m)^\\s*import\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
+
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 
   private ServiceLoaderSourceCache() {}
@@ -78,6 +86,8 @@ final class ServiceLoaderSourceCache {
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
         source, !samePackageTypeShadow, true).stream()
         .filter(site -> !isShadowedAt(file, structuralSource, site.offset()))
+        .filter(site -> !inheritedTypeShadowsAt(
+            scanner, file, structuralSource, site.offset()))
         .filter(site -> !valueDeclarationShadowsAt(structuralSource, valueScopes, site.offset()))
         .toList();
     return new CachedSource(
@@ -93,6 +103,87 @@ final class ServiceLoaderSourceCache {
     return SourceMetadataScanner.typeDeclarations(file).stream()
         .filter(type -> type.name().equals("ServiceLoader"))
         .anyMatch(type -> declarationInScope(file, source, type, offset));
+  }
+
+  /**
+   * Inherited member types from a superclass in another file (JLS 6.4.1/6.5).
+   * BOUNDED, single level: each type declaration enclosing the site contributes
+   * its extends-clause simple name, resolved against the selected files by
+   * same package, single-type import, or on-demand import; a resolved
+   * superclass file that declares a ServiceLoader type (nested member type, or
+   * top-level) shadows the site. Multi-level chains, qualified or unresolvable
+   * superclass names, and superinterfaces are not followed (documented
+   * residuals — behavior for them is unchanged).
+   */
+  private static boolean inheritedTypeShadowsAt(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      int offset) {
+    if (source.startsWith("java.util.ServiceLoader", offset)) {
+      return false;
+    }
+    for (SourceMetadataScannerState.TypeInfo type : SourceMetadataScanner.typeDeclarations(file)) {
+      if (type.start() <= offset
+          && (type.end() < 0 || offset <= type.end())
+          && superclassDeclaresServiceLoader(scanner, file, source, type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean superclassDeclaresServiceLoader(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      SourceMetadataScannerState.TypeInfo type) {
+    String superName = extendsSimpleName(source, type);
+    if (superName == null) {
+      return false;
+    }
+    for (SourceMetadataScanner.SourceFile candidate : scanner.files()) {
+      if (candidate.simpleTypeName().equals(superName)
+          && (candidate.packageName().equals(file.packageName())
+              || importedBySimpleName(
+                  file.structuralSource(), superName, candidate.packageName()))
+          && declaresServiceLoaderType(candidate)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static String extendsSimpleName(
+      String source, SourceMetadataScannerState.TypeInfo type) {
+    int body = source.indexOf('{', type.start());
+    int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
+    if (limit <= type.start()) {
+      return null;
+    }
+    Matcher extendsClause = EXTENDS_SIMPLE_NAME.matcher(source);
+    extendsClause.region(type.start(), limit);
+    return extendsClause.find() ? extendsClause.group(1) : null;
+  }
+
+  private static boolean importedBySimpleName(
+      String source, String simpleName, String packageName) {
+    String single = packageName + "." + simpleName;
+    String onDemand = packageName + ".*";
+    Matcher imports = ANY_IMPORT.matcher(source);
+    while (imports.find()) {
+      String name = imports.group(1);
+      if (name.equals(single) || name.equals(onDemand)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean declaresServiceLoaderType(
+      SourceMetadataScanner.SourceFile candidate) {
+    return SourceMetadataScanner.typeDeclarations(candidate).stream()
+        .anyMatch(type -> type.name().equals("ServiceLoader"));
   }
 
   private static boolean declarationInScope(
