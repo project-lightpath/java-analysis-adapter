@@ -376,6 +376,118 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).size());
   }
 
+  /**
+   * Precision (item M): a type-parameter bound is not an extends clause.
+   * {@code Bridge<T extends Base>} does not inherit Base's member types, so
+   * the wildcard import still supplies the JDK ServiceLoader.
+   */
+  @Test
+  void typeParameterBoundIsNotAnExtendsClause() throws IOException {
+    assertFalse(matrixSites("matrix-cell-binding", """
+        package demo;
+        import java.util.*;
+        class Bridge<T extends Base> {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Precision (item M): a type nested inside a member type is not inherited —
+   * {@code Base.Inner.ServiceLoader} is not in scope in Bridge, so the
+   * wildcard import supplies the JDK class.
+   */
+  @Test
+  void nestedTypeOfMemberTypeIsNotInherited() throws IOException {
+    assertFalse(matrixSites("matrix-cell-deep-nested", """
+        package demo;
+        import java.util.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          static class Inner {
+            static class ServiceLoader<T> { }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Precedence (item M, JLS 6.4.1): a single-type import outranks a
+   * same-package type, so an imported superclass without a ServiceLoader
+   * member leaves the wildcard-supplied JDK class attributed.
+   */
+  @Test
+  void singleTypeImportedSuperclassNameOutranksSamePackage() throws IOException {
+    assertFalse(matrixSites("matrix-cell-import-precedence", """
+        package demo;
+        import java.util.*;
+        import other.Base;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of(
+            "demo/Base.java", """
+        package demo;
+        class Base {
+          static class ServiceLoader<T> { }
+        }
+        """,
+            "other/Base.java", """
+        package other;
+        public class Base { }
+        """)).isEmpty());
+  }
+
+  /**
+   * Guard (green at head and after item M): a single-type import that does
+   * resolve the superclass keeps the inherited-type abstention.
+   */
+  @Test
+  void singleTypeImportedSuperclassWithMemberTypeShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-import-shadow", """
+        package demo;
+        import java.util.*;
+        import other.Base;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("other/Base.java", """
+        package other;
+        public class Base {
+          public static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Guard (green at head and after item M): qualified superclass names are a
+   * documented residual — not followed, so the site stays attributed.
+   */
+  @Test
+  void qualifiedSuperclassNameIsNotFollowed() throws IOException {
+    assertFalse(matrixSites("matrix-cell-qualified-super", """
+        package demo;
+        import java.util.*;
+        class Bridge extends demo.Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
   private List<ServiceLoaderCallSite> matrixSites(
       String id, String bridgeSource) throws IOException {
     return matrixSites(id, bridgeSource, Map.of());
