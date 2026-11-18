@@ -22,6 +22,16 @@ final class ServiceLoaderCallSiteParser {
    */
   private static final Set<String> VALUE_PRESERVING_CALLS = Set.of("findFirst");
 
+  /**
+   * Chain operations that may receive the provider lambda directly. A lambda
+   * inside any other call's arguments (for example build(...) nested in
+   * equals(...)) is not supplied by the ServiceLoader chain.
+   */
+  private static final Set<String> CHAIN_LAMBDA_CONSUMERS = Set.of(
+      "map", "flatMap", "filter", "ifPresent", "ifPresentOrElse", "forEach",
+      "peek", "orElseGet", "orElseThrow", "anyMatch", "allMatch", "noneMatch",
+      "collect", "reduce", "takeWhile", "dropWhile");
+
   private ServiceLoaderCallSiteParser() {}
 
   static List<ServiceLoaderCallSite> parse(String source) {
@@ -223,7 +233,8 @@ final class ServiceLoaderCallSiteParser {
     String name = sourceText.substring(dot + 1, nameEnd);
     int closing = matchingParenthesis(sourceText, opening);
     int argumentEnd = closing > opening ? closing : lambdaStart;
-    return !sourceText.substring(opening, argumentEnd).contains("->")
+    boolean lambdaArgument = sourceText.substring(opening, argumentEnd).contains("->");
+    return !(lambdaArgument && CHAIN_LAMBDA_CONSUMERS.contains(name))
         && !VALUE_PRESERVING_CALLS.contains(name);
   }
 
