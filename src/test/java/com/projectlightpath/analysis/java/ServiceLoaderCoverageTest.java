@@ -353,6 +353,75 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void explicitDescriptorPathWithDotSegmentsIsAuthorizedAndRead() throws IOException {
+    Path sourceRoot = temp.resolve("dot-segments/src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("dot-segments/classes");
+    Files.createDirectories(applicationClasses);
+    Path descriptors = temp.resolve("dot-segments/descriptors");
+    Files.createDirectories(descriptors);
+    Files.writeString(descriptors.resolve("demo.Inside"), "demo.InsideProvider\n");
+    String declared = temp.resolve("dot-segments/missing/../descriptors/demo.Inside").toString();
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("dot-segments")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("dot-segments")
+        .javaRelease(17)
+        .repositoryRoot(temp.resolve("dot-segments"))
+        .applicationClasses(applicationClasses)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "file", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED, declared))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertTrue(scan.descriptors().stream()
+        .anyMatch(item -> item.serviceType().equals("demo.Inside")),
+        scan.descriptors() + " " + scan.diagnostics());
+  }
+
+  @Test
+  void explicitlySelectedDescriptorWithInvalidFilenameIsDiagnosed() throws IOException {
+    Path sourceRoot = temp.resolve("invalid-name/src/main/java");
+    Files.createDirectories(sourceRoot);
+    Path applicationClasses = temp.resolve("invalid-name/classes");
+    Files.createDirectories(applicationClasses);
+    Path selected = temp.resolve("invalid-name/provider-list");
+    Files.writeString(selected, "demo.Provider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("invalid-name")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("invalid-name")
+        .javaRelease(17)
+        .repositoryRoot(temp.resolve("invalid-name"))
+        .applicationClasses(applicationClasses)
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "file", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            selected.toString()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorReader.scan(context);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_filename_invalid")),
+        scan.diagnostics().toString());
+  }
+
+  @Test
   void observedServicesDirectoryIsEnumeratedOnce() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     Files.createDirectories(sourceRoot);

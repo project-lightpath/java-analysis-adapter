@@ -517,6 +517,28 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
+   * JLS 6.4.1 (CodeRabbit 4614619867): a superclass resolved through an
+   * on-demand import ({@code import support.*;}) can inherit a ServiceLoader
+   * member type. The on-demand branch must actually see the wildcard import.
+   */
+  @Test
+  void onDemandImportSuperclassNameShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-on-demand-super", """
+        package demo;
+        import java.util.*;
+        import support.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("support/Base.java", """
+        package support;
+        public class Base {
+          public static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.
    */

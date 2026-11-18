@@ -8,6 +8,20 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ServiceLoaderCallSiteSourceTest {
+  /**
+   * Lexical boundary (CodeRabbit 4614619769): in Java, {@code 外ServiceLoader}
+   * is one identifier, so a call on it is not a ServiceLoader call even though
+   * the ASCII regex boundary accepted the suffix.
+   */
+  @Test
+  void nonAsciiIdentifierPrefixIsNotServiceLoaderCall() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "class Bridge {\n"
+        + "  void audit() { 外ServiceLoader.load(AuditProvider.class); }\n"
+        + "}\n";
+    assertTrue(ServiceLoaderCallSiteParser.parse(source).isEmpty());
+  }
+
   @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
