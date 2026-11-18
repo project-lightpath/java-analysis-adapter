@@ -663,6 +663,83 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
+   * A spaced foreign single-type import must defeat wildcard ownership
+   * (peer-review probe; head attributes it to java.util).
+   */
+  @Test
+  void spacedForeignSingleTypeImportAbstains() throws IOException {
+    assertTrue(matrixSites("matrix-cell-spaced-foreign", """
+        package demo;
+        import java.util.*;
+        import other . ServiceLoader;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("other/ServiceLoader.java", """
+        package other;
+        public class ServiceLoader<T> {
+          public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+        }
+        """)).isEmpty());
+  }
+
+  /** A private member type is not inherited, so it must not shadow. */
+  @Test
+  void privateNestedServiceLoaderDoesNotShadow() throws IOException {
+    assertFalse(matrixSites("matrix-cell-private-nested", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          private static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** A legal `$` in a package name must parse so wildcard resolution works. */
+  @Test
+  void packageDollarNameIsParsed() throws IOException {
+    assertTrue(matrixSites("matrix-cell-dollar-package", """
+        package demo;
+        import java.util.*;
+        import a$b.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("a$b/Base.java", """
+        package a$b;
+        public class Base {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** Unicode type names are legal identifiers and must resolve across files. */
+  @Test
+  void unicodeTypeNameIsResolved() throws IOException {
+    assertTrue(matrixSites("matrix-cell-unicode-type", """
+        package demo;
+        import java.util.*;
+        class Bridge extends Bāse {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("demo/Bāse.java", """
+        package demo;
+        public class Bāse {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.
    */

@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,6 +30,31 @@ class ServiceLoaderCallSiteSourceTest {
         + "  void audit() { \uD840\uDC00ServiceLoader.load(AuditProvider.class); }\n"
         + "}\n";
     assertTrue(ServiceLoaderCallSiteParser.parse(source).isEmpty());
+  }
+
+  @Test
+  void sameLineServiceLoaderImportsAreRecognized() {
+    String source = "import java.util.List; import java.util.ServiceLoader;\n"
+        + "class Bridge { void audit() { ServiceLoader.load(Object.class); } }\n";
+    assertEquals(1, ServiceLoaderCallSiteParser.parse(source).size());
+  }
+
+  @Test
+  void staticMemberTypeImportDoesNotOwnTheName() {
+    String source = "import java.util.*;\n"
+        + "import static other.Base.ServiceLoader;\n"
+        + "class Bridge { void audit() { ServiceLoader.load(Object.class); } }\n";
+    assertTrue(ServiceLoaderCallSiteParser.parse(source, true).isEmpty());
+  }
+
+  @Test
+  void longDottedImportDoesNotOverflowTheStack() {
+    StringBuilder name = new StringBuilder("a");
+    for (int index = 0; index < 20000; index++) {
+      name.append(".b");
+    }
+    String source = "import " + name + ".*;\nclass Bridge { }\n";
+    assertDoesNotThrow(() -> ServiceLoaderCallSiteParser.parse(source));
   }
 
   @Test
