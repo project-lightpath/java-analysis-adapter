@@ -845,6 +845,127 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).isEmpty());
   }
 
+  /** Item S: a value named java turns the qualified spelling into a value chain. */
+  @Test
+  void javaParameterDropsQualifiedSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-java-parameter", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit(Util java) { java.util.ServiceLoader.load(Object.class); }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void javaLocalDeclaredAfterTheSiteKeepsIt() throws IOException {
+    assertFalse(matrixSites("matrix-cell-java-local-after", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() { java.util.ServiceLoader.load(Object.class); Util java = null; }
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void javaFieldDropsQualifiedSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-java-field", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() { java.util.ServiceLoader.load(Object.class); }
+          Util java;
+        }
+        """).isEmpty());
+  }
+
+  @Test
+  void javaLambdaParameterDropsOnlyInsideTheLambda() throws IOException {
+    assertEquals(1, matrixSites("matrix-cell-java-lambda", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            java.util.function.Consumer<Util> consumer = java ->
+                java.util.ServiceLoader.load(Object.class);
+            java.util.ServiceLoader.load(Object.class);
+          }
+        }
+        """).size());
+  }
+
+  @Test
+  void switchArmJavaPatternDropsOnlyThatArm() throws IOException {
+    assertEquals(1, matrixSites("matrix-cell-java-switch", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit(Object value) {
+            switch (value) {
+              case Util java -> java.util.ServiceLoader.load(Object.class);
+              default -> java.util.ServiceLoader.load(Object.class);
+            }
+          }
+        }
+        """).size());
+  }
+
+  @Test
+  void samePackageTypeJavaDropsQualifiedSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-java-type-same-package", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() { java.util.ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("demo/java.java", """
+        package demo;
+        public class java {
+          public static class util { }
+        }
+        """)).isEmpty());
+  }
+
+  @Test
+  void importedTypeJavaDropsQualifiedSite() throws IOException {
+    assertTrue(matrixSites("matrix-cell-java-type-import", """
+        package demo;
+        import java.util.*;
+        import other.java;
+        class Bridge {
+          void audit() { java.util.ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("other/java.java", """
+        package other;
+        public class java {
+          public static class util { }
+        }
+        """)).isEmpty());
+  }
+
+  @Test
+  void bareServiceLoaderIsUnaffectedByAJavaValue() throws IOException {
+    assertEquals(1, matrixSites("matrix-cell-java-bare", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit(Util java) { ServiceLoader.load(Object.class); }
+        }
+        """).size());
+  }
+
+  @Test
+  void controlNameIsNotJava() throws IOException {
+    assertEquals(1, matrixSites("matrix-cell-java-control", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit(Util myjava) { java.util.ServiceLoader.load(Object.class); }
+        }
+        """).size());
+  }
+
   /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.
