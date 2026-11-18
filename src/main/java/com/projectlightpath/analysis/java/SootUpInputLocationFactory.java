@@ -142,6 +142,26 @@ final class SootUpInputLocationFactory {
     }
   }
 
+  private static void classifyWildcardEntry(
+      Path path,
+      NavigableSet<Path> entries,
+      List<Skipped> skipped,
+      Set<String> reported) {
+    boolean jarNamed = path.getFileName().toString()
+        .toLowerCase(java.util.Locale.ROOT).endsWith(".jar");
+    boolean regular = Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS);
+    if (regular && jarNamed) {
+      ServiceLoaderDescriptorSource.retainSmallest(entries, path, MAX_DEPENDENCY_ENTRIES);
+    } else if (regular && PathUtils.isArchive(path)) {
+      report(skipped, reported, "dependency_wildcard_archive_skipped",
+          path.toAbsolutePath().normalize(),
+          "supported archive is not expanded by the wildcard classpath");
+    } else if (Files.isSymbolicLink(path) && jarNamed) {
+      report(skipped, reported, "dependency_classpath_entry_skipped",
+          path.toAbsolutePath().normalize(), "symbolic link is not followed");
+    }
+  }
+
   private static Expansion expandDependencyPath(
       Path dependency, List<Skipped> skipped, Set<String> reported) {
     Path normalized = dependency.toAbsolutePath().normalize();
@@ -173,20 +193,7 @@ final class SootUpInputLocationFactory {
           break;
         }
         enumeratedEntries++;
-        String fileName = path.getFileName().toString();
-        boolean jarNamed = fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".jar");
-        if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && jarNamed) {
-          ServiceLoaderDescriptorSource.retainSmallest(
-              entries, path, MAX_DEPENDENCY_ENTRIES);
-        } else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-            && PathUtils.isArchive(path)) {
-          report(skipped, reported, "dependency_wildcard_archive_skipped",
-              path.toAbsolutePath().normalize(),
-              "supported archive is not expanded by the wildcard classpath");
-        } else if (Files.isSymbolicLink(path) && jarNamed) {
-          report(skipped, reported, "dependency_classpath_entry_skipped",
-              path.toAbsolutePath().normalize(), "symbolic link is not followed");
-        }
+        classifyWildcardEntry(path, entries, skipped, reported);
       }
     } catch (IOException error) {
       throw new IllegalArgumentException(
