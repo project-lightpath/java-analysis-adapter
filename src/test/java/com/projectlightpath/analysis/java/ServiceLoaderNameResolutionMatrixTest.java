@@ -739,6 +739,58 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).isEmpty());
   }
 
+  /** A letter-number package start (Ⅻ) is a legal Java identifier start. */
+  @Test
+  void letterNumberPackageIsParsed() throws IOException {
+    assertTrue(matrixSites("matrix-cell-letter-number-package", """
+        package demo;
+        import java.util.*;
+        import Ⅻp.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("Ⅻp/Base.java", """
+        package Ⅻp;
+        public class Base {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** A Unicode-typed value named ServiceLoader shadows, as for ASCII types. */
+  @Test
+  void unicodeTypedValueDeclarationShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-unicode-typed-value", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() { Данные ServiceLoader = null; ServiceLoader.load(Object.class); }
+        }
+        """).isEmpty());
+  }
+
+  /**
+   * A private member type is not inherited even when an annotation with an
+   * array initializer precedes the modifiers.
+   */
+  @Test
+  void privateTypeAfterArrayAnnotationDoesNotShadow() throws IOException {
+    assertFalse(matrixSites("matrix-cell-private-annotation", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          @Marker({Base.class}) private static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
   /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.

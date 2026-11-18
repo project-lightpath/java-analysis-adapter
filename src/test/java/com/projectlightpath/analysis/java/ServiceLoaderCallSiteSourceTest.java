@@ -58,6 +58,22 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void staticOnDemandImportDoesNotSuppressWildcardOwnership() {
+    String source = "import java.util.*;\n"
+        + "import static org.junit.jupiter.api.Assertions.*;\n"
+        + "class Bridge { void audit() { ServiceLoader.load(Object.class); } }\n";
+    assertEquals(1, ServiceLoaderCallSiteParser.parse(source, true).size());
+  }
+
+  @Test
+  void packageJavaUtilSurvivesStaticOnDemandImport() {
+    String source = "package java.util;\n"
+        + "import static other.X.*;\n"
+        + "class Bridge { void audit() { ServiceLoader.load(Object.class); } }\n";
+    assertEquals(1, ServiceLoaderCallSiteParser.parse(source).size());
+  }
+
+  @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
         + "import java.util.ServiceLoader;\n"
