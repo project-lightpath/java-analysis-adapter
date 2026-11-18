@@ -47,9 +47,9 @@ final class ServiceLoaderSourceCache {
       "permits", "return", "super", "switch", "throw", "throws", "try",
       "while", "yield");
 
-  /** The name following a top-level extends keyword in a type declaration header. */
-  private static final Pattern EXTENDS_TARGET = Pattern.compile(
-      "extends\\s+([A-Za-z_$][\\w$]*)(?!\\s*\\.)");
+  /** The extends-clause reference in a type declaration header (no generics). */
+  private static final Pattern EXTENDS_REFERENCE = Pattern.compile(
+      "extends\\s+([A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*)");
 
   /** Any single-type or on-demand import in a compilation unit. */
   private static final Pattern ANY_IMPORT = Pattern.compile(
@@ -109,14 +109,16 @@ final class ServiceLoaderSourceCache {
   /**
    * Inherited member types from a superclass in another file (JLS 6.4.1/6.5).
    * BOUNDED, single level: each type declaration enclosing the site contributes
-   * its extends-clause simple name, resolved against the selected files by
-   * JLS 6.4.1 precedence (single-type import, then same package, then on-demand
-   * import); a resolved superclass file that declares an inheritable
-   * ServiceLoader type (its top-level type or a direct member) shadows the
-   * site. Multi-level chains, {@code implements} clauses, superinterfaces
-   * listed after the first extends name, and qualified or unresolvable
-   * superclass names (including nested-type imports) are not followed
-   * (documented residuals — behavior for them is unchanged).
+   * its extends-clause reference. An unqualified name is resolved against the
+   * selected files by JLS 6.4.1 precedence (single-type import, then same
+   * package, then on-demand import); a package-qualified reference
+   * ({@code pkg.Base}) is resolved directly against the selected files. A
+   * resolved superclass file that declares an inheritable ServiceLoader type
+   * (its top-level type or a direct member) shadows the site. Multi-level
+   * chains, {@code implements} clauses, superinterfaces listed after the first
+   * extends name, nested-type-qualified superclass references
+   * ({@code Outer.Base}), and superclasses outside the selected file set are
+   * not followed (documented residuals — behavior for them is unchanged).
    */
   private static boolean inheritedTypeShadowsAt(
       SourceMetadataScanner scanner,
@@ -141,18 +143,30 @@ final class ServiceLoaderSourceCache {
       SourceMetadataScanner.SourceFile file,
       String source,
       SourceMetadataScannerState.TypeInfo type) {
-    String superName = extendsSimpleName(source, type);
-    if (superName == null) {
+    String superReference = extendsReference(source, type);
+    if (superReference == null) {
       return false;
     }
+    int qualifierEnd = superReference.lastIndexOf('.');
+    if (qualifierEnd >= 0) {
+      // Only the package-qualified form (pkg.Base) is resolved; a nested-type
+      // qualifier (Outer.Base) and a selection outside the selected files stay
+      // documented residuals.
+      String qualifier = superReference.substring(0, qualifierEnd);
+      String simpleName = superReference.substring(qualifierEnd + 1);
+      return scanner.files().stream()
+          .filter(candidate -> candidate.packageName().equals(qualifier)
+              && candidate.simpleTypeName().equals(simpleName))
+          .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType);
+    }
     List<SourceMetadataScanner.SourceFile> candidates = scanner.files().stream()
-        .filter(candidate -> candidate.simpleTypeName().equals(superName))
+        .filter(candidate -> candidate.simpleTypeName().equals(superReference))
         .toList();
-    String singleTypeImport = singleTypeImport(source, superName);
+    String singleTypeImport = singleTypeImport(source, superReference);
     if (singleTypeImport != null) {
       // JLS 6.4.1: a single-type import outranks any package member.
       String importPackage = singleTypeImport.substring(
-          0, singleTypeImport.length() - superName.length() - 1);
+          0, singleTypeImport.length() - superReference.length() - 1);
       return candidates.stream()
           .filter(candidate -> candidate.packageName().equals(importPackage))
           .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType);
@@ -171,7 +185,7 @@ final class ServiceLoaderSourceCache {
         .anyMatch(ServiceLoaderSourceCache::declaresInheritableServiceLoaderType);
   }
 
-  private static String extendsSimpleName(
+  private static String extendsReference(
       String source, SourceMetadataScannerState.TypeInfo type) {
     int body = source.indexOf('{', type.start());
     int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
@@ -184,11 +198,10 @@ final class ServiceLoaderSourceCache {
       return null;
     }
     // lookingAt keeps the match anchored after the extends keyword, so a
-    // qualified superclass name is skipped rather than matched on its last
-    // segment (documented residual).
-    Matcher target = EXTENDS_TARGET.matcher(header);
+    // type-parameter bound is never treated as the extends clause.
+    Matcher target = EXTENDS_REFERENCE.matcher(header);
     target.region(extendsIndex, header.length());
-    return target.lookingAt() ? target.group(1) : null;
+    return target.lookingAt() ? target.group(1).replaceAll("\\s+", "") : null;
   }
 
   /** Returns the single-type import name (pkg.Type) for a simple name, if any. */
