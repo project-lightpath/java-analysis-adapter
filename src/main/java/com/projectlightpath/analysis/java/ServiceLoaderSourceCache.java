@@ -29,11 +29,12 @@ final class ServiceLoaderSourceCache {
    * {@code List<ServiceLoader>}.
    */
   /** One declared name with its typed and inferred-lambda patterns. */
-  private record DeclaredName(String value, Pattern typed, Pattern inferred) {}
+  private record DeclaredName(
+      String value, Pattern typed, Pattern inferred, Pattern parameterList) {}
 
   private static DeclaredName declaredName(String name, boolean arrowTerminator) {
-    return new DeclaredName(name,
-        typedValueDeclaration(name, arrowTerminator), inferredLambdaParameter(name));
+    return new DeclaredName(name, typedValueDeclaration(name, arrowTerminator),
+        inferredLambdaParameter(name), parameterListElement(name));
   }
 
   private static Pattern typedValueDeclaration(String name, boolean arrowTerminator) {
@@ -50,6 +51,12 @@ final class ServiceLoaderSourceCache {
   private static Pattern inferredLambdaParameter(String name) {
     return Pattern.compile(
         "(?:^|[^\\w$.])(\\()?(" + Pattern.quote(name) + ")(\\)?)(?=\\s*->)");
+  }
+
+  /** A name that is an element of a parenthesized parameter list. */
+  private static Pattern parameterListElement(String name) {
+    return Pattern.compile(
+        "(?<=[\\s(,])(" + Pattern.quote(name) + ")\\s*(?=,|\\)\\s*->)");
   }
 
   private static final DeclaredName SERVICE_LOADER = declaredName("ServiceLoader", true);
@@ -180,6 +187,10 @@ final class ServiceLoaderSourceCache {
         addValueScope(file, source, inferred.start(2), name.value().length(), scopes);
       }
     }
+    Matcher parameterList = name.parameterList().matcher(source);
+    while (parameterList.find()) {
+      addValueScope(file, source, parameterList.start(1), name.value().length(), scopes);
+    }
     return scopes;
   }
 
@@ -306,6 +317,17 @@ final class ServiceLoaderSourceCache {
             source, method.end() - 1, '{', '}') >= offset);
   }
 
+  /** True when a non-static single-type import binds this simple name. */
+  private static boolean singleTypeImportNamed(String source, String simpleName) {
+    for (JavaImports.Import imported : JavaImports.parse(source)) {
+      if (!imported.isStatic() && !imported.onDemand()
+          && imported.simpleName().equals(simpleName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static boolean scopedValueShadowsAt(
       String source, List<int[]> scopes, int offset) {
     if (source.startsWith("java.util.ServiceLoader", offset)) {
@@ -339,6 +361,9 @@ final class ServiceLoaderSourceCache {
       return false;
     }
     if (inScope(javaScopes, site.offset())) {
+      return true;
+    }
+    if (singleTypeImportNamed(source, "java")) {
       return true;
     }
     boolean sameCompilationUnit = SourceMetadataScanner.typeDeclarations(file).stream()
