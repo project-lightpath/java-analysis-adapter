@@ -104,6 +104,58 @@ class SootUpBaseGraphProviderIntegrationTest {
         fact.evidence().get(0).attributes().get("calleeSignature").startsWith("(")));
   }
 
+  /** Item R: a derived-but-unbound chain must not be DEFINITE. */
+  @Test
+  void unboundDerivedChainIsNotDefinite() throws IOException {
+    Path sourceRoot = temp.resolve("unbound-chain/src/main/java");
+    Path classes = temp.resolve("unbound-chain/target/classes");
+    write(sourceRoot, "demo/Handler.java", """
+        package demo;
+        public abstract class Handler { public abstract String record(); }
+        """);
+    write(sourceRoot, "demo/DefaultHandler.java", """
+        package demo;
+        public final class DefaultHandler extends Handler {
+          public String record() { return "x"; }
+        }
+        """);
+    write(sourceRoot, "demo/App.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class App {
+          public String call() {
+            return ServiceLoader.load(Handler.class).findFirst().get().record();
+          }
+        }
+        """);
+    compile(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("unbound-chain")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("unbound-chain")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    SemanticCallFacts.Fact fact = facts.providerFacts().stream()
+        .filter(item -> item.caller().equals("demo.App#call"))
+        .filter(item -> item.callee().equals("demo.DefaultHandler#record"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals("invokes", fact.relationshipType());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty());
+  }
+
   /** Keeps every provider edge visible when one source owns many ServiceLoader sites. */
   @Test
   void classifiesMultipleProviderEdges() throws IOException {
