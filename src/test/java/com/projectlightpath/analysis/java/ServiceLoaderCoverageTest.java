@@ -457,6 +457,101 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void sourceOnlyDescriptorAloneIsNotClasspathBacked() throws IOException {
+    Path root = temp.resolve("source-only");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path resourceServices = root.resolve("src/main/resources/META-INF/services");
+    Files.createDirectories(sourceRoot.resolve("demo"));
+    Files.createDirectories(resourceServices);
+    Files.createDirectories(root.resolve("target/classes"));
+    Files.writeString(sourceRoot.resolve("demo/App.java"), "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App { void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); } }\n");
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"),
+        "package demo; interface Provider { void record(); }\n");
+    Files.writeString(resourceServices.resolve("demo.Provider"), "demo.DefaultProvider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("source-only")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("source-only")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals("source_meta_inf_services", scan.descriptors().get(0).kind());
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        3,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+  }
+
+  @Test
+  void explicitlySelectedResourceDirectoryRemainsClasspathBacked() throws IOException {
+    Path root = temp.resolve("selected-resources");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path resourceServices = root.resolve("src/main/resources/META-INF/services");
+    Files.createDirectories(sourceRoot.resolve("demo"));
+    Files.createDirectories(resourceServices);
+    Files.createDirectories(root.resolve("target/classes"));
+    Files.writeString(sourceRoot.resolve("demo/App.java"), "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App { void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); } }\n");
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"),
+        "package demo; interface Provider { void record(); }\n");
+    Files.writeString(resourceServices.resolve("demo.Provider"), "demo.DefaultProvider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("selected-resources")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("selected-resources")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "resources", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/resources/META-INF/services"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals("meta_inf_services", scan.descriptors().get(0).kind());
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        3,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
+  }
+
+  @Test
   void observedServicesDirectoryIsEnumeratedOnce() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     Files.createDirectories(sourceRoot);
