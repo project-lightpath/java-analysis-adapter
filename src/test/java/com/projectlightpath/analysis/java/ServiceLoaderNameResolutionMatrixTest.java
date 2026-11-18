@@ -792,6 +792,60 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
+   * A static on-demand import of a type that declares a member ServiceLoader
+   * collides with `java.util.*` (javac: ambiguous), so ownership is unprovable.
+   */
+  @Test
+  void staticOnDemandLookalikeMakesWildcardAmbiguous() throws IOException {
+    assertTrue(matrixSites("matrix-cell-static-ambiguous", """
+        package demo;
+        import java.util.*;
+        import static other.Outer.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("other/Outer.java", """
+        package other;
+        public class Outer {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** Unicode inside generic type arguments must not defeat a value shadow. */
+  @Test
+  void unicodeGenericArgumentValueDeclarationShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-unicode-generic-value", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() { Registry<Данные> ServiceLoader = null; ServiceLoader.load(Object.class); }
+        }
+        """).isEmpty());
+  }
+
+  /** A package-qualified Unicode superclass reference resolves. */
+  @Test
+  void qualifiedUnicodeSuperclassNameIsResolved() throws IOException {
+    assertTrue(matrixSites("matrix-cell-qualified-unicode", """
+        package demo;
+        import java.util.*;
+        class Bridge extends Ⅻp.Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("Ⅻp/Base.java", """
+        package Ⅻp;
+        public class Base {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.
    */

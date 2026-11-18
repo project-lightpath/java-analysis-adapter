@@ -74,6 +74,13 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void unicodeClassLiteralIsAttributed() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "class Bridge { void audit() { ServiceLoader.load(Данные.class); } }\n";
+    assertEquals(1, ServiceLoaderCallSiteParser.parse(source).size());
+  }
+
+  @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
         + "import java.util.ServiceLoader;\n"
