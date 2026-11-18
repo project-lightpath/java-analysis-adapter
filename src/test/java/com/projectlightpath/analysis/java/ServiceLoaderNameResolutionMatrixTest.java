@@ -287,6 +287,95 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).size());
   }
 
+  /**
+   * Inherited member type from a superclass in another file (item L): with
+   * Base.java declaring a nested ServiceLoader and Child extends Base, the
+   * inherited member type is in scope in Child (JLS 6.4.1/6.5) and shadows
+   * the on-demand import.
+   */
+  @Test
+  void inheritedMemberTypeFromSuperclassInAnotherFileShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-inherited-member", """
+        package demo;
+        import java.util.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Guard (green at head): a top-level ServiceLoader as the superclass
+   * already abstains through the same-package shadow path — item L's
+   * extends-resolution must not break that shape.
+   */
+  @Test
+  void superclassNameFromAnotherFileShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-superclass-name", """
+        package demo;
+        import java.util.*;
+        class Bridge extends ServiceLoader {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/ServiceLoader.java", """
+        package demo;
+        class ServiceLoader<T> {
+          static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * Precision guard: a third file's nested ServiceLoader that the site's
+   * class does NOT extend must not shadow — the site stays attributed.
+   */
+  @Test
+  void unrelatedServiceLoaderTypeInAnotherFileDoesNotShadow() throws IOException {
+    assertFalse(matrixSites("matrix-cell-unrelated-nested", """
+        package demo;
+        import java.util.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base { }
+        """, "demo/Unrelated.java", """
+        package demo;
+        class Unrelated {
+          static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** FQN escape under the inherited member type: still attributed. */
+  @Test
+  void fullyQualifiedCallSurvivesInheritedMemberTypeShadow() throws IOException {
+    assertEquals(1, matrixSites("matrix-cell-inherited-fqn", """
+        package demo;
+        import java.util.*;
+        class Bridge extends Base {
+          void audit() { java.util.ServiceLoader.load(Provider.class); }
+        }
+        """, Map.of("demo/Base.java", """
+        package demo;
+        class Base {
+          static class ServiceLoader<T> {
+            static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).size());
+  }
+
   private List<ServiceLoaderCallSite> matrixSites(
       String id, String bridgeSource) throws IOException {
     return matrixSites(id, bridgeSource, Map.of());
