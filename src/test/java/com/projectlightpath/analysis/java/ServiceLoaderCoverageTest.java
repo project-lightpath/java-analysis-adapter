@@ -609,6 +609,84 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
+  void contextClassLoaderMutationBlocksDefinite() throws IOException {
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        providerCertainty("context-mutated", true, false));
+  }
+
+  @Test
+  void stableContextClassLoaderKeepsDefinite() throws IOException {
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
+        providerCertainty("context-stable", false, false));
+  }
+
+  @Test
+  void parameterisedOnlyProviderConstructorBlocksDefinite() throws IOException {
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        providerCertainty("parameterised-provider", false, true));
+  }
+
+  @Test
+  void implicitNoArgProviderConstructorKeepsDefinite() throws IOException {
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
+        providerCertainty("implicit-provider", false, false));
+  }
+
+
+  private SemanticCallFacts.Certainty providerCertainty(
+      String id, boolean mutatesContextLoader, boolean parameterisedConstructor)
+      throws IOException {
+    Path root = temp.resolve(id);
+    Path sourceRoot = root.resolve("src/main/java");
+    Path services = root.resolve("target/classes/META-INF/services");
+    Files.createDirectories(sourceRoot.resolve("demo"));
+    Files.createDirectories(services);
+    Files.writeString(sourceRoot.resolve("demo/App.java"), "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + (mutatesContextLoader
+            ? "  void install(ClassLoader loader) {"
+                + " Thread.currentThread().setContextClassLoader(loader); }\n"
+            : "")
+        + "}\n");
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"),
+        "package demo; interface Provider { void record(); }\n");
+    Files.writeString(sourceRoot.resolve("demo/DefaultProvider.java"),
+        "package demo;\nfinal class DefaultProvider implements Provider {\n"
+            + (parameterisedConstructor
+                ? "  DefaultProvider(String name) { }\n"
+                : "")
+            + "  public void record() { }\n}\n");
+    Files.writeString(services.resolve("demo.Provider"), "demo.DefaultProvider\n");
+    AnalysisContext context = AnalysisContext.builder()
+        .id(id)
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId(id)
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    return ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context)).certainty();
+  }
+
+  @Test
   void observedServicesDirectoryIsEnumeratedOnce() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     Files.createDirectories(sourceRoot);

@@ -88,7 +88,8 @@ final class ServiceLoaderCallSiteReader {
     return new ServiceLoadHints(
         Set.copyOf(resolved),
         selected.stream().anyMatch(ServiceLoaderCallSite::explicitClassLoader),
-        bound);
+        bound,
+        !ServiceLoaderSourceCache.contextClassLoaderMutated(scanner));
   }
 
   private static List<ServiceLoaderCallSite> selectedSites(
@@ -108,13 +109,17 @@ final class ServiceLoaderCallSiteReader {
         .toList();
   }
 
-  record ServiceLoadHints(Set<String> serviceTypes, boolean explicitClassLoader, boolean callSiteBound) {
+  record ServiceLoadHints(
+      Set<String> serviceTypes,
+      boolean explicitClassLoader,
+      boolean callSiteBound,
+      boolean contextClassLoaderStable) {
     ServiceLoadHints {
       serviceTypes = Set.copyOf(serviceTypes);
     }
 
     static ServiceLoadHints empty() {
-      return new ServiceLoadHints(Set.of(), false, false);
+      return new ServiceLoadHints(Set.of(), false, false, true);
     }
   }
 

@@ -39,7 +39,9 @@ final class ServiceLoaderDescriptorScanner {
     List<Descriptor> descriptors = selectedDescriptors(hints, scan);
     Set<String> providers = providerNames(descriptors);
     boolean moduleVisibilityProven = descriptors.stream().noneMatch(Descriptor::moduleInfo);
-    boolean unique = isUnique(hints, edge, scan, descriptors, providers, moduleVisibilityProven);
+    boolean providerEligible = ProviderEligibility.eligible(scanner, edge.callee().owner());
+    boolean unique = isUnique(
+        hints, edge, scan, descriptors, providers, moduleVisibilityProven, providerEligible);
     String selection = selection(descriptors, unique);
     return new Resolution(
         certainty(edge, unique),
@@ -71,14 +73,17 @@ final class ServiceLoaderDescriptorScanner {
       Scan scan,
       List<Descriptor> descriptors,
       Set<String> providers,
-      boolean moduleVisibilityProven) {
+      boolean moduleVisibilityProven,
+      boolean providerEligible) {
     return !hints.explicitClassLoader()
         && hints.callSiteBound()
+        && hints.contextClassLoaderStable()
         && providers.size() == 1
         && descriptors.stream().noneMatch(Descriptor::malformed)
         && descriptors.stream().anyMatch(Descriptor::classpathBacked)
         && scan.diagnostics().isEmpty()
         && moduleVisibilityProven
+        && providerEligible
         && providers.contains(edge.callee().owner());
   }
 

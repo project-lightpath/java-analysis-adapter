@@ -69,9 +69,26 @@ final class ServiceLoaderSourceCache {
       "permits", "return", "super", "switch", "throw", "throws", "try",
       "while", "yield");
 
+  private static final Map<SourceMetadataScanner, Boolean> CONTEXT_LOADER_MUTATIONS =
+      new WeakHashMap<>();
+
   private final Map<Path, CachedSource> sources = new LinkedHashMap<>();
 
   private ServiceLoaderSourceCache() {}
+
+  /**
+   * True when any selected source installs a context class loader. A
+   * default-context ServiceLoader call then cannot be proven to see exactly
+   * the scanned providers, so uniqueness must not be promoted.
+   */
+  static boolean contextClassLoaderMutated(SourceMetadataScanner scanner) {
+    synchronized (CONTEXT_LOADER_MUTATIONS) {
+      return CONTEXT_LOADER_MUTATIONS.computeIfAbsent(scanner, key ->
+          key.files().stream().anyMatch(file ->
+              ServiceLoaderSourceMasker.mask(file.structuralSource())
+                  .contains("setContextClassLoader")));
+    }
+  }
 
   /** Returns one cached source model for a scanner and method owner. */
   static Optional<CachedSource> source(SourceMetadataScanner scanner, MethodSymbol symbol) {
