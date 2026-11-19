@@ -151,7 +151,7 @@ final class ServiceLoaderDescriptorSource {
     }
   }
 
-  static void scanModuleInfo(
+  static boolean scanModuleInfo(
       Path classpathDirectory,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ScanState state) {
@@ -161,22 +161,24 @@ final class ServiceLoaderDescriptorSource {
         state.diagnostic("descriptor_read_error", module.toString(),
             "module-info.class is not a non-symbolic regular file");
       }
-      return;
+      return true;
     }
     String path = module.toAbsolutePath().normalize().toString();
     if (!state.hasDecompressedBudget()) {
       state.diagnostic(
           "archive_decompression_limit", path,
           "module-info.class could not be read after the descriptor decompression budget was exhausted");
-      return;
+      return true;
     }
     try (var input = Files.newInputStream(module, LinkOption.NOFOLLOW_LINKS)) {
       byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(input, state, path);
       if (bytes != null) {
-        addModuleBytes(bytes, path, descriptors, state);
+        return addModuleBytes(bytes, path, descriptors, state);
       }
+      return true;
     } catch (IOException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_read_error", path, message(error));
+      return true;
     }
   }
 

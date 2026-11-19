@@ -141,13 +141,18 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     if (attributes.isDirectory()) {
+      int descriptorStart = descriptors.size();
+      long retainedBefore = state.retainedBytes();
       if (ServiceLoaderDescriptorAuthorization.derivedDirectory(
           normalized, ServiceLoaderDescriptorSource.SERVICES_DIRECTORY, state)) {
         ServiceLoaderDescriptorSource.scanServiceDirectory(
             normalized.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY),
             normalized.toString(), "meta_inf_services", descriptors, visited, state);
       }
-      ServiceLoaderDescriptorSource.scanModuleInfo(normalized, descriptors, state);
+      if (!ServiceLoaderDescriptorSource.scanModuleInfo(normalized, descriptors, state)) {
+        descriptors.subList(descriptorStart, descriptors.size()).clear();
+        state.restoreRetained(retainedBefore);
+      }
     } else if (attributes.isRegularFile()) {
       ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
     } else if (diagnoseUnavailable) {

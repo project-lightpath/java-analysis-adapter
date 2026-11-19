@@ -24,6 +24,10 @@ final class ServiceLoaderDescriptorArchiveSource {
 
   private ServiceLoaderDescriptorArchiveSource() {}
 
+  /**
+   * Scans one archive into {@code descriptors}, which must be mutable: a
+   * retention-budget rollback removes the descriptors this archive contributed.
+   */
   static void scan(
       Path archive,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
@@ -42,22 +46,25 @@ final class ServiceLoaderDescriptorArchiveSource {
           ServiceLoaderDescriptorSource.message(error));
       return;
     }
+    int descriptorStart = descriptors.size();
+    long retainedBefore = state.retainedBytes();
+    boolean complete = false;
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
-      int descriptorStart = descriptors.size();
-      long retainedBefore = state.retainedBytes();
       ArchiveEntries entries = enumerate(zip, normalized, state);
       readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
-      if (!readModule(
-          zip, normalized, entries.module(), entries.versionedModule(), descriptors, state)) {
-        descriptors.subList(descriptorStart, descriptors.size()).clear();
-        state.restoreRetained(retainedBefore);
-      }
+      complete = readModule(
+          zip, normalized, entries.module(), entries.versionedModule(), descriptors, state);
     } catch (ZipException error) {
       state.diagnostic("invalid_archive", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
     } catch (IOException error) {
       state.diagnostic("archive_read_error", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
+    } finally {
+      if (!complete) {
+        descriptors.subList(descriptorStart, descriptors.size()).clear();
+        state.restoreRetained(retainedBefore);
+      }
     }
   }
 
