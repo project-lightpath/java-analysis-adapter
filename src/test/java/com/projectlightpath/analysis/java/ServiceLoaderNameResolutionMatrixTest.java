@@ -1009,6 +1009,77 @@ class ServiceLoaderNameResolutionMatrixTest {
         """).isEmpty());
   }
 
+  /** Identifier-ignorable characters inside an import name are not semantic. */
+  @Test
+  void ignorableCharacterInImportNameAbstains() throws IOException {
+    assertTrue(matrixSites("matrix-cell-ignorable-import", """
+        package demo;
+        import java.util.*;
+        import other.Service\u200CLoader;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("other/ServiceLoader.java", """
+        package other;
+        public class ServiceLoader<T> {
+          public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+        }
+        """)).isEmpty());
+  }
+
+  /** A later declarator (`Type unused, ServiceLoader = ...`) declares the name. */
+  @Test
+  void laterDeclaratorNamedServiceLoaderShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-later-declarator", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            Helper unused, ServiceLoader = new Helper();
+            ServiceLoader.load(Object.class);
+          }
+        }
+        """).isEmpty());
+  }
+
+  /** A top-level ServiceLoader in a differently named same-package file shadows. */
+  @Test
+  void samePackageTopLevelInDifferentlyNamedFileShadows() throws IOException {
+    assertTrue(matrixSites("matrix-cell-multi-top-level", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("demo/Helpers.java", """
+        package demo;
+        class Helpers { }
+        class ServiceLoader {
+          static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+        }
+        """)).isEmpty());
+  }
+
+  /** Whitespace around package dots does not change the package name. */
+  @Test
+  void spacedPackageDeclarationStillResolves() throws IOException {
+    assertTrue(matrixSites("matrix-cell-spaced-package", """
+        package demo;
+        import java.util.*;
+        import support.api.*;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("support/api/Base.java", """
+        package support . api;
+        public class Base {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
   /**
    * Compiles every Java source written under the fixture root, proving the
    * fixture is complete Java rather than a text shape only.

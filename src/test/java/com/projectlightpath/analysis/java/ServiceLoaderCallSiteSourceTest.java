@@ -92,6 +92,13 @@ class ServiceLoaderCallSiteSourceTest {
   }
 
   @Test
+  void dottedMemberSelectionIsNotABareServiceLoaderCall() {
+    String source = "import java.util.ServiceLoader;\n"
+        + "class Bridge { void audit() { holder. ServiceLoader.load(Object.class); } }\n";
+    assertTrue(ServiceLoaderCallSiteParser.parse(source).isEmpty());
+  }
+
+  @Test
   void bindsProviderLambdaInsideStreamExpression() {
     String source = "package demo;\n"
         + "import java.util.ServiceLoader;\n"
