@@ -1244,7 +1244,7 @@ class ServiceLoaderCoverageTest {
       names.add("noise/e-" + index);
     }
     Path archive = temp.resolve("classic-65535.jar");
-    writeClassicZip(archive, names);
+    writeClassicZip(archive, names, "demo.ProviderImpl\n");
 
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState state =
@@ -1253,7 +1253,14 @@ class ServiceLoaderCoverageTest {
 
     assertEquals(1, descriptors.size(), descriptors.toString());
     assertEquals("demo.Provider", descriptors.get(0).serviceType());
+    assertEquals(List.of("demo.ProviderImpl"), descriptors.get(0).providers());
     assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+
+    byte[] bytes = Files.readAllBytes(archive);
+    int end = lastIndexOf(bytes, new byte[] {0x50, 0x4b, 0x05, 0x06});
+    assertEquals(bytes.length - 22, end);
+    assertEquals(0xffff, (bytes[end + 10] & 0xff) | ((bytes[end + 11] & 0xff) << 8));
+    assertEquals(-1, lastIndexOf(bytes, new byte[] {0x50, 0x4b, 0x06, 0x07}));
   }
 
   @Test
@@ -1417,19 +1424,21 @@ class ServiceLoaderCoverageTest {
 
     Path large = temp.resolve("record-cost.jar");
     String longName = "noise/" + "x".repeat(80);
-    long expected;
+    String unicodeName = "noise/" + "é".repeat(40);
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(large))) {
-      ZipEntry entry = new ZipEntry(longName);
-      entry.setExtra(new byte[10]);
-      output.putNextEntry(entry);
+      ZipEntry ascii = new ZipEntry(longName);
+      ascii.setExtra(new byte[10]);
+      output.putNextEntry(ascii);
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry(unicodeName));
+      output.closeEntry();
+      ZipEntry commented = new ZipEntry("noise/short");
+      commented.setComment("abcd");
+      output.putNextEntry(commented);
       output.closeEntry();
     }
-    try (ZipFile zip = new ZipFile(large.toFile())) {
-      expected = ServiceLoaderDescriptorBudget.centralDirectoryBytes(
-          zip.getEntry(longName));
-    }
-    assertTrue(expected > ServiceLoaderDescriptorBudget.MEASURED_RAW_BYTES_PER_ENTRY,
-        Long.toString(expected));
+    // 46 + 86 ASCII bytes + 10 extra; 46 + 86 UTF-8 bytes (46 chars); floor 122.
+    long expected = 142 + 132 + 122;
 
     List<ServiceLoaderDescriptorScanner.Descriptor> largeDescriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState largeState =
@@ -1454,13 +1463,14 @@ class ServiceLoaderCoverageTest {
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
       put(output, "META-INF/services/demo.A", "demo.ProviderImpl\n");
       put(output, "META-INF/services/demo.B", "demo.ProviderImpl\n");
+      put(output, "META-INF/services/demo.C", "demo.ProviderImpl\n");
     }
     List<ServiceLoaderDescriptorScanner.Descriptor> archiveDescriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState archiveState =
         ServiceLoaderDescriptorSource.ScanState.withBudgets(
             ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
             ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
-            oneDescriptor);
+            oneDescriptor * 2);
     ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
     assertTrue(archiveDescriptors.isEmpty(), archiveDescriptors.toString());
     assertTrue(archiveState.diagnostics().stream()
@@ -1468,6 +1478,24 @@ class ServiceLoaderCoverageTest {
         archiveState.diagnostics().toString());
     assertTrue(archiveState.diagnostics().stream()
         .noneMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    ServiceLoaderDescriptorScanner.Diagnostic retention = archiveState.diagnostics().get(0);
+    assertTrue(retention.detail().contains("bytes"), retention.detail());
+    assertTrue(retention.detail().contains(Long.toString(oneDescriptor * 2)),
+        retention.detail());
+    assertEquals(0L, archiveState.retainedBytes());
+
+    Path laterArchive = temp.resolve("retention-later.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(laterArchive))) {
+      put(output, "META-INF/services/demo.C", "demo.ProviderImpl\n");
+      put(output, "META-INF/services/demo.D", "demo.ProviderImpl\n");
+    }
+    ServiceLoaderDescriptorSource.ScanState laterState = archiveState;
+    int diagnosticsBefore = laterState.diagnostics().size();
+    List<ServiceLoaderDescriptorScanner.Descriptor> laterDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorArchiveSource.scan(laterArchive, laterDescriptors, laterState);
+    assertEquals(2, laterDescriptors.size(), laterDescriptors.toString());
+    assertEquals(diagnosticsBefore, laterState.diagnostics().size(),
+        laterState.diagnostics().toString());
 
     Path classes = temp.resolve("retention-classes");
     Path services = Files.createDirectories(
@@ -1486,11 +1514,100 @@ class ServiceLoaderCoverageTest {
     assertTrue(directoryState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
         directoryState.diagnostics().toString());
+    assertTrue(directoryState.diagnostics().get(0).detail().contains("bytes"));
+    assertEquals(0L, directoryState.retainedBytes());
+  }
+
+  @Test
+  void moduleInfoDescriptorsRespectRetentionBudget() throws IOException {
+    Path sourceRoot = Files.createDirectories(temp.resolve("retention-module-src"));
+    Path source = Files.createDirectories(sourceRoot.resolve("demo"));
+    for (String name : List.of("A", "B")) {
+      Files.writeString(source.resolve(name + ".java"),
+          "package demo; public interface " + name + " { void record(); }\n");
+      Files.writeString(source.resolve(name + "Impl.java"),
+          "package demo; public final class " + name + "Impl implements " + name
+              + " { public void record() {} }\n");
+    }
+    Files.writeString(sourceRoot.resolve("module-info.java"),
+        "module demo.provider { provides demo.A with demo.AImpl;"
+            + " provides demo.B with demo.BImpl; }\n");
+    Path classes = Files.createDirectories(temp.resolve("retention-module-classes"));
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(sourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null, files, null, List.of("--release", "17", "-d", classes.toString()), null,
+          units).call());
+    }
+    byte[] bytes = Files.readAllBytes(classes.resolve("module-info.class"));
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> bounded = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState boundedState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorSource.addModuleBytes(
+        bytes, "module-info.class", bounded, boundedState);
+    assertTrue(bounded.isEmpty(), bounded.toString());
+    assertEquals(0L, boundedState.retainedBytes());
+    assertTrue(boundedState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
+        boundedState.diagnostics().toString());
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> complete = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState completeState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES * 2);
+    ServiceLoaderDescriptorSource.addModuleBytes(
+        bytes, "module-info.class", complete, completeState);
+    assertEquals(2, complete.size(), complete.toString());
+    assertTrue(completeState.diagnostics().isEmpty(), completeState.diagnostics().toString());
   }
 
   @Test
   void enumerationExhaustionDowngradesCertaintyToPossible() throws IOException {
-    Path root = temp.resolve("exhaustion-certainty");
+    AnalysisContext context = certaintyContext("exhaustion-certainty");
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")),
+        scan.diagnostics().toString());
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, certainty(context, scan));
+  }
+
+  @Test
+  void retentionExhaustionDowngradesCertaintyToPossible() throws IOException {
+    AnalysisContext context = certaintyContext("retention-certainty");
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
+        scan.diagnostics().toString());
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, certainty(context, scan));
+  }
+
+  private AnalysisContext certaintyContext(String name) throws IOException {
+    Path root = temp.resolve(name);
     Path sourceRoot = root.resolve("src/main/java");
     Path resourceServices = root.resolve("src/main/resources/META-INF/services");
     Files.createDirectories(sourceRoot.resolve("demo"));
@@ -1509,11 +1626,11 @@ class ServiceLoaderCoverageTest {
       put(output, "META-INF/services/demo.Provider", "demo.OtherProvider\n");
     }
 
-    AnalysisContext context = AnalysisContext.builder()
-        .id("exhaustion-certainty")
+    return AnalysisContext.builder()
+        .id(name)
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
-        .fixtureId("exhaustion-certainty")
+        .fixtureId(name)
         .javaRelease(17)
         .repositoryRoot(root)
         .applicationClasses(root.resolve("target/classes"))
@@ -1527,16 +1644,10 @@ class ServiceLoaderCoverageTest {
             "src/main/resources/META-INF/services"))
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
+  }
 
-    ServiceLoaderDescriptorSource.ScanState state =
-        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
-    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
-        context, SootUpInputLocationFactory.dependencyResolution(context), state);
-
-    assertTrue(scan.diagnostics().stream()
-        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")),
-        scan.diagnostics().toString());
-    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+  private SemanticCallFacts.Certainty certainty(
+      AnalysisContext context, ServiceLoaderDescriptorScanner.Scan scan) {
     CallEdge edge = new CallEdge(
         new MethodSymbol("demo.App", "audit", "()V"),
         new MethodSymbol("demo.DefaultProvider", "record", "()V"),
@@ -1544,9 +1655,8 @@ class ServiceLoaderCoverageTest {
         "src/main/java/demo/App.java",
         SemanticCallFacts.Certainty.DEFINITE,
         "service_loader");
-    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
-        context, edge, scan, new SourceMetadataScanner(context));
-    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    return ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context)).certainty();
   }
 
   @Test
@@ -1652,6 +1762,8 @@ class ServiceLoaderCoverageTest {
   void defaultScanStateBudgetsAreTheAdoptedValues() {
     ServiceLoaderDescriptorSource.ScanState state =
         new ServiceLoaderDescriptorSource.ScanState();
+    assertEquals(2L * 1024 * 1024 * 1024, state.remainingEnumerated());
+    assertEquals(16L * 1024 * 1024, state.remainingRetained());
     assertEquals(ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
         state.remainingEnumerated());
     assertEquals(ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES,
@@ -1666,13 +1778,19 @@ class ServiceLoaderCoverageTest {
         () -> ServiceLoaderDescriptorSource.ScanState.withBudgets(1, 1, 0));
   }
 
-  private static void writeClassicZip(Path archive, List<String> names) throws IOException {
+  private static void writeClassicZip(Path archive, List<String> names, String firstContent)
+      throws IOException {
+    byte[] content = firstContent.getBytes(StandardCharsets.UTF_8);
+    java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+    crc.update(content);
     try (OutputStream raw = new BufferedOutputStream(Files.newOutputStream(archive));
         DataOutputStream output = new DataOutputStream(raw)) {
       int[] offsets = new int[names.size()];
       int position = 0;
       for (int index = 0; index < names.size(); index++) {
         byte[] name = names.get(index).getBytes(StandardCharsets.UTF_8);
+        int size = index == 0 ? content.length : 0;
+        long checksum = index == 0 ? crc.getValue() : 0;
         offsets[index] = position;
         writeLeInt(output, 0x04034b50);
         writeLeShort(output, 10);
@@ -1680,17 +1798,22 @@ class ServiceLoaderCoverageTest {
         writeLeShort(output, 0);
         writeLeShort(output, 0);
         writeLeShort(output, 0);
-        writeLeInt(output, 0);
-        writeLeInt(output, 0);
-        writeLeInt(output, 0);
+        writeLeInt(output, (int) checksum);
+        writeLeInt(output, size);
+        writeLeInt(output, size);
         writeLeShort(output, name.length);
         writeLeShort(output, 0);
         output.write(name);
-        position += 30 + name.length;
+        if (index == 0) {
+          output.write(content);
+        }
+        position += 30 + name.length + size;
       }
       int centralStart = position;
       for (int index = 0; index < names.size(); index++) {
         byte[] name = names.get(index).getBytes(StandardCharsets.UTF_8);
+        int size = index == 0 ? content.length : 0;
+        long checksum = index == 0 ? crc.getValue() : 0;
         writeLeInt(output, 0x02014b50);
         writeLeShort(output, 10);
         writeLeShort(output, 10);
@@ -1698,9 +1821,9 @@ class ServiceLoaderCoverageTest {
         writeLeShort(output, 0);
         writeLeShort(output, 0);
         writeLeShort(output, 0);
-        writeLeInt(output, 0);
-        writeLeInt(output, 0);
-        writeLeInt(output, 0);
+        writeLeInt(output, (int) checksum);
+        writeLeInt(output, size);
+        writeLeInt(output, size);
         writeLeShort(output, name.length);
         writeLeShort(output, 0);
         writeLeShort(output, 0);
@@ -1720,6 +1843,22 @@ class ServiceLoaderCoverageTest {
       writeLeInt(output, centralStart);
       writeLeShort(output, 0);
     }
+  }
+
+  private static int lastIndexOf(byte[] haystack, byte[] needle) {
+    for (int index = haystack.length - needle.length; index >= 0; index--) {
+      boolean match = true;
+      for (int offset = 0; offset < needle.length; offset++) {
+        if (haystack[index + offset] != needle[offset]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return index;
+      }
+    }
+    return -1;
   }
 
   private static void writeLeInt(DataOutputStream output, int value) throws IOException {
