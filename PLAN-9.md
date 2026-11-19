@@ -359,3 +359,33 @@ Full gates on GREEN_09b (re-run after the review wave):
 - `make adapter-test`: 304 tests, 0 failures (baseline 275).
 - `make java-lint`: PASS (0 PMD/CPD findings).
 - `make evidence-validate`: PASS.
+
+## Execution record (EVIDENCE_09c — CodeRabbit PR #12 findings)
+
+Two inline findings, both valid; resolution reviewed adversarially to
+ACTIONABLE_COUNT 0 over four rounds (RESOLUTION-9-coderabbit.md).
+
+- **Annotation names with `$` (minor):** the shared mask pattern now uses Java
+  identifier classes in `maskAnnotationArguments` and the three
+  annotation-stripping `replaceAll` sites. Eight regex-embedded copies are
+  deferred with per-site dispositions (mostly lost-fact/abstention; the
+  qualifier-enumeration site is recorded as a not-proven-safe follow-up).
+- **Nested-owner prefix collision (minor):** a non-exact `$` prefix is
+  accepted only when the candidate declares the owner path or a declared path
+  is a proper prefix with an anonymous/local digit suffix. Exact match still
+  wins first. `Outer$Inner.java` no longer claims `Outer$Inner$Leaf`.
+
+RED_09c (4900bef): targeted matrix 90 tests, 2 failures
+(`dollarNamedAnnotationArgumentDoesNotHidePublicMemberType`,
+`nestedOwnerWithDollarTopLevelPrefixPrefersDeclaringFile`); three new guards
+green.
+
+GREEN_09c (09ab30e): targeted matrix 90/90 green.
+
+Full gates on GREEN_09c:
+
+- `make adapter-test`: 309 tests, 0 failures (baseline 275).
+- `make java-lint`: PASS (0 PMD/CPD findings).
+- `make evidence-validate`: PASS.
+
+No diagnostics added; `ServiceLoaderScanner.isUnique` behavior unchanged.

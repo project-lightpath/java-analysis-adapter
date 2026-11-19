@@ -53,6 +53,16 @@ empirically for: empty component, single character, prefix/suffix OVERLAP
 the slash), and exact-boundary lengths. Never verify index arithmetic by
 inspection — run a scratch probe before committing.
 
+- Binary `$` truncation is name arithmetic too: a shorter prefix may be used
+  only when the candidate declares the owner path (including nested chains) or
+  the dropped suffix is an anonymous/local digit (`$1`, `$1Local`). A bare
+  `typeName` prefix can select an unrelated top-level `Outer$Inner.java` for
+  `Outer$Inner$Leaf`.
+- Annotation names are Java identifiers: mask/strip patterns must accept `$`
+  and Unicode identifier characters. A narrower pattern (`@[A-Za-z_]...`)
+  leaves argument braces in the header and silently drops modifiers such as
+  `public`, which flips member accessibility.
+
 ## Weakness disposition
 When a review flags a weakness below full confidence, audit EVERY caller and
 path through the weak code, not just the flagged instance. An "accepted
