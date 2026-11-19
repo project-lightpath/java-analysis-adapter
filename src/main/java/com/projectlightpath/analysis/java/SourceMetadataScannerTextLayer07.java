@@ -59,7 +59,8 @@ static boolean quotedArgumentIsFirst(String source, int start, int closing) {
     String structuralSource = stripComments(source);
     String maskedStructuralSource = maskStringLiterals(structuralSource);
     Matcher packageMatcher = PACKAGE.matcher(maskedStructuralSource);
-    String packageName = packageMatcher.find() ? packageMatcher.group(1) : "";
+    String packageName = packageMatcher.find()
+        ? packageMatcher.group(1).replaceAll("\\s+", "") : "";
     Matcher typeMatcher = TYPE.matcher(maskedStructuralSource);
     if (!typeMatcher.find()) {
       throw new IllegalStateException("Java source has no top-level type: " + path);

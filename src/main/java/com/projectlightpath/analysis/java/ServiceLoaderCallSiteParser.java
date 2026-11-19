@@ -89,17 +89,20 @@ final class ServiceLoaderCallSiteParser {
     return List.copyOf(result);
   }
 
-  /**
-   * Java identifier-part boundary: the ASCII regex lookbehind already blocks
-   * ASCII names, so this adds the Unicode cases the JLS treats as one
-   * identifier ({@code 外ServiceLoader}).
-   */
+  /** Java identifier-part boundary, including a member-selection dot before whitespace. */
   private static boolean identifierBoundary(String source, int start) {
     if (start == 0) {
       return true;
     }
     int previous = source.codePointBefore(start);
-    return previous != '.' && !Character.isJavaIdentifierPart(previous);
+    if (previous == '.' || Character.isJavaIdentifierPart(previous)) {
+      return false;
+    }
+    int index = start - 1;
+    while (index >= 0 && Character.isWhitespace(source.charAt(index))) {
+      index--;
+    }
+    return index < 0 || source.charAt(index) != '.';
   }
 
   private static boolean isJavaUtilServiceLoader(

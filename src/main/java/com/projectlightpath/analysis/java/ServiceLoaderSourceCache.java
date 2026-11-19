@@ -30,11 +30,16 @@ final class ServiceLoaderSourceCache {
    */
   /** One declared name with its typed and inferred-lambda patterns. */
   private record DeclaredName(
-      String value, Pattern typed, Pattern inferred, Pattern parameterList) {}
+      String value, Pattern typed, Pattern inferred, Pattern parameterList, Pattern declarator) {}
 
   private static DeclaredName declaredName(String name, boolean arrowTerminator) {
     return new DeclaredName(name, typedValueDeclaration(name, arrowTerminator),
-        inferredLambdaParameter(name), parameterListElement(name));
+        inferredLambdaParameter(name), parameterListElement(name), declarator(name));
+  }
+
+  /** A later declarator in a declaration: {@code Type first, name = ...}. */
+  private static Pattern declarator(String name) {
+    return Pattern.compile(",\\s*(" + Pattern.quote(name) + ")\\s*(?==)");
   }
 
   private static Pattern typedValueDeclaration(String name, boolean arrowTerminator) {
@@ -95,8 +100,8 @@ final class ServiceLoaderSourceCache {
     String source = file.source();
     String structuralSource = ServiceLoaderSourceMasker.mask(source);
     boolean samePackageTypeShadow = scanner.files().stream()
-        .anyMatch(candidate -> candidate.packageName().equals(file.packageName())
-            && candidate.simpleTypeName().equals("ServiceLoader"));
+        .filter(candidate -> candidate.packageName().equals(file.packageName()))
+        .anyMatch(candidate -> declaresTopLevelType(candidate, "ServiceLoader"));
     boolean staticOnDemandAmbiguous =
         ServiceLoaderInheritance.staticOnDemandAmbiguous(scanner, structuralSource);
     List<int[]> serviceLoaderScopes = declarationScopes(file, structuralSource, SERVICE_LOADER);
@@ -113,6 +118,17 @@ final class ServiceLoaderSourceCache {
     return new CachedSource(
         source,
         sites);
+  }
+
+  /** True when a file declares a top-level type with this name. */
+  private static boolean declaresTopLevelType(
+      SourceMetadataScanner.SourceFile candidate, String name) {
+    List<SourceMetadataScannerState.TypeInfo> types =
+        SourceMetadataScanner.typeDeclarations(candidate);
+    return types.stream()
+        .filter(type -> type.name().equals(name))
+        .anyMatch(type -> types.stream()
+            .noneMatch(other -> other.start() < type.start() && type.end() <= other.end()));
   }
 
   /** True when the site file itself declares ServiceLoader in scope. */
@@ -190,6 +206,10 @@ final class ServiceLoaderSourceCache {
     Matcher parameterList = name.parameterList().matcher(source);
     while (parameterList.find()) {
       addValueScope(file, source, parameterList.start(1), name.value().length(), scopes);
+    }
+    Matcher declarator = name.declarator().matcher(source);
+    while (declarator.find()) {
+      addValueScope(file, source, declarator.start(1), name.value().length(), scopes);
     }
     return scopes;
   }

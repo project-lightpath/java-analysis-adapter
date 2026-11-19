@@ -84,7 +84,7 @@ final class JavaImports {
         }
         cursor += Character.charCount(codePoint);
       }
-      name.append(source, segmentStart, cursor);
+      appendNormalized(name, source, segmentStart, cursor);
       int afterSegment = skipWhitespace(source, cursor);
       if (afterSegment >= source.length() || source.charAt(afterSegment) != '.') {
         return new QualifiedName(name.toString(), false, afterSegment);
@@ -96,6 +96,18 @@ final class JavaImports {
       }
       name.append('.');
       cursor = afterDot;
+    }
+  }
+
+  /** Appends identifier text without identifier-ignorable code points. */
+  private static void appendNormalized(
+      StringBuilder name, String source, int start, int end) {
+    for (int index = start; index < end; ) {
+      int codePoint = source.codePointAt(index);
+      if (!Character.isIdentifierIgnorable(codePoint)) {
+        name.appendCodePoint(codePoint);
+      }
+      index += Character.charCount(codePoint);
     }
   }
 

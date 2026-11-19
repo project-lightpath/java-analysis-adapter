@@ -13,7 +13,8 @@ abstract class SourceMetadataScannerState {
 
 
 static final Pattern PACKAGE = Pattern.compile(
-      "(?U)\\bpackage\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*(?:\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*)\\s*;");
+      "(?U)\\bpackage\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
+          + "(?:\\s*\\.\\s*[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*)\\s*;");
 static final Pattern TYPE = Pattern.compile(
       "(?U)\\b(?:class|interface|record|enum)\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)");
 static final Pattern TYPE_DECLARATION = Pattern.compile(
