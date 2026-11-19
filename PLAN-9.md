@@ -281,3 +281,35 @@ Gates (after RED, after GREEN, after refactor):
   file; such a pair cannot compile together, but source scanning can reach it.
 - Deferred per the task brief: multi-statement derived chains and
   dependency-resolution diagnostics when no `service_loader` edge exists.
+
+## Execution record (EVIDENCE_09)
+
+Plan review: four adversarial rounds before implementation, converging to
+ACTIONABLE_COUNT 0. Dispositions:
+
+- helper routing split (sites helper for C1 only; `sourceFileOf` for C2–C9b;
+  `scannerFor` for C10–C12) — accepted;
+- `$` truncation bounded by the last package dot, with C9b decoy cell to
+  distinguish head, naive last-`$`, and correct implementations — accepted;
+- all five `sourceFile` callers enumerated (`ServiceLoaderSourceCache.source`,
+  `ServiceLoaderCallSiteReader.read`, `sourceLineContains`, `declaredType`,
+  `methodSource`), with C10–C12 guards and a transitive argument for the
+  reader — accepted;
+- three superclass-resolution branches for B4/B5 (`import other.Base`,
+  `import other.*`, `extends other.Base`) — accepted;
+- A6/A7 private/protected static-import cells and `java.util.*` in every (a)
+  cell — accepted.
+
+RED_09 (473bcf1): targeted `ServiceLoaderNameResolutionMatrixTest` 79 tests,
+12 failures + 1 error, exactly the cells listed in the RED commit; guards
+green.
+
+GREEN_09 (cebe9e8): targeted matrix 79/79 green.
+
+Full gates on GREEN_09:
+
+- `make adapter-test`: 298 tests, 0 failures, 0 errors (baseline on
+  6a46a85: 275 tests, 0 failures; +23 new tests).
+- `make java-lint`: PASS, PMD/CPD enforced findings 0.
+- `make evidence-validate`: PASS (10 acceptance criteria, 3 candidates,
+  10 capability cases, 21 expected relationships, 10 observed results).
