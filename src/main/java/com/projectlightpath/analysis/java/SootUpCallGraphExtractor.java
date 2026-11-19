@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import sootup.callgraph.CallGraph;
 import sootup.core.frontend.SootClassSource;
 import sootup.core.inputlocation.AnalysisInputLocation;
+import sootup.core.jimple.common.expr.AbstractInstanceInvokeExpr;
 import sootup.core.jimple.common.expr.JInterfaceInvokeExpr;
 import sootup.core.jimple.common.expr.JVirtualInvokeExpr;
 import sootup.core.model.SootClass;
@@ -93,15 +94,30 @@ final class SootUpCallGraphExtractor {
     if (targetContext == null) {
       return Optional.empty();
     }
-    String relationshipType = relationshipType(call, caller, callee, scanner);
+    String relationshipType = relationshipType(call, caller, callee, scanner, context);
+    SemanticCallFacts.Certainty certainty = certainty(call, view, relationshipType, targetContext);
+    if ("invokes".equals(relationshipType)
+        && ServiceLoaderCallSiteReader.loadStatus(context, caller, call, scanner)
+            == ServiceLoaderCallSiteReader.LoadStatus.UNBOUND) {
+      certainty = SemanticCallFacts.Certainty.POSSIBLE;
+    }
     return Optional.of(new CallEdge(
         caller,
         callee,
         call.getLineNumber(),
         sourcePath(context, caller.owner()),
-        certainty(call, view, relationshipType, targetContext),
+        certainty,
         relationshipType,
-        targetContext));
+        targetContext,
+        invocationReceiver(call)));
+  }
+
+  private static String invocationReceiver(CallGraph.Call call) {
+    return call.invokableStmt().getInvokeExpr()
+        .filter(AbstractInstanceInvokeExpr.class::isInstance)
+        .map(AbstractInstanceInvokeExpr.class::cast)
+        .map(expression -> expression.getBase().getName())
+        .orElse(null);
   }
 
   private static CallEdge.TargetContext targetContext(
@@ -115,8 +131,12 @@ final class SootUpCallGraphExtractor {
   }
 
   private static String relationshipType(
-      CallGraph.Call call, MethodSymbol caller, MethodSymbol callee, SourceMetadataScanner scanner) {
-    boolean serviceLoaderCall = serviceLoaderCall(call, caller, scanner);
+      CallGraph.Call call,
+      MethodSymbol caller,
+      MethodSymbol callee,
+      SourceMetadataScanner scanner,
+      AnalysisContext context) {
+    boolean serviceLoaderCall = serviceLoaderCall(call, caller, context, scanner);
     boolean interfaceDispatch = interfaceDispatch(call, callee, scanner);
     if (serviceLoaderCall) {
       return "service_loader";
@@ -128,13 +148,12 @@ final class SootUpCallGraphExtractor {
   }
 
   private static boolean serviceLoaderCall(
-      CallGraph.Call call, MethodSymbol caller, SourceMetadataScanner scanner) {
-    if (call.getLineNumber() > 0) {
-      return scanner.sourceLineContains(caller, call.getLineNumber(), "ServiceLoader.load");
-    }
-    return scanner.methodSource(caller, call.getLineNumber())
-        .map(source -> source.contains("ServiceLoader.load"))
-        .orElse(false);
+      CallGraph.Call call,
+      MethodSymbol caller,
+      AnalysisContext context,
+      SourceMetadataScanner scanner) {
+    return ServiceLoaderCallSiteReader.hasJavaServiceLoaderCall(
+        context, caller, call, scanner);
   }
 
   private static boolean interfaceDispatch(

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Production integration boundary: SootUp base graph plus project-owned
@@ -31,18 +32,28 @@ public final class JavaAnalysisAdapter {
   /** Builds the provider graph before applying framework enrichment. */
   public SemanticCallFacts analyze(AnalysisContext context) {
     Objects.requireNonNull(context, "analysis context");
-    AnalysisGraph graph = baseGraphProvider.analyze(context);
-    return analyze(context, graph);
+    SootUpInputLocationFactory.DependencyResolution dependencies =
+        SootUpInputLocationFactory.dependencyResolution(context);
+    AnalysisGraph graph = baseGraphProvider.analyze(context, dependencies);
+    return enrich(context, graph, () -> dependencies);
   }
 
-  /** Testable handoff used by callers that already own a provider graph. */
+  /** Caller owns graph/input consistency; enrichment uses fresh, lazily resolved inputs. */
   public SemanticCallFacts analyze(AnalysisContext context, AnalysisGraph graph) {
     Objects.requireNonNull(context, "analysis context");
     Objects.requireNonNull(graph, "analysis graph");
+    return enrich(context, graph, () -> SootUpInputLocationFactory.dependencyResolution(context));
+  }
+
+  private SemanticCallFacts enrich(
+      AnalysisContext context,
+      AnalysisGraph graph,
+      Supplier<SootUpInputLocationFactory.DependencyResolution> dependencies) {
     FrameworkModel selectedModel = frameworkModel == null
         ? FrameworkModels.forContext(context.framework())
         : frameworkModel;
-    List<SemanticCallFacts.Fact> providerFacts = new ArrayList<>(ProviderFactNormalizer.normalize(context, graph));
+    List<SemanticCallFacts.Fact> providerFacts = new ArrayList<>(
+        ProviderFactNormalizer.normalize(context, graph, dependencies));
     List<SemanticCallFacts.Fact> frameworkFacts = attachExactProviderIdentities(
         selectedModel.enrich(context, graph), providerFacts);
     return new SemanticCallFacts(
