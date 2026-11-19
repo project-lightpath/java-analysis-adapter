@@ -493,3 +493,19 @@ Full gates on GREEN_09g:
 - `make adapter-test`: 321 tests, 0 failures (baseline 275).
 - `make java-lint`: PASS (0 PMD/CPD findings).
 - `make evidence-validate`: PASS.
+
+## Execution record (EVIDENCE_09h — review loop round 4)
+
+The only actionable finding was that the recorded 321/0 and lint receipts were
+not reproducible on the SHA they claimed (the artifacts were from the 09f run,
+316/97).
+
+- Re-ran all three gates on REFACTOR_09h (14a58af):
+  - `make adapter-test`: **321 tests, 0 failures, 0 errors**; matrix report is
+    **102 tests** (all A16-A21 present).
+  - `make java-lint`: PASS (0 PMD/CPD findings).
+  - `make evidence-validate`: PASS.
+- Nit: `shadowsAt` now receives the annotation-masked source computed once in
+  `ServiceLoaderSourceCache`, so `extendsReference` no longer re-masks the file
+  per type per site.
+- Nit: PR body commit list now uses shas for the 09f/09g/09h records.
