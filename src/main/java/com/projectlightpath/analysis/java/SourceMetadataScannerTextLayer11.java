@@ -30,7 +30,11 @@ static String methodDescriptor(MethodInfo method) {
 
   /** Extracts constructor bodies so dynamic sites retain an explicit initializer caller. */
 static List<MethodInfo> constructors(SourceFile file) {
-    String maskedSource = maskStringLiterals(maskAnnotationArguments(file.structuralSource()));
+    return SourceMetadataScannerFileExtracts.of(file).constructors(file);
+  }
+
+  /** Computes the constructor declarations for one file without consulting the cache. */
+static List<MethodInfo> extractConstructors(SourceFile file, String maskedSource) {
     List<MethodInfo> result = new ArrayList<>();
     for (TypeInfo type : typeDeclarations(file)) {
       Pattern constructor = Pattern.compile(
@@ -55,10 +59,11 @@ static List<MethodInfo> constructors(SourceFile file) {
             ""));
       }
     }
-    return result.stream()
+    List<MethodInfo> constructors = result.stream()
         .distinct()
         .sorted(Comparator.comparingInt(MethodInfo::start))
         .toList();
+    return constructors;
   }
 
 static boolean isInitializerBlockOpening(SourceFile file, String source, int opening) {

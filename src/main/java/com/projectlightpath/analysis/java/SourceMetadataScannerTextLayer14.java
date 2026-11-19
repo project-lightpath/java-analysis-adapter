@@ -111,7 +111,7 @@ static Optional<List<String>> typeVariableBoundsInMethod(
 
 static Optional<List<String>> typeVariableBoundsInType(
       SourceFile file, TypeInfo type, String variable) {
-    String source = maskStringLiterals(file.structuralSource());
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     int openingBrace = typeBodyOpening(source, type.start());
     if (openingBrace < 0) {
       return Optional.empty();

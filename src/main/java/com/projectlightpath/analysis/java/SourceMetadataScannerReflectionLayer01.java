@@ -17,10 +17,6 @@ abstract class SourceMetadataScannerReflectionLayer01 extends SourceMetadataScan
 
 
 
-static int fieldDeclarationEnd(String source, int start) {
-    return fieldInitializerEnd(source, start);
-  }
-
 static boolean isAccessibleField(
       SourceFile declaringFile,
       SourceFile siteFile,
@@ -181,7 +177,10 @@ static int chainedTerminalStart(
     return result;
   }
 
-static Optional<String> declaredFieldType(
+private static final Pattern DECLARATOR_NAME =
+      Pattern.compile("^([A-Za-z_$][\\w$]*)");
+
+  static Optional<String> declaredFieldType(
       String sharedType, String declarators, String variable) {
     for (String raw : splitFieldDeclarators(declarators)) {
       String declaration = raw.trim();
@@ -189,7 +188,7 @@ static Optional<String> declaredFieldType(
       if (equals >= 0) {
         declaration = declaration.substring(0, equals).trim();
       }
-      Matcher name = Pattern.compile("^([A-Za-z_$][\\w$]*)").matcher(declaration);
+      Matcher name = DECLARATOR_NAME.matcher(declaration);
       if (!name.find() || !name.group(1).equals(variable)) {
         continue;
       }

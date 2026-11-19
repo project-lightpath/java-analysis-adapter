@@ -119,7 +119,7 @@ static List<String> values(
         if (!typeContaining(file, type.start()).equals(typeName) || !type.kind().equals("class")) {
           continue;
         }
-        String source = maskStringLiterals(file.structuralSource());
+        String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
         int opening = typeBodyOpening(source, type.start());
         if (opening >= 0 && Pattern.compile("\\bimplements\\b")
             .matcher(source.substring(type.start(), opening)).find()) {

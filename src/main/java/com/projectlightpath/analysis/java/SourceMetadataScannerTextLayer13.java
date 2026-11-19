@@ -19,8 +19,12 @@ abstract class SourceMetadataScannerTextLayer13 extends SourceMetadataScannerTex
 
   /** Extracts bounded method declarations and their annotation blocks. */
   static List<MethodInfo> methods(SourceFile file) {
+    return SourceMetadataScannerFileExtracts.of(file).methods(file);
+  }
+
+  /** Computes the method declarations for one file without consulting the cache. */
+  static List<MethodInfo> extractMethods(SourceFile file, String maskedSource) {
     List<MethodInfo> result = new ArrayList<>();
-    String maskedSource = maskAnnotationArguments(file.structuralSource());
     Matcher matcher = METHOD.matcher(maskedSource);
     while (matcher.find()) {
       if (isControlFlowKeyword(matcher.group(1))) {
@@ -53,11 +57,11 @@ static Optional<MethodInfo> initializerBlockContaining(
     if (typeOpening < 0 || typeOpening >= owner.end()) {
       return Optional.empty();
     }
-    int typeBodyDepth = braceDepthAt(source, typeOpening + 1);
+    int typeBodyDepth = braceDepthAt(file, typeOpening + 1);
     MethodInfo selected = null;
     for (int opening = typeOpening + 1; opening < index; opening++) {
       if (source.charAt(opening) != '{'
-          || braceDepthAt(source, opening) != typeBodyDepth
+          || braceDepthAt(file, opening) != typeBodyDepth
           || !isInitializerBlockOpening(file, source, opening)) {
         continue;
       }
@@ -90,7 +94,7 @@ static boolean isTypeMemberScope(SourceFile file, String source, int index) {
     if (opening < 0 || opening >= owner.end()) {
       return false;
     }
-    return braceDepthAt(source, index) == braceDepthAt(source, opening + 1);
+    return braceDepthAt(file, index) == braceDepthAt(file, opening + 1);
   }
 
 static boolean isLocalType(SourceFile file, TypeInfo type) {
@@ -98,11 +102,11 @@ static boolean isLocalType(SourceFile file, TypeInfo type) {
     if (enclosing == null) {
       return false;
     }
-    String source = maskStringLiterals(file.structuralSource());
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     int opening = typeBodyOpening(source, enclosing.start());
     return opening >= 0
         && opening < enclosing.end()
-        && braceDepthAt(source, type.start()) > braceDepthAt(source, opening + 1);
+        && braceDepthAt(file, type.start()) > braceDepthAt(file, opening + 1);
   }
 
 static int anonymousConstructorOpening(String source, int start) {

@@ -45,7 +45,11 @@ static int qualifiedIdentifierEnd(String source, int start) {
 
   /** Finds declared top-level and nested Java types with bounded body ranges. */
 static List<TypeInfo> typeDeclarations(SourceFile file) {
-    String source = maskStringLiterals(file.structuralSource());
+    return SourceMetadataScannerFileExtracts.of(file).typeDeclarations();
+  }
+
+  /** Computes the type declarations for one file without consulting the cache. */
+static List<TypeInfo> extractTypeDeclarations(String source) {
     Matcher matcher = TYPE_DECLARATION.matcher(source);
     List<TypeInfo> result = new ArrayList<>();
     while (matcher.find()) {

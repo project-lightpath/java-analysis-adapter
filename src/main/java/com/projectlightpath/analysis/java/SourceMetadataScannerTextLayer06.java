@@ -33,7 +33,7 @@ static String simpleName(String value) {
     }
     return sourceFile(symbol.owner())
         .map(file -> {
-          String source = maskStringLiterals(file.structuralSource());
+          String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
           int start = lineStartOffset(source, line);
           if (start < 0) {
             return false;
@@ -62,11 +62,8 @@ static List<String> importedTypes(String type, SourceFile sourceFile) {
     if (nestedSeparator >= 0) {
       simpleType = type.substring(0, nestedSeparator);
     }
-    Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\s*;")
-        .matcher(maskStringLiterals(sourceFile.structuralSource()));
     List<String> result = new ArrayList<>();
-    while (matcher.find()) {
-      String imported = matcher.group(1);
+    for (String imported : SourceMetadataScannerFileExtracts.of(sourceFile).importedNames()) {
       if (imported.endsWith("." + simpleType)) {
         result.add(imported + type.substring(simpleType.length()));
       }
@@ -75,13 +72,29 @@ static List<String> importedTypes(String type, SourceFile sourceFile) {
   }
 
 static Set<String> onDemandImportPackages(SourceFile sourceFile) {
+    return SourceMetadataScannerFileExtracts.of(sourceFile).onDemandImportPackages();
+  }
+
+  /** Parses explicit import names once per file. */
+static List<String> extractImportedNames(String source) {
+    Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\s*;")
+        .matcher(source);
+    List<String> result = new ArrayList<>();
+    while (matcher.find()) {
+      result.add(matcher.group(1));
+    }
+    return List.copyOf(result);
+  }
+
+  /** Parses on-demand import packages once per file. */
+static Set<String> extractOnDemandImportPackages(String source) {
     Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
-        .matcher(maskStringLiterals(sourceFile.structuralSource()));
+        .matcher(source);
     Set<String> packages = new LinkedHashSet<>();
     while (matcher.find()) {
       packages.add(matcher.group(1));
     }
-    return packages;
+    return Collections.unmodifiableSet(packages);
   }
 
   /** Splits one call's arguments without crossing nested expressions. */
@@ -116,9 +129,16 @@ static List<String> splitTypeIntersectionBounds(String expression) {
     return splitBalanced(expression, '&', false);
   }
 
+  private static final Pattern CACHEABLE_PACKAGE = Pattern.compile("[A-Za-z_][\\w.]*");
+
 static boolean hasOnDemandImport(SourceFile sourceFile, String packageName) {
+    if (CACHEABLE_PACKAGE.matcher(packageName).matches()) {
+      return onDemandImportPackages(sourceFile).contains(packageName);
+    }
+    // A package name with '$' or non-ASCII identifiers is valid Java but
+    // outside the capture pattern of the cached set, so keep the exact scan.
     return Pattern.compile("(?m)\\bimport\\s+" + Pattern.quote(packageName) + "\\.\\*\\s*;")
-        .matcher(maskStringLiterals(sourceFile.structuralSource()))
+        .matcher(SourceMetadataScannerFileExtracts.of(sourceFile).literalMaskedSource())
         .find();
   }
 

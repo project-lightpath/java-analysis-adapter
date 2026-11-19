@@ -17,14 +17,22 @@ abstract class SourceMetadataScannerReflectionLayer02 extends SourceMetadataScan
 
 
 
-static int declaratorVariableOffset(String declarators, String variable) {
+  static final Pattern FIELD_START = Pattern.compile(
+      "(?m)(?:^|[;{}])\\s*(?:@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
+          + "(?:(?:public|protected|private|static|final|transient|volatile|strictfp)\\s+)*"
+          + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
+
+private static final Pattern DECLARATOR_NAME =
+      Pattern.compile("^([A-Za-z_$][\\w$]*)");
+
+  static int declaratorVariableOffset(String declarators, String variable) {
     int search = 0;
     for (String raw : splitFieldDeclarators(declarators)) {
       int rawStart = declarators.indexOf(raw, search);
       if (rawStart < 0) {
         continue;
       }
-      Matcher name = Pattern.compile("^([A-Za-z_$][\\w$]*)").matcher(raw);
+      Matcher name = DECLARATOR_NAME.matcher(raw);
       if (name.find() && name.group(1).equals(variable)) {
         return rawStart + name.start(1);
       }
@@ -109,13 +117,15 @@ static int declaratorVariableOffset(String declarators, String variable) {
   }
 
 static LocalDeclaration sharedDeclarationMatch(
+      SourceFile candidateFile,
       String source,
       Matcher matcher,
       String variable,
       int offset,
       int ownerStart,
       LocalDeclaration selected) {
-    int declarationEnd = fieldDeclarationEnd(source, matcher.end(1));
+    int declarationEnd =
+        SourceMetadataScannerFileExtracts.of(candidateFile).fieldInitializerEnd(matcher.end(1));
     if (declarationEnd < 0) {
       return selected;
     }
@@ -143,36 +153,76 @@ static LocalDeclaration sharedDeclarationMatch(
       SourceFile siteFile,
       String variable,
       String siteType,
-      Pattern fieldStart,
       Map<String, Integer> visibleOwners) {
-    String source = maskStringLiterals(candidate.structuralSource());
-    Matcher matcher = fieldStart.matcher(source);
     VisibleField selected = null;
+    for (SourceMetadataScannerFileExtracts.FieldCandidate field :
+        SourceMetadataScannerFileExtracts.of(candidate).fieldCandidates(candidate)) {
+      Optional<String> fieldType =
+          declaredFieldType(field.sharedType(), field.declarators(), variable);
+      if (fieldType.isEmpty()) {
+        continue;
+      }
+      if (!isAccessibleField(
+              candidate, siteFile, field.fieldOwner(), siteType, field.declaration())
+          || !methodContaining(candidate, field.fieldOffset()).name().equals("<unknown>")) {
+        continue;
+      }
+      Integer distance = visibleOwners.get(field.fieldOwner());
+      if (distance == null || selected != null && distance >= selected.distance()) {
+        continue;
+      }
+      selected = new VisibleField(
+          new FieldReference(fieldType.get(), candidate, field.fieldOffset()), distance);
+    }
+    return Optional.ofNullable(selected);
+  }
+
+  /**
+   * Reports whether the token following a candidate type starts a field
+   * declarator. Method and initializer headers are rejected here, before any
+   * declaration text is copied or {@code methodContaining} scans the prefix.
+   */
+  static boolean fieldDeclaratorShape(String source, int typeEnd) {
+    for (int index = typeEnd; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '=' || character == ';' || character == ',') {
+        return true;
+      }
+      if (character == '(' || character == '{' || character == '}') {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /** Captures the accepted field declarations of one file once for every visibility lookup. */
+  static List<SourceMetadataScannerFileExtracts.FieldCandidate> extractFieldCandidates(
+      SourceFile candidate, String source) {
+    SourceMetadataScannerFileExtracts extracts =
+        SourceMetadataScannerFileExtracts.of(candidate);
+    Matcher matcher = FIELD_START.matcher(source);
+    List<SourceMetadataScannerFileExtracts.FieldCandidate> result = new ArrayList<>();
     while (matcher.find()) {
-      int declarationEnd = fieldDeclarationEnd(source, matcher.end(1));
+      // Reject method and initializer headers before any expensive work: FIELD_START
+      // also matches a method's return type, and its "declarators" would run to
+      // the next top-level ';'.
+      if (!fieldDeclaratorShape(source, matcher.end(1))) {
+        continue;
+      }
+      int declarationEnd = extracts.fieldInitializerEnd(matcher.end(1));
+      int fieldOffset = matcher.start(1);
       if (declarationEnd < 0
           || !isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()))) {
         continue;
       }
-      int fieldOffset = matcher.start(1);
-      Optional<String> fieldType = declaredFieldType(
-          matcher.group(1), source.substring(matcher.end(1), declarationEnd), variable);
-      if (fieldType.isEmpty()) {
-        continue;
-      }
-      String fieldOwner = typeContaining(candidate, fieldOffset);
-      String declaration = source.substring(matcher.start(), declarationEnd + 1);
-      if (!isAccessibleField(candidate, siteFile, fieldOwner, siteType, declaration)
-          || !methodContaining(candidate, fieldOffset).name().equals("<unknown>")) {
-        continue;
-      }
-      Integer distance = visibleOwners.get(fieldOwner);
-      if (distance == null || selected != null && distance >= selected.distance()) {
-        continue;
-      }
-      selected = new VisibleField(new FieldReference(fieldType.get(), candidate, fieldOffset), distance);
+      result.add(new SourceMetadataScannerFileExtracts.FieldCandidate(
+          fieldOffset,
+          matcher.group(1),
+          source.substring(matcher.end(1), declarationEnd),
+          source.substring(matcher.start(), declarationEnd + 1),
+          typeContaining(candidate, fieldOffset)));
     }
-    return Optional.ofNullable(selected);
+    return List.copyOf(result);
   }
 
   void addStaticForNameSites(
