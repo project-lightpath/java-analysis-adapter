@@ -163,7 +163,13 @@ final class ServiceLoaderInheritance {
     return target.lookingAt() ? target.group(1).replaceAll("\\s+", "") : null;
   }
 
-  /** The type declaration header, up to its body. */
+  /**
+   * The type declaration header, up to its body.
+   *
+   * <p>The source must already be annotation-argument masked: a brace inside
+   * an array-valued annotation argument would otherwise be mistaken for the
+   * body opening.
+   */
   static String typeHeader(
       String source, SourceMetadataScannerState.TypeInfo type) {
     int body = source.indexOf('{', type.start());
