@@ -108,6 +108,12 @@ changes.
 | A13 | owner `a.Tools implements a.Iface`, and `a.Iface` declares a public member `ServiceLoader` | site abstained | **RED at GREEN_09d**; GREEN_09e abstains |
 | A14 | owner `interface a.Tools extends a.First, a.Second`, and `a.Second` declares the member | site abstained | **RED at GREEN_09d**; GREEN_09e abstains |
 | A15 | owner `a.Tools extends a.Base`, and `a.Base extends external.X` | site abstained (grandparent unproven) | **RED at GREEN_09d**; GREEN_09e abstains |
+| A16 | `demo` site, owner `a.Tools extends a.Base`, `a.Base` declares a package-private member | site attributed (member inaccessible from `demo`) | **RED at GREEN_09e**; GREEN_09f attributes |
+| A17 | `public @$Outer . Ann({Object.class}) static class ServiceLoader` in a cross-package base | site abstained (qualified annotation masked) | **RED at GREEN_09f**; GREEN_09g abstains |
+| A18 | `String @$Ann... args` through `parameterType` | `String[]` (annotation name stops before `...`) | **RED at GREEN_09f**; GREEN_09g returns `String[]` |
+| A19 | `@Ann(value=1) String p` through `parameterType` | `String` (argument list masked) | **RED at GREEN_09f**; GREEN_09g returns `String` |
+| A20 | owner `a.Tools extends @Mark a.Base` with a public member | site abstained (annotated extends resolved) | **RED at GREEN_09f**; GREEN_09g abstains |
+| A21 | owner declares a private `ServiceLoader`, superclass declares a public one | site attributed (private declaration hides the inherited type) | **RED at GREEN_09f**; GREEN_09g attributes |
 
 All `(a)` cells include `import java.util.*;` so attribution is not vacuous.
 
@@ -423,9 +429,9 @@ GREEN_09d: targeted matrix 92/92 green.
 
 Full gates on GREEN_09d:
 
-- `make adapter-test`: pending re-run (expected 312; baseline 275).
-- `make java-lint`: pending.
-- `make evidence-validate`: pending.
+- `make adapter-test`: 311 tests measured at GREEN_09e (baseline 275).
+- `make java-lint`: PASS at GREEN_09e.
+- `make evidence-validate`: PASS at GREEN_09e.
 
 ## Execution record (EVIDENCE_09e — independent PR review wave 3)
 
@@ -456,5 +462,34 @@ predicates and the targeted matrix stays 96/96.
 Full gates on REFACTOR_09e:
 
 - `make adapter-test`: 315 tests, 0 failures (baseline 275).
+- `make java-lint`: PASS (0 PMD/CPD findings).
+- `make evidence-validate`: PASS.
+
+## Execution record (EVIDENCE_09f/09g — CodeRabbit round 2)
+
+Six actionable CodeRabbit comments on the 09c-09e diff; all valid.
+
+- **Site accessibility (comment on `StaticImportOwnerResolver:50`):** already
+  fixed by GREEN_09f — `superclassDeclaresServiceLoader` takes the importing
+  site package; A16 pins the demo/a pair. Also fixed all-superclass-candidate
+  checking and removed the duplicated header arithmetic.
+- **Qualified annotation whitespace + varargs (two findings on the shared
+  `ANNOTATION_NAME`):** the pattern now matches dotted components with Java
+  whitespace around dots and does not consume a trailing `...` (A17/A18).
+- **`parameterType` argument lists:** masks annotation arguments before
+  stripping names (A19).
+- **Annotated superclass name:** `EXTENDS_REFERENCE` accepts annotations before
+  the superclass and the header is annotation-argument masked first (A20).
+- **Private owner declaration hides inherited type:** a direct declaration,
+  even private/inaccessible, stops the inherited fallback (A21).
+
+RED_09g (47418ee): targeted matrix 102 tests, 5 failures (A17-A21; A16 was
+already fixed by GREEN_09f).
+
+GREEN_09f (76abeec) / GREEN_09g (7eaf7ea): targeted matrix 102/102 green.
+
+Full gates on GREEN_09g:
+
+- `make adapter-test`: 321 tests, 0 failures (baseline 275).
 - `make java-lint`: PASS (0 PMD/CPD findings).
 - `make evidence-validate`: PASS.
