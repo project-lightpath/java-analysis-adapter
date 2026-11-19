@@ -15,6 +15,7 @@ record JavacResolverFact(
     String member,
     String accessibility,
     String certainty,
+    String promotion,
     List<JavacResolverDiagnostic> diagnostics) {
 
   JavacResolverFact {

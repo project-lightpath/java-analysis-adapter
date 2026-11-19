@@ -24,7 +24,7 @@ record JavacResolverCell(
 
   enum Family { PRECEDENCE, STATIC_OWNER, DOLLAR_OWNER, INCOMPLETE }
 
-  enum Expectation { DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED }
+  enum Expectation { DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT }
 
   /** One expected load site, in source-offset order. */
   record ExpectedSite(Expectation expectation, String serviceType) {}

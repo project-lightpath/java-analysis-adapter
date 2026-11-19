@@ -21,8 +21,12 @@ public final class JavacResolverHarnessMain {
       throw new IllegalArgumentException("usage: --work <dir> --report <file>");
     }
     List<JavacResolverCell> cells = JavacResolverFixtureCatalog.cells();
-    JavacResolverAccuracyHarness.Report result = JavacResolverAccuracyHarness.run(work, cells);
-    result.write(report);
+    JavacResolverAccuracyHarness.Report first =
+        JavacResolverAccuracyHarness.run(work.resolve("run-1"), cells);
+    JavacResolverAccuracyHarness.Report second =
+        JavacResolverAccuracyHarness.run(work.resolve("run-2"), cells);
+    boolean deterministic = first.canonical().equals(second.canonical());
+    first.write(report, deterministic);
     System.out.println("wrote " + report);
   }
 }

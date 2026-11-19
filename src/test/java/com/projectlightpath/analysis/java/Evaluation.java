@@ -48,7 +48,7 @@ final class Evaluation {
               abstentionMismatch++;
             }
           }
-          case AMBIGUOUS, SHADOWED -> {
+          case AMBIGUOUS, SHADOWED, NO_FACT -> {
             added++;
             unexpected++;
             if (definite) {
@@ -66,6 +66,14 @@ final class Evaluation {
             }
           }
           default -> { }
+        }
+        String expectedReason = switch (site.expectation()) {
+          case AMBIGUOUS -> "AMBIGUOUS";
+          case SHADOWED -> "SHADOWED";
+          default -> null;
+        };
+        if (expectedReason != null && !expectedReason.equals(abstention.reason())) {
+          abstentionMismatch++;
         }
       }
     }

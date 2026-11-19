@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,7 +27,7 @@ class JavacResolverAccuracyTest {
       Set.of("N20", "N21", "N22", "N23", "A9", "A10", "A11", "A13", "A14", "A15",
           "A16b", "A17", "A20", "I1", "I2", "I3", "I5");
   private static final Set<String> BASELINE_LOST =
-      Set.of("N20", "N21", "N22", "N23", "N28", "A1", "A4", "A7",
+      Set.of("N20", "N21", "N22", "N23", "N28", "N32", "A1", "A4", "A7",
           "D1", "D3", "D4", "D6", "D7", "D8", "D9");
 
   @TempDir Path temp;
@@ -48,8 +50,9 @@ class JavacResolverAccuracyTest {
 
     JavacResolverMetrics baseline = report.baselineTotals();
     assertEquals(17, baseline.wrongDefinite());
-    assertEquals(15, baseline.lost());
+    assertEquals(16, baseline.lost());
     assertEquals(10, baseline.added());
+    assertEquals(6, baseline.abstentionMismatch());
     assertEquals(BASELINE_WRONG, cellsWith(report, "wrongDefinite", true));
     assertEquals(BASELINE_LOST, cellsWith(report, "lost", true));
     assertEquals(0, report.cells().stream().filter(JavacResolverAccuracyHarness.CellReport::blocked).count());
@@ -92,6 +95,17 @@ class JavacResolverAccuracyTest {
     assertEquals("javac-symbol-resolver-observation.v1", report.get("schema").asText());
     assertEquals(JavacResolverFixtureCatalog.cells().size(), report.get("cells").size());
     assertNoAbsolutePaths(report);
+  }
+
+  @Test
+  void committedObservationMatchesAFreshRun() throws IOException {
+    Path committed = Path.of("spike/results/javac-symbol-resolver-observation.json");
+    assertTrue(Files.exists(committed), "committed observation is missing");
+    Path fresh = temp.resolve("fresh-observation.json");
+    runHarness(temp.resolve("fresh-work"), fresh);
+    assertEquals(
+        evidenceView(MAPPER.readTree(committed.toFile())),
+        evidenceView(MAPPER.readTree(fresh.toFile())));
   }
 
   @Test
@@ -187,8 +201,59 @@ class JavacResolverAccuracyTest {
     return value.toString();
   }
 
-  private static void assertNoAbsolutePaths(JsonNode node) {
-    if (node.isTextual()) {
+  private static String evidenceView(JsonNode report) {
+    ObjectNode view = MAPPER.createObjectNode();
+    view.put("schema", report.get("schema").asText());
+    ArrayNode cells = view.putArray("cells");
+    for (JsonNode cell : report.get("cells")) {
+      ObjectNode item = cells.addObject();
+      item.put("id", cell.get("id").asText());
+      item.put("family", cell.get("family").asText());
+      item.put("release", cell.get("release").asInt());
+      item.put("blocked", cell.get("blocked").asBoolean());
+      item.set("expected", cell.get("expected"));
+      item.set("baselineMetrics", cell.get("baseline").get("metrics"));
+      item.set("javacMetrics", cell.get("javac").get("metrics"));
+      item.set("baselineFacts", stableSites(cell.get("baseline").get("facts"), true));
+      item.set("javacFacts", stableSites(cell.get("javac").get("facts"), true));
+      item.set("baselineAbstentions", stableSites(cell.get("baseline").get("abstentions"), false));
+      item.set("javacAbstentions", stableSites(cell.get("javac").get("abstentions"), false));
+    }
+    view.set("baselineTotals", report.get("baselineTotals"));
+    view.set("javacTotals", report.get("javacTotals"));
+    return view.toString();
+  }
+
+  private static ArrayNode stableSites(JsonNode sites, boolean fact) {
+    List<JsonNode> sorted = new ArrayList<>();
+    sites.forEach(sorted::add);
+    sorted.sort(java.util.Comparator.comparingInt(item -> item.get("offset").asInt()));
+    ArrayNode result = MAPPER.createArrayNode();
+    for (JsonNode site : sorted) {
+      ObjectNode item = result.addObject();
+      item.put("path", site.get("path").asText());
+      item.put("offset", site.get("offset").asInt());
+      if (fact) {
+        item.put("topLevel", site.get("topLevel").asText());
+        item.put("serviceType", site.get("serviceType").asText());
+        item.put("owner", site.get("owner").asText());
+        item.put("member", site.get("member").asText());
+        item.put("accessibility", site.get("accessibility").asText());
+        item.put("certainty", site.get("certainty").asText());
+        item.put("promotion", site.get("promotion").asText());
+      } else {
+        item.put("reason", site.get("reason").asText());
+      }
+      List<String> codes = new ArrayList<>();
+      site.get("diagnostics").forEach(diagnostic -> codes.add(diagnostic.get("code").asText()));
+      codes.sort(java.util.Comparator.naturalOrder());
+      ArrayNode codeNodes = item.putArray("diagnosticCodes");
+      codes.forEach(codeNodes::add);
+    }
+    return result;
+  }
+
+  private static void assertNoAbsolutePaths(JsonNode node) {    if (node.isTextual()) {
       assertFalse(node.asText().startsWith("/"), "absolute path in report: " + node.asText());
     } else if (node.isObject()) {
       node.fieldNames().forEachRemaining(name -> assertNoAbsolutePaths(node.get(name)));

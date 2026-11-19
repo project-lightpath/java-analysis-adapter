@@ -165,7 +165,7 @@ lost fact. A7 therefore demonstrates a javac gain, not a javac regression.
 |---|---|---|
 | A1 | `import static a.Tools.*`; unrelated `b.Tools` has a public member | DEFINITE (owner mismatch) |
 | A2 | `a.Tools` declares a public member, with `java.util.*` | AMBIGUOUS |
-| A3 | only `import static a.Tools.*` with member and `java.util.*` | AMBIGUOUS (same name from both imports) |
+| A3 | only `import static a.Tools.ServiceLoader` with `java.util.*` | SHADOWED (static single-member type wins) |
 | A4 | `a.Tools` member is package-private, site in `demo` | DEFINITE (not accessible at import site) |
 | A5 | A4 with site in `a` | AMBIGUOUS (accessible) |
 | A6 | `a.Tools` member is private | DEFINITE (not importable) |
@@ -216,10 +216,10 @@ result. Baseline owners are the production binary spellings.
 | D9 | package `$`: owner `a$b.Outer` + default-package decoy `a.java` | DEFINITE, canonical `a$b.Outer` | wrong `a` (must never be accepted by javac) |
 
 D1/D3/D7/D9 are prefix/suffix-overlap probes; D8 is the exact-boundary
-probe; D6 is the empty-suffix probe. C10-C12 parity is asserted through
-`scanner.declaredType`, `scanner.methodSource`, and
-`scanner.sourceLineContains` on the D1 fixture, so all five `sourceFile`
-callers are audited per AGENTS.md.
+probe; D6 is the empty-suffix probe. The D-cells are scored against the
+textual `sourceFile` baseline. C10-C12 helper parity
+(`declaredType`/`methodSource`/`sourceLineContains`) and the "all five
+sourceFile callers" claim moved to residuals after implementation review.
 
 ### Incomplete-input cells (I-series)
 
@@ -242,13 +242,15 @@ locally in the harness.
 | I5 | `a.Base` declares `Missing payload;`; `a.Tools extends a.Base` with no `ServiceLoader` member | MISSING_INPUT (site binds, task error -> POSSIBLE) |
 
 I4 passes both `r1/demo/Dup.java` and `r2/demo/Dup.java` as explicit units.
-I5 defines the error-typed inherited member shape. Specific diagnostic codes
-are asserted (`compiler.err.doesnt.exist`,
-`compiler.err.cant.resolve.location`, or duplicate-class code).
+I5 defines the error-typed inherited member shape. The test asserts a
+non-empty diagnostic with its compiler code, not one hard-coded code, because
+javac's specific error code varies by shape.
 
 ## Baseline golden (pinned executables, not prose counts)
 
-The test pins full baseline tuples `(cell, offset, canonical serviceType)`.
+The test pins the baseline cell sets and totals `(wrongDefinite, lost, added,
+abstentionMismatch)`; per-cell canonical offsets/types are recorded in the
+observation rather than asserted as a second positional contract.
 On `0ced20a` the live `ServiceLoaderSourceCache` proxy emits one site for
 A9, A10, A11, A13, A14, A15, A16b, A20 (eight wrong DEFINITE proxies) and
 none for A1, A4, A7 (three lost facts). A7 is the documented textual
@@ -274,9 +276,10 @@ Files:
   abstentions, metrics, peak heap, wall time; writes deterministic JSON with
   relative paths only.
 - `JavacResolverHarnessMain.java` — subprocess entry. Accepts
-  `--report <unique path> --mode all|baseline|javac`; samples heap per phase
-  with `MemoryMXBean`; one `-Xmx256m` child for the whole run, with
-  `peakHeapBytes` recorded separately for the baseline and javac phases.
+  `--report <unique path>` (the main runs two fresh in-process passes for a
+  real determinism flag); samples heap per phase with `MemoryMXBean`; one
+  `-Xmx256m` child for the whole run, with `peakHeapBytes` recorded separately
+  for the baseline and javac phases.
 - `JavacResolverMetricsTest.java` — synthetic negative controls for every
   metric, including `downgraded`, `added`/`unexpectedFact`, and
   `wrongServiceType`.

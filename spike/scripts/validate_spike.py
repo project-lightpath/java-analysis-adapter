@@ -338,15 +338,26 @@ def main() -> None:
     for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):
         require(javac_totals[metric] == 0, f"javac resolver GO metric {metric} must be zero")
     javac_cells = {cell["id"] for cell in javac_resolver["cells"]}
-    required_javac_cells = {"A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15", "A16", "A16b", "A17", "A20", "A21"}
-    require(required_javac_cells.issubset(javac_cells), "javac resolver observation is missing PR #12 cells")
-    require(any(cell["id"].startswith("D") for cell in javac_resolver["cells"]), "javac resolver observation is missing $ owner cells")
-    require(any(cell["id"].startswith("I") for cell in javac_resolver["cells"]), "javac resolver observation is missing incomplete-input cells")
+    required_javac_cells = set((
+        "N1 N2 N3 N4 N5 N6 N7 N8 N9 N10 N11 N12 N13 N14 N15 N16 N17 N18 N19 "
+        "N20 N21 N22 N23 N24a N24b N25 N26 N27 N28 N29 N30 N31 N32 N33 "
+        "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A16b A17 A20 A21 "
+        "D1 D2 D3 D4 D5 D6 D7 D8 D9 I1 I2 I3 I4 I5").split())
+    require(javac_cells == required_javac_cells, "javac resolver observation cell set is incomplete or has drifted")
+    require(len(javac_resolver["cells"]) == 68, "javac resolver observation must have 68 cells")
     for cell in javac_resolver["cells"]:
+        require(not cell["blocked"], f"javac resolver cell {cell['id']} is blocked")
+        for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):
+            require(cell["javac"]["metrics"][metric] == 0, f"javac resolver cell {cell['id']} metric {metric} must be zero")
         for fact in cell["javac"]["facts"]:
             require(fact["owner"] == "java.util.ServiceLoader", f"javac fact {cell['id']} owner mismatch")
             require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
             require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
+    recomputed = {metric: 0 for metric in javac_totals}
+    for cell in javac_resolver["cells"]:
+        for metric in recomputed:
+            recomputed[metric] += cell["javac"]["metrics"][metric]
+    require(recomputed == javac_totals, "javac resolver totals must equal the per-cell sum")
 
     def javac_contains_host_path(value: object) -> bool:
         """Recursively reject machine-specific paths in the javac observation."""

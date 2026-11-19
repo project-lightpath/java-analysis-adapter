@@ -3,6 +3,7 @@ package com.projectlightpath.analysis.java;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.AMBIGUOUS;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.DEFINITE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.MISSING_INPUT;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.NO_FACT;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.POSSIBLE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.SHADOWED;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Family.DOLLAR_OWNER;
@@ -492,7 +493,23 @@ final class JavacResolverFixtureCatalog {
                       }
                     }
                     """),
-            site(DEFINITE, "java.lang.Object")));
+            site(DEFINITE, "java.lang.Object")),
+        cell("N32", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
+            sources("demo/Bridge.java", """
+                package demo;
+                import static java.util.ServiceLoader.load;
+                class Bridge { void audit() { load(Object.class); } }
+                """),
+            site(DEFINITE, "java.lang.Object")),
+        cell("N33", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
+            sources("demo/Bridge.java", """
+                package demo;
+                import java.util.*;
+                class Bridge {
+                  void audit(Class<Object> type) { ServiceLoader.load(type); }
+                }
+                """),
+            site(NO_FACT, "java.lang.Object")));
   }
 
   private static List<JavacResolverCell> staticOwnerCells() {
@@ -504,9 +521,16 @@ final class JavacResolverFixtureCatalog {
         staticCell("A2", "demo/Bridge.java", "demo.Bridge", Map.of(
             "a/Tools.java", "package a; public class Tools {" + SERVICE_LOADER_MEMBER + "}"),
             site(AMBIGUOUS, "java.lang.Object")),
-        staticCell("A3", "demo/Bridge.java", "demo.Bridge", Map.of(
-            "a/Tools.java", "package a; public class Tools {" + SERVICE_LOADER_MEMBER + "}"),
-            site(AMBIGUOUS, "java.lang.Object")),
+        cell("A3", STATIC_OWNER, "demo/Bridge.java", "demo.Bridge", 17,
+            sources(
+                "demo/Bridge.java", """
+                    package demo;
+                    import java.util.*;
+                    import static a.Tools.ServiceLoader;
+                    class Bridge { void audit() { ServiceLoader.load(Object.class); } }
+                    """,
+                "a/Tools.java", "package a; public class Tools {" + SERVICE_LOADER_MEMBER + "}"),
+            site(SHADOWED, "java.lang.Object")),
         staticCell("A4", "demo/Bridge.java", "demo.Bridge", Map.of(
             "a/Tools.java", "package a; public class Tools {" + PACKAGE_SERVICE_LOADER_MEMBER + "}"),
             site(DEFINITE, "java.lang.Object")),

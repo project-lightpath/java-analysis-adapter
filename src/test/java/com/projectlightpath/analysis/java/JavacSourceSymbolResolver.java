@@ -188,11 +188,15 @@ final class JavacSourceSymbolResolver {
             && !shadowLines.isEmpty()
             && diagnostics.stream()
                 .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
+                .findAny()
+                .isPresent()
+            && diagnostics.stream()
+                .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
                 .allMatch(item -> shadowLines.contains((int) item.getLineNumber()))) {
           stableFacts.add(new JavacResolverFact(
               fact.cellId(), fact.path(), fact.topLevel(), fact.line(), fact.column(),
               fact.offset(), fact.serviceType(), fact.owner(), fact.member(),
-              fact.accessibility(), "DEFINITE", List.of()));
+              fact.accessibility(), "DEFINITE", "shadow-only-errors", fact.diagnostics()));
         } else {
           stableFacts.add(fact);
         }
@@ -206,23 +210,39 @@ final class JavacSourceSymbolResolver {
     @Override
     public Void visitMethodInvocation(MethodInvocationTree node, Void unused) {
       TreePath invocationPath = getCurrentPath();
-      if (!(node.getMethodSelect() instanceof MemberSelectTree select)
-          || !select.getIdentifier().contentEquals(LOAD)
-          || !isSiteFile(invocationPath)) {
+      ExpressionTree selectTree = node.getMethodSelect();
+      String selectedName = selectedName(selectTree);
+      if (!LOAD.equals(selectedName) || !isSiteFile(invocationPath)) {
         return super.visitMethodInvocation(node, unused);
       }
       long position = startPosition(invocationPath);
+      if (position < 0) {
+        addAbstention(0, 0, 0, "UNRESOLVED");
+        return super.visitMethodInvocation(node, unused);
+      }
       int line = lineNumber(invocationPath, position);
       int column = columnNumber(invocationPath, position);
-      Element method = trees.getElement(new TreePath(invocationPath, select));
-      Element receiver = trees.getElement(new TreePath(new TreePath(invocationPath, select),
-          select.getExpression()));
+      Element method = trees.getElement(new TreePath(invocationPath, selectTree));
+      Element receiver = selectTree instanceof MemberSelectTree memberSelect
+          ? trees.getElement(new TreePath(new TreePath(invocationPath, memberSelect),
+              memberSelect.getExpression()))
+          : trees.getElement(invocationPath);
       if (isServiceLoaderLoad(method)) {
         addFact(invocationPath, position, line, column, method);
       } else {
         addAbstention((int) position, line, column, reason(method, receiver, line));
       }
       return super.visitMethodInvocation(node, unused);
+    }
+
+    private static String selectedName(ExpressionTree selectTree) {
+      if (selectTree instanceof MemberSelectTree memberSelect) {
+        return memberSelect.getIdentifier().toString();
+      }
+      if (selectTree instanceof com.sun.source.tree.IdentifierTree identifier) {
+        return identifier.getName().toString();
+      }
+      return "";
     }
 
     private boolean isSiteFile(TreePath path) {
@@ -249,7 +269,11 @@ final class JavacSourceSymbolResolver {
         TreePath invocationPath, long position, int line, int column, Element method) {
       MethodInvocationTree node = (MethodInvocationTree) invocationPath.getLeaf();
       String serviceType = node.getArguments().isEmpty()
-          ? "<no-argument>" : classLiteralType(invocationPath, node.getArguments().get(0));
+          ? null : classLiteralType(invocationPath, node.getArguments().get(0));
+      if (serviceType == null) {
+        addAbstention((int) position, line, column, "NO_CLASS_LITERAL");
+        return;
+      }
       boolean errorType = serviceType.contains("<error>") || serviceType.isEmpty();
       String certainty = taskHasError || errorType ? "POSSIBLE" : "DEFINITE";
       List<JavacResolverDiagnostic> attached = diagnosticsFor(line);
@@ -263,9 +287,17 @@ final class JavacSourceSymbolResolver {
           serviceType,
           SERVICE_LOADER,
           LOAD,
-          "PUBLIC_STATIC",
+          accessibility(method),
           certainty,
+          "",
           attached));
+    }
+
+    private static String accessibility(Element method) {
+      boolean isPublic = method.getModifiers().contains(Modifier.PUBLIC);
+      boolean isStatic = method.getModifiers().contains(Modifier.STATIC);
+      String access = isPublic ? "PUBLIC" : "PACKAGE";
+      return isStatic ? access + "_STATIC" : access;
     }
 
     private void addAbstention(int position, int line, int column, String reason) {
@@ -319,19 +351,16 @@ final class JavacSourceSymbolResolver {
     private String classLiteralType(TreePath invocationPath, ExpressionTree argument) {
       if (!(argument instanceof MemberSelectTree select)
           || !select.getIdentifier().contentEquals("class")) {
-        return "<not-class-literal>";
+        return null;
       }
       TreePath argumentPath = new TreePath(invocationPath, argument);
       TreePath typePath = new TreePath(argumentPath, select.getExpression());
       TypeMirror mirror = trees.getTypeMirror(typePath);
       if (mirror == null) {
-        return select.getExpression().toString();
+        return null;
       }
       String canonical = canonicalType(mirror, types);
-      if (canonical.isEmpty()) {
-        return select.getExpression().toString();
-      }
-      return canonical;
+      return canonical.isEmpty() ? null : canonical;
     }
 
     private String topLevelName(TreePath path) {
@@ -352,13 +381,17 @@ final class JavacSourceSymbolResolver {
       return diagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
           .filter(item -> item.getLineNumber() <= 0 || item.getLineNumber() == line || taskHasError)
-          .limit(12)
           .map(item -> new JavacResolverDiagnostic(
               item.getCode(),
               item.getMessage(Locale.ROOT),
               relativePath(item.getSource()),
               item.getLineNumber(),
               item.getColumnNumber()))
+          .sorted(Comparator.comparing(JavacResolverDiagnostic::path)
+              .thenComparingLong(JavacResolverDiagnostic::line)
+              .thenComparingLong(JavacResolverDiagnostic::column)
+              .thenComparing(JavacResolverDiagnostic::code)
+              .thenComparing(JavacResolverDiagnostic::message))
           .toList();
     }
 

@@ -32,7 +32,9 @@ final class JavacResolverAccuracyHarness {
           cell,
           baseline.result(),
           javac.result(),
-          Evaluation.evaluate(cell, baseline.result()),
+          cell.baselineAvailable()
+              ? Evaluation.evaluate(cell, baseline.result())
+              : new JavacResolverMetrics(0, 0, 0, 0, 0, 0, 0),
           Evaluation.evaluate(cell, javac.result()),
           baseline,
           javac,
@@ -91,6 +93,7 @@ final class JavacResolverAccuracyHarness {
             "load",
             "TEXTUAL_SITE",
             "DEFINITE",
+            "",
             List.of()));
       }
       return new JavacResolverResult(cell.id(), facts, List.of());
@@ -189,11 +192,27 @@ final class JavacResolverAccuracyHarness {
       return JavacResolverMetrics.sum(cells.stream().map(CellReport::javacMetrics).toList());
     }
 
+    String canonical() {
+      StringBuilder value = new StringBuilder();
+      for (CellReport cell : cells) {
+        value.append(cell.cell().id()).append('|')
+            .append(cell.baseline()).append('|')
+            .append(cell.javac()).append('|')
+            .append(cell.baselineMetrics()).append('|')
+            .append(cell.javacMetrics()).append('\n');
+      }
+      return value.toString();
+    }
+
     void write(Path reportPath) throws IOException {
+      write(reportPath, true);
+    }
+
+    void write(Path reportPath, boolean deterministic) throws IOException {
       Map<String, Object> root = new LinkedHashMap<>();
       root.put("schema", "javac-symbol-resolver-observation.v1");
       root.put("javaVersion", Runtime.version().toString());
-      root.put("deterministic", true);
+      root.put("deterministic", deterministic);
       List<Map<String, Object>> cellItems = new ArrayList<>();
       for (CellReport report : cells) {
         Map<String, Object> item = new LinkedHashMap<>();
@@ -202,8 +221,12 @@ final class JavacResolverAccuracyHarness {
         item.put("release", report.cell().release());
         item.put("blocked", report.blocked());
         item.put("expected", report.cell().expectedSites().stream()
-            .map(site -> Map.of("expectation", site.expectation().name(),
-                "serviceType", site.serviceType()))
+            .map(site -> {
+              Map<String, Object> expected = new LinkedHashMap<>();
+              expected.put("expectation", site.expectation().name());
+              expected.put("serviceType", site.serviceType());
+              return expected;
+            })
             .toList());
         item.put("baseline", pathItem(report.baseline(), report.baselineMetrics(), report.baselinePhase()));
         item.put("javac", pathItem(report.javac(), report.javacMetrics(), report.javacPhase()));
@@ -237,6 +260,7 @@ final class JavacResolverAccuracyHarness {
         value.put("member", fact.member());
         value.put("accessibility", fact.accessibility());
         value.put("certainty", fact.certainty());
+        value.put("promotion", fact.promotion());
         value.put("diagnostics", fact.diagnostics().stream()
             .map(Report::diagnostic)
             .toList());

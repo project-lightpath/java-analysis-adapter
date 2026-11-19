@@ -76,6 +76,6 @@ class JavacResolverMetricsTest {
   private static JavacResolverFact fact(String certainty, String serviceType) {
     return new JavacResolverFact(
         "control", "demo/Bridge.java", "demo.Bridge", 3, 1, 30, serviceType,
-        "java.util.ServiceLoader", "load", "PUBLIC_STATIC", certainty, List.of());
+        "java.util.ServiceLoader", "load", "PUBLIC_STATIC", certainty, "", List.of());
   }
 }

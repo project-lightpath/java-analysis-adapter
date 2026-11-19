@@ -10,9 +10,9 @@ Observation: `spike/results/javac-symbol-resolver-observation.json`
 **GO.**
 
 The javac/Trees prototype produced **zero wrong DEFINITEs**, **zero lost
-facts**, **zero downgraded facts**, and **zero added facts** across the 66-cell
-catalogue. The textual baseline produced 17 wrong DEFINITE proxies, 15 lost
-facts, 10 added facts, and 8 missing abstentions on the same cells. The
+facts**, **zero downgraded facts**, and **zero added facts** across the 68-cell
+catalogue. The textual baseline produced 17 wrong DEFINITE proxies, 16 lost
+facts, 10 added facts, and 6 missing abstentions on the same cells. The
 prototype is deterministic across fresh JVM runs and stays inside the
 `-Xmx256m` child.
 
@@ -20,23 +20,23 @@ This is an accuracy GO, not a production-adoption GO: the prototype is
 test-scope only. Migration is a separate follow-up (issue filed after this
 report).
 
-## Baseline vs prototype (all 66 cells)
+## Baseline vs prototype (all 68 cells)
 
 | Metric | Textual baseline (`0ced20a`) | javac prototype |
 |---|---:|---:|
 | wrong DEFINITE | 17 | **0** |
 | wrong service type | 0 | **0** |
-| lost facts | 15 | **0** |
+| lost facts | 16 | **0** |
 | downgraded facts | 0 | **0** |
 | added facts | 10 | **0** |
 | unexpected facts | 10 | **0** |
-| abstention mismatches | 8 | **0** |
-| wall time (66 cells) | 147 ms | 1,279 ms |
-| peak sampled heap | 197.7 MB | 198.4 MB |
+| abstention mismatches | 6 | **0** |
+| wall time (68 cells) | 190 ms | 1,622 ms |
+| peak sampled heap | 189.0 MB | 189.0 MB |
 
 Baseline wrong-DEFINITE cells: `N20 N21 N22 N23 A9 A10 A11 A13 A14 A15 A16b
 A17 A20 I1 I2 I3 I5`.
-Baseline lost-fact cells: `N20 N21 N22 N23 N28 A1 A4 A7 D1 D3 D4 D6 D7 D8
+Baseline lost-fact cells: `N20 N21 N22 N23 N28 N32 A1 A4 A7 D1 D3 D4 D6 D7 D8
 D9`.
 Baseline added-fact cells: `N20 N21 N22 N23 A10 A13 A14 A16b A17 A20`.
 
@@ -49,21 +49,24 @@ gap.
 
 ## Coverage
 
-- **JLS precedence/scope (N-series, 33 cells):** on-demand import, same-package
+- **JLS precedence/scope (N-series, 34 cells):** on-demand import, same-package
   type, single-type import, same-CU top-level/nested/local, field/parameter,
   lambda, catch, instanceof, try-with-resources, for-each, inherited member,
   fully qualified escape, lambda × local class, catch × nested type, switch
-  pattern, lambda × switch, same-CU × inherited, and the three
+  pattern, lambda × switch, same-CU × inherited, static single-member import,
+  a non-class-literal `load` negative control, and the three
   `extends`-resolution branches with public/package-private/protected/private
   members.
 - **PR #12 A-series (20 cells):** A1-A17, A16b, A20, A21. A18/A19 are covered
-  as parameter-type probes. A2/A3/A5/A10/A13/A14/A16b/A17/A20 are ambiguous
-  and correctly produce no fact; A8/A9/A11/A15/I5 are incomplete and produce
-  POSSIBLE with a diagnostic.
+  as parameter-type probes. A2/A5/A10/A13/A14/A16b/A17/A20 are ambiguous and
+  correctly produce no fact; A3 is a clean static single-member import shadow;
+  A8/A9/A11/A15/I5 are incomplete and produce POSSIBLE with a diagnostic.
 - **`$` owners (9 cells):** top-level `$` names, nested vs top-level
   `Outer$Inner`, leading `$`, adjacent `$$`, single-character `$`, package
-  `$`, anonymous/local `$1`, and prefix collisions with decoy files. C10-C12
-  parity drives `declaredType`, `methodSource`, and `sourceLineContains`.
+  `$`, anonymous/local `$1`, and prefix collisions with decoy files. Each
+  D-cell is also scored against the textual `sourceFile` baseline. C10-C12
+  helper parity (`declaredType`/`methodSource`/`sourceLineContains`) remains a
+  documented residual rather than a claimed check.
 - **Incomplete inputs (5 cells):** missing class literal, missing import,
   missing superclass, duplicate binary name across explicit units, and an
   error-typed inherited member. All are POSSIBLE/abstained with diagnostics;
