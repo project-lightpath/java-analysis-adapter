@@ -17,10 +17,17 @@ abstract class SourceMetadataScannerTextLayer13 extends SourceMetadataScannerTex
 
 
 
+  private static final Map<Path, List<MethodInfo>> METHODS =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
   /** Extracts bounded method declarations and their annotation blocks. */
   static List<MethodInfo> methods(SourceFile file) {
+    List<MethodInfo> cached = METHODS.get(file.path());
+    if (cached != null) {
+      return cached;
+    }
     List<MethodInfo> result = new ArrayList<>();
-    String maskedSource = maskAnnotationArguments(file.structuralSource());
+    String maskedSource = maskStringLiterals(maskAnnotationArguments(file.structuralSource()));
     Matcher matcher = METHOD.matcher(maskedSource);
     while (matcher.find()) {
       if (isControlFlowKeyword(matcher.group(1))) {

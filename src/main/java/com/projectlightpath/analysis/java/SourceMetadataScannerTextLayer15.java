@@ -79,11 +79,32 @@ static int localTypeOrdinal(SourceFile file, TypeInfo type) {
         .count() + 1;
   }
 
+  private static final Map<Path, List<AnonymousType>> ANONYMOUS_TYPES =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
   /** Returns an anonymous-class scope without inventing a source-only binary owner. */
 static AnonymousType anonymousTypeContaining(SourceFile file, int index) {
+    List<AnonymousType> ranges = ANONYMOUS_TYPES.get(file.path());
+    if (ranges == null) {
+      ranges = anonymousTypes(file);
+      ANONYMOUS_TYPES.put(file.path(), ranges);
+    }
+    AnonymousType selected = null;
+    for (AnonymousType range : ranges) {
+      if (range.start() <= index
+          && range.end() >= index
+          && (selected == null || range.start() > selected.start())) {
+        selected = range;
+      }
+    }
+    return selected;
+  }
+
+  /** Scans a file once for every anonymous-class body range. */
+static List<AnonymousType> anonymousTypes(SourceFile file) {
     String source = maskStringLiterals(file.structuralSource());
     Matcher matcher = NEW_EXPRESSION.matcher(source);
-    AnonymousType selected = null;
+    List<AnonymousType> ranges = new ArrayList<>();
     while (matcher.find()) {
       int constructorOpening = anonymousConstructorOpening(source, matcher.end());
       if (constructorOpening < 0) {
@@ -101,13 +122,9 @@ static AnonymousType anonymousTypeContaining(SourceFile file, int index) {
         continue;
       }
       int closing = matchingDelimiter(source, opening, '{', '}');
-      if (opening <= index
-          && closing >= index
-          && (selected == null || opening > selected.start())) {
-        selected = new AnonymousType(opening, closing);
-      }
+      ranges.add(new AnonymousType(opening, closing));
     }
-    return selected;
+    return List.copyOf(ranges);
   }
 
   /** Adds only canonically resolved Spring annotation spellings to evidence. */
