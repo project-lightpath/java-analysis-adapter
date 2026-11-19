@@ -1568,6 +1568,89 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).isEmpty());
   }
 
+  /** Qualified annotation names may contain Java whitespace around dots. */
+  @Test
+  void qualifiedAnnotationWithWhitespaceDoesNotHidePublicMemberType()
+      throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-qualified-annotation-space", "demo", """
+        package demo;
+        import java.util.*;
+        import other.Base;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("other/Base.java", """
+        package other;
+        public class Base {
+          public @$Outer . Ann({Object.class}) static class ServiceLoader<T> { }
+          @interface $Outer {
+            @interface Ann { Class<?>[] value(); }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** An annotation name must not consume the varargs ellipsis. */
+  @Test
+  void annotationNameDoesNotConsumeVarargsEllipsis() {
+    assertEquals("String[]", SourceMetadataScanner.parameterType("String @$Ann... args"));
+  }
+
+  /** parameterType drops annotation argument lists as well as their names. */
+  @Test
+  void parameterTypeStripsAnnotationArguments() {
+    assertEquals("String", SourceMetadataScanner.parameterType("@Ann(value=1) String p"));
+  }
+
+  /** An annotated superclass name is still an extends clause. */
+  @Test
+  void staticOnDemandAnnotatedSuperclassStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-annotated-super", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools extends @Mark Base { }
+        @interface Mark { }
+        """,
+            "a/Base.java", """
+        package a;
+        public class Base {
+          public static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** A private owner declaration hides the inherited public member type. */
+  @Test
+  void staticOnDemandPrivateMemberHidesInheritedPublicMember() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-private-hides", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools extends Base {
+          private static class ServiceLoader<T> { }
+        }
+        """,
+            "a/Base.java", """
+        package a;
+        public class Base {
+          public static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
   // ---- Issue #9: sourceFile owner '$' matching (c) ----
 
   private static final String DOLLAR_FLOW_SOURCE = """
