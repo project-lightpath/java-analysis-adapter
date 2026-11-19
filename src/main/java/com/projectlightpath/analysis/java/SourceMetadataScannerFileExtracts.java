@@ -22,11 +22,11 @@ import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
  * a field extent per question made extraction quadratic in the number of call
  * sites (issue #11). This holder computes each extract once per file.
  *
- * <p>Freshness: an entry is reused only while its {@code structuralSource} is
- * the <em>same string instance</em> as the caller's. {@code read} builds that
- * string once per scan and {@code stripComments} always returns a new string, so
- * one run reuses entries and a re-read of the same path cannot reuse stale
- * extraction.
+ * <p>Freshness: an entry is reused only while the file's raw source is
+ * unchanged (exact string equality after an identity fast path). The structural
+ * source is a deterministic function of the raw source, so unchanged files
+ * reuse their extracts across scanners in one JVM while any edit forces a
+ * rebuild.
  *
  * <p>Retention: the value deliberately holds no {@link SourceFile} and no
  * {@link Path}, so it never keeps its own weak key reachable, and the entry
@@ -78,6 +78,8 @@ final class SourceMetadataScannerFileExtracts {
   private List<FieldCandidate> fieldCandidates;
   private List<String> importedNames;
   private Set<String> onDemandImportPackages;
+  private final Map<Integer, String> typeContaining = new HashMap<>();
+  private final Map<Integer, MethodInfo> methodContaining = new HashMap<>();
 
   private SourceMetadataScannerFileExtracts(SourceFile file) {
     this.rawSource = file.source();
@@ -102,13 +104,20 @@ final class SourceMetadataScannerFileExtracts {
     braceDepths = depths.stream().mapToInt(Integer::intValue).toArray();
   }
 
-  /** Returns the extracts for one file, reusing the entry for this run. */
+  /**
+   * Returns the extracts for one file, reusing the entry for this run.
+   *
+   * <p>A second scanner over the same roots (for example the adapter's own
+   * scanner after {@code dynamicFeatures}) reads the same files again and would
+   * otherwise rebuild every mask and index. Raw text equality is exact and
+   * subsumes every other component: the structural source is a deterministic
+   * function of it, and the remaining fields derive from the same bytes and
+   * path. Changed content therefore always misses; unchanged content reuses.
+   */
   static SourceMetadataScannerFileExtracts of(SourceFile file) {
     synchronized (CACHE) {
       SourceMetadataScannerFileExtracts cached = CACHE.get(file.path());
-      if (cached != null
-          && cached.structuralSource == file.structuralSource()
-          && cached.rawSource == file.source()) {
+      if (cached != null && cached.rawSource.equals(file.source())) {
         return cached;
       }
       SourceMetadataScannerFileExtracts created = new SourceMetadataScannerFileExtracts(file);
@@ -203,6 +212,36 @@ final class SourceMetadataScannerFileExtracts {
           SourceMetadataScannerReflectionLayer02.extractFieldCandidates(file, literalMaskedSource);
     }
     return fieldCandidates;
+  }
+
+  /** Memoized {@code typeContaining} for one offset; the computation is file-local. */
+  String typeContaining(SourceFile file, int index) {
+    synchronized (this) {
+      String cached = typeContaining.get(index);
+      if (cached != null) {
+        return cached;
+      }
+    }
+    String value = SourceMetadataScannerTextLayer16.computeTypeContaining(file, index);
+    synchronized (this) {
+      String previous = typeContaining.putIfAbsent(index, value);
+      return previous != null ? previous : value;
+    }
+  }
+
+  /** Memoized {@code methodContaining} for one offset; the computation is file-local. */
+  MethodInfo methodContaining(SourceFile file, int index) {
+    synchronized (this) {
+      MethodInfo cached = methodContaining.get(index);
+      if (cached != null) {
+        return cached;
+      }
+    }
+    MethodInfo value = SourceMetadataScannerTextLayer18.computeMethodContaining(file, index);
+    synchronized (this) {
+      MethodInfo previous = methodContaining.putIfAbsent(index, value);
+      return previous != null ? previous : value;
+    }
   }
 
   synchronized List<String> importedNames() {

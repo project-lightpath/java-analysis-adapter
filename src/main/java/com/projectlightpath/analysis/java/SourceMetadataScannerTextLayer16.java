@@ -47,6 +47,11 @@ static boolean declarationIsActive(
 
   /** Returns the deepest declared type that contains a source offset. */
 static String typeContaining(SourceFile file, int index) {
+    return SourceMetadataScannerFileExtracts.of(file).typeContaining(file, index);
+  }
+
+  /** Computes the containing type for one offset without the per-file memo. */
+static String computeTypeContaining(SourceFile file, int index) {
     if (anonymousTypeContaining(file, index) != null) {
       return "unknown";
     }
