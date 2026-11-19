@@ -188,7 +188,11 @@ final class ServiceLoaderDescriptorReader {
         "descriptor_directory_read_error", state)
         .ifPresent(candidates -> {
           for (Path path : candidates) {
+            int descriptorStart = descriptors.size();
             addFile(path, context, dependencyEntries, descriptors, visited, state);
+            if (descriptors.size() == descriptorStart) {
+              state.releaseRetained();
+            }
           }
         });
   }

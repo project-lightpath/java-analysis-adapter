@@ -67,9 +67,13 @@ final class ServiceLoaderDescriptorSource {
     serviceFileCandidates(normalized, visited, "service_directory_read_error", state)
         .ifPresent(candidates -> {
           for (Path path : candidates) {
+            int descriptorStart = descriptors.size();
             addServiceFile(path,
                 label + "/" + SERVICES_DIRECTORY + "/" + path.getFileName(),
                 kind, descriptors, visited, state);
+            if (descriptors.size() == descriptorStart) {
+              state.releaseRetained();
+            }
           }
         });
   }
@@ -359,6 +363,12 @@ final class ServiceLoaderDescriptorSource {
 
     void restoreRetained(long value) {
       retainedBytes = value;
+    }
+
+    /** Releases one retained candidate slot whose descriptor was not added. */
+    void releaseRetained() {
+      retainedBytes = Math.max(
+          0L, retainedBytes - ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
     }
 
     long remainingRetained() {

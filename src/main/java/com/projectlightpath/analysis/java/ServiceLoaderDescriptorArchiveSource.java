@@ -138,6 +138,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       List<ZipEntry> entries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state) {
+    int processed = 0;
     for (ZipEntry entry : entries) {
       if (!state.hasDecompressedBudget()) {
         state.diagnostic(
@@ -145,7 +146,15 @@ final class ServiceLoaderDescriptorArchiveSource {
             "archive decompression budget exhausted before all entries were read");
         break;
       }
+      int descriptorStart = descriptors.size();
       addDescriptor(zip, archive, entry, descriptors, state);
+      if (descriptors.size() == descriptorStart) {
+        state.releaseRetained();
+      }
+      processed++;
+    }
+    for (int index = processed; index < entries.size(); index++) {
+      state.releaseRetained();
     }
   }
 
