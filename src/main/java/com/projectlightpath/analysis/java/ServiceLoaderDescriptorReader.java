@@ -122,6 +122,11 @@ final class ServiceLoaderDescriptorReader {
   }
 
   /** Scans one selected classpath entry, diagnosing unavailable entries on request. */
+  /**
+   * Scans one selected classpath entry. {@code descriptors} must be mutable: a
+   * module-info retention rollback removes the descriptors this source
+   * contributed.
+   */
   static void scanSelectedEntry(
       Path entry,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,

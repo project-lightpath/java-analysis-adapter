@@ -100,7 +100,8 @@ final class ServiceLoaderDescriptorArchiveSource {
       if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
         module = entry;
       }
-      if (versionedModule == null && isVersionedModuleInfo(entry.getName())) {
+      if (versionedModule == null && ServiceLoaderDescriptorEntryNames.isVersionedModuleInfo(
+          entry.getName())) {
         versionedModule = entry.getName();
       }
     }
@@ -109,22 +110,6 @@ final class ServiceLoaderDescriptorArchiveSource {
       return new ArchiveEntries(List.of(), null, null);
     }
     return new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule);
-  }
-
-  private static final String VERSIONED_PREFIX = "META-INF/versions/";
-  private static final String VERSIONED_SUFFIX = "/" + ServiceLoaderDescriptorSource.MODULE_INFO;
-
-  private static boolean isVersionedModuleInfo(String name) {
-    // Bounds first: a path whose prefix and suffix overlap (for example
-    // META-INF/versions/module-info.class) has no room for a version
-    // component, and an exactly-boundary path has an empty one.
-    if (name.length() <= VERSIONED_PREFIX.length() + VERSIONED_SUFFIX.length()
-        || !name.startsWith(VERSIONED_PREFIX) || !name.endsWith(VERSIONED_SUFFIX)) {
-      return false;
-    }
-    String version = name.substring(
-        VERSIONED_PREFIX.length(), name.length() - VERSIONED_SUFFIX.length());
-    return version.chars().allMatch(Character::isDigit);
   }
 
   private static boolean retainDescriptor(
