@@ -11,6 +11,7 @@ ADAPTER_TEST_PARALLELISM ?= $(shell sh -c '\
 	[ "$$p" -lt 1 ] && p=1; echo "$$p"')
 
 adapter-test:
+	rm -rf target/surefire-reports target/surefire-reports-large
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
 	JAVA_TOOL_OPTIONS="$${JAVA_TOOL_OPTIONS:-} -Djunit.jupiter.execution.parallel.config.fixed.parallelism=$(ADAPTER_TEST_PARALLELISM)" \
 	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 3))g

@@ -40,10 +40,10 @@ diagnostic downgrades every ServiceLoader edge in the analysis to POSSIBLE.
 ## Gates (final tree)
 
 - `make adapter-test`: **299** tests (298 default + 1 large-archive),
-  0 failures (baseline before RED: 275 tests, 0 failures). The target now runs
-  `spike/scripts/check_test_count.py 275`, which sums
-  `target/surefire-reports` + `target/surefire-reports-large` and requires the
-  large-archive execution to have run at least one test.
+  0 failures (baseline before RED: 275 tests, 0 failures). The target removes
+  both report directories, then runs `spike/scripts/check_test_count.py 299`,
+  which sums them and requires the large-archive execution to have run at
+  least one test and the total to stay at 299.
 - `make java-lint`: PASS, 0 findings outside the reviewed baseline, 0 CPD.
 - `make evidence-validate`: passes (10 acceptance criteria, 3 candidates,
   10 capability cases, 21 expected relationships, 10 observed results).
