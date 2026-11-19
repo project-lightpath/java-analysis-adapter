@@ -3,7 +3,7 @@
 Issue: https://redhat.atlassian.net/browse/FLPATH-5123
 Branch: `flpath-5123/enumeration-budgets`
 Base: `origin/main` @ `6a46a85`
-Plan: `PLAN-5123.md` (v4, adversarial plan review `PLAN_REVIEW_CLEAN`)
+Plan: `PLAN-5123.md` (v5, adversarial plan review `PLAN_REVIEW_CLEAN`)
 
 ## Change
 
@@ -39,11 +39,11 @@ diagnostic downgrades every ServiceLoader edge in the analysis to POSSIBLE.
 
 ## Gates (final tree)
 
-- `make adapter-test`: **299** tests (298 default + 1 large-archive),
+- `make adapter-test`: **302** tests (301 default + 1 large-archive),
   0 failures (baseline before RED: 275 tests, 0 failures). The target removes
-  both report directories, then runs `spike/scripts/check_test_count.py 299`,
+  both report directories, then runs `spike/scripts/check_test_count.py 302`,
   which sums them and requires the large-archive execution to have run at
-  least one test and the total to stay at 299.
+  least one test and the total to be at least 302.
 - `make java-lint`: PASS, 0 findings outside the reviewed baseline, 0 CPD.
 - `make evidence-validate`: passes (10 acceptance criteria, 3 candidates,
   10 capability cases, 21 expected relationships, 10 observed results).
@@ -102,6 +102,11 @@ in `PLAN-5123.md`; the load-bearing ones are:
   directory-listing/module-info contract, comment-term cell, observed
   single-file retention charge, non-descriptor charge rejection, observable
   test-count gate, reproducible baseline probe, and evidence-trail numbering.
+- PR review round 5 (fresh reviewer): 4 findings addressed in
+  `RED_6`/`GREEN_5`: no-descriptor candidates (unreadable, decompression
+  exhausted, duplicate, unprocessed after an early stop) release their
+  retention slot; the misnamed archive-exhaustion cell no longer claims
+  rollback coverage; plan version and count-gate wording corrected.
 - CodeRabbit: rate-limited on this repository; `@coderabbitai full review` was
   posted and returned "Review rate limited", so no bot findings exist yet. The
   command must be re-run after the quota resets before merge.
