@@ -1452,6 +1452,98 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).isEmpty());
   }
 
+  /** A member inherited from an implemented interface participates in the import. */
+  @Test
+  void staticOnDemandImplementedMemberStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-implemented-member", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools implements Iface { }
+        """,
+            "a/Iface.java", """
+        package a;
+        public interface Iface {
+          class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** A member inherited from the second superinterface participates too. */
+  @Test
+  void staticOnDemandSecondSuperinterfaceMemberStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-second-super", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public interface Tools extends First, Second { }
+        """,
+            "a/First.java", """
+        package a;
+        public interface First { }
+        """,
+            "a/Second.java", """
+        package a;
+        public interface Second {
+          class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** An owner superclass that itself extends an unselected type is unproven. */
+  @Test
+  void staticOnDemandUnresolvedOwnerGrandparentAbstains() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-unresolved-grandparent", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools extends Base { }
+        """,
+            "a/Base.java", """
+        package a;
+        public class Base extends external.X { }
+        """)).isEmpty());
+  }
+
+  /** A resolved clean superclass leaves the owner's member set proven absent. */
+  @Test
+  void staticOnDemandCleanOwnerSuperclassStaysAttributed() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-clean-super", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools extends Plain { }
+        """,
+            "a/Plain.java", """
+        package a;
+        public class Plain { }
+        """)).isEmpty());
+  }
+
   // ---- Issue #9: sourceFile owner '$' matching (c) ----
 
   private static final String DOLLAR_FLOW_SOURCE = """
