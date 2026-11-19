@@ -144,10 +144,13 @@ final class ServiceLoaderInheritance {
         .toList();
   }
 
+  /**
+   * Returns the extends-clause reference. The source must already be
+   * annotation-argument masked (offsets are preserved by masking).
+   */
   static String extendsReference(
       String source, SourceMetadataScannerState.TypeInfo type) {
-    String header = typeHeader(
-        SourceMetadataScanner.maskAnnotationArguments(source), type);
+    String header = typeHeader(source, type);
     if (header.isEmpty()) {
       return null;
     }

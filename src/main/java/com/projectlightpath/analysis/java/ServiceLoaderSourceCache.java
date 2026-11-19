@@ -99,6 +99,8 @@ final class ServiceLoaderSourceCache {
       SourceMetadataScanner scanner, SourceMetadataScanner.SourceFile file) {
     String source = file.source();
     String structuralSource = ServiceLoaderSourceMasker.mask(source);
+    String annotationMaskedSource =
+        SourceMetadataScanner.maskAnnotationArguments(structuralSource);
     boolean samePackageTypeShadow = scanner.files().stream()
         .filter(candidate -> candidate.packageName().equals(file.packageName()))
         .anyMatch(candidate -> declaresTopLevelType(candidate, "ServiceLoader"));
@@ -110,7 +112,7 @@ final class ServiceLoaderSourceCache {
         source, !samePackageTypeShadow, true, staticOnDemandAmbiguous).stream()
         .filter(site -> !isShadowedAt(file, structuralSource, site.offset()))
         .filter(site -> !ServiceLoaderInheritance.shadowsAt(
-            scanner, file, structuralSource, site.offset()))
+            scanner, file, annotationMaskedSource, site.offset()))
         .filter(site -> !scopedValueShadowsAt(structuralSource, serviceLoaderScopes, site.offset()))
         .filter(site -> !javaQualifierShadowedAt(
             scanner, file, structuralSource, javaScopes, site))
