@@ -103,7 +103,7 @@ final class ServiceLoaderSourceCache {
         .filter(candidate -> candidate.packageName().equals(file.packageName()))
         .anyMatch(candidate -> declaresTopLevelType(candidate, "ServiceLoader"));
     boolean staticOnDemandAmbiguous =
-        ServiceLoaderInheritance.staticOnDemandAmbiguous(scanner, structuralSource);
+        ServiceLoaderInheritance.staticOnDemandAmbiguous(scanner, file, structuralSource);
     List<int[]> serviceLoaderScopes = declarationScopes(file, structuralSource, SERVICE_LOADER);
     List<int[]> javaScopes = declarationScopes(file, structuralSource, JAVA);
     List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(

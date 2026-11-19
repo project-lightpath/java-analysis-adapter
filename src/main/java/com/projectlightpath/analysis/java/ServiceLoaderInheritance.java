@@ -25,6 +25,8 @@ final class ServiceLoaderInheritance {
           + "[\\p{javaJavaIdentifierPart}]*)*)");
 
   private static final Pattern PRIVATE_MODIFIER = Pattern.compile("\\bprivate\\b");
+  private static final Pattern PROTECTED_MODIFIER = Pattern.compile("\\bprotected\\b");
+  private static final Pattern PUBLIC_MODIFIER = Pattern.compile("\\bpublic\\b");
 
   private ServiceLoaderInheritance() {}
 
@@ -34,15 +36,18 @@ final class ServiceLoaderInheritance {
    * ambiguous, so the wildcard cannot own the simple name.
    */
   static boolean staticOnDemandAmbiguous(
-      SourceMetadataScanner scanner, String source) {
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      String source) {
     for (JavaImports.Import imported : JavaImports.parse(source)) {
       if (!imported.isStatic() || !imported.onDemand()) {
         continue;
       }
-      String target = imported.simpleName();
+      String owner = imported.name();
       if (scanner.files().stream()
-          .filter(candidate -> candidate.simpleTypeName().equals(target))
-          .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType)) {
+          .filter(candidate -> candidate.typeName().equals(owner))
+          .anyMatch(candidate -> declaresInheritableServiceLoaderType(
+              candidate, file.packageName()))) {
         return true;
       }
     }
@@ -87,10 +92,12 @@ final class ServiceLoaderInheritance {
       return scanner.files().stream()
           .filter(candidate -> candidate.packageName().equals(qualifier)
               && candidate.simpleTypeName().equals(simpleName))
-          .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
+          .anyMatch(candidate -> declaresInheritableServiceLoaderType(
+              candidate, file.packageName()));
     }
     return resolveSimpleType(scanner, file, source, superReference).stream()
-        .anyMatch(ServiceLoaderInheritance::declaresInheritableServiceLoaderType);
+        .anyMatch(candidate -> declaresInheritableServiceLoaderType(
+            candidate, file.packageName()));
   }
 
   /**
@@ -170,28 +177,49 @@ final class ServiceLoaderInheritance {
    * type owns: the candidate's own top-level type or one of its direct
    * members. Types nested deeper (a member of a member) and local classes are
    * not inherited by an extending type, so they must not shadow the site.
+   * A private member is never inherited; a package-private member is inherited
+   * only by a subclass in the same package (JLS 8.5).
    */
   static boolean declaresInheritableServiceLoaderType(
-      SourceMetadataScanner.SourceFile candidate) {
+      SourceMetadataScanner.SourceFile candidate, String sitePackage) {
     List<SourceMetadataScannerState.TypeInfo> types =
         SourceMetadataScanner.typeDeclarations(candidate);
+    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
+    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
     return types.stream()
         .filter(type -> type.name().equals("ServiceLoader"))
         .filter(type -> !SourceMetadataScanner.isLocalType(candidate, type))
-        .filter(type -> !isPrivateMemberType(candidate, type))
+        .filter(type -> isInheritableMemberType(candidate, masked, type, sitePackage))
         .anyMatch(type -> types.stream()
             .filter(other -> other.start() < type.start() && type.end() <= other.end())
             .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
   }
 
-  /** A private member type is not inherited by an extending type. */
-  private static boolean isPrivateMemberType(
-      SourceMetadataScanner.SourceFile candidate, SourceMetadataScannerState.TypeInfo type) {
-    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
+  /**
+   * A private member type is never inherited; a package-private member type is
+   * inherited only inside its own package (JLS 8.5).
+   */
+  private static boolean isInheritableMemberType(
+      SourceMetadataScanner.SourceFile candidate,
+      String source,
+      SourceMetadataScannerState.TypeInfo type,
+      String sitePackage) {
+    String modifiers = declarationModifiers(source, type);
+    if (PRIVATE_MODIFIER.matcher(modifiers).find()) {
+      return false;
+    }
+    return candidate.packageName().equals(sitePackage)
+        || PUBLIC_MODIFIER.matcher(modifiers).find()
+        || PROTECTED_MODIFIER.matcher(modifiers).find();
+  }
+
+  /** The declaration header between the previous member boundary and the type. */
+  private static String declarationModifiers(
+      String source, SourceMetadataScannerState.TypeInfo type) {
     int boundary = type.start() - 1;
     while (boundary >= 0 && ";{}".indexOf(source.charAt(boundary)) < 0) {
       boundary--;
     }
-    return PRIVATE_MODIFIER.matcher(source.substring(boundary + 1, type.start())).find();
+    return source.substring(boundary + 1, type.start());
   }
 }

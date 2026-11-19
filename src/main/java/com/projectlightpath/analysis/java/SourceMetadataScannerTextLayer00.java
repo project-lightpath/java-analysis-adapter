@@ -18,8 +18,24 @@ abstract class SourceMetadataScannerTextLayer00 extends SourceMetadataScannerTex
 
 
   Optional<SourceFile> sourceFile(String owner) {
-    String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
-    return files().stream().filter(file -> file.typeName().equals(topLevel)).findFirst();
+    List<SourceFile> candidates = files();
+    int packageSeparator = owner.lastIndexOf('.');
+    int end = owner.length();
+    while (end > packageSeparator + 1) {
+      String candidateName = owner.substring(0, end);
+      Optional<SourceFile> match = candidates.stream()
+          .filter(file -> file.typeName().equals(candidateName))
+          .findFirst();
+      if (match.isPresent()) {
+        return match;
+      }
+      int dollar = owner.lastIndexOf('$', end - 1);
+      if (dollar <= packageSeparator) {
+        break;
+      }
+      end = dollar;
+    }
+    return Optional.empty();
   }
 
 static int lineStartOffset(String source, int line) {
