@@ -26,8 +26,6 @@ final class ServiceLoaderDescriptorSource {
   static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
   static final String MODULE_INFO = "module-info.class";
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
-  // RED-only compatibility constant; removed by GREEN_1 with the count cap.
-  static final int MAX_ENUMERATED_ENTRIES = 1024;
 
   private ServiceLoaderDescriptorSource() {}
 
@@ -85,16 +83,24 @@ final class ServiceLoaderDescriptorSource {
       return Optional.empty();
     }
     NavigableSet<Path> candidates = new TreeSet<>();
+    long retainedBefore = state.retainedBytes();
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
       for (Path path : paths) {
-        if (!state.tryEnumerate(path.toString())) {
+        long entryBytes = ServiceLoaderDescriptorBudget.directoryEntryBytes(path);
+        if (!state.tryEnumerate(path.toString(), entryBytes)) {
+          state.restoreRetained(retainedBefore);
           return Optional.empty();
         }
         if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)) {
-          retainSmallest(candidates, path, MAX_ENUMERATED_ENTRIES);
+          if (!state.tryRetain(path.toString())) {
+            state.restoreRetained(retainedBefore);
+            return Optional.empty();
+          }
+          candidates.add(path);
         }
       }
     } catch (IOException | DirectoryIteratorException | UnsupportedOperationException | SecurityException error) {
+      state.restoreRetained(retainedBefore);
       state.diagnostic(readErrorKey, normalized.toString(), message(error));
       return Optional.empty();
     }
@@ -191,7 +197,7 @@ final class ServiceLoaderDescriptorSource {
     return new ProviderEntries(List.copyOf(providers), List.copyOf(malformed));
   }
 
-  static void addModuleBytes(
+  static boolean addModuleBytes(
       byte[] bytes,
       String path,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
@@ -199,9 +205,15 @@ final class ServiceLoaderDescriptorSource {
     try {
       ModuleDescriptor module = ModuleDescriptor.read(new ByteArrayInputStream(bytes));
       String digest = sha256(bytes);
+      List<ServiceLoaderDescriptorScanner.Descriptor> produced = new ArrayList<>();
+      long retainedBefore = state.retainedBytes();
       for (ModuleDescriptor.Provides provides : module.provides()) {
         if (!provides.providers().isEmpty()) {
-          descriptors.add(new ServiceLoaderDescriptorScanner.Descriptor(
+          if (!state.tryRetain(path)) {
+            state.restoreRetained(retainedBefore);
+            return false;
+          }
+          produced.add(new ServiceLoaderDescriptorScanner.Descriptor(
               provides.service(),
               List.copyOf(provides.providers()),
               path,
@@ -210,8 +222,11 @@ final class ServiceLoaderDescriptorSource {
               List.of()));
         }
       }
+      descriptors.addAll(produced);
+      return true;
     } catch (IOException | InvalidModuleDescriptorException error) {
       state.diagnostic("malformed_module_info", path, message(error));
+      return true;
     }
   }
 
@@ -315,48 +330,52 @@ final class ServiceLoaderDescriptorSource {
       return maxDecompressedBytes - decompressedBytes;
     }
 
-    private int enumeratedEntries;
+    private long enumeratedBytes;
 
     boolean hasDecompressedBudget() {
       return remainingDecompressed() > 0;
     }
 
     long enumeratedBytes() {
-      // RED stub: byte accounting lands in GREEN_1.
-      return 0L;
+      return enumeratedBytes;
     }
 
     long remainingEnumerated() {
-      return maxEnumeratedBytes;
+      return maxEnumeratedBytes - enumeratedBytes;
     }
 
     long retainedBytes() {
       return retainedBytes;
     }
 
+    void restoreRetained(long value) {
+      retainedBytes = value;
+    }
+
     long remainingRetained() {
       return maxRetainedBytes - retainedBytes;
     }
 
-    boolean tryEnumerate(String path) {
-      if (enumeratedEntries >= MAX_ENUMERATED_ENTRIES) {
+    boolean tryEnumerate(String path, long bytes) {
+      if (bytes > remainingEnumerated()) {
         diagnostic(
             "descriptor_enumeration_limit", path,
-            "descriptor entry enumeration exceeds " + MAX_ENUMERATED_ENTRIES + " entries");
+            "descriptor entry enumeration exceeds " + maxEnumeratedBytes + " bytes");
         return false;
       }
-      enumeratedEntries++;
+      enumeratedBytes += bytes;
       return true;
     }
 
-    /** RED stub: delegates to the count path; byte accounting lands in GREEN_1. */
-    boolean tryEnumerate(String path, long bytes) {
-      return tryEnumerate(path);
-    }
-
-    /** RED stub: retention is not enforced until GREEN_1. */
     boolean tryRetain(String path) {
-      retainedBytes += ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES;
+      long bytes = ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES;
+      if (bytes > remainingRetained()) {
+        diagnostic(
+            "descriptor_retention_limit", path,
+            "retained descriptor metadata exceeds " + maxRetainedBytes + " bytes");
+        return false;
+      }
+      retainedBytes += bytes;
       return true;
     }
 

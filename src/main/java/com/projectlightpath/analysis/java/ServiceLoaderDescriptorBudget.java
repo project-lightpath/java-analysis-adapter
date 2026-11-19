@@ -5,24 +5,43 @@ import java.nio.file.Path;
 import java.util.zip.ZipEntry;
 
 /**
- * Byte-denominated ServiceLoader enumeration and retention budgets.
+ * Cumulative, scan-global byte budgets for ServiceLoader metadata.
  *
- * <p>The policy numbers come from {@code POLICY-NUMBERS.md} on
- * {@code spike/flpath-5078-prototype}: 2 GiB raw directory-read budget, 16 MiB
- * decompressed and 1 MiB per-entry (the latter two stay in
- * {@link ServiceLoaderDescriptorSource} / unchanged read code). Enumeration
- * cost is a byte estimate floored at the measured raw cost, so ordinary names
- * are dominated by the floor: {@code 2 GiB / 122 B} entries. Retained metadata
- * is a separate cumulative budget so deleting the shared 1,024-entry cap does
- * not leave the candidate and result maps unbounded.
+ * <p>Policy (FLPATH-5123): the shared entry-count cap is gone. Enumeration is
+ * bounded by {@link #MAX_ENUMERATION_BYTES}, the ratified 2 GiB raw
+ * directory-read budget from {@code POLICY-NUMBERS.md}. Retained descriptor
+ * metadata is bounded by {@link #MAX_RETAINED_DESCRIPTOR_BYTES}. Both are
+ * <strong>cumulative volumes for the whole scan</strong>, not live/peak bounds,
+ * matching the existing cumulative decompression budget (16 MiB, unchanged).
  *
- * <p>The durable fix for eager JDK central-directory indexing is FLPATH-5124.
+ * <p>Parity deliberately not adopted here: the prototype's 1 MiB per-entry
+ * control (production never had one; see PLAN-5123 R1) and its spill quota
+ * (production has no spill; R2). Provider-line payload amplification remains
+ * bounded only by the shared decompression budget, a pre-existing property
+ * (PLAN R11). The durable fix for eager JDK central-directory indexing is
+ * FLPATH-5124.
  */
 final class ServiceLoaderDescriptorBudget {
+  /**
+   * Ratified raw directory-read budget (2 GiB). The per-entry charge is a byte
+   * estimate floored at {@link #MEASURED_RAW_BYTES_PER_ENTRY}, so ordinary
+   * names are floor-dominated: {@code 2 GiB / 122 B} ~= 17.6M entries.
+   */
   static final long MAX_ENUMERATION_BYTES = 2L * 1024 * 1024 * 1024;
+  /** Measured raw directory-read cost per entry (POLICY-NUMBERS.md). */
   static final long MEASURED_RAW_BYTES_PER_ENTRY = 122L;
+  /** ZIP central-directory fixed record header. */
   static final long ENUMERATION_RECORD_OVERHEAD_BYTES = 46L;
+  /**
+   * Cumulative retained-metadata budget: 16 MiB / 512 B = 32,768 descriptors
+   * per analysis. Charged once per retained descriptor candidate (including
+   * module-info provides) and restored when a source rolls back.
+   */
   static final long MAX_RETAINED_DESCRIPTOR_BYTES = 16L * 1024 * 1024;
+  /**
+   * Conservative model of one retained descriptor plus its candidate slot
+   * (two Strings, two Lists, path String, 64-char fingerprint, object headers).
+   */
   static final long RETAINED_DESCRIPTOR_BYTES = 512L;
 
   private ServiceLoaderDescriptorBudget() {}

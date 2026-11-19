@@ -43,9 +43,15 @@ final class ServiceLoaderDescriptorArchiveSource {
       return;
     }
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
+      int descriptorStart = descriptors.size();
+      long retainedBefore = state.retainedBytes();
       ArchiveEntries entries = enumerate(zip, normalized, state);
       readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
-      readModule(zip, normalized, entries.module(), entries.versionedModule(), descriptors, state);
+      if (!readModule(
+          zip, normalized, entries.module(), entries.versionedModule(), descriptors, state)) {
+        descriptors.subList(descriptorStart, descriptors.size()).clear();
+        state.restoreRetained(retainedBefore);
+      }
     } catch (ZipException error) {
       state.diagnostic("invalid_archive", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
@@ -61,11 +67,13 @@ final class ServiceLoaderDescriptorArchiveSource {
     ZipEntry module = null;
     String versionedModule = null;
     boolean complete = true;
+    long retainedBefore = state.retainedBytes();
     Enumeration<? extends ZipEntry> entries = zip.entries();
     while (entries.hasMoreElements()) {
       ZipEntry entry = entries.nextElement();
       String entryPath = archive + "!/" + entry.getName();
-      if (!state.tryEnumerate(entryPath)) {
+      long entryBytes = ServiceLoaderDescriptorBudget.centralDirectoryBytes(entry);
+      if (!state.tryEnumerate(entryPath, entryBytes)) {
         complete = false;
         break;
       }
@@ -77,8 +85,10 @@ final class ServiceLoaderDescriptorArchiveSource {
             entry.getName(), archive, state);
       }
       if (entry.getName().startsWith(
-              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")) {
-        retainDescriptor(descriptors, entry);
+              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")
+          && !retainDescriptor(descriptors, entry, entryPath, state)) {
+        complete = false;
+        break;
       }
       if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
         module = entry;
@@ -87,9 +97,11 @@ final class ServiceLoaderDescriptorArchiveSource {
         versionedModule = entry.getName();
       }
     }
-    return complete
-        ? new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule)
-        : new ArchiveEntries(List.of(), null, null);
+    if (!complete) {
+      state.restoreRetained(retainedBefore);
+      return new ArchiveEntries(List.of(), null, null);
+    }
+    return new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule);
   }
 
   private static final String VERSIONED_PREFIX = "META-INF/versions/";
@@ -108,18 +120,20 @@ final class ServiceLoaderDescriptorArchiveSource {
     return version.chars().allMatch(Character::isDigit);
   }
 
-  private static void retainDescriptor(
-      NavigableMap<String, ZipEntry> descriptors, ZipEntry entry) {
+  private static boolean retainDescriptor(
+      NavigableMap<String, ZipEntry> descriptors,
+      ZipEntry entry,
+      String path,
+      ServiceLoaderDescriptorSource.ScanState state) {
     String name = entry.getName();
     if (descriptors.containsKey(name)) {
-      return;
+      return true;
     }
-    if (descriptors.size() < ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES) {
-      descriptors.put(name, entry);
-    } else if (name.compareTo(descriptors.lastKey()) < 0) {
-      descriptors.pollLastEntry();
-      descriptors.put(name, entry);
+    if (!state.tryRetain(path)) {
+      return false;
     }
+    descriptors.put(name, entry);
+    return true;
   }
 
   private static void readDescriptors(
@@ -139,7 +153,7 @@ final class ServiceLoaderDescriptorArchiveSource {
     }
   }
 
-  private static void readModule(
+  private static boolean readModule(
       ZipFile zip,
       Path archive,
       ZipEntry module,
@@ -153,19 +167,21 @@ final class ServiceLoaderDescriptorArchiveSource {
         state.diagnostic(
             "versioned_module_info_unsupported", archive.toString(), versionedModule);
       }
-      return;
+      return true;
     }
     String modulePath = archive + "!/" + module.getName();
     if (!state.hasDecompressedBudget()) {
       state.diagnostic(
           "archive_decompression_limit", modulePath,
           "module-info.class could not be read after the archive decompression budget was exhausted");
-      return;
+      return true;
     }
     byte[] bytes = readEntry(zip, module, state, modulePath);
-    if (bytes != null) {
-      ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
+    if (bytes == null) {
+      return true;
     }
+    return ServiceLoaderDescriptorSource.addModuleBytes(
+        bytes, modulePath, descriptors, state);
   }
 
   private static void addDescriptor(
