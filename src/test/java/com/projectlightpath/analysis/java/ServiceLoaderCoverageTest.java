@@ -1331,7 +1331,77 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
-  void archiveExhaustionAfterCollectingDescriptorStillRollsBack() throws IOException {
+  void directoryCandidateWithoutDescriptorRestoresRetention() throws IOException {
+    Path classes = temp.resolve("restore-directory-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.Provider"), "demo.ProviderImpl\n");
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void archiveCandidateWithoutDescriptorRestoresRetention() throws IOException {
+    Path archive = temp.resolve("restore-archive.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void archiveUnreadEntriesReleaseRetention() throws IOException {
+    Path archive = temp.resolve("restore-unread.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 3; index++) {
+        put(output, "META-INF/services/demo.Provider" + index, "demo.ProviderImpl\n");
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            20,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals(ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+    assertEquals(2, state.diagnostics().stream()
+        .filter(item -> item.code().equals("archive_decompression_limit")).count(),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void archiveExhaustionContributesNoDescriptors() throws IOException {
     Path archive = temp.resolve("bounded-after-collect.jar");
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
       put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
