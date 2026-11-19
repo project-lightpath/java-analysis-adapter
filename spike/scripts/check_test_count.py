@@ -23,7 +23,7 @@ def count(directory: Path) -> int:
 
 
 def main() -> int:
-    minimum = int(sys.argv[1]) if len(sys.argv) > 1 else 275
+    minimum = int(sys.argv[1]) if len(sys.argv) > 1 else 299
     default = count(Path("target/surefire-reports"))
     large = count(Path("target/surefire-reports-large"))
     total = default + large
