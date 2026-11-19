@@ -41,6 +41,7 @@ def main() -> None:
     sootup_fsi = load("spike/results/sootup-3.0.1-fsi-spring-observation.json")
     codeql_quarkus = load("spike/results/codeql-2.27.4-java21-quarkus-observation.json")
     codeql_fsi = load("spike/results/codeql-2.27.4-fsi-spring-observation.json")
+    javac_resolver = load("spike/results/javac-symbol-resolver-observation.json")
 
     require(matrix["adr"] == "ADR-001", "matrix must cite ADR-001")
     require(matrix["jiraIssue"] == "FLPATH-5000", "matrix must cite FLPATH-5000")
@@ -330,6 +331,34 @@ def main() -> None:
     for candidate_id in ("sootup", "codeql"):
         candidate = next(item for item in candidates["candidateSet"] if item["id"] == candidate_id)
         require("unverified" not in candidate["acceptance"].values(), f"{candidate_id} still has an unverified acceptance result after its evidence run")
+
+    require(javac_resolver["schema"] == "javac-symbol-resolver-observation.v1", "javac resolver observation schema mismatch")
+    require(javac_resolver["deterministic"], "javac resolver observation must record determinism")
+    javac_totals = javac_resolver["javacTotals"]
+    for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):
+        require(javac_totals[metric] == 0, f"javac resolver GO metric {metric} must be zero")
+    javac_cells = {cell["id"] for cell in javac_resolver["cells"]}
+    required_javac_cells = {"A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15", "A16", "A16b", "A17", "A20", "A21"}
+    require(required_javac_cells.issubset(javac_cells), "javac resolver observation is missing PR #12 cells")
+    require(any(cell["id"].startswith("D") for cell in javac_resolver["cells"]), "javac resolver observation is missing $ owner cells")
+    require(any(cell["id"].startswith("I") for cell in javac_resolver["cells"]), "javac resolver observation is missing incomplete-input cells")
+    for cell in javac_resolver["cells"]:
+        for fact in cell["javac"]["facts"]:
+            require(fact["owner"] == "java.util.ServiceLoader", f"javac fact {cell['id']} owner mismatch")
+            require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
+            require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
+
+    def javac_contains_host_path(value: object) -> bool:
+        """Recursively reject machine-specific paths in the javac observation."""
+        if isinstance(value, str):
+            return value.startswith("/") or "/Users/" in value or "/private/var/" in value
+        if isinstance(value, list):
+            return any(javac_contains_host_path(item) for item in value)
+        if isinstance(value, dict):
+            return any(javac_contains_host_path(item) for item in value.values())
+        return False
+
+    require(not javac_contains_host_path(javac_resolver), "javac resolver observation contains a host path")
 
     print(f"validated {len(criteria_ids)} acceptance criteria, {len(candidate_ids)} candidates, {len(cases)} capability cases, {len(all_relationships)} expected relationships, and {len(observed_ids)} observed results")
 

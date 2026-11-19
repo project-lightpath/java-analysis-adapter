@@ -1,0 +1,3779 @@
+{
+  "schema" : "javac-symbol-resolver-observation.v1",
+  "javaVersion" : "27.0.1.0.3",
+  "deterministic" : true,
+  "cells" : [ {
+    "id" : "N1",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 53,
+      "peakHeapBytes" : 4266536,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 0,
+        "offset" : 64,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 259,
+      "peakHeapBytes" : 17211552,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 64,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "N2",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 18260128,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 34,
+      "peakHeapBytes" : 29794464,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 64,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N3",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 30843040,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 0,
+        "offset" : 76,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 29,
+      "peakHeapBytes" : 41328800,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 76,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "N4",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 28637472,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 20,
+      "peakHeapBytes" : 39123232,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 72,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N5",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 39123232,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 26,
+      "peakHeapBytes" : 48560416,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 92,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N6",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 44040192,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 23,
+      "peakHeapBytes" : 46162512,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 64,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N7",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 3,
+      "peakHeapBytes" : 45113936,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 21,
+      "peakHeapBytes" : 52428800,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 7,
+        "column" : 18,
+        "offset" : 173,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N8",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 52428800,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 62914560,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 8,
+        "column" : 5,
+        "offset" : 176,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N9",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 63963136,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 75497472,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 5,
+        "column" : 18,
+        "offset" : 104,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.Object",
+          "path" : "demo/Bridge.java",
+          "line" : 5,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N10",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 76546048,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 14,
+      "peakHeapBytes" : 88080384,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 38,
+        "offset" : 86,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.Object",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 51
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N11",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 88080384,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 99614720,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 6,
+        "column" : 50,
+        "offset" : 151,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.Object",
+          "path" : "demo/Bridge.java",
+          "line" : 6,
+          "column" : 63
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N12",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 100663296,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 20,
+      "peakHeapBytes" : 100663296,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 6,
+        "column" : 7,
+        "offset" : 125,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.RuntimeException",
+          "path" : "demo/Bridge.java",
+          "line" : 6,
+          "column" : 20
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N13",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 82798976,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 14,
+      "peakHeapBytes" : 94333312,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 6,
+        "column" : 7,
+        "offset" : 133,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
+          "path" : "demo/Bridge.java",
+          "line" : 6,
+          "column" : 20
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N14",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 95381888,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 15,
+      "peakHeapBytes" : 106916224,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 6,
+        "column" : 7,
+        "offset" : 151,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.io.StringReader",
+          "path" : "demo/Bridge.java",
+          "line" : 6,
+          "column" : 20
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N15",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 106916224,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 24,
+      "peakHeapBytes" : 106916224,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 6,
+        "column" : 7,
+        "offset" : 120,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
+          "path" : "demo/Bridge.java",
+          "line" : 6,
+          "column" : 20
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N16",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 77070336,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 88604672,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 79,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N17",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 89653248,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 0,
+        "offset" : 64,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 100139008,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 64,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "N18",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 3,
+      "peakHeapBytes" : 101187584,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 79,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 18,
+      "peakHeapBytes" : 101187584,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 79,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "N19",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 90701824,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 15,
+      "peakHeapBytes" : 102236160,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 64,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N20",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 3,
+      "peakHeapBytes" : 102236160,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 11,
+        "column" : 0,
+        "offset" : 257,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 14,
+      "peakHeapBytes" : 113770496,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 11,
+        "column" : 5,
+        "offset" : 257,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 9,
+        "column" : 7,
+        "offset" : 212,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N21",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 114819072,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 11,
+        "column" : 0,
+        "offset" : 273,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 20,
+      "peakHeapBytes" : 114819072,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 11,
+        "column" : 5,
+        "offset" : 273,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 9,
+        "column" : 7,
+        "offset" : 229,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N22",
+    "family" : "PRECEDENCE",
+    "release" : 21,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 102760448,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 9,
+        "column" : 0,
+        "offset" : 199,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 18,
+      "peakHeapBytes" : 115343360,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 9,
+        "column" : 5,
+        "offset" : 199,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 6,
+        "column" : 36,
+        "offset" : 134,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
+          "path" : "demo/Bridge.java",
+          "line" : 6,
+          "column" : 49
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N23",
+    "family" : "PRECEDENCE",
+    "release" : 21,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 115343360,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 11,
+        "column" : 0,
+        "offset" : 242,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 16,
+      "peakHeapBytes" : 127926272,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 11,
+        "column" : 5,
+        "offset" : 242,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 7,
+        "column" : 38,
+        "offset" : 166,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location.args",
+          "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
+          "path" : "demo/Bridge.java",
+          "line" : 7,
+          "column" : 51
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N24a",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 128974848,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 139460608,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 7,
+        "column" : 18,
+        "offset" : 160,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N24b",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 140509184,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 19,
+      "peakHeapBytes" : 140509184,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 7,
+        "column" : 18,
+        "offset" : 173,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N25",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 126353408,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 138936320,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 5,
+        "column" : 18,
+        "offset" : 98,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N26",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 138936320,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 149422080,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 5,
+        "column" : 18,
+        "offset" : 95,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N27",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 150470656,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 160956416,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 85,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N28",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 6,
+      "peakHeapBytes" : 160956416,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 148373504,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 85,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "N29",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 148373504,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 159907840,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 79,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "N30",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "SHADOWED",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 159907840,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 18,
+      "peakHeapBytes" : 168296448,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 85,
+        "reason" : "SHADOWED",
+        "diagnostics" : [ {
+          "code" : "compiler.err.not.def.public.cant.access",
+          "message" : "<S>load(java.lang.Class<S>) is not public in other.Base.ServiceLoader; cannot be accessed from outside package",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "N31",
+    "family" : "PRECEDENCE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 149422080,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 85,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 159907840,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 85,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A1",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 160956416,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 162529280,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A2",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 163577856,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 174063616,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Tools.ServiceLoader in a.Tools and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A3",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 175112192,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 186646528,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Tools.ServiceLoader in a.Tools and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A4",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 186646528,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 18,
+      "peakHeapBytes" : 195035136,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A5",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 179306496,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 20,
+      "peakHeapBytes" : 183521184,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "a/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 86,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Tools.ServiceLoader in a.Tools and class java.util.ServiceLoader in java.util match",
+          "path" : "a/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A6",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 109072288,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 14,
+      "peakHeapBytes" : 120606624,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A7",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 120606624,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 127946656,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A8",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 121634816,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 133169152,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package a does not exist",
+          "path" : "demo/Bridge.java",
+          "line" : 3,
+          "column" : 16
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A9",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 134217728,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 14,
+      "peakHeapBytes" : 145752064,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package a does not exist",
+          "path" : "demo/Bridge.java",
+          "line" : 3,
+          "column" : 16
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A10",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 145752064,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 15,
+      "peakHeapBytes" : 157286400,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Base.ServiceLoader in a.Base and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A11",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 158334976,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 169869312,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package external does not exist",
+          "path" : "a/Tools.java",
+          "line" : 1,
+          "column" : 47
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A12",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 170917888,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 177209344,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A13",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 135266304,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 146800640,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Iface.ServiceLoader in a.Iface and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A14",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 146800640,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 158334976,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Second.ServiceLoader in a.Second and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A15",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 159383552,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 170917888,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package external does not exist",
+          "path" : "a/Base.java",
+          "line" : 1,
+          "column" : 46
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A16",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 171966464,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 183500800,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "A16b",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 183500800,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "a/Bridge.java",
+        "topLevel" : "a.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 86,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 19,
+      "peakHeapBytes" : 190840832,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "a/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 86,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Base.ServiceLoader in a.Base and class java.util.ServiceLoader in java.util match",
+          "path" : "a/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A17",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 162004992,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 16,
+      "peakHeapBytes" : 173539328,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Base.ServiceLoader in a.Base and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A20",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "AMBIGUOUS",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 174587904,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 1,
+        "unexpectedFact" : 1,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 14,
+      "peakHeapBytes" : 185073664,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Bridge.java",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "reason" : "AMBIGUOUS",
+        "diagnostics" : [ {
+          "code" : "compiler.err.ref.ambiguous",
+          "message" : "reference to ServiceLoader is ambiguous\n  both class a.Base.ServiceLoader in a.Base and class java.util.ServiceLoader in java.util match",
+          "path" : "demo/Bridge.java",
+          "line" : 4,
+          "column" : 31
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "A21",
+    "family" : "STATIC_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 186122240,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 197656576,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D1",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 197656576,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 16,
+      "peakHeapBytes" : 208142336,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Cash$Flow.java",
+        "topLevel" : "demo.Cash$Flow",
+        "line" : 3,
+        "column" : 34,
+        "offset" : 67,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D2",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 188743680,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Outer.java",
+        "topLevel" : "demo.Outer$Inner",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 86,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 189792256,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Outer.java",
+        "topLevel" : "demo.Outer",
+        "line" : 4,
+        "column" : 39,
+        "offset" : 86,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D3",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 190840832,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 17,
+      "peakHeapBytes" : 190840832,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Outer$Inner.java",
+        "topLevel" : "demo.Outer$Inner",
+        "line" : 3,
+        "column" : 36,
+        "offset" : 69,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D4",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 81416768,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 91902528,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "a$b/Outer.java",
+        "topLevel" : "a$b.Outer",
+        "line" : 4,
+        "column" : 39,
+        "offset" : 85,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D5",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 92951104,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge$1",
+        "line" : 5,
+        "column" : 0,
+        "offset" : 98,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 103436864,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 5,
+        "column" : 33,
+        "offset" : 98,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D6",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 104485440,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 104485440,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/$Flow.java",
+        "topLevel" : "demo.$Flow",
+        "line" : 3,
+        "column" : 30,
+        "offset" : 63,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D7",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 94371840,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 105906176,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Cash$$Flow.java",
+        "topLevel" : "demo.Cash$$Flow",
+        "line" : 3,
+        "column" : 35,
+        "offset" : 68,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D8",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 105906176,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 117440512,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/$.java",
+        "topLevel" : "demo.$",
+        "line" : 3,
+        "column" : 26,
+        "offset" : 59,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "D9",
+    "family" : "DOLLAR_OWNER",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 118489088,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 1,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 130023424,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "a$b/Outer.java",
+        "topLevel" : "a$b.Outer",
+        "line" : 3,
+        "column" : 30,
+        "offset" : 62,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "I1",
+    "family" : "INCOMPLETE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "Missing"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 130023424,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 0,
+        "offset" : 64,
+        "serviceType" : "Missing",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 141557760,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 3,
+        "column" : 31,
+        "offset" : 64,
+        "serviceType" : "Missing",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location",
+          "message" : "cannot find symbol\n  symbol:   class Missing\n  location: class demo.Bridge",
+          "path" : "demo/Bridge.java",
+          "line" : 3,
+          "column" : 50
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "I2",
+    "family" : "INCOMPLETE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 141557760,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 84,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 154140672,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 84,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package missing does not exist",
+          "path" : "demo/Bridge.java",
+          "line" : 3,
+          "column" : 15
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "I3",
+    "family" : "INCOMPLETE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 1,
+      "peakHeapBytes" : 154140672,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 87,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 166723584,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 18,
+        "offset" : 87,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package missing does not exist",
+          "path" : "demo/Bridge.java",
+          "line" : 3,
+          "column" : 29
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "I4",
+    "family" : "INCOMPLETE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 166723584,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 18,
+      "peakHeapBytes" : 175112192,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "r1/demo/Dup.java",
+        "topLevel" : "demo.Dup",
+        "line" : 3,
+        "column" : 28,
+        "offset" : 61,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.duplicate.class",
+          "message" : "duplicate class: demo.Dup",
+          "path" : "r2/demo/Dup.java",
+          "line" : 3,
+          "column" : 1
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "I5",
+    "family" : "INCOMPLETE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "java.lang.Object"
+    } ],
+    "baseline" : {
+      "wallMillis" : 2,
+      "peakHeapBytes" : 121110528,
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 0,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "TEXTUAL_SITE",
+        "certainty" : "DEFINITE",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 12,
+      "peakHeapBytes" : 132644864,
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
+        "line" : 4,
+        "column" : 31,
+        "offset" : 89,
+        "serviceType" : "java.lang.Object",
+        "owner" : "java.util.ServiceLoader",
+        "member" : "load",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "diagnostics" : [ {
+          "code" : "compiler.err.cant.resolve.location",
+          "message" : "cannot find symbol\n  symbol:   class Missing\n  location: class a.Base",
+          "path" : "a/Base.java",
+          "line" : 1,
+          "column" : 32
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  } ],
+  "baselineTotals" : {
+    "wrongDefinite" : 17,
+    "wrongServiceType" : 0,
+    "lost" : 15,
+    "downgraded" : 0,
+    "added" : 10,
+    "unexpectedFact" : 10,
+    "abstentionMismatch" : 8
+  },
+  "javacTotals" : {
+    "wrongDefinite" : 0,
+    "wrongServiceType" : 0,
+    "lost" : 0,
+    "downgraded" : 0,
+    "added" : 0,
+    "unexpectedFact" : 0,
+    "abstentionMismatch" : 0
+  }
+}
