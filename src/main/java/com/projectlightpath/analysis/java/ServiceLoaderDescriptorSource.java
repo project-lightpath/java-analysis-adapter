@@ -81,9 +81,9 @@ final class ServiceLoaderDescriptorSource {
   /**
    * Enumerates the service-file candidates of one already-normalized services
    * directory in deterministic smallest-first order. Empty when the directory
-   * was already visited, the enumeration budget was exhausted, or the stream
-   * failed (the failure diagnostic is keyed by {@code readErrorKey}, which the
-   * two callers keep distinct for behavior compatibility).
+   * was already visited, the enumeration or retention budget was exhausted, or
+   * the stream failed (the failure diagnostic is keyed by {@code readErrorKey},
+   * which the two callers keep distinct for behavior compatibility).
    */
   static Optional<List<Path>> serviceFileCandidates(
       Path normalized, Set<String> visited, String readErrorKey, ScanState state) {

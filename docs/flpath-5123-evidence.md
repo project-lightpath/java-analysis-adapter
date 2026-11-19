@@ -36,6 +36,9 @@ diagnostic downgrades every ServiceLoader edge in the analysis to POSSIBLE.
 - `RED_5` / `GREEN_4` — PR review round: decompression partial-result and
   directory-listing/module-info cells, observed single-file retention charging,
   non-descriptor entries rejected before charging, and the test-count gate.
+- `RED_6` / `GREEN_5` — PR review round 5: candidates that add no descriptor
+  release their retention slot; archive-exhaustion cell renamed to its real
+  claim; count gate at 302.
 
 ## Gates (final tree)
 
