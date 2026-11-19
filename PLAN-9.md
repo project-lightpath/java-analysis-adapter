@@ -37,6 +37,7 @@ For a direct superclass `S` of `C`, `C` inherits the member types of `S`:
 | `public` | inherited | inherited |
 | `protected` | inherited | inherited |
 | package-private (no access modifier) | inherited | **not inherited** |
+| no modifier, direct member of an `interface` | inherited (implicitly `public`, JLS 9.3) | inherited (implicitly `public`) |
 | `private` | not inherited | not inherited |
 | local / anonymous | never a member | never a member |
 | nested deeper than a direct member | not inherited | not inherited |
@@ -99,6 +100,8 @@ changes.
 | A5 | A4 with bridge in `package a;` (owner `a.Bridge`) | site abstained (member accessible) | guard |
 | A6 | `package demo;` `import java.util.*;` `import static a.Tools.*`; `a.Tools` member `ServiceLoader` is `private` | site attributed | guard (predicate's private exclusion) |
 | A7 | `package demo;` `import java.util.*;` `import static a.Tools.*`; `a.Tools` member `ServiceLoader` is `protected` | site abstained | guard pinning the documented over-abstention |
+| A8 | owner `a.Tools` is outside the selected files, and a selected `b.Tools` shares the simple name | site abstained (owner's members unprovable) | **RED at GREEN_09**; GREEN_09b abstains |
+| A9 | owner `a.Tools` is outside the selected files and no selected type shares the simple name | site attributed | guard (pre-existing behavior) |
 
 All `(a)` cells include `import java.util.*;` so attribution is not vacuous.
 
@@ -117,6 +120,7 @@ and B5 are each a three-cell row: (i) single-type import `import other.Base;`,
 | B4 | cross package, `protected` member (three resolution paths) | abstained | guards (head already abstains; pins the new predicate on every path) |
 | B5 | cross package, package-private member (three resolution paths) | attributed | **RED** (head over-abstains; precision gap) |
 | B6 | same package, deeper nested type of a member (existing fixture) | attributed | guard (existing `nestedTypeOfMemberTypeIsNotInherited`) |
+| B7 | cross package, unmodified member of a superinterface (three resolution paths) | abstained (implicitly public) | **RED at GREEN_09** (independent review regression); GREEN_09b fixes |
 
 ### (c) `sourceFile` owner matching
 
@@ -259,8 +263,16 @@ Gates (after RED, after GREEN, after refactor):
 ## Residuals (documented, safe-direction)
 
 - Static import whose owner is a nested type (`import static a.Outer.Tools.*`)
-  is still not matched by the top-level `typeName` comparison; the wildcard
-  stays attributed (possible under-abstention), not DEFINITE-fabricated.
+  is still not matched by the top-level `typeName` comparison. This is a
+  pre-existing **DEFINITE risk**, not merely under-abstention: the simple name
+  may be attributed to `java.util.ServiceLoader` even where javac resolves it
+  to the imported member type. It is unchanged by this issue and belongs to
+  FLPATH-5124 follow-up work.
+- A static-import owner type outside the selected files is treated as follows
+  (A8/A9): with a same-simple-name lookalike the scan abstains, without one it
+  attributes. That is the pre-existing attribution direction, not a new proof
+  of ownership. A package-private owner type behaves the same way when it is
+  not selected.
 - Import names are normalized by `JavaImports.appendNormalized` (identifier-
   ignorable code points stripped) while `typeName` is raw source text. An
   owner name containing an ignorable code point cannot match the owner
@@ -313,3 +325,37 @@ Full gates on GREEN_09:
 - `make java-lint`: PASS, PMD/CPD enforced findings 0.
 - `make evidence-validate`: PASS (10 acceptance criteria, 3 candidates,
   10 capability cases, 21 expected relationships, 10 observed results).
+
+## Execution record (EVIDENCE_09b — independent change review)
+
+Independent change review of `6a46a85..EVIDENCE_09` found one safety regression
+and four discipline gaps; dispositions:
+
+- **Interface implicit public (blocker):** JLS 9.3 makes every member type of
+  an interface implicitly public. GREEN_09's predicate attributed a site head
+  abstained on. RED_09b added the three superclass-path cells; GREEN_09b treats
+  the innermost enclosing interface as public.
+- **Unselected static-import owner (minor):** owner comparison alone could
+  attribute when the named owner is not selected. GREEN_09b abstains when a
+  selected type shares the owner's simple name; A8 is the RED cell and A9 pins
+  the no-lookalike attribution.
+- **Nested-owner residual (minor):** reworded as a pre-existing DEFINITE risk,
+  not safe under-abstention.
+- **C9b decoy (minor):** the test now asserts the decoy default-package type is
+  selected before asserting the missing owner is unresolved.
+- **Boundary probes (minor):** added `dollarBoundaryEdgesAreResolved` for a
+  single-character segment, a single-character nested segment, and adjacent
+  `$$` components.
+- **Eager mask (nit):** GREEN_09b masks the candidate source lazily, after the
+  ServiceLoader name/local filters.
+
+RED_09b (677c856): targeted matrix 85 tests, 4 failures (three interface cells,
+one unselected-owner cell).
+
+GREEN_09b (f20c47d): targeted matrix 85/85 green.
+
+Full gates on GREEN_09b (re-run after the review wave):
+
+- `make adapter-test`: 304 tests, 0 failures (baseline 275).
+- `make java-lint`: PASS (0 PMD/CPD findings).
+- `make evidence-validate`: PASS.
