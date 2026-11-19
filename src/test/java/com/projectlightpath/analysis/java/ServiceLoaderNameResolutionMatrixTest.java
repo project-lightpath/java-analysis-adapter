@@ -1300,8 +1300,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         Map.of("other/Base.java", crossPackageBase(""))).isEmpty());
   }
 
-  /** B4 via a single-type import: protected cross-package member is inherited. */
-  @Test
+  /** B4 via a single-type import: protected cross-package member is inherited. */  @Test
   void crossPackageProtectedMemberViaSingleTypeImportIsInherited() throws IOException {
     assertTrue(matrixSitesIn("matrix-cell-cross-package-protected-import", "demo",
         SINGLE_TYPE_IMPORT_BRIDGE,
@@ -1322,6 +1321,96 @@ class ServiceLoaderNameResolutionMatrixTest {
     assertTrue(matrixSitesIn("matrix-cell-cross-package-protected-qualified", "demo",
         QUALIFIED_SUPERCLASS_BRIDGE,
         Map.of("other/Base.java", crossPackageBase("protected"))).isEmpty());
+  }
+
+  // ---- Issue #9 follow-up: interface members and unselected owners ----
+
+  private static String crossPackageInterfaceBase() {
+    return """
+        package other;
+        public interface Base {
+          class ServiceLoader<T> { }
+        }
+        """;
+  }
+
+  private static final String INTERFACE_SINGLE_TYPE_IMPORT_BRIDGE = """
+      package demo;
+      import java.util.*;
+      import other.Base;
+      interface Bridge extends Base {
+        default void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  private static final String INTERFACE_ON_DEMAND_IMPORT_BRIDGE = """
+      package demo;
+      import java.util.*;
+      import other.*;
+      interface Bridge extends Base {
+        default void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  private static final String INTERFACE_QUALIFIED_SUPERCLASS_BRIDGE = """
+      package demo;
+      import java.util.*;
+      interface Bridge extends other.Base {
+        default void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  /** JLS 9.3: an unmodified member type of an interface is implicitly public. */
+  @Test
+  void interfaceMemberViaSingleTypeImportIsInherited() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-interface-member-import", "demo",
+        INTERFACE_SINGLE_TYPE_IMPORT_BRIDGE,
+        Map.of("other/Base.java", crossPackageInterfaceBase())).isEmpty());
+  }
+
+  @Test
+  void interfaceMemberViaOnDemandImportIsInherited() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-interface-member-demand", "demo",
+        INTERFACE_ON_DEMAND_IMPORT_BRIDGE,
+        Map.of("other/Base.java", crossPackageInterfaceBase())).isEmpty());
+  }
+
+  @Test
+  void interfaceMemberViaQualifiedSuperclassIsInherited() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-interface-member-qualified", "demo",
+        INTERFACE_QUALIFIED_SUPERCLASS_BRIDGE,
+        Map.of("other/Base.java", crossPackageInterfaceBase())).isEmpty());
+  }
+
+  /** An unselected static-import owner with a selected lookalike stays unproven. */
+  @Test
+  void staticOnDemandUnselectedOwnerWithLookalikeAbstains() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-unselected-owner", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("b/Tools.java", """
+        package b;
+        public class Tools {
+          public static void helper() { }
+        }
+        """)).isEmpty());
+  }
+
+  /** No selected same-simple-name type, so the unselected owner adds no doubt. */
+  @Test
+  void staticOnDemandUnselectedOwnerWithoutLookalikeStaysAttributed() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-unselected-owner-plain", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of()).isEmpty());
   }
 
   // ---- Issue #9: sourceFile owner '$' matching (c) ----
@@ -1410,8 +1499,21 @@ class ServiceLoaderNameResolutionMatrixTest {
 
   @Test
   void missingDollarOwnerNeverResolvesDecoyDefaultPackageType() throws IOException {
-    assertTrue(sourceFileOf("matrix-cell-owner-decoy", Map.of(
-        "a.java", "class a { }\n"), "a$b.Missing$Inner").isEmpty());
+    String id = "matrix-cell-owner-decoy";
+    Map<String, String> files = Map.of("a.java", "class a { }\n");
+    assertTrue(sourceFileOf(id, files, "a").isPresent(), "decoy must be selected");
+    assertTrue(sourceFileOf(id, files, "a$b.Missing$Inner").isEmpty());
+  }
+
+  @Test
+  void dollarBoundaryEdgesAreResolved() throws IOException {
+    String id = "matrix-cell-owner-boundary";
+    Map<String, String> files = Map.of(
+        "demo/X.java", "package demo;\nclass X { }\n",
+        "demo/Outer.java", "package demo;\nclass Outer { class I { } class $Inner { } }\n");
+    assertTrue(sourceFileOf(id, files, "demo.X").isPresent(), "single-character segment");
+    assertTrue(sourceFileOf(id, files, "demo.Outer$I").isPresent(), "single-character nested");
+    assertTrue(sourceFileOf(id, files, "demo.Outer$$Inner").isPresent(), "adjacent $ components");
   }
 
   @Test
