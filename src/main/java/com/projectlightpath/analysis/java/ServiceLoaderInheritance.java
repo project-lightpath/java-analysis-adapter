@@ -71,7 +71,8 @@ final class ServiceLoaderInheritance {
     for (SourceMetadataScannerState.TypeInfo type : SourceMetadataScanner.typeDeclarations(file)) {
       if (type.start() <= offset
           && (type.end() < 0 || offset <= type.end())
-          && superclassDeclaresServiceLoader(scanner, file, source, type)) {
+          && superclassDeclaresServiceLoader(
+              scanner, file, source, type, file.packageName())) {
         return true;
       }
     }
@@ -82,7 +83,8 @@ final class ServiceLoaderInheritance {
       SourceMetadataScanner scanner,
       SourceMetadataScanner.SourceFile file,
       String source,
-      SourceMetadataScannerState.TypeInfo type) {
+      SourceMetadataScannerState.TypeInfo type,
+      String sitePackage) {
     String superReference = extendsReference(source, type);
     if (superReference == null) {
       return false;
@@ -98,11 +100,11 @@ final class ServiceLoaderInheritance {
           .filter(candidate -> candidate.packageName().equals(qualifier)
               && candidate.simpleTypeName().equals(simpleName))
           .anyMatch(candidate -> ServiceLoaderMemberTypes
-              .declaresInheritableServiceLoaderType(candidate, file.packageName()));
+              .declaresInheritableServiceLoaderType(candidate, sitePackage));
     }
     return resolveSimpleType(scanner, file, source, superReference).stream()
         .anyMatch(candidate -> ServiceLoaderMemberTypes
-            .declaresInheritableServiceLoaderType(candidate, file.packageName()));
+            .declaresInheritableServiceLoaderType(candidate, sitePackage));
   }
 
   /**
@@ -141,12 +143,10 @@ final class ServiceLoaderInheritance {
 
   static String extendsReference(
       String source, SourceMetadataScannerState.TypeInfo type) {
-    int body = source.indexOf('{', type.start());
-    int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
-    if (limit <= type.start()) {
+    String header = typeHeader(source, type);
+    if (header.isEmpty()) {
       return null;
     }
-    String header = source.substring(type.start(), limit);
     int extendsIndex = SourceMetadataScanner.topLevelKeywordIndex(header, "extends");
     if (extendsIndex < 0) {
       return null;
@@ -154,6 +154,14 @@ final class ServiceLoaderInheritance {
     Matcher target = EXTENDS_REFERENCE.matcher(header);
     target.region(extendsIndex, header.length());
     return target.lookingAt() ? target.group(1).replaceAll("\\s+", "") : null;
+  }
+
+  /** The type declaration header, up to its body. */
+  static String typeHeader(
+      String source, SourceMetadataScannerState.TypeInfo type) {
+    int body = source.indexOf('{', type.start());
+    int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
+    return limit <= type.start() ? "" : source.substring(type.start(), limit);
   }
 
   /** Returns the single-type import name (pkg.Type) for a simple name, if any. */

@@ -1,6 +1,6 @@
 package com.projectlightpath.analysis.java;
 
-import java.util.Optional;
+import java.util.List;
 
 /**
  * Owner-side proof for static-import-on-demand ambiguity (JLS 7.5.4).
@@ -32,7 +32,7 @@ final class StaticImportOwnerResolver {
       if (!type.name().equals(candidate.simpleTypeName())) {
         continue;
       }
-      String header = typeHeader(masked, type);
+      String header = ServiceLoaderInheritance.typeHeader(masked, type);
       if (SourceMetadataScanner.topLevelKeywordIndex(header, "implements") >= 0
           || hasSecondSupertype(header)) {
         return true;
@@ -41,16 +41,16 @@ final class StaticImportOwnerResolver {
       if (reference == null) {
         continue;
       }
-      Optional<SourceMetadataScanner.SourceFile> superclass =
-          resolvedSuperclass(scanner, candidate, masked, reference);
-      if (superclass.isEmpty()) {
+      List<SourceMetadataScanner.SourceFile> superclasses =
+          resolvedSuperclasses(scanner, candidate, masked, reference);
+      if (superclasses.isEmpty()) {
         return true;
       }
       if (ServiceLoaderInheritance.superclassDeclaresServiceLoader(
-          scanner, candidate, masked, type)) {
+          scanner, candidate, masked, type, sitePackage)) {
         return true;
       }
-      if (hasUnprovenInheritance(superclass.get())) {
+      if (superclasses.stream().anyMatch(StaticImportOwnerResolver::hasUnprovenInheritance)) {
         return true;
       }
     }
@@ -71,20 +71,12 @@ final class StaticImportOwnerResolver {
       if (!type.name().equals(file.simpleTypeName())) {
         continue;
       }
-      String header = typeHeader(masked, type);
+      String header = ServiceLoaderInheritance.typeHeader(masked, type);
       return SourceMetadataScanner.topLevelKeywordIndex(header, "implements") >= 0
           || hasSecondSupertype(header)
           || ServiceLoaderInheritance.extendsReference(masked, type) != null;
     }
     return false;
-  }
-
-  /** The superclass declaration header, up to the type body. */
-  private static String typeHeader(
-      String source, SourceMetadataScannerState.TypeInfo type) {
-    int body = source.indexOf('{', type.start());
-    int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
-    return limit <= type.start() ? "" : source.substring(type.start(), limit);
   }
 
   /** True when a top-level comma adds a second extends/superinterface name. */
@@ -107,8 +99,8 @@ final class StaticImportOwnerResolver {
     return false;
   }
 
-  /** Resolves the extends reference to its selected source file. */
-  private static Optional<SourceMetadataScanner.SourceFile> resolvedSuperclass(
+  /** Resolves the extends reference to every selected source file. */
+  private static List<SourceMetadataScanner.SourceFile> resolvedSuperclasses(
       SourceMetadataScanner scanner,
       SourceMetadataScanner.SourceFile file,
       String source,
@@ -120,9 +112,8 @@ final class StaticImportOwnerResolver {
       return scanner.files().stream()
           .filter(candidate -> candidate.packageName().equals(qualifier)
               && candidate.simpleTypeName().equals(simpleName))
-          .findFirst();
+          .toList();
     }
-    return ServiceLoaderInheritance.resolveSimpleType(scanner, file, source, reference)
-        .stream().findFirst();
+    return ServiceLoaderInheritance.resolveSimpleType(scanner, file, source, reference);
   }
 }
