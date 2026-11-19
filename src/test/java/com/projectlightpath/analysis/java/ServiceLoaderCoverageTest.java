@@ -1559,6 +1559,16 @@ class ServiceLoaderCoverageTest {
       output.closeEntry();
     }
 
+    List<ServiceLoaderDescriptorScanner.Descriptor> complete = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState completeState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES * 3);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, complete, completeState);
+    assertEquals(3, complete.size(), complete.toString());
+    assertTrue(completeState.diagnostics().isEmpty(), completeState.diagnostics().toString());
+
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState state =
         ServiceLoaderDescriptorSource.ScanState.withBudgets(
