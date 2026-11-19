@@ -28,15 +28,13 @@ static String methodDescriptor(MethodInfo method) {
         .toList()) + ")";
   }
 
-  private static final Map<Path, List<MethodInfo>> CONSTRUCTORS =
-      Collections.synchronizedMap(new WeakHashMap<>());
-
   /** Extracts constructor bodies so dynamic sites retain an explicit initializer caller. */
 static List<MethodInfo> constructors(SourceFile file) {
-    List<MethodInfo> cached = CONSTRUCTORS.get(file.path());
-    if (cached != null) {
-      return cached;
-    }
+    return SourceMetadataScannerFileExtracts.of(file).constructors();
+  }
+
+  /** Computes the constructor declarations for one file without consulting the cache. */
+static List<MethodInfo> extractConstructors(SourceFile file) {
     String maskedSource = maskStringLiterals(maskAnnotationArguments(file.structuralSource()));
     List<MethodInfo> result = new ArrayList<>();
     for (TypeInfo type : typeDeclarations(file)) {
@@ -66,7 +64,6 @@ static List<MethodInfo> constructors(SourceFile file) {
         .distinct()
         .sorted(Comparator.comparingInt(MethodInfo::start))
         .toList();
-    CONSTRUCTORS.put(file.path(), constructors);
     return constructors;
   }
 

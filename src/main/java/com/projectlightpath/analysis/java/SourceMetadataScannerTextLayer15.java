@@ -79,16 +79,9 @@ static int localTypeOrdinal(SourceFile file, TypeInfo type) {
         .count() + 1;
   }
 
-  private static final Map<Path, List<AnonymousType>> ANONYMOUS_TYPES =
-      Collections.synchronizedMap(new WeakHashMap<>());
-
   /** Returns an anonymous-class scope without inventing a source-only binary owner. */
 static AnonymousType anonymousTypeContaining(SourceFile file, int index) {
-    List<AnonymousType> ranges = ANONYMOUS_TYPES.get(file.path());
-    if (ranges == null) {
-      ranges = anonymousTypes(file);
-      ANONYMOUS_TYPES.put(file.path(), ranges);
-    }
+    List<AnonymousType> ranges = anonymousTypes(file);
     AnonymousType selected = null;
     for (AnonymousType range : ranges) {
       if (range.start() <= index
@@ -102,6 +95,11 @@ static AnonymousType anonymousTypeContaining(SourceFile file, int index) {
 
   /** Scans a file once for every anonymous-class body range. */
 static List<AnonymousType> anonymousTypes(SourceFile file) {
+    return SourceMetadataScannerFileExtracts.of(file).anonymousTypes();
+  }
+
+  /** Computes the anonymous-class ranges for one file without consulting the cache. */
+static List<AnonymousType> extractAnonymousTypes(SourceFile file) {
     String source = maskStringLiterals(file.structuralSource());
     Matcher matcher = NEW_EXPRESSION.matcher(source);
     List<AnonymousType> ranges = new ArrayList<>();

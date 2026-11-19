@@ -1,10 +1,13 @@
 package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.projectlightpath.analysis.java.SourceMetadataScannerState.AnonymousType;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.MethodInfo;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.SourceFile;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
@@ -78,6 +81,7 @@ class ScannerExtractionCacheTest {
 
     List<MethodInfo> constructors = SourceMetadataScannerTextLayer11.constructors(file);
     List<TypeInfo> types = SourceMetadataScannerTextLayer08.typeDeclarations(file);
+    List<AnonymousType> anonymous = SourceMetadataScannerTextLayer15.anonymousTypes(file);
 
     assertEquals(1, constructors.size(), constructors.toString());
     assertEquals("<init>", constructors.get(0).name(), constructors.toString());
@@ -89,12 +93,11 @@ class ScannerExtractionCacheTest {
         List.of("class", "class", "interface"),
         types.stream().map(TypeInfo::kind).toList(),
         types.toString());
-    assertEquals(1, SourceMetadataScannerTextLayer15.anonymousTypes(file).size());
+    assertEquals(1, anonymous.size(), anonymous.toString());
     assertSame(types, SourceMetadataScannerTextLayer08.typeDeclarations(file));
-    assertSame(constructors, SourceMetadataScannerTextLayer11.constructors(file));
     assertSame(
-        SourceMetadataScannerTextLayer15.anonymousTypes(file),
-        SourceMetadataScannerTextLayer15.anonymousTypes(file));
+        constructors, SourceMetadataScannerTextLayer11.constructors(file));
+    assertSame(anonymous, SourceMetadataScannerTextLayer15.anonymousTypes(file));
   }
 
   @Test
@@ -154,9 +157,181 @@ class ScannerExtractionCacheTest {
         "a negative start is outside the contract and must not be silently clamped");
   }
 
+  @Test
+  void fileExtractsAreReusedForOneRun() throws IOException {
+    SourceFile file = sourceFile("extracts-cache", SAMPLE);
+
+    SourceMetadataScannerFileExtracts first = SourceMetadataScannerFileExtracts.of(file);
+    SourceMetadataScannerFileExtracts second = SourceMetadataScannerFileExtracts.of(file);
+
+    assertSame(first, second, "one run must reuse the extracts for a file");
+    assertSame(first.methods(), second.methods());
+    assertSame(first.typeDeclarations(), second.typeDeclarations());
+    assertSame(first.constructors(), second.constructors());
+    assertSame(first.anonymousTypes(), second.anonymousTypes());
+    assertSame(first.literalMaskedSource(), second.literalMaskedSource());
+    assertSame(first.declarationMaskedSource(), second.declarationMaskedSource());
+  }
+
+  @Test
+  void extractsDoNotDependOnRequestOrder() throws IOException {
+    SourceFile methodsFirst = sourceFile("order-methods-first", SAMPLE);
+    List<MethodInfo> methods = SourceMetadataScannerFileExtracts.of(methodsFirst).methods();
+    List<TypeInfo> types = SourceMetadataScannerFileExtracts.of(methodsFirst).typeDeclarations();
+
+    SourceFile typesFirst = sourceFile("order-types-first", SAMPLE);
+    List<TypeInfo> otherTypes = SourceMetadataScannerFileExtracts.of(typesFirst).typeDeclarations();
+    List<MethodInfo> otherMethods = SourceMetadataScannerFileExtracts.of(typesFirst).methods();
+
+    assertEquals(methods, otherMethods);
+    assertEquals(types, otherTypes);
+  }
+
+  @Test
+  void samePathWithNewContentIsNotReused() throws IOException {
+    String id = "freshness";
+    String firstContent = "package demo; class Sample { Object first() { return null; } }\n";
+    String secondContent =
+        "package demo; class Sample { Object second() { return null; } }\n";
+
+    SourceFile before = scannedSourceFile(id, firstContent, "demo/Sample.java");
+    SourceMetadataScannerFileExtracts beforeExtracts = SourceMetadataScannerFileExtracts.of(before);
+    assertEquals(List.of("first"), methodNames(beforeExtracts));
+
+    SourceFile after = scannedSourceFile(id, secondContent, "demo/Sample.java");
+    SourceMetadataScannerFileExtracts afterExtracts = SourceMetadataScannerFileExtracts.of(after);
+    assertEquals(List.of("second"), methodNames(afterExtracts));
+
+    assertNotSame(beforeExtracts, afterExtracts,
+        "a re-read of the same path must never answer from the previous content");
+    assertEquals(List.of("first"), methodNames(beforeExtracts),
+        "previously returned extracts keep their own values");
+
+    SourceFile back = scannedSourceFile(id, firstContent, "demo/Sample.java");
+    SourceMetadataScannerFileExtracts backExtracts = SourceMetadataScannerFileExtracts.of(back);
+    assertNotSame(afterExtracts, backExtracts,
+        "A->B->A must not answer from the B entry");
+    assertEquals(List.of("first"), methodNames(backExtracts));
+  }
+
+  @Test
+  void differentPathsDoNotShareExtracts() throws IOException {
+    String source = "package demo; class Sample { Object run() { return null; } }\n";
+    SourceFile one = scannedSourceFile("paths-one", source, "demo/One.java");
+    SourceFile two = scannedSourceFile("paths-two", source, "demo/Two.java");
+
+    assertNotSame(SourceMetadataScannerFileExtracts.of(one),
+        SourceMetadataScannerFileExtracts.of(two));
+  }
+
+  @Test
+  void braceIndexMatchesTheReferenceScanForEveryBoundaryCell() throws IOException {
+    List<String> sources = List.of(
+        "",
+        "{",
+        "}",
+        "a",
+        "{}{}",
+        "}}{{",
+        "{{}}",
+        "class A { void m() { if (x) { y(); } } }",
+        "class A { String s = \"{\"; char c = '}'; }",
+        "class A { String s = \"\"\"\n{ }\n\"\"\"; }",
+        "@A({1, 2}) class B { }",
+        "a\r\n{\r\n}\r\n");
+    for (String source : sources) {
+      SourceFile file = syntheticSource(source);
+      SourceMetadataScannerFileExtracts extracts = SourceMetadataScannerFileExtracts.of(file);
+      String masked = extracts.literalMaskedSource();
+      for (int offset = -1; offset <= masked.length() + 1; offset++) {
+        assertEquals(
+            referenceBraceDepth(masked, offset),
+            extracts.braceDepthAt(offset),
+            "source=" + source + " index=" + offset);
+      }
+    }
+  }
+
+  @Test
+  void fieldExtentIndexMatchesTheReferenceScanForEveryBoundaryCell() throws IOException {
+    List<String> sources = List.of(
+        "",
+        ";",
+        "= 1;",
+        "= f(1;2);",
+        "= a[1;2];",
+        "= new X() { void m() { int a = 1; } };",
+        "= {1;2}; x = 3;",
+        "= 1",
+        "= 1 distractor;",
+        "= \"\"\"\n;\n\"\"\";",
+        "= 1; = 2;");
+    for (String source : sources) {
+      SourceFile file = syntheticSource(source);
+      SourceMetadataScannerFileExtracts extracts = SourceMetadataScannerFileExtracts.of(file);
+      String masked = extracts.literalMaskedSource();
+      for (int start = 0; start <= masked.length(); start++) {
+        assertEquals(
+            referenceFieldInitializerEnd(masked, start),
+            extracts.fieldInitializerEnd(start),
+            "source=" + source + " start=" + start);
+        assertEquals(
+            extracts.fieldInitializerEnd(start),
+            extracts.fieldInitializerEnd(start),
+            "the memoized extent must be stable for " + source + " start=" + start);
+      }
+    }
+  }
+
+  @Test
+  void annotationArgumentsAreMaskedOnlyForDeclarations() throws IOException {
+    String source = "package demo;\n"
+        + "@Marker({1, 2})\n"
+        + "class Sample {\n"
+        + "  @Marker({\"a\", \"b\"})\n"
+        + "  Object run(String value) { return value; }\n"
+        + "}\n";
+    SourceFile file = sourceFile("mask-variants", source);
+    SourceMetadataScannerFileExtracts extracts = SourceMetadataScannerFileExtracts.of(file);
+
+    assertEquals(file.structuralSource().length(), extracts.literalMaskedSource().length());
+    assertEquals(file.structuralSource().length(), extracts.declarationMaskedSource().length());
+    assertTrue(extracts.literalMaskedSource().contains("1, 2"),
+        extracts.literalMaskedSource());
+    assertFalse(extracts.declarationMaskedSource().contains("1, 2"),
+        extracts.declarationMaskedSource());
+  }
+
+  private static List<String> methodNames(SourceMetadataScannerFileExtracts extracts) {
+    return extracts.methods().stream().map(MethodInfo::name).toList();
+  }
+
+  private static SourceFile syntheticSource(String source) {
+    String structural = JavaSourceText.stripComments(source);
+    return new SourceFile(
+        Path.of("synthetic-" + Math.abs(source.hashCode()) + "-" + SYNTHETIC.incrementAndGet()
+            + ".java"),
+        "synthetic.java",
+        source,
+        structural,
+        "demo",
+        "demo.Synthetic",
+        "Synthetic",
+        0,
+        false);
+  }
+
+  private static final java.util.concurrent.atomic.AtomicInteger SYNTHETIC =
+      new java.util.concurrent.atomic.AtomicInteger();
+
   private SourceFile sourceFile(String id, String sourceText) throws IOException {
+    return scannedSourceFile(id, sourceText, "demo/Sample.java");
+  }
+
+  private SourceFile scannedSourceFile(String id, String sourceText, String relative)
+      throws IOException {
     Path root = temp.resolve(id).resolve("src/main/java");
-    Path source = root.resolve("demo/Sample.java");
+    Path source = root.resolve(relative);
     Files.createDirectories(source.getParent());
     Files.writeString(source, sourceText);
     AnalysisContext context = AnalysisContext.builder()
