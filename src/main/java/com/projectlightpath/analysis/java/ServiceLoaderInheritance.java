@@ -1,9 +1,7 @@
 package com.projectlightpath.analysis.java;
 
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,10 +23,6 @@ final class ServiceLoaderInheritance {
       "(?U)extends\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
           + "(?:\\s*\\.\\s*[\\p{javaJavaIdentifierStart}]"
           + "[\\p{javaJavaIdentifierPart}]*)*)");
-
-  private static final Pattern PRIVATE_MODIFIER = Pattern.compile("\\bprivate\\b");
-  private static final Pattern PROTECTED_MODIFIER = Pattern.compile("\\bprotected\\b");
-  private static final Pattern PUBLIC_MODIFIER = Pattern.compile("\\bpublic\\b");
 
   private ServiceLoaderInheritance() {}
 
@@ -57,124 +51,12 @@ final class ServiceLoaderInheritance {
         return true;
       }
       if (owners.stream()
-          .anyMatch(candidate -> ownerMayDeclareServiceLoader(
+          .anyMatch(candidate -> StaticImportOwnerResolver.mayDeclareServiceLoader(
               scanner, candidate, file.packageName()))) {
         return true;
       }
     }
     return false;
-  }
-
-  /**
-   * True when the owner declares a ServiceLoader member, inherits one through
-   * its direct superclass, or has any unresolved/multi-branch inheritance that
-   * leaves the member set unproven. A package-qualified superclass outside the
-   * selected files and a nested-type-qualified reference are unresolved.
-   */
-  private static boolean ownerMayDeclareServiceLoader(
-      SourceMetadataScanner scanner,
-      SourceMetadataScanner.SourceFile candidate,
-      String sitePackage) {
-    if (declaresInheritableServiceLoaderType(candidate, sitePackage)) {
-      return true;
-    }
-    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
-    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
-    for (SourceMetadataScannerState.TypeInfo type
-        : SourceMetadataScanner.typeDeclarations(candidate)) {
-      if (!type.name().equals(candidate.simpleTypeName())) {
-        continue;
-      }
-      String header = typeHeader(masked, type);
-      if (SourceMetadataScanner.topLevelKeywordIndex(header, "implements") >= 0
-          || hasSecondSupertype(header)) {
-        return true;
-      }
-      String reference = extendsReference(masked, type);
-      if (reference == null) {
-        continue;
-      }
-      Optional<SourceMetadataScanner.SourceFile> superclass =
-          resolvedSuperclass(scanner, candidate, masked, reference);
-      if (superclass.isEmpty()) {
-        return true;
-      }
-      if (superclassDeclaresServiceLoader(scanner, candidate, masked, type)) {
-        return true;
-      }
-      if (hasUnprovenInheritance(superclass.get())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * True when the resolved superclass itself has any extends/implements
-   * clause. Its inherited member set is then beyond the one-hop proof and the
-   * scan abstains.
-   */
-  private static boolean hasUnprovenInheritance(
-      SourceMetadataScanner.SourceFile file) {
-    String source = ServiceLoaderSourceMasker.mask(file.structuralSource());
-    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
-    for (SourceMetadataScannerState.TypeInfo type
-        : SourceMetadataScanner.typeDeclarations(file)) {
-      if (!type.name().equals(file.simpleTypeName())) {
-        continue;
-      }
-      String header = typeHeader(masked, type);
-      return SourceMetadataScanner.topLevelKeywordIndex(header, "implements") >= 0
-          || hasSecondSupertype(header)
-          || extendsReference(masked, type) != null;
-    }
-    return false;
-  }
-
-  /** The superclass declaration header, up to the type body. */
-  private static String typeHeader(
-      String source, SourceMetadataScannerState.TypeInfo type) {
-    int body = source.indexOf('{', type.start());
-    int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
-    return limit <= type.start() ? "" : source.substring(type.start(), limit);
-  }
-
-  /** True when a top-level comma adds a second extends/superinterface name. */
-  private static boolean hasSecondSupertype(String header) {
-    int extendsIndex = SourceMetadataScanner.topLevelKeywordIndex(header, "extends");
-    if (extendsIndex < 0) {
-      return false;
-    }
-    int depth = 0;
-    for (int index = extendsIndex; index < header.length(); index++) {
-      char value = header.charAt(index);
-      if (value == '<' || value == '(' || value == '[') {
-        depth++;
-      } else if ((value == '>' || value == ')' || value == ']') && depth > 0) {
-        depth--;
-      } else if (value == ',' && depth == 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Resolves the extends reference to its selected source file. */
-  private static Optional<SourceMetadataScanner.SourceFile> resolvedSuperclass(
-      SourceMetadataScanner scanner,
-      SourceMetadataScanner.SourceFile file,
-      String source,
-      String reference) {
-    int qualifierEnd = reference.lastIndexOf('.');
-    if (qualifierEnd >= 0) {
-      String qualifier = reference.substring(0, qualifierEnd);
-      String simpleName = reference.substring(qualifierEnd + 1);
-      return scanner.files().stream()
-          .filter(candidate -> candidate.packageName().equals(qualifier)
-              && candidate.simpleTypeName().equals(simpleName))
-          .findFirst();
-    }
-    return resolveSimpleType(scanner, file, source, reference).stream().findFirst();
   }
 
   /** True when an enclosing type inherits a ServiceLoader member type. */
@@ -196,7 +78,7 @@ final class ServiceLoaderInheritance {
     return false;
   }
 
-  private static boolean superclassDeclaresServiceLoader(
+  static boolean superclassDeclaresServiceLoader(
       SourceMetadataScanner scanner,
       SourceMetadataScanner.SourceFile file,
       String source,
@@ -215,12 +97,12 @@ final class ServiceLoaderInheritance {
       return scanner.files().stream()
           .filter(candidate -> candidate.packageName().equals(qualifier)
               && candidate.simpleTypeName().equals(simpleName))
-          .anyMatch(candidate -> declaresInheritableServiceLoaderType(
-              candidate, file.packageName()));
+          .anyMatch(candidate -> ServiceLoaderMemberTypes
+              .declaresInheritableServiceLoaderType(candidate, file.packageName()));
     }
     return resolveSimpleType(scanner, file, source, superReference).stream()
-        .anyMatch(candidate -> declaresInheritableServiceLoaderType(
-            candidate, file.packageName()));
+        .anyMatch(candidate -> ServiceLoaderMemberTypes
+            .declaresInheritableServiceLoaderType(candidate, file.packageName()));
   }
 
   /**
@@ -257,7 +139,7 @@ final class ServiceLoaderInheritance {
         .toList();
   }
 
-  private static String extendsReference(
+  static String extendsReference(
       String source, SourceMetadataScannerState.TypeInfo type) {
     int body = source.indexOf('{', type.start());
     int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
@@ -295,74 +177,4 @@ final class ServiceLoaderInheritance {
     return result;
   }
 
-  /**
-   * True when the candidate declares a ServiceLoader type that its top-level
-   * type owns: the candidate's own top-level type or one of its direct
-   * members. Types nested deeper (a member of a member) and local classes are
-   * not inherited by an extending type, so they must not shadow the site.
-   * A private member is never inherited; a package-private member is inherited
-   * only by a subclass in the same package (JLS 8.5).
-   */
-  static boolean declaresInheritableServiceLoaderType(
-      SourceMetadataScanner.SourceFile candidate, String sitePackage) {
-    List<SourceMetadataScannerState.TypeInfo> types =
-        SourceMetadataScanner.typeDeclarations(candidate);
-    List<SourceMetadataScannerState.TypeInfo> named = types.stream()
-        .filter(type -> type.name().equals("ServiceLoader"))
-        .filter(type -> !SourceMetadataScanner.isLocalType(candidate, type))
-        .toList();
-    if (named.isEmpty()) {
-      return false;
-    }
-    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
-    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
-    return named.stream()
-        .filter(type -> isInheritableMemberType(
-            candidate, masked, type, sitePackage, types))
-        .anyMatch(type -> types.stream()
-            .filter(other -> other.start() < type.start() && type.end() <= other.end())
-            .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
-  }
-
-  /**
-   * A private member type is never inherited; a package-private member type is
-   * inherited only inside its own package (JLS 8.5). Every member type of an
-   * interface is implicitly public (JLS 9.3).
-   */
-  private static boolean isInheritableMemberType(
-      SourceMetadataScanner.SourceFile candidate,
-      String source,
-      SourceMetadataScannerState.TypeInfo type,
-      String sitePackage,
-      List<SourceMetadataScannerState.TypeInfo> types) {
-    String modifiers = declarationModifiers(source, type);
-    if (PRIVATE_MODIFIER.matcher(modifiers).find()) {
-      return false;
-    }
-    return candidate.packageName().equals(sitePackage)
-        || PUBLIC_MODIFIER.matcher(modifiers).find()
-        || PROTECTED_MODIFIER.matcher(modifiers).find()
-        || implicitlyPublicInterfaceMember(types, type);
-  }
-
-  /** True when the type's innermost enclosing type is an interface. */
-  private static boolean implicitlyPublicInterfaceMember(
-      List<SourceMetadataScannerState.TypeInfo> types,
-      SourceMetadataScannerState.TypeInfo type) {
-    return types.stream()
-        .filter(other -> other.start() < type.start() && type.end() <= other.end())
-        .max(Comparator.comparingInt(SourceMetadataScannerState.TypeInfo::start))
-        .map(other -> other.kind().equals("interface"))
-        .orElse(false);
-  }
-
-  /** The declaration header between the previous member boundary and the type. */
-  private static String declarationModifiers(
-      String source, SourceMetadataScannerState.TypeInfo type) {
-    int boundary = type.start() - 1;
-    while (boundary >= 0 && ";{}".indexOf(source.charAt(boundary)) < 0) {
-      boundary--;
-    }
-    return source.substring(boundary + 1, type.start());
-  }
 }
