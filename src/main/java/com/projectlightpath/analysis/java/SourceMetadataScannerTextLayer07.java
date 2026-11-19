@@ -82,7 +82,7 @@ static boolean quotedArgumentIsFirst(String source, int start, int closing) {
   /** Masks annotation arguments so method declaration scanning remains bounded. */
 static String maskAnnotationArguments(String source) {
     char[] masked = source.toCharArray();
-    Matcher matcher = Pattern.compile("@[A-Za-z_][\\w.]*").matcher(source);
+    Matcher matcher = ANNOTATION_NAME.matcher(source);
     while (matcher.find()) {
       int opening = matcher.end();
       while (opening < source.length() && Character.isWhitespace(source.charAt(opening))) {

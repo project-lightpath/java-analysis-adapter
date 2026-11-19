@@ -172,7 +172,7 @@ static List<Parameter> parameters(SourceFile file, String source) {
     for (String raw : splitArguments(source)) {
       List<String> qualifiers = qualifierNames(file, raw);
       String cleaned = maskAnnotationArguments(stripComments(raw))
-          .replaceAll("@[A-Za-z_][\\w.]*", " ").trim();
+          .replaceAll(ANNOTATION_NAME.pattern(), " ").trim();
       cleaned = cleaned.replaceAll("\\b(final|volatile|transient)\\b", "").trim();
       if (cleaned.isBlank()) {
         continue;

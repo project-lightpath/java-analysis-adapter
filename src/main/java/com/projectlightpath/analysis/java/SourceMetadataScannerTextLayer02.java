@@ -77,7 +77,7 @@ static int quotedArgumentEnd(String source, int start, int closing) {
 
 static String parameterType(String parameter) {
     String normalized = parameter.trim()
-        .replaceAll("@[A-Za-z_][\\w.]*", "")
+        .replaceAll(ANNOTATION_NAME.pattern(), "")
         .replace("final ", "")
         .trim();
     int nameSeparator = normalized.lastIndexOf(' ');

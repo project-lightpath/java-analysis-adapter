@@ -23,8 +23,10 @@ abstract class SourceMetadataScannerTextLayer00 extends SourceMetadataScannerTex
     int end = owner.length();
     while (end > packageSeparator + 1) {
       String candidateName = owner.substring(0, end);
+      boolean exact = candidateName.equals(owner);
       Optional<SourceFile> match = candidates.stream()
           .filter(file -> file.typeName().equals(candidateName))
+          .filter(file -> exact || declaresOwnerPath(file, owner))
           .findFirst();
       if (match.isPresent()) {
         return match;
@@ -36,6 +38,30 @@ abstract class SourceMetadataScannerTextLayer00 extends SourceMetadataScannerTex
       end = dollar;
     }
     return Optional.empty();
+  }
+
+  /**
+   * True when the file declares the owner itself or a declared type is a
+   * proper prefix of the owner with an anonymous/local digit suffix. A mere
+   * type-name prefix is not enough: {@code Outer$Inner.java} must not claim
+   * {@code Outer$Inner$Leaf} when {@code Outer.java} declares that chain.
+   */
+  private static boolean declaresOwnerPath(SourceFile file, String owner) {
+    List<SourceMetadataScannerState.TypeInfo> types =
+        SourceMetadataScanner.typeDeclarations(file);
+    for (SourceMetadataScannerState.TypeInfo type : types) {
+      String path = SourceMetadataScanner.typeContaining(file, type.start());
+      if (path.equals(owner)) {
+        return true;
+      }
+      if (owner.startsWith(path + "$")) {
+        String remainder = owner.substring(path.length() + 1);
+        if (!remainder.isEmpty() && Character.isDigit(remainder.charAt(0))) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
 static int lineStartOffset(String source, int line) {
