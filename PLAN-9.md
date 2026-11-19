@@ -104,6 +104,10 @@ changes.
 | A9 | owner `a.Tools` is outside the selected files and no selected type shares the simple name | site abstained (owner's members unprovable regardless of lookalikes) | **RED at GREEN_09c**; GREEN_09d abstains |
 | A10 | owner `a.Tools extends a.Base`, and `a.Base` declares a public member `ServiceLoader` | site abstained (inherited member participates) | **RED at GREEN_09c**; GREEN_09d abstains |
 | A11 | owner `a.Tools extends external.Base` (superclass outside the selected files) | site abstained (inherited member set unproven) | **RED at GREEN_09c**; GREEN_09d abstains |
+| A12 | owner `a.Tools extends a.Plain`, and `a.Plain` has no inheritance clause or member | site attributed (member set proven absent) | guard (previously uncovered false exit) |
+| A13 | owner `a.Tools implements a.Iface`, and `a.Iface` declares a public member `ServiceLoader` | site abstained | **RED at GREEN_09d**; GREEN_09e abstains |
+| A14 | owner `interface a.Tools extends a.First, a.Second`, and `a.Second` declares the member | site abstained | **RED at GREEN_09d**; GREEN_09e abstains |
+| A15 | owner `a.Tools extends a.Base`, and `a.Base extends external.X` | site abstained (grandparent unproven) | **RED at GREEN_09d**; GREEN_09e abstains |
 
 All `(a)` cells include `import java.util.*;` so attribution is not vacuous.
 
@@ -265,17 +269,19 @@ Gates (after RED, after GREEN, after refactor):
 ## Residuals (documented, safe-direction)
 
 - Static import whose owner is a nested type (`import static a.Outer.Tools.*`)
-  is still not matched by the top-level `typeName` comparison. This is a
-  pre-existing **DEFINITE risk**, not merely under-abstention: the simple name
-  may be attributed to `java.util.ServiceLoader` even where javac resolves it
-  to the imported member type. It is unchanged by this issue and belongs to
-  FLPATH-5124 follow-up work.
+  no longer matches a selected file, so it abstains (over-abstention). It is no
+  longer a DEFINITE risk; nested-type owner support is part of FLPATH-5136.
 - A static-import owner type outside the selected files is unprovable (A8/A9):
   the scan abstains whether or not a selected type shares its simple name. An
   owner whose extends clause cannot be resolved to a selected file also
   abstains (A11), because an inherited member would participate in the
-  wildcard import. An owner whose selected direct superclass declares no
-  eligible member keeps the previous attribution (A1).
+  wildcard import. Implements clauses, second superinterface names, and a
+  resolved superclass that itself has any inheritance clause also abstain
+  (A13-A15).
+- The owner-side proof is one hop: a resolved superclass with no inheritance
+  clause and no eligible member keeps attribution (A12); a superclass that
+  extends even a clean selected class over-abstains. That is the safe
+  direction and is part of FLPATH-5136's owner-path work.
 - Import names are normalized by `JavaImports.appendNormalized` (identifier-
   ignorable code points stripped) while `typeName` is raw source text. An
   owner name containing an ignorable code point cannot match the owner
@@ -420,3 +426,35 @@ Full gates on GREEN_09d:
 - `make adapter-test`: pending re-run (expected 312; baseline 275).
 - `make java-lint`: pending.
 - `make evidence-validate`: pending.
+
+## Execution record (EVIDENCE_09e — independent PR review wave 3)
+
+Round 2 review found the owner-side proof covered only the first `extends`
+name and one hop, plus a missing false-exit guard and stale PR/plan text.
+
+- **Owner implements/second superinterface/grandparent (minor):** the owner
+  header now abstains on an `implements` clause or a second
+  extends/superinterface name; the resolved superclass must have no inheritance
+  clause of its own. A12 pins the clean-superclass attribution exit; A13-A15
+  are the RED cells.
+- **PR description (minor):** updated with the 09c/09d/09e work, the full
+  commit list, and current gate counts.
+- **Gate receipt (minor):** this record replaces the pending line.
+- **Resolution line numbers (nit):** all rows now use 1-based ranges covering
+  the statement and its literal.
+
+RED_09e (d7090d9): targeted matrix 96 tests, 3 failures (A13-A15); A12 guard
+green.
+
+GREEN_09e (514a84d): targeted matrix 96/96 green.
+
+REFACTOR_09e (be2aa19): PMD forced a behavior-neutral split of
+`ServiceLoaderInheritance` into `ServiceLoaderMemberTypes` and
+`StaticImportOwnerResolver` (GodClass WMC); both classes keep the same
+predicates and the targeted matrix stays 96/96.
+
+Full gates on REFACTOR_09e:
+
+- `make adapter-test`: 315 tests, 0 failures (baseline 275).
+- `make java-lint`: PASS (0 PMD/CPD findings).
+- `make evidence-validate`: PASS.
