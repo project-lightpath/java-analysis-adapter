@@ -32,9 +32,11 @@ final class ServiceLoaderInheritance {
   private ServiceLoaderInheritance() {}
 
   /**
-   * True when a static on-demand import names a selected type that declares a
-   * member ServiceLoader: that member and java.util.ServiceLoader are then
-   * ambiguous, so the wildcard cannot own the simple name.
+   * True when a static on-demand import names a type whose own or inherited
+   * members include a ServiceLoader: that member and java.util.ServiceLoader
+   * are then ambiguous, so the wildcard cannot own the simple name. An owner
+   * outside the selected files, or one whose superclass cannot be resolved,
+   * leaves the member set unproven and abstains.
    */
   static boolean staticOnDemandAmbiguous(
       SourceMetadataScanner scanner,
@@ -49,23 +51,68 @@ final class ServiceLoaderInheritance {
           .filter(candidate -> candidate.typeName().equals(owner))
           .toList();
       if (owners.isEmpty()) {
-        // The named owner is outside the selected files. If a selected type
-        // shares its simple name, the owner could still declare the member, so
-        // the ambiguity is unprovable and abstention is the safe direction.
-        String simpleName = imported.simpleName();
-        if (scanner.files().stream()
-            .anyMatch(candidate -> candidate.simpleTypeName().equals(simpleName))) {
-          return true;
-        }
-        continue;
+        // The named owner is outside the selected files: whether it declares
+        // (or inherits) the member cannot be proven, so abstain.
+        return true;
       }
       if (owners.stream()
-          .anyMatch(candidate -> declaresInheritableServiceLoaderType(
-              candidate, file.packageName()))) {
+          .anyMatch(candidate -> ownerMayDeclareServiceLoader(
+              scanner, candidate, file.packageName()))) {
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * True when the owner declares a ServiceLoader member, inherits one through
+   * its direct superclass, or has an extends clause whose superclass cannot be
+   * resolved. A package-qualified superclass outside the selected files and a
+   * nested-type-qualified reference are treated as unresolved.
+   */
+  private static boolean ownerMayDeclareServiceLoader(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile candidate,
+      String sitePackage) {
+    if (declaresInheritableServiceLoaderType(candidate, sitePackage)) {
+      return true;
+    }
+    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
+    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
+    for (SourceMetadataScannerState.TypeInfo type
+        : SourceMetadataScanner.typeDeclarations(candidate)) {
+      if (!type.name().equals(candidate.simpleTypeName())) {
+        continue;
+      }
+      String reference = extendsReference(masked, type);
+      if (reference == null) {
+        continue;
+      }
+      if (!resolvesSuperclass(scanner, candidate, masked, reference)) {
+        return true;
+      }
+      if (superclassDeclaresServiceLoader(scanner, candidate, masked, type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** True when the extends reference resolves to a selected source file. */
+  private static boolean resolvesSuperclass(
+      SourceMetadataScanner scanner,
+      SourceMetadataScanner.SourceFile file,
+      String source,
+      String reference) {
+    int qualifierEnd = reference.lastIndexOf('.');
+    if (qualifierEnd >= 0) {
+      String qualifier = reference.substring(0, qualifierEnd);
+      String simpleName = reference.substring(qualifierEnd + 1);
+      return scanner.files().stream()
+          .anyMatch(candidate -> candidate.packageName().equals(qualifier)
+              && candidate.simpleTypeName().equals(simpleName));
+    }
+    return !resolveSimpleType(scanner, file, source, reference).isEmpty();
   }
 
   /** True when an enclosing type inherits a ServiceLoader member type. */
