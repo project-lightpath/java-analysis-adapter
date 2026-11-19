@@ -1,6 +1,5 @@
 .PHONY: package adapter-test adapter-package validator-test java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis e2e-test
 
-
 # JUnit runs the tests; this target only sizes the pool and heap from the host.
 # One concurrent SootUp scene needs ~3 GB; the pool is also capped by CPU count
 # and at 8. Override with ADAPTER_TEST_PARALLELISM=N (heap follows at 3 GB per slot).
@@ -15,6 +14,7 @@ adapter-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
 	JAVA_TOOL_OPTIONS="$${JAVA_TOOL_OPTIONS:-} -Djunit.jupiter.execution.parallel.config.fixed.parallelism=$(ADAPTER_TEST_PARALLELISM)" \
 	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 3))g
+	python3 spike/scripts/check_test_count.py 315
 
 e2e-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=ServiceLoaderEndToEndTest test -f pom.xml

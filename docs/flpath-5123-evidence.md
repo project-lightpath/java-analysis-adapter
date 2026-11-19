@@ -24,20 +24,26 @@ diagnostic downgrades every ServiceLoader edge in the analysis to POSSIBLE.
   inert compile stub and package-private state-injection seam. 18 cells failed
   for the intended reason.
 - `GREEN_1` — implementation, count cap deleted, surefire large-archive split.
-- `RED_2` / `GREEN_2` — review round 1: retention rollback restores the
-  cumulative budget, module-info `provides` are charged atomically, retention
-  exhaustion downgrades certainty, byte-term cells pin literal charges, classic
-  cell pins EOCD/locator/payload.
+  Closes both `RED_1` and `RED_2` (RED_1/RED_2 both landed before the first
+  GREEN because the review round happened against the plan-era API).
+- `RED_2` — review round 1 cells (retention restore, module-info atomicity,
+  certainty, literal byte terms, classic EOCD/locator/payload); closed by
+  `GREEN_1` plus the `GREEN_2` follow-up where noted.
 - `RED_3` / `GREEN_2` — review round 2: directory and archive module-retention
   failures roll the whole source back; archive rollback is exception-safe.
 - `RED_4` / `GREEN_3` — archive pre-state characterization; lint-driven
   `ServiceLoaderDescriptorEntryNames` extraction and mutable-list contract.
+- `RED_5` / `GREEN_4` — PR review round: decompression partial-result and
+  directory-listing/module-info cells, observed single-file retention charging,
+  non-descriptor entries rejected before charging, and the test-count gate.
 
 ## Gates (final tree)
 
-- `make adapter-test`: **295** tests, 0 failures
-  (baseline before RED: 275 tests, 0 failures; count is the sum of
-  `target/surefire-reports` and `target/surefire-reports-large`).
+- `make adapter-test`: **299** tests (298 default + 1 large-archive),
+  0 failures (baseline before RED: 275 tests, 0 failures). The target now runs
+  `spike/scripts/check_test_count.py 275`, which sums
+  `target/surefire-reports` + `target/surefire-reports-large` and requires the
+  large-archive execution to have run at least one test.
 - `make java-lint`: PASS, 0 findings outside the reviewed baseline, 0 CPD.
 - `make evidence-validate`: passes (10 acceptance criteria, 3 candidates,
   10 capability cases, 21 expected relationships, 10 observed results).
@@ -50,7 +56,9 @@ diagnostic downgrades every ServiceLoader edge in the analysis to POSSIBLE.
    diagnostics. 12 pre-existing `versioned_module_info_unsupported`
    diagnostics remain (unrelated diagnostic-only condition; not a budget
    failure). Before this change the Jira records 5/54 descriptors with 99
-   enumeration diagnostics.
+   enumeration diagnostics. This is external evidence: reproduce with
+   `spike/probes/flpath-5123/README.md`; it is not covered by
+   `make evidence-validate`.
 2. **65,535-entry classic ZIP** (`ServiceLoaderCoverageTest`): complete, one
    descriptor with its provider payload, EOCD count `0xFFFF`, no ZIP64 locator,
    zero diagnostics.
@@ -89,6 +97,14 @@ in `PLAN-5123.md`; the load-bearing ones are:
   in `RED_4`.
 - Implementation review round 3: no new blocker or high finding; only the
   documented residuals below and the mutable-list contract (now documented).
+- PR review round 4 (fresh PR-level reviewer): 10 findings addressed in
+  `RED_5`/`GREEN_4` and this evidence update: decompression partial-result cell,
+  directory-listing/module-info contract, comment-term cell, observed
+  single-file retention charge, non-descriptor charge rejection, observable
+  test-count gate, reproducible baseline probe, and evidence-trail numbering.
+- CodeRabbit: rate-limited on this repository; `@coderabbitai full review` was
+  posted and returned "Review rate limited", so no bot findings exist yet. The
+  command must be re-run after the quota resets before merge.
 
 ## Java 17 parity
 
