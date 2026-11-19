@@ -29,10 +29,11 @@ import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
  * extraction.
  *
  * <p>Retention: the value deliberately holds no {@link SourceFile} and no
- * {@link Path}. It only holds derived data, so it never keeps its own weak key
- * reachable and the entry becomes collectible together with the scan's
- * {@code SourceFile}s. Callers that need file identity (source text, line
- * numbers, offset lookups) pass their {@code SourceFile} to the accessor.
+ * {@link Path}, so it never keeps its own weak key reachable, and the entry
+ * becomes collectible together with the scan's {@code SourceFile}s. Besides
+ * the raw-source reference used only as a reuse identity, it holds derived
+ * data. Callers that need file identity (source text, line numbers, offset
+ * lookups) pass their {@code SourceFile} to the accessor.
  *
  * <p>Scope: the map is static, keyed by path, and correct under parallel scans
  * (fill is one synchronized get-validate-put; lazy slots synchronize on the
