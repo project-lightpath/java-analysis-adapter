@@ -1541,6 +1541,75 @@ class ServiceLoaderNameResolutionMatrixTest {
         new MethodSymbol("demo.Cash$Flow", "audit", "()V"), 6, "ServiceLoader"));
   }
 
+  // ---- PR #12 CodeRabbit findings ----
+
+  /** Annotation names may contain `$`; masking must still expose `public`. */
+  @Test
+  void dollarNamedAnnotationArgumentDoesNotHidePublicMemberType() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-dollar-annotation", "demo", """
+        package demo;
+        import java.util.*;
+        import other.Base;
+        class Bridge extends Base {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("other/Base.java", """
+        package other;
+        public class Base {
+          public @$Mark({Object.class}) static class ServiceLoader<T> { }
+          @interface $Mark { Class<?>[] value(); }
+        }
+        """)).isEmpty());
+  }
+
+  /**
+   * A nested owner must not bind to an unrelated top-level type whose name is
+   * only a prefix of the owner.
+   */
+  @Test
+  void nestedOwnerWithDollarTopLevelPrefixPrefersDeclaringFile() throws IOException {
+    String id = "matrix-cell-owner-prefix-decoy";
+    Map<String, String> files = Map.of(
+        "demo/Outer.java", "package demo;\nclass Outer { class Inner { class Leaf { } } }\n",
+        "demo/Outer$Inner.java", "package demo;\nclass Outer$Inner { }\n");
+    Optional<SourceMetadataScanner.SourceFile> file =
+        sourceFileOf(id, files, "demo.Outer$Inner$Leaf");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("Outer.java"),
+        "must not bind to the unrelated Outer$Inner.java");
+  }
+
+  @Test
+  void anonymousOwnerResolvesEnclosingTopLevel() throws IOException {
+    Optional<SourceMetadataScanner.SourceFile> file = sourceFileOf(
+        "matrix-cell-owner-anonymous",
+        Map.of("demo/Outer.java", "package demo;\nclass Outer { }\n"),
+        "demo.Outer$1");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("Outer.java"));
+  }
+
+  @Test
+  void nestedAnonymousOwnerResolvesEnclosingTopLevel() throws IOException {
+    Optional<SourceMetadataScanner.SourceFile> file = sourceFileOf(
+        "matrix-cell-owner-nested-anonymous",
+        Map.of("demo/Outer.java", "package demo;\nclass Outer { class Inner { } }\n"),
+        "demo.Outer$Inner$1");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("Outer.java"));
+  }
+
+  @Test
+  void exactTopLevelDollarOwnerResolvesItself() throws IOException {
+    Map<String, String> files = Map.of(
+        "demo/Outer.java", "package demo;\nclass Outer { class Inner { } }\n",
+        "demo/Outer$Inner.java", "package demo;\nclass Outer$Inner { }\n");
+    Optional<SourceMetadataScanner.SourceFile> file =
+        sourceFileOf("matrix-cell-owner-exact-dollar", files, "demo.Outer$Inner");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("Outer$Inner.java"));
+  }
+
   private List<ServiceLoaderCallSite> matrixSites(
       String id, String bridgeSource) throws IOException {
     return matrixSites(id, bridgeSource, Map.of());
