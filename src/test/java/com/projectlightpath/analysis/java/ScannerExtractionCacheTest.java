@@ -301,7 +301,7 @@ class ScannerExtractionCacheTest {
   }
 
   @Test
-  void samePathWithIdenticalContentIsReReadNotShared() throws IOException {
+  void samePathWithIdenticalContentIsReused() throws IOException {
     String id = "identical-content";
     String source = "package demo; class Sample { Object run() { return null; } }\n";
     SourceFile first = scannedSourceFile(id, source, "demo/Sample.java");
@@ -309,9 +309,9 @@ class ScannerExtractionCacheTest {
 
     assertNotSame(first.structuralSource(), second.structuralSource(),
         "every read must produce its own structural string");
-    assertNotSame(SourceMetadataScannerFileExtracts.of(first),
+    assertSame(SourceMetadataScannerFileExtracts.of(first),
         SourceMetadataScannerFileExtracts.of(second),
-        "freshness is per read, not per content equality");
+        "an unchanged file must share extracts across scanners");
   }
 
   @Test

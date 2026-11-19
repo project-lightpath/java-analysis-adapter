@@ -38,6 +38,11 @@ abstract class SourceMetadataScannerTextLayer18 extends SourceMetadataScannerTex
   }
 
 static MethodInfo methodContaining(SourceFile file, int index) {
+    return SourceMetadataScannerFileExtracts.of(file).methodContaining(file, index);
+  }
+
+  /** Computes the containing method for one offset without the per-file memo. */
+  static MethodInfo computeMethodContaining(SourceFile file, int index) {
     List<MethodInfo> constructors = constructors(file);
     String siteType = typeContaining(file, index);
     return executableMethods(file).stream()

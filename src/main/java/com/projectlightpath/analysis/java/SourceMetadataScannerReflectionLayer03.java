@@ -42,9 +42,29 @@ private static final Pattern SHARED_DECLARATION = Pattern.compile(
     return Optional.ofNullable(selected);
   }
 
+  private final Map<String, Optional<FieldReference>> visibleFields = new HashMap<>();
+
   FieldReference visibleField(
       SourceFile file, String variable, int siteOffset, String selectedOwner) {
     String siteType = typeContaining(file, siteOffset);
+    String key = siteType + '\u0000' + variable + '\u0000' + selectedOwner;
+    synchronized (visibleFields) {
+      Optional<FieldReference> cached = visibleFields.get(key);
+      if (cached != null) {
+        return cached.orElse(null);
+      }
+    }
+    FieldReference value = resolveVisibleField(file, variable, siteType, selectedOwner);
+    synchronized (visibleFields) {
+      Optional<FieldReference> previous =
+          visibleFields.putIfAbsent(key, Optional.ofNullable(value));
+      return (previous != null ? previous : Optional.ofNullable(value)).orElse(null);
+    }
+  }
+
+  /** Resolves the nearest visible field for one site type; per-scanner memo target. */
+  private FieldReference resolveVisibleField(
+      SourceFile file, String variable, String siteType, String selectedOwner) {
     Map<String, Integer> visibleOwners = selectedOwner == null
         ? visibleFieldOwners(file, siteType)
         : selectedOwnerFieldOwners(selectedOwner);
