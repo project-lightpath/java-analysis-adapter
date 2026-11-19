@@ -129,7 +129,14 @@ static List<String> splitTypeIntersectionBounds(String expression) {
     return splitBalanced(expression, '&', false);
   }
 
+  private static final Pattern CACHEABLE_PACKAGE = Pattern.compile("[A-Za-z_][\\w.]*");
+
 static boolean hasOnDemandImport(SourceFile sourceFile, String packageName) {
+    if (CACHEABLE_PACKAGE.matcher(packageName).matches()) {
+      return onDemandImportPackages(sourceFile).contains(packageName);
+    }
+    // A package name with '$' or non-ASCII identifiers is valid Java but
+    // outside the capture pattern of the cached set, so keep the exact scan.
     return Pattern.compile("(?m)\\bimport\\s+" + Pattern.quote(packageName) + "\\.\\*\\s*;")
         .matcher(SourceMetadataScannerFileExtracts.of(sourceFile).literalMaskedSource())
         .find();

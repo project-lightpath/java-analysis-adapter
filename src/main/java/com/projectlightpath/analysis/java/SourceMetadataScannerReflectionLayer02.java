@@ -163,7 +163,8 @@ static LocalDeclaration sharedDeclarationMatch(
         continue;
       }
       if (!isAccessibleField(
-          candidate, siteFile, field.fieldOwner(), siteType, field.declaration())) {
+              candidate, siteFile, field.fieldOwner(), siteType, field.declaration())
+          || !methodContaining(candidate, field.fieldOffset()).name().equals("<unknown>")) {
         continue;
       }
       Integer distance = visibleOwners.get(field.fieldOwner());
@@ -176,6 +177,24 @@ static LocalDeclaration sharedDeclarationMatch(
     return Optional.ofNullable(selected);
   }
 
+  /**
+   * Reports whether the token following a candidate type starts a field
+   * declarator. Method and initializer headers are rejected here, before any
+   * declaration text is copied or {@code methodContaining} scans the prefix.
+   */
+  static boolean fieldDeclaratorShape(String source, int typeEnd) {
+    for (int index = typeEnd; index < source.length(); index++) {
+      char character = source.charAt(index);
+      if (character == '=' || character == ';' || character == ',') {
+        return true;
+      }
+      if (character == '(' || character == '{' || character == '}') {
+        return false;
+      }
+    }
+    return false;
+  }
+
   /** Captures the accepted field declarations of one file once for every visibility lookup. */
   static List<SourceMetadataScannerFileExtracts.FieldCandidate> extractFieldCandidates(
       SourceFile candidate, String source) {
@@ -184,16 +203,16 @@ static LocalDeclaration sharedDeclarationMatch(
     Matcher matcher = FIELD_START.matcher(source);
     List<SourceMetadataScannerFileExtracts.FieldCandidate> result = new ArrayList<>();
     while (matcher.find()) {
+      // Reject method and initializer headers before any expensive work: FIELD_START
+      // also matches a method's return type, and its "declarators" would run to
+      // the next top-level ';'.
+      if (!fieldDeclaratorShape(source, matcher.end(1))) {
+        continue;
+      }
       int declarationEnd = extracts.fieldInitializerEnd(matcher.end(1));
       int fieldOffset = matcher.start(1);
-      boolean memberScope = declarationEnd >= 0
-          && isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()));
-      // Reject method declarations before copying any text: FIELD_START also
-      // matches a method's return type, and its "declarators" would run to the
-      // next top-level ';'. The consumer never accepts those candidates, so
-      // filtering here avoids caching large method-shaped substrings.
-      if (!memberScope
-          || !methodContaining(candidate, fieldOffset).name().equals("<unknown>")) {
+      if (declarationEnd < 0
+          || !isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()))) {
         continue;
       }
       result.add(new SourceMetadataScannerFileExtracts.FieldCandidate(

@@ -403,6 +403,18 @@ class ScannerExtractionCacheTest {
     return offset;
   }
 
+  @Test
+  void onDemandImportLookupUsesTheCachedSetAndKeepsDollarPackages() {
+    SourceFile file = syntheticSource(
+        "package demo;\nimport java.lang.reflect.*;\nimport a$b.*;\nclass Sample {}\n");
+
+    assertTrue(SourceMetadataScannerTextLayer06.hasOnDemandImport(
+        file, "java.lang.reflect"), "the cached set must answer ascii packages");
+    assertFalse(SourceMetadataScannerTextLayer06.hasOnDemandImport(file, "java.util"));
+    assertTrue(SourceMetadataScannerTextLayer06.hasOnDemandImport(file, "a$b"),
+        "a '$' package is outside the cached capture pattern and must still match");
+  }
+
   private static List<String> methodNames(SourceFile file) {
     return SourceMetadataScannerFileExtracts.of(file).methods(file).stream()
         .map(MethodInfo::name).toList();
