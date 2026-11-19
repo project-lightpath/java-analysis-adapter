@@ -20,7 +20,7 @@ abstract class SourceMetadataScannerTextLayer05 extends SourceMetadataScannerTex
   /** Checks whether a simple {@code @Produces} resolves to a CDI import. */
 static boolean importsCdiProducer(SourceFile file) {
     Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*(?:\\.\\*)?)\\s*;")
-        .matcher(maskStringLiterals(file.structuralSource()));
+        .matcher(SourceMetadataScannerFileExtracts.of(file).literalMaskedSource());
     boolean explicitCdi = false;
     boolean explicitOther = false;
     boolean cdiWildcard = false;

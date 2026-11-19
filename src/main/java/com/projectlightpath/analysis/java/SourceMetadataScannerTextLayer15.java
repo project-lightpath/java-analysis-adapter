@@ -17,16 +17,41 @@ abstract class SourceMetadataScannerTextLayer15 extends SourceMetadataScannerTex
 
 
 
+  /** Field declaration shape used for initializer attribution. */
+  private static final Pattern INITIALIZER_FIELD = Pattern.compile(
+      "(?m)(?:^|[;{}])\\s*"
+          + "(?:(?:@[A-Za-z_][\\w.]*(?:\\([^;{}]*\\))?\\s*)|"
+          + "(?:(?:public|protected|private|static|final|transient|volatile|strictfp)\\s+))*"
+          + "[A-Za-z_$][\\w$.<>?,\\[\\] ]*\\s+[A-Za-z_$][\\w$]*\\s*=");
+  private static final Pattern STATIC_MODIFIER = Pattern.compile("\\bstatic\\b");
+
   /** Attributes a dynamic site in a field initializer to the instance or static initializer. */
 static Optional<MethodInfo> initializerContaining(SourceFile file, int index) {
-    String source = maskStringLiterals(file.structuralSource());
-    Pattern field = Pattern.compile(
-        "(?m)(?:^|[;{}])\\s*"
-            + "(?:(?:@[A-Za-z_][\\w.]*(?:\\([^;{}]*\\))?\\s*)|"
-            + "(?:(?:public|protected|private|static|final|transient|volatile|strictfp)\\s+))*"
-            + "[A-Za-z_$][\\w$.<>?,\\[\\] ]*\\s+[A-Za-z_$][\\w$]*\\s*=");
-    Matcher matcher = field.matcher(source);
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     MethodInfo selected = initializerBlockContaining(file, source, index).orElse(null);
+    for (SourceMetadataScannerFileExtracts.InitializerField field :
+        SourceMetadataScannerFileExtracts.of(file).initializerFields()) {
+      if (field.equalsOffset() >= index || field.end() <= index) {
+        continue;
+      }
+      selected = new MethodInfo(
+          field.name(),
+          "",
+          field.declaration(),
+          field.matchStart(),
+          field.end() + 1,
+          field.line(),
+          "");
+    }
+    return Optional.ofNullable(selected);
+  }
+
+  /** Captures every attributeable field declaration in one pass over the file. */
+static List<SourceMetadataScannerFileExtracts.InitializerField> extractInitializerFields(
+      SourceFile file) {
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
+    Matcher matcher = INITIALIZER_FIELD.matcher(source);
+    List<SourceMetadataScannerFileExtracts.InitializerField> result = new ArrayList<>();
     while (matcher.find()) {
       int declarationStart = matcher.start();
       while (declarationStart < matcher.end()
@@ -38,28 +63,16 @@ static Optional<MethodInfo> initializerContaining(SourceFile file, int index) {
         continue;
       }
       int equals = source.lastIndexOf('=', matcher.end() - 1);
-      if (equals >= index) {
-        continue;
-      }
-      int end = fieldInitializerEnd(source, equals + 1);
-      if (end <= index) {
-        continue;
-      }
+      int end = SourceMetadataScannerFileExtracts.of(file).fieldInitializerEnd(equals + 1);
       String declaration = source.substring(matcher.start(), equals);
       TypeInfo owner = innermostType(file, declarationStart);
       String name = owner != null && owner.kind().equals("interface")
-          || Pattern.compile("\\bstatic\\b").matcher(declaration).find()
+          || STATIC_MODIFIER.matcher(declaration).find()
           ? "<clinit>" : "<init>";
-      selected = new MethodInfo(
-          name,
-          "",
-          declaration,
-          matcher.start(),
-          end + 1,
-          file.lineAt(matcher.start()),
-          "");
+      result.add(new SourceMetadataScannerFileExtracts.InitializerField(
+          matcher.start(), equals, end, file.lineAt(matcher.start()), name, declaration));
     }
-    return Optional.ofNullable(selected);
+    return List.copyOf(result);
   }
 
 static int localTypeOrdinal(SourceFile file, TypeInfo type) {
@@ -100,7 +113,7 @@ static List<AnonymousType> anonymousTypes(SourceFile file) {
 
   /** Computes the anonymous-class ranges for one file without consulting the cache. */
 static List<AnonymousType> extractAnonymousTypes(SourceFile file) {
-    String source = maskStringLiterals(file.structuralSource());
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     Matcher matcher = NEW_EXPRESSION.matcher(source);
     List<AnonymousType> ranges = new ArrayList<>();
     while (matcher.find()) {

@@ -17,10 +17,6 @@ abstract class SourceMetadataScannerReflectionLayer01 extends SourceMetadataScan
 
 
 
-static int fieldDeclarationEnd(String source, int start) {
-    return fieldInitializerEnd(source, start);
-  }
-
 static boolean isAccessibleField(
       SourceFile declaringFile,
       SourceFile siteFile,

@@ -85,7 +85,7 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
   /** Finds each executable reflection marker without treating strings or comments as code. */
   List<DynamicSite> reflectionSites(SourceFile file) {
     String source = file.structuralSource();
-    String dynamicSource = maskStringLiterals(source);
+    String dynamicSource = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     List<DynamicSite> result = new ArrayList<>();
     addClassForNameSites(result, dynamicSource, source, file);
     if (STATIC_FOR_NAME_IMPORT.matcher(dynamicSource).find()) {
@@ -161,7 +161,7 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
 
     private List<DynamicFeature> proxyFeatures(SourceFile file) {
       List<DynamicFeature> result = new ArrayList<>();
-      String source = maskStringLiterals(file.structuralSource());
+      String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
       for (int proxyOffset : proxyCallOffsets(file, source)) {
         result.addAll(proxyFeaturesAt(file, proxyOffset));
       }

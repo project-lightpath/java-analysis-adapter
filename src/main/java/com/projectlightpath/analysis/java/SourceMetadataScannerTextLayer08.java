@@ -43,10 +43,6 @@ static int qualifiedIdentifierEnd(String source, int start) {
     }
   }
 
-  /** Per-path cache: reflection loops rescan the same files many times. */
-  private static final Map<Path, List<TypeInfo>> TYPE_DECLARATIONS =
-      Collections.synchronizedMap(new WeakHashMap<>());
-
   /** Finds declared top-level and nested Java types with bounded body ranges. */
 static List<TypeInfo> typeDeclarations(SourceFile file) {
     return SourceMetadataScannerFileExtracts.of(file).typeDeclarations();
@@ -54,7 +50,7 @@ static List<TypeInfo> typeDeclarations(SourceFile file) {
 
   /** Computes the type declarations for one file without consulting the cache. */
 static List<TypeInfo> extractTypeDeclarations(SourceFile file) {
-    String source = maskStringLiterals(file.structuralSource());
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     Matcher matcher = TYPE_DECLARATION.matcher(source);
     List<TypeInfo> result = new ArrayList<>();
     while (matcher.find()) {

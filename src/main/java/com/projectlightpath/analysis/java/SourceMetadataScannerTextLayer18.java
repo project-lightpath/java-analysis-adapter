@@ -191,7 +191,7 @@ static List<String> mediaValues(
     if (reference == null) {
       return false;
     }
-    String source = maskStringLiterals(reference.file().structuralSource());
+    String source = SourceMetadataScannerFileExtracts.of(reference.file()).literalMaskedSource();
     int opening = typeBodyOpening(source, reference.type().start());
     if (opening < 0) {
       return false;

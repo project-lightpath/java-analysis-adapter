@@ -17,25 +17,26 @@ abstract class SourceMetadataScannerReflectionLayer03 extends SourceMetadataScan
 
 
 
-static Optional<LocalDeclaration> sharedLocalDeclaration(
-      String source, MethodInfo owner, String variable, int offset) {
-    Pattern sharedDeclaration = Pattern.compile(
-        "(?m)(?:^|[;{}:])\\s*"
-            + "(?:(?:final|volatile|transient)\\s+"
-            + "|@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
-            + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
-    Pattern basicForSharedDeclaration = Pattern.compile(
-        "(?m)\\bfor\\s*\\(\\s*"
-            + "(?:(?:final|volatile|transient)\\s+"
-            + "|@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
-            + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
+private static final Pattern SHARED_DECLARATION = Pattern.compile(
+      "(?m)(?:^|[;{}:])\\s*"
+          + "(?:(?:final|volatile|transient)\\s+"
+          + "|@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
+          + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
+  private static final Pattern BASIC_FOR_SHARED_DECLARATION = Pattern.compile(
+      "(?m)\\bfor\\s*\\(\\s*"
+          + "(?:(?:final|volatile|transient)\\s+"
+          + "|@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
+          + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
+
+  static Optional<LocalDeclaration> sharedLocalDeclaration(
+      SourceFile file, String source, MethodInfo owner, String variable, int offset) {
     LocalDeclaration selected = null;
-    for (Pattern pattern : List.of(sharedDeclaration, basicForSharedDeclaration)) {
+    for (Pattern pattern : List.of(SHARED_DECLARATION, BASIC_FOR_SHARED_DECLARATION)) {
       Matcher matcher = pattern.matcher(source);
       matcher.region(owner.start(), Math.min(offset, source.length()));
       while (matcher.find()) {
         selected = sharedDeclarationMatch(
-            source, matcher, variable, offset, owner.start(), selected);
+            file, source, matcher, variable, offset, owner.start(), selected);
       }
     }
     return Optional.ofNullable(selected);
@@ -43,10 +44,6 @@ static Optional<LocalDeclaration> sharedLocalDeclaration(
 
   FieldReference visibleField(
       SourceFile file, String variable, int siteOffset, String selectedOwner) {
-    Pattern fieldStart = Pattern.compile(
-        "(?m)(?:^|[;{}])\\s*(?:@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
-            + "(?:(?:public|protected|private|static|final|transient|volatile|strictfp)\\s+)*"
-            + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
     String siteType = typeContaining(file, siteOffset);
     Map<String, Integer> visibleOwners = selectedOwner == null
         ? visibleFieldOwners(file, siteType)
@@ -55,7 +52,7 @@ static Optional<LocalDeclaration> sharedLocalDeclaration(
     int selectedDistance = Integer.MAX_VALUE;
     for (SourceFile candidate : files()) {
       Optional<VisibleField> visible = visibleFieldInCandidate(
-          candidate, file, variable, siteType, fieldStart, visibleOwners);
+          candidate, file, variable, siteType, visibleOwners);
       if (visible.isPresent() && visible.get().distance() < selectedDistance) {
         selectedDistance = visible.get().distance();
         selected = visible.get().reference();
@@ -66,9 +63,10 @@ static Optional<LocalDeclaration> sharedLocalDeclaration(
 
   Optional<LocalDeclaration> activeLocalDeclaration(
       SourceFile file, MethodInfo owner, String variable, int offset) {
-    String source = maskStringLiterals(file.structuralSource());
+    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     Optional<LocalDeclaration> simple = simpleLocalDeclaration(source, owner, variable, offset);
-    Optional<LocalDeclaration> shared = sharedLocalDeclaration(source, owner, variable, offset);
+    Optional<LocalDeclaration> shared =
+        sharedLocalDeclaration(file, source, owner, variable, offset);
     return shared.isPresent() ? shared : simple;
   }
 

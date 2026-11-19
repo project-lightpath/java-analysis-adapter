@@ -17,14 +17,22 @@ abstract class SourceMetadataScannerReflectionLayer02 extends SourceMetadataScan
 
 
 
-static int declaratorVariableOffset(String declarators, String variable) {
+  static final Pattern FIELD_START = Pattern.compile(
+      "(?m)(?:^|[;{}])\\s*(?:@[A-Za-z_][\\w.]*(?:\\s*\\([^;]*\\))?\\s*)*"
+          + "(?:(?:public|protected|private|static|final|transient|volatile|strictfp)\\s+)*"
+          + "([A-Za-z_$][\\w$.]*(?:\\s*<[^;=(){}]+>)?(?:\\s*\\[\\])*)\\s+");
+
+private static final Pattern DECLARATOR_NAME =
+      Pattern.compile("^([A-Za-z_$][\\w$]*)");
+
+  static int declaratorVariableOffset(String declarators, String variable) {
     int search = 0;
     for (String raw : splitFieldDeclarators(declarators)) {
       int rawStart = declarators.indexOf(raw, search);
       if (rawStart < 0) {
         continue;
       }
-      Matcher name = Pattern.compile("^([A-Za-z_$][\\w$]*)").matcher(raw);
+      Matcher name = DECLARATOR_NAME.matcher(raw);
       if (name.find() && name.group(1).equals(variable)) {
         return rawStart + name.start(1);
       }
@@ -109,13 +117,15 @@ static int declaratorVariableOffset(String declarators, String variable) {
   }
 
 static LocalDeclaration sharedDeclarationMatch(
+      SourceFile candidateFile,
       String source,
       Matcher matcher,
       String variable,
       int offset,
       int ownerStart,
       LocalDeclaration selected) {
-    int declarationEnd = fieldDeclarationEnd(source, matcher.end(1));
+    int declarationEnd =
+        SourceMetadataScannerFileExtracts.of(candidateFile).fieldInitializerEnd(matcher.end(1));
     if (declarationEnd < 0) {
       return selected;
     }
@@ -143,36 +153,58 @@ static LocalDeclaration sharedDeclarationMatch(
       SourceFile siteFile,
       String variable,
       String siteType,
-      Pattern fieldStart,
       Map<String, Integer> visibleOwners) {
-    String source = maskStringLiterals(candidate.structuralSource());
-    Matcher matcher = fieldStart.matcher(source);
     VisibleField selected = null;
-    while (matcher.find()) {
-      int declarationEnd = fieldDeclarationEnd(source, matcher.end(1));
-      if (declarationEnd < 0
-          || !isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()))) {
+    for (SourceMetadataScannerFileExtracts.FieldCandidate field :
+        SourceMetadataScannerFileExtracts.of(candidate).fieldCandidates()) {
+      if (!field.memberScope()) {
         continue;
       }
-      int fieldOffset = matcher.start(1);
-      Optional<String> fieldType = declaredFieldType(
-          matcher.group(1), source.substring(matcher.end(1), declarationEnd), variable);
+      Optional<String> fieldType =
+          declaredFieldType(field.sharedType(), field.declarators(), variable);
       if (fieldType.isEmpty()) {
         continue;
       }
-      String fieldOwner = typeContaining(candidate, fieldOffset);
-      String declaration = source.substring(matcher.start(), declarationEnd + 1);
-      if (!isAccessibleField(candidate, siteFile, fieldOwner, siteType, declaration)
-          || !methodContaining(candidate, fieldOffset).name().equals("<unknown>")) {
+      if (!isAccessibleField(
+              candidate, siteFile, field.fieldOwner(), siteType, field.declaration())
+          || !field.methodOwner().equals("<unknown>")) {
         continue;
       }
-      Integer distance = visibleOwners.get(fieldOwner);
+      Integer distance = visibleOwners.get(field.fieldOwner());
       if (distance == null || selected != null && distance >= selected.distance()) {
         continue;
       }
-      selected = new VisibleField(new FieldReference(fieldType.get(), candidate, fieldOffset), distance);
+      selected = new VisibleField(
+          new FieldReference(fieldType.get(), candidate, field.fieldOffset()), distance);
     }
     return Optional.ofNullable(selected);
+  }
+
+  /** Captures the field declarations of one file once for every visibility lookup. */
+  static List<SourceMetadataScannerFileExtracts.FieldCandidate> extractFieldCandidates(
+      SourceFile candidate) {
+    SourceMetadataScannerFileExtracts extracts =
+        SourceMetadataScannerFileExtracts.of(candidate);
+    String source = extracts.literalMaskedSource();
+    Matcher matcher = FIELD_START.matcher(source);
+    List<SourceMetadataScannerFileExtracts.FieldCandidate> result = new ArrayList<>();
+    while (matcher.find()) {
+      int declarationEnd = extracts.fieldInitializerEnd(matcher.end(1));
+      int fieldOffset = matcher.start(1);
+      boolean memberScope = declarationEnd >= 0
+          && isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()));
+      result.add(new SourceMetadataScannerFileExtracts.FieldCandidate(
+          matcher.start(),
+          fieldOffset,
+          declarationEnd,
+          memberScope,
+          matcher.group(1),
+          declarationEnd < 0 ? "" : source.substring(matcher.end(1), declarationEnd),
+          declarationEnd < 0 ? "" : source.substring(matcher.start(), declarationEnd + 1),
+          memberScope ? typeContaining(candidate, fieldOffset) : "",
+          memberScope ? methodContaining(candidate, fieldOffset).name() : ""));
+    }
+    return List.copyOf(result);
   }
 
   void addStaticForNameSites(

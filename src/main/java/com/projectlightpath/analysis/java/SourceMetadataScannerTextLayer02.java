@@ -136,4 +136,9 @@ static int braceDepthAt(String source, int index) {
     }
     return depth;
   }
+
+  /** Brace depth over the per-file literal-masked source, answered by index. */
+  static int braceDepthAt(SourceFile file, int index) {
+    return SourceMetadataScannerFileExtracts.of(file).braceDepthAt(index);
+  }
 }

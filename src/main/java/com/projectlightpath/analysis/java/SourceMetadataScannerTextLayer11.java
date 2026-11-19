@@ -34,8 +34,7 @@ static List<MethodInfo> constructors(SourceFile file) {
   }
 
   /** Computes the constructor declarations for one file without consulting the cache. */
-static List<MethodInfo> extractConstructors(SourceFile file) {
-    String maskedSource = maskStringLiterals(maskAnnotationArguments(file.structuralSource()));
+static List<MethodInfo> extractConstructors(SourceFile file, String maskedSource) {
     List<MethodInfo> result = new ArrayList<>();
     for (TypeInfo type : typeDeclarations(file)) {
       Pattern constructor = Pattern.compile(
