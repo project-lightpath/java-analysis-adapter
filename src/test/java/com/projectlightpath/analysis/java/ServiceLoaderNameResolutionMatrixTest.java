@@ -9,8 +9,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
@@ -1103,6 +1105,340 @@ class ServiceLoaderNameResolutionMatrixTest {
     }
   }
 
+  // ---- Issue #9: static on-demand owner matching (a) ----
+
+  /** A1: an unrelated same-simple-name type must not create wildcard ambiguity. */
+  @Test
+  void staticOnDemandUnrelatedOwnerDoesNotAbstain() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-unrelated-owner", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools {
+          public static void helper() { }
+        }
+        """,
+            "b/Tools.java", """
+        package b;
+        public class Tools {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** A2: the named owner still makes the wildcard ambiguous. */
+  @Test
+  void staticOnDemandOwnerMatchWithLookalikeStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-owner-lookalike", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """,
+            "b/Tools.java", """
+        package b;
+        public class Tools {
+          public static class ServiceLoader<T> {
+            public static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+          }
+        }
+        """)).isEmpty());
+  }
+
+  /** A4: a package-private member is not accessible through a cross-package static import. */
+  @Test
+  void staticOnDemandPackagePrivateMemberCrossPackageDoesNotAbstain() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-package-private", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("a/Tools.java", """
+        package a;
+        public class Tools {
+          public static void helper() { }
+          static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** A5: the same package-private member is accessible from its own package. */
+  @Test
+  void staticOnDemandSamePackagePackagePrivateMemberStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-package-private-same", "a", """
+        package a;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("a/Tools.java", """
+        package a;
+        public class Tools {
+          public static void helper() { }
+          static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** A6: a private member is never importable, so it cannot create ambiguity. */
+  @Test
+  void staticOnDemandPrivateMemberDoesNotAbstain() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-private-member", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("a/Tools.java", """
+        package a;
+        public class Tools {
+          public static void helper() { }
+          private static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** A7: protected cross-package static import over-abstains (documented residual). */
+  @Test
+  void staticOnDemandProtectedMemberCrossPackageStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-protected-member", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("a/Tools.java", """
+        package a;
+        public class Tools {
+          public static void helper() { }
+          protected static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  // ---- Issue #9: inherited member-type accessibility (b) ----
+
+  private static String crossPackageBase(String memberModifiers) {
+    return """
+        package other;
+        public class Base {
+          %s static class ServiceLoader<T> { }
+        }
+        """.formatted(memberModifiers);
+  }
+
+  private static final String SINGLE_TYPE_IMPORT_BRIDGE = """
+      package demo;
+      import java.util.*;
+      import other.Base;
+      class Bridge extends Base {
+        void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  private static final String ON_DEMAND_IMPORT_BRIDGE = """
+      package demo;
+      import java.util.*;
+      import other.*;
+      class Bridge extends Base {
+        void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  private static final String QUALIFIED_SUPERCLASS_BRIDGE = """
+      package demo;
+      import java.util.*;
+      class Bridge extends other.Base {
+        void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  /** B5 via a single-type import: package-private cross-package member is not inherited. */
+  @Test
+  void crossPackagePackagePrivateMemberViaSingleTypeImportIsNotInherited() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-cross-package-private-import", "demo",
+        SINGLE_TYPE_IMPORT_BRIDGE,
+        Map.of("other/Base.java", crossPackageBase(""))).isEmpty());
+  }
+
+  /** B5 via an on-demand import. */
+  @Test
+  void crossPackagePackagePrivateMemberViaOnDemandImportIsNotInherited() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-cross-package-private-demand", "demo",
+        ON_DEMAND_IMPORT_BRIDGE,
+        Map.of("other/Base.java", crossPackageBase(""))).isEmpty());
+  }
+
+  /** B5 via a package-qualified superclass. */
+  @Test
+  void crossPackagePackagePrivateMemberViaQualifiedSuperclassIsNotInherited() throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-cross-package-private-qualified", "demo",
+        QUALIFIED_SUPERCLASS_BRIDGE,
+        Map.of("other/Base.java", crossPackageBase(""))).isEmpty());
+  }
+
+  /** B4 via a single-type import: protected cross-package member is inherited. */
+  @Test
+  void crossPackageProtectedMemberViaSingleTypeImportIsInherited() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-cross-package-protected-import", "demo",
+        SINGLE_TYPE_IMPORT_BRIDGE,
+        Map.of("other/Base.java", crossPackageBase("protected"))).isEmpty());
+  }
+
+  /** B4 via an on-demand import. */
+  @Test
+  void crossPackageProtectedMemberViaOnDemandImportIsInherited() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-cross-package-protected-demand", "demo",
+        ON_DEMAND_IMPORT_BRIDGE,
+        Map.of("other/Base.java", crossPackageBase("protected"))).isEmpty());
+  }
+
+  /** B4 via a package-qualified superclass. */
+  @Test
+  void crossPackageProtectedMemberViaQualifiedSuperclassIsInherited() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-cross-package-protected-qualified", "demo",
+        QUALIFIED_SUPERCLASS_BRIDGE,
+        Map.of("other/Base.java", crossPackageBase("protected"))).isEmpty());
+  }
+
+  // ---- Issue #9: sourceFile owner '$' matching (c) ----
+
+  private static final String DOLLAR_FLOW_SOURCE = """
+      package demo;
+      import java.util.*;
+
+      class Cash$Flow {
+        void audit() {
+          ServiceLoader.load(Object.class);
+        }
+      }
+      """;
+
+  private static final String BRIDGE_SOURCE = """
+      package demo;
+      import java.util.*;
+      class Bridge {
+        void audit() { ServiceLoader.load(Object.class); }
+      }
+      """;
+
+  @Test
+  void topLevelDollarNameIsResolvedExactly() throws IOException {
+    String id = "matrix-cell-owner-dollar-top";
+    Map<String, String> files = Map.of(
+        "demo/Cash$Flow.java", DOLLAR_FLOW_SOURCE,
+        "demo/Bridge.java", BRIDGE_SOURCE);
+    assertFalse(matrixSitesForOwner(id, "demo.Cash$Flow", files).isEmpty());
+    assertTrue(sourceFileOf(id, files, "demo.Bridge").isPresent());
+  }
+
+  @Test
+  void leadingDollarTopLevelNameIsResolved() throws IOException {
+    String id = "matrix-cell-owner-leading-dollar";
+    Optional<SourceMetadataScanner.SourceFile> file = sourceFileOf(id, Map.of(
+        "demo/$Flow.java", "package demo;\nclass $Flow { }\n"), "demo.$Flow");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("$Flow.java"));
+  }
+
+  @Test
+  void ordinaryNestedOwnerFallsBackToTopLevel() throws IOException {
+    String id = "matrix-cell-owner-ordinary-nested";
+    Optional<SourceMetadataScanner.SourceFile> file = sourceFileOf(id, Map.of(
+        "demo/Outer.java", "package demo;\nclass Outer { class Inner { } }\n"),
+        "demo.Outer$Inner");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("Outer.java"));
+  }
+
+  @Test
+  void nestedInsideDollarNamedTopLevelIsResolved() throws IOException {
+    String id = "matrix-cell-owner-dollar-nested";
+    Optional<SourceMetadataScanner.SourceFile> file = sourceFileOf(id, Map.of(
+        "demo/Cash$Flow.java", "package demo;\nclass Cash$Flow { class Inner { } }\n"),
+        "demo.Cash$Flow$Inner");
+    assertTrue(file.isPresent());
+    assertTrue(file.orElseThrow().path().toString().endsWith("Cash$Flow.java"));
+  }
+
+  @Test
+  void unknownNestedOwnerIsUnresolved() throws IOException {
+    assertTrue(sourceFileOf("matrix-cell-owner-missing", Map.of(
+        "demo/Outer.java", "package demo;\nclass Outer { }\n"),
+        "demo.Missing$Inner").isEmpty());
+  }
+
+  @Test
+  void plainOwnerIsResolved() throws IOException {
+    assertTrue(sourceFileOf("matrix-cell-owner-plain", Map.of(
+        "demo/Plain.java", "package demo;\nclass Plain { }\n"), "demo.Plain").isPresent());
+  }
+
+  @Test
+  void dollarInPackageNameIsNotTruncated() throws IOException {
+    String id = "matrix-cell-owner-dollar-package";
+    Map<String, String> files = Map.of(
+        "a$b/Service.java", "package a$b;\nclass Service { }\n",
+        "a$b/Outer.java", "package a$b;\nclass Outer { class Inner { } }\n");
+    assertTrue(sourceFileOf(id, files, "a$b.Service").isPresent());
+    assertTrue(sourceFileOf(id, files, "a$b.Outer$Inner").isPresent());
+    assertTrue(sourceFileOf(id, files, "a$b.Outer").isPresent());
+  }
+
+  @Test
+  void missingDollarOwnerNeverResolvesDecoyDefaultPackageType() throws IOException {
+    assertTrue(sourceFileOf("matrix-cell-owner-decoy", Map.of(
+        "a.java", "class a { }\n"), "a$b.Missing$Inner").isEmpty());
+  }
+
+  @Test
+  void declaredTypeResolvesDollarNamedTopLevel() throws IOException {
+    SourceMetadataScanner scanner = scannerFor("matrix-cell-owner-declared",
+        Map.of("demo/Cash$Flow.java", DOLLAR_FLOW_SOURCE));
+    assertTrue(scanner.declaredType("demo.Cash$Flow").isPresent());
+  }
+
+  @Test
+  void methodSourceResolvesDollarNamedTopLevel() throws IOException {
+    SourceMetadataScanner scanner = scannerFor("matrix-cell-owner-method",
+        Map.of("demo/Cash$Flow.java", DOLLAR_FLOW_SOURCE));
+    Optional<String> body = scanner.methodSource(
+        new MethodSymbol("demo.Cash$Flow", "audit", "()V"), 5);
+    assertTrue(body.isPresent());
+    assertTrue(body.orElseThrow().contains("ServiceLoader.load"));
+  }
+
+  @Test
+  void sourceLineContainsResolvesDollarNamedTopLevel() throws IOException {
+    SourceMetadataScanner scanner = scannerFor("matrix-cell-owner-source-line",
+        Map.of("demo/Cash$Flow.java", DOLLAR_FLOW_SOURCE));
+    assertTrue(scanner.sourceLineContains(
+        new MethodSymbol("demo.Cash$Flow", "audit", "()V"), 6, "ServiceLoader"));
+  }
+
   private List<ServiceLoaderCallSite> matrixSites(
       String id, String bridgeSource) throws IOException {
     return matrixSites(id, bridgeSource, Map.of());
@@ -1110,15 +1446,37 @@ class ServiceLoaderNameResolutionMatrixTest {
 
   private List<ServiceLoaderCallSite> matrixSites(
       String id, String bridgeSource, Map<String, String> extraFiles) throws IOException {
+    return matrixSitesIn(id, "demo", bridgeSource, extraFiles);
+  }
+
+  private List<ServiceLoaderCallSite> matrixSitesIn(
+      String id, String bridgePackage, String bridgeSource,
+      Map<String, String> extraFiles) throws IOException {
+    Map<String, String> files = new LinkedHashMap<>(extraFiles);
+    files.put(bridgePackage.replace('.', '/') + "/Bridge.java", bridgeSource);
+    return matrixSitesForOwner(id, bridgePackage + ".Bridge", files);
+  }
+
+  private List<ServiceLoaderCallSite> matrixSitesForOwner(
+      String id, String owner, Map<String, String> files) throws IOException {
+    SourceMetadataScanner scanner = scannerFor(id, files);
+    return ServiceLoaderSourceCache.source(
+        scanner, new MethodSymbol(owner, "audit", "()V")).orElseThrow().sites();
+  }
+
+  private Optional<SourceMetadataScanner.SourceFile> sourceFileOf(
+      String id, Map<String, String> files, String owner) throws IOException {
+    return scannerFor(id, files).sourceFile(owner);
+  }
+
+  private SourceMetadataScanner scannerFor(String id, Map<String, String> files)
+      throws IOException {
     Path root = temp.resolve(id);
     Path sourceRoot = root.resolve("src/main/java");
-    Path bridge = sourceRoot.resolve("demo/Bridge.java");
-    Files.createDirectories(bridge.getParent());
-    Files.writeString(bridge, bridgeSource);
-    for (Map.Entry<String, String> entry : extraFiles.entrySet()) {
-      Path extra = sourceRoot.resolve(entry.getKey());
-      Files.createDirectories(extra.getParent());
-      Files.writeString(extra, entry.getValue());
+    for (Map.Entry<String, String> entry : files.entrySet()) {
+      Path path = sourceRoot.resolve(entry.getKey());
+      Files.createDirectories(path.getParent());
+      Files.writeString(path, entry.getValue());
     }
     AnalysisContext context = AnalysisContext.builder()
         .id(id)
@@ -1134,8 +1492,8 @@ class ServiceLoaderNameResolutionMatrixTest {
         .dependencyClasspathRequired(false)
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
-    return ServiceLoaderSourceCache.source(
-        new SourceMetadataScanner(context), new MethodSymbol("demo.Bridge", "audit", "()V"))
-        .orElseThrow().sites();
+    return new SourceMetadataScanner(context);
   }
 }
+
+
