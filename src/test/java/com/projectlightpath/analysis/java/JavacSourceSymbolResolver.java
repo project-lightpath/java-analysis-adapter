@@ -178,21 +178,23 @@ final class JavacSourceSymbolResolver {
     }
 
     JavacResolverResult result() {
-      java.util.Set<Integer> shadowLines = abstentions.stream()
+      java.util.Set<String> shadowSites = abstentions.stream()
           .filter(item -> item.reason().equals("SHADOWED"))
-          .map(JavacResolverAbstention::line)
+          .map(item -> item.path() + ":" + item.line())
           .collect(java.util.stream.Collectors.toSet());
       List<JavacResolverFact> stableFacts = new ArrayList<>();
       for (JavacResolverFact fact : facts) {
         if ("POSSIBLE".equals(fact.certainty())
-            && !shadowLines.isEmpty()
+            && fact.promotion().isEmpty()
+            && !shadowSites.isEmpty()
             && diagnostics.stream()
                 .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
                 .findAny()
                 .isPresent()
             && diagnostics.stream()
                 .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
-                .allMatch(item -> shadowLines.contains((int) item.getLineNumber()))) {
+                .allMatch(item -> shadowSites.contains(
+                    relativePath(item.getSource()) + ":" + item.getLineNumber()))) {
           stableFacts.add(new JavacResolverFact(
               fact.cellId(), fact.path(), fact.topLevel(), fact.line(), fact.column(),
               fact.offset(), fact.serviceType(), fact.owner(), fact.member(),
@@ -223,6 +225,9 @@ final class JavacSourceSymbolResolver {
       int line = lineNumber(invocationPath, position);
       int column = columnNumber(invocationPath, position);
       Element method = trees.getElement(new TreePath(invocationPath, selectTree));
+      if (selectTree instanceof com.sun.source.tree.IdentifierTree && !isServiceLoaderLoad(method)) {
+        return super.visitMethodInvocation(node, unused);
+      }
       Element receiver = selectTree instanceof MemberSelectTree memberSelect
           ? trees.getElement(new TreePath(new TreePath(invocationPath, memberSelect),
               memberSelect.getExpression()))
@@ -268,14 +273,13 @@ final class JavacSourceSymbolResolver {
     private void addFact(
         TreePath invocationPath, long position, int line, int column, Element method) {
       MethodInvocationTree node = (MethodInvocationTree) invocationPath.getLeaf();
-      String serviceType = node.getArguments().isEmpty()
+      ClassLiteral literal = node.getArguments().isEmpty()
           ? null : classLiteralType(invocationPath, node.getArguments().get(0));
-      if (serviceType == null) {
+      if (literal == null) {
         addAbstention((int) position, line, column, "NO_CLASS_LITERAL");
         return;
       }
-      boolean errorType = serviceType.contains("<error>") || serviceType.isEmpty();
-      String certainty = taskHasError || errorType ? "POSSIBLE" : "DEFINITE";
+      String certainty = taskHasError || literal.error() ? "POSSIBLE" : "DEFINITE";
       List<JavacResolverDiagnostic> attached = diagnosticsFor(line);
       facts.add(new JavacResolverFact(
           cell.id(),
@@ -284,14 +288,16 @@ final class JavacSourceSymbolResolver {
           line,
           column,
           (int) position,
-          serviceType,
+          literal.type(),
           SERVICE_LOADER,
           LOAD,
           accessibility(method),
           certainty,
-          "",
+          literal.error() ? "error-type" : "",
           attached));
     }
+
+    private record ClassLiteral(String type, boolean error) {}
 
     private static String accessibility(Element method) {
       boolean isPublic = method.getModifiers().contains(Modifier.PUBLIC);
@@ -348,7 +354,7 @@ final class JavacSourceSymbolResolver {
           || lower.contains("package") && lower.contains("not found");
     }
 
-    private String classLiteralType(TreePath invocationPath, ExpressionTree argument) {
+    private ClassLiteral classLiteralType(TreePath invocationPath, ExpressionTree argument) {
       if (!(argument instanceof MemberSelectTree select)
           || !select.getIdentifier().contentEquals("class")) {
         return null;
@@ -359,8 +365,24 @@ final class JavacSourceSymbolResolver {
       if (mirror == null) {
         return null;
       }
-      String canonical = canonicalType(mirror, types);
-      return canonical.isEmpty() ? null : canonical;
+      TypeMirror erased = types.erasure(mirror);
+      if (erased.getKind() == javax.lang.model.type.TypeKind.ERROR) {
+        String name = ((DeclaredType) erased).asElement().getSimpleName().toString();
+        return name.isEmpty() ? null : new ClassLiteral(name, true);
+      }
+      if (erased.getKind() != javax.lang.model.type.TypeKind.DECLARED) {
+        return null;
+      }
+      Element element = ((DeclaredType) erased).asElement();
+      if (!(element instanceof TypeElement named)) {
+        return null;
+      }
+      if (named.getNestingKind() == javax.lang.model.element.NestingKind.LOCAL
+          || named.getNestingKind() == javax.lang.model.element.NestingKind.ANONYMOUS) {
+        return null;
+      }
+      String canonical = named.getQualifiedName().toString();
+      return canonical.isEmpty() ? null : new ClassLiteral(canonical, false);
     }
 
     private String topLevelName(TreePath path) {

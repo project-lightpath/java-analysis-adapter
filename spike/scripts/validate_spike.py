@@ -340,11 +340,11 @@ def main() -> None:
     javac_cells = {cell["id"] for cell in javac_resolver["cells"]}
     required_javac_cells = set((
         "N1 N2 N3 N4 N5 N6 N7 N8 N9 N10 N11 N12 N13 N14 N15 N16 N17 N18 N19 "
-        "N20 N21 N22 N23 N24a N24b N25 N26 N27 N28 N29 N30 N31 N32 N33 "
+        "N20 N21 N22 N23 N24a N24b N25 N26 N27 N28 N29 N30 N31 N32 N33 N34 N35 N36 "
         "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A16b A17 A20 A21 "
         "D1 D2 D3 D4 D5 D6 D7 D8 D9 I1 I2 I3 I4 I5").split())
     require(javac_cells == required_javac_cells, "javac resolver observation cell set is incomplete or has drifted")
-    require(len(javac_resolver["cells"]) == 68, "javac resolver observation must have 68 cells")
+    require(len(javac_resolver["cells"]) == 71, "javac resolver observation must have 71 cells")
     for cell in javac_resolver["cells"]:
         require(not cell["blocked"], f"javac resolver cell {cell['id']} is blocked")
         for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):

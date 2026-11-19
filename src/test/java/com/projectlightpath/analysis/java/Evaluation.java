@@ -70,6 +70,7 @@ final class Evaluation {
         String expectedReason = switch (site.expectation()) {
           case AMBIGUOUS -> "AMBIGUOUS";
           case SHADOWED -> "SHADOWED";
+          case NO_FACT -> "NO_CLASS_LITERAL";
           default -> null;
         };
         if (expectedReason != null && !expectedReason.equals(abstention.reason())) {
@@ -92,6 +93,8 @@ final class Evaluation {
         if ("DEFINITE".equals(fact.certainty())) {
           wrongDefinite++;
         }
+      } else {
+        abstentionMismatch++;
       }
     }
     return new JavacResolverMetrics(

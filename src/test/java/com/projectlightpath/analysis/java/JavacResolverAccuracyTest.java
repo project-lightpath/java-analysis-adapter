@@ -24,8 +24,8 @@ import org.junit.jupiter.api.io.TempDir;
 class JavacResolverAccuracyTest {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final Set<String> BASELINE_WRONG =
-      Set.of("N20", "N21", "N22", "N23", "A9", "A10", "A11", "A13", "A14", "A15",
-          "A16b", "A17", "A20", "I1", "I2", "I3", "I5");
+      Set.of("N20", "N21", "N22", "N23", "N34", "N36", "A9", "A10", "A11", "A13",
+          "A14", "A15", "A16b", "A17", "A20", "I1", "I2", "I3", "I5");
   private static final Set<String> BASELINE_LOST =
       Set.of("N20", "N21", "N22", "N23", "N28", "N32", "A1", "A4", "A7",
           "D1", "D3", "D4", "D6", "D7", "D8", "D9");
@@ -49,9 +49,9 @@ class JavacResolverAccuracyTest {
     assertEquals(0, javac.abstentionMismatch());
 
     JavacResolverMetrics baseline = report.baselineTotals();
-    assertEquals(17, baseline.wrongDefinite());
+    assertEquals(19, baseline.wrongDefinite());
     assertEquals(16, baseline.lost());
-    assertEquals(10, baseline.added());
+    assertEquals(12, baseline.added());
     assertEquals(6, baseline.abstentionMismatch());
     assertEquals(BASELINE_WRONG, cellsWith(report, "wrongDefinite", true));
     assertEquals(BASELINE_LOST, cellsWith(report, "lost", true));

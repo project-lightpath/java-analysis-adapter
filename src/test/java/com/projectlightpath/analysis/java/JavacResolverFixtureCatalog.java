@@ -509,7 +509,37 @@ final class JavacResolverFixtureCatalog {
                   void audit(Class<Object> type) { ServiceLoader.load(type); }
                 }
                 """),
-            site(NO_FACT, "java.lang.Object")));
+            site(NO_FACT, "java.lang.Object")),
+        cell("N34", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
+            sources("demo/Bridge.java", """
+                package demo;
+                import java.util.*;
+                class Bridge {
+                  void audit() { ServiceLoader.load(int.class); }
+                }
+                """),
+            site(NO_FACT, "int")),
+        cell("N35", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
+            sources("demo/Bridge.java", """
+                package demo;
+                import java.util.*;
+                class Bridge {
+                  void audit() { ServiceLoader.load(Object[].class); }
+                }
+                """),
+            site(NO_FACT, "java.lang.Object[]")),
+        cell("N36", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
+            sources("demo/Bridge.java", """
+                package demo;
+                import java.util.*;
+                class Bridge {
+                  void audit() {
+                    class Local { }
+                    ServiceLoader.load(Local.class);
+                  }
+                }
+                """),
+            site(NO_FACT, "Local")));
   }
 
   private static List<JavacResolverCell> staticOwnerCells() {

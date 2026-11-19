@@ -10,9 +10,9 @@ Observation: `spike/results/javac-symbol-resolver-observation.json`
 **GO.**
 
 The javac/Trees prototype produced **zero wrong DEFINITEs**, **zero lost
-facts**, **zero downgraded facts**, and **zero added facts** across the 68-cell
-catalogue. The textual baseline produced 17 wrong DEFINITE proxies, 16 lost
-facts, 10 added facts, and 6 missing abstentions on the same cells. The
+facts**, **zero downgraded facts**, and **zero added facts** across the 71-cell
+catalogue. The textual baseline produced 19 wrong DEFINITE proxies, 16 lost
+facts, 12 added facts, and 6 missing abstentions on the same cells. The
 prototype is deterministic across fresh JVM runs and stays inside the
 `-Xmx256m` child.
 
@@ -20,22 +20,22 @@ This is an accuracy GO, not a production-adoption GO: the prototype is
 test-scope only. Migration is a separate follow-up (issue filed after this
 report).
 
-## Baseline vs prototype (all 68 cells)
+## Baseline vs prototype (all 71 cells)
 
 | Metric | Textual baseline (`0ced20a`) | javac prototype |
 |---|---:|---:|
-| wrong DEFINITE | 17 | **0** |
+| wrong DEFINITE | 19 | **0** |
 | wrong service type | 0 | **0** |
 | lost facts | 16 | **0** |
 | downgraded facts | 0 | **0** |
-| added facts | 10 | **0** |
-| unexpected facts | 10 | **0** |
+| added facts | 12 | **0** |
+| unexpected facts | 12 | **0** |
 | abstention mismatches | 6 | **0** |
-| wall time (68 cells) | 190 ms | 1,622 ms |
-| peak sampled heap | 189.0 MB | 189.0 MB |
+| wall time (71 cells) | 198 ms | 1,706 ms |
+| peak sampled heap | 186.9 MB | 187.5 MB |
 
-Baseline wrong-DEFINITE cells: `N20 N21 N22 N23 A9 A10 A11 A13 A14 A15 A16b
-A17 A20 I1 I2 I3 I5`.
+Baseline wrong-DEFINITE cells: `N20 N21 N22 N23 N34 N36 A9 A10 A11 A13 A14
+A15 A16b A17 A20 I1 I2 I3 I5`.
 Baseline lost-fact cells: `N20 N21 N22 N23 N28 N32 A1 A4 A7 D1 D3 D4 D6 D7 D8
 D9`.
 Baseline added-fact cells: `N20 N21 N22 N23 A10 A13 A14 A16b A17 A20`.
@@ -49,7 +49,7 @@ gap.
 
 ## Coverage
 
-- **JLS precedence/scope (N-series, 34 cells):** on-demand import, same-package
+- **JLS precedence/scope (N-series, 37 cells):** on-demand import, same-package
   type, single-type import, same-CU top-level/nested/local, field/parameter,
   lambda, catch, instanceof, try-with-resources, for-each, inherited member,
   fully qualified escape, lambda × local class, catch × nested type, switch
