@@ -24,9 +24,16 @@ final class ServiceLoaderDescriptorReader {
 
   static ServiceLoaderDescriptorScanner.Scan scan(
       AnalysisContext context, SootUpInputLocationFactory.DependencyResolution dependencyResolution) {
+    return scan(
+        context, dependencyResolution, new ServiceLoaderDescriptorSource.ScanState());
+  }
+
+  static ServiceLoaderDescriptorScanner.Scan scan(
+      AnalysisContext context,
+      SootUpInputLocationFactory.DependencyResolution dependencyResolution,
+      ServiceLoaderDescriptorSource.ScanState state) {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
-    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
     for (Path wildcard : dependencyResolution.truncatedWildcards()) {
       state.diagnostic(
           "dependency_enumeration_limit", wildcard.toString(),

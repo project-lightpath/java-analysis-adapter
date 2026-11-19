@@ -26,6 +26,7 @@ final class ServiceLoaderDescriptorSource {
   static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
   static final String MODULE_INFO = "module-info.class";
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
+  // RED-only compatibility constant; removed by GREEN_1 with the count cap.
   static final int MAX_ENUMERATED_ENTRIES = 1024;
 
   private ServiceLoaderDescriptorSource() {}
@@ -247,15 +248,45 @@ final class ServiceLoaderDescriptorSource {
     private boolean warMetadataLimitReported;
     private int warMetadataDiagnostics;
 
+    private final long maxEnumeratedBytes;
+    private final long maxRetainedBytes;
+    private long retainedBytes;
+
     ScanState() {
       this(MAX_ARCHIVE_DECOMPRESSED_BYTES);
     }
 
     ScanState(long maxDecompressedBytes) {
+      this(maxDecompressedBytes,
+          ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+          ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    }
+
+    private ScanState(
+        long maxDecompressedBytes, long maxEnumeratedBytes, long maxRetainedBytes) {
       if (maxDecompressedBytes <= 0) {
         throw new IllegalArgumentException("maximum decompressed bytes must be positive");
       }
+      if (maxEnumeratedBytes <= 0) {
+        throw new IllegalArgumentException("maximum enumerated bytes must be positive");
+      }
+      if (maxRetainedBytes <= 0) {
+        throw new IllegalArgumentException("maximum retained bytes must be positive");
+      }
       this.maxDecompressedBytes = maxDecompressedBytes;
+      this.maxEnumeratedBytes = maxEnumeratedBytes;
+      this.maxRetainedBytes = maxRetainedBytes;
+    }
+
+    static ScanState withBudgets(
+        long maxDecompressedBytes, long maxEnumeratedBytes, long maxRetainedBytes) {
+      return new ScanState(maxDecompressedBytes, maxEnumeratedBytes, maxRetainedBytes);
+    }
+
+    static ScanState withEnumerationBudget(long maxEnumeratedBytes) {
+      return new ScanState(
+          MAX_ARCHIVE_DECOMPRESSED_BYTES, maxEnumeratedBytes,
+          ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
     }
 
     void diagnostic(String code, String path, String detail) {
@@ -290,6 +321,23 @@ final class ServiceLoaderDescriptorSource {
       return remainingDecompressed() > 0;
     }
 
+    long enumeratedBytes() {
+      // RED stub: byte accounting lands in GREEN_1.
+      return 0L;
+    }
+
+    long remainingEnumerated() {
+      return maxEnumeratedBytes;
+    }
+
+    long retainedBytes() {
+      return retainedBytes;
+    }
+
+    long remainingRetained() {
+      return maxRetainedBytes - retainedBytes;
+    }
+
     boolean tryEnumerate(String path) {
       if (enumeratedEntries >= MAX_ENUMERATED_ENTRIES) {
         diagnostic(
@@ -298,6 +346,17 @@ final class ServiceLoaderDescriptorSource {
         return false;
       }
       enumeratedEntries++;
+      return true;
+    }
+
+    /** RED stub: delegates to the count path; byte accounting lands in GREEN_1. */
+    boolean tryEnumerate(String path, long bytes) {
+      return tryEnumerate(path);
+    }
+
+    /** RED stub: retention is not enforced until GREEN_1. */
+    boolean tryRetain(String path) {
+      retainedBytes += ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES;
       return true;
     }
 
