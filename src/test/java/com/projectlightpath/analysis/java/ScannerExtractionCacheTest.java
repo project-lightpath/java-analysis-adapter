@@ -372,6 +372,12 @@ class ScannerExtractionCacheTest {
         sample, "late", offsetOf(sample, "return late"));
     assertNotNull(late, "a field declared after the site is still visible");
     assertEquals(sample.path(), late.file().path(), late.toString());
+
+    List<SourceMetadataScannerFileExtracts.FieldCandidate> candidates =
+        SourceMetadataScannerFileExtracts.of(sample).fieldCandidates(sample);
+    assertEquals(2, candidates.size(), candidates.toString());
+    assertTrue(candidates.stream().noneMatch(candidate ->
+        candidate.declaration().contains("use(")), candidates.toString());
   }
 
   private void assertInitializerAt(

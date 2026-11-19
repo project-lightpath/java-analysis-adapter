@@ -157,17 +157,13 @@ static LocalDeclaration sharedDeclarationMatch(
     VisibleField selected = null;
     for (SourceMetadataScannerFileExtracts.FieldCandidate field :
         SourceMetadataScannerFileExtracts.of(candidate).fieldCandidates(candidate)) {
-      if (!field.memberScope()) {
-        continue;
-      }
       Optional<String> fieldType =
           declaredFieldType(field.sharedType(), field.declarators(), variable);
       if (fieldType.isEmpty()) {
         continue;
       }
       if (!isAccessibleField(
-              candidate, siteFile, field.fieldOwner(), siteType, field.declaration())
-          || !field.methodOwner().equals("<unknown>")) {
+          candidate, siteFile, field.fieldOwner(), siteType, field.declaration())) {
         continue;
       }
       Integer distance = visibleOwners.get(field.fieldOwner());
@@ -180,7 +176,7 @@ static LocalDeclaration sharedDeclarationMatch(
     return Optional.ofNullable(selected);
   }
 
-  /** Captures the field declarations of one file once for every visibility lookup. */
+  /** Captures the accepted field declarations of one file once for every visibility lookup. */
   static List<SourceMetadataScannerFileExtracts.FieldCandidate> extractFieldCandidates(
       SourceFile candidate, String source) {
     SourceMetadataScannerFileExtracts extracts =
@@ -192,14 +188,20 @@ static LocalDeclaration sharedDeclarationMatch(
       int fieldOffset = matcher.start(1);
       boolean memberScope = declarationEnd >= 0
           && isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()));
+      // Reject method declarations before copying any text: FIELD_START also
+      // matches a method's return type, and its "declarators" would run to the
+      // next top-level ';'. The consumer never accepts those candidates, so
+      // filtering here avoids caching large method-shaped substrings.
+      if (!memberScope
+          || !methodContaining(candidate, fieldOffset).name().equals("<unknown>")) {
+        continue;
+      }
       result.add(new SourceMetadataScannerFileExtracts.FieldCandidate(
           fieldOffset,
-          memberScope,
           matcher.group(1),
-          declarationEnd < 0 ? "" : source.substring(matcher.end(1), declarationEnd),
-          declarationEnd < 0 ? "" : source.substring(matcher.start(), declarationEnd + 1),
-          memberScope ? typeContaining(candidate, fieldOffset) : "",
-          memberScope ? methodContaining(candidate, fieldOffset).name() : ""));
+          source.substring(matcher.end(1), declarationEnd),
+          source.substring(matcher.start(), declarationEnd + 1),
+          typeContaining(candidate, fieldOffset)));
     }
     return List.copyOf(result);
   }

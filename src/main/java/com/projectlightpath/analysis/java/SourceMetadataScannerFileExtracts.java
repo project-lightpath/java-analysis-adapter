@@ -46,12 +46,10 @@ final class SourceMetadataScannerFileExtracts {
   /** Field declaration captured once per file for visibility lookups. */
   record FieldCandidate(
       int fieldOffset,
-      boolean memberScope,
       String sharedType,
       String declarators,
       String declaration,
-      String fieldOwner,
-      String methodOwner) {}
+      String fieldOwner) {}
 
   /** Field declaration captured once per file for initializer attribution. */
   record InitializerField(
