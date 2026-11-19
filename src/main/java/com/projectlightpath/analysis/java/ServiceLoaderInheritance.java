@@ -3,6 +3,7 @@ package com.projectlightpath.analysis.java;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -66,9 +67,9 @@ final class ServiceLoaderInheritance {
 
   /**
    * True when the owner declares a ServiceLoader member, inherits one through
-   * its direct superclass, or has an extends clause whose superclass cannot be
-   * resolved. A package-qualified superclass outside the selected files and a
-   * nested-type-qualified reference are treated as unresolved.
+   * its direct superclass, or has any unresolved/multi-branch inheritance that
+   * leaves the member set unproven. A package-qualified superclass outside the
+   * selected files and a nested-type-qualified reference are unresolved.
    */
   private static boolean ownerMayDeclareServiceLoader(
       SourceMetadataScanner scanner,
@@ -84,22 +85,82 @@ final class ServiceLoaderInheritance {
       if (!type.name().equals(candidate.simpleTypeName())) {
         continue;
       }
+      String header = typeHeader(masked, type);
+      if (SourceMetadataScanner.topLevelKeywordIndex(header, "implements") >= 0
+          || hasSecondSupertype(header)) {
+        return true;
+      }
       String reference = extendsReference(masked, type);
       if (reference == null) {
         continue;
       }
-      if (!resolvesSuperclass(scanner, candidate, masked, reference)) {
+      Optional<SourceMetadataScanner.SourceFile> superclass =
+          resolvedSuperclass(scanner, candidate, masked, reference);
+      if (superclass.isEmpty()) {
         return true;
       }
       if (superclassDeclaresServiceLoader(scanner, candidate, masked, type)) {
+        return true;
+      }
+      if (hasUnprovenInheritance(superclass.get())) {
         return true;
       }
     }
     return false;
   }
 
-  /** True when the extends reference resolves to a selected source file. */
-  private static boolean resolvesSuperclass(
+  /**
+   * True when the resolved superclass itself has any extends/implements
+   * clause. Its inherited member set is then beyond the one-hop proof and the
+   * scan abstains.
+   */
+  private static boolean hasUnprovenInheritance(
+      SourceMetadataScanner.SourceFile file) {
+    String source = ServiceLoaderSourceMasker.mask(file.structuralSource());
+    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
+    for (SourceMetadataScannerState.TypeInfo type
+        : SourceMetadataScanner.typeDeclarations(file)) {
+      if (!type.name().equals(file.simpleTypeName())) {
+        continue;
+      }
+      String header = typeHeader(masked, type);
+      return SourceMetadataScanner.topLevelKeywordIndex(header, "implements") >= 0
+          || hasSecondSupertype(header)
+          || extendsReference(masked, type) != null;
+    }
+    return false;
+  }
+
+  /** The superclass declaration header, up to the type body. */
+  private static String typeHeader(
+      String source, SourceMetadataScannerState.TypeInfo type) {
+    int body = source.indexOf('{', type.start());
+    int limit = body >= 0 ? body : (type.end() >= 0 ? type.end() + 1 : source.length());
+    return limit <= type.start() ? "" : source.substring(type.start(), limit);
+  }
+
+  /** True when a top-level comma adds a second extends/superinterface name. */
+  private static boolean hasSecondSupertype(String header) {
+    int extendsIndex = SourceMetadataScanner.topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return false;
+    }
+    int depth = 0;
+    for (int index = extendsIndex; index < header.length(); index++) {
+      char value = header.charAt(index);
+      if (value == '<' || value == '(' || value == '[') {
+        depth++;
+      } else if ((value == '>' || value == ')' || value == ']') && depth > 0) {
+        depth--;
+      } else if (value == ',' && depth == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Resolves the extends reference to its selected source file. */
+  private static Optional<SourceMetadataScanner.SourceFile> resolvedSuperclass(
       SourceMetadataScanner scanner,
       SourceMetadataScanner.SourceFile file,
       String source,
@@ -109,10 +170,11 @@ final class ServiceLoaderInheritance {
       String qualifier = reference.substring(0, qualifierEnd);
       String simpleName = reference.substring(qualifierEnd + 1);
       return scanner.files().stream()
-          .anyMatch(candidate -> candidate.packageName().equals(qualifier)
-              && candidate.simpleTypeName().equals(simpleName));
+          .filter(candidate -> candidate.packageName().equals(qualifier)
+              && candidate.simpleTypeName().equals(simpleName))
+          .findFirst();
     }
-    return !resolveSimpleType(scanner, file, source, reference).isEmpty();
+    return resolveSimpleType(scanner, file, source, reference).stream().findFirst();
   }
 
   /** True when an enclosing type inherits a ServiceLoader member type. */
