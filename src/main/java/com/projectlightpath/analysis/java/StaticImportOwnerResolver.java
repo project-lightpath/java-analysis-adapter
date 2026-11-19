@@ -25,6 +25,11 @@ final class StaticImportOwnerResolver {
         candidate, sitePackage)) {
       return true;
     }
+    if (ServiceLoaderMemberTypes.declaresDirectServiceLoaderMember(candidate)) {
+      // A direct declaration, even private or inaccessible, hides an inherited
+      // type of the same name (JLS 8.5); the inherited fallback must not run.
+      return false;
+    }
     String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
     String masked = SourceMetadataScanner.maskAnnotationArguments(source);
     for (SourceMetadataScannerState.TypeInfo type

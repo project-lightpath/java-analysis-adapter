@@ -45,6 +45,23 @@ final class ServiceLoaderMemberTypes {
             .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
   }
 
+  /**
+   * True when the candidate declares a ServiceLoader type as its top-level
+   * type or a direct member, regardless of accessibility. A direct declaration
+   * hides an inherited type of the same name (JLS 8.5).
+   */
+  static boolean declaresDirectServiceLoaderMember(
+      SourceMetadataScanner.SourceFile candidate) {
+    List<SourceMetadataScannerState.TypeInfo> types =
+        SourceMetadataScanner.typeDeclarations(candidate);
+    return types.stream()
+        .filter(type -> type.name().equals("ServiceLoader"))
+        .filter(type -> !SourceMetadataScanner.isLocalType(candidate, type))
+        .anyMatch(type -> types.stream()
+            .filter(other -> other.start() < type.start() && type.end() <= other.end())
+            .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
+  }
+
   private static boolean isInheritableMemberType(
       SourceMetadataScanner.SourceFile candidate,
       String source,

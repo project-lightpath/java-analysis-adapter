@@ -21,7 +21,9 @@ static final Pattern TYPE_DECLARATION = Pattern.compile(
       "(?U)\\b(class|interface|record|enum)\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)");
 static final Pattern NEW_EXPRESSION = Pattern.compile("\\bnew\\b");
 static final Pattern ANNOTATION_NAME = Pattern.compile(
-      "@\\p{javaJavaIdentifierStart}[\\p{javaJavaIdentifierPart}.]*");
+      "@\\p{javaJavaIdentifierStart}[\\p{javaJavaIdentifierPart}]*"
+          + "(?:\\s*\\.\\s*\\p{javaJavaIdentifierStart}"
+          + "[\\p{javaJavaIdentifierPart}]*)*");
 static final Pattern METHOD = Pattern.compile(
       "(?m)(?:^|[;{}\\n])\\s*(?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)|(?:(?:public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\s+))*(?:<[^>{}]+>\\s+)?[\\w.?$<>\\[\\], ]+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*(?:throws [^{;]+)?(?:\\{|;)");
 static final Pattern METHOD_BODY_STATEMENT = Pattern.compile(

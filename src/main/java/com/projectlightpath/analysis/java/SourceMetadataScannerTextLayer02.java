@@ -76,8 +76,9 @@ static int quotedArgumentEnd(String source, int start, int closing) {
   }
 
 static String parameterType(String parameter) {
-    String normalized = parameter.trim()
-        .replaceAll(ANNOTATION_NAME.pattern(), "")
+    String normalized = ANNOTATION_NAME.matcher(
+        SourceMetadataScanner.maskAnnotationArguments(parameter.trim()))
+        .replaceAll("")
         .replace("final ", "")
         .trim();
     int nameSeparator = normalized.lastIndexOf(' ');

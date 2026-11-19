@@ -171,8 +171,8 @@ static List<Parameter> parameters(SourceFile file, String source) {
     List<Parameter> result = new ArrayList<>();
     for (String raw : splitArguments(source)) {
       List<String> qualifiers = qualifierNames(file, raw);
-      String cleaned = maskAnnotationArguments(stripComments(raw))
-          .replaceAll(ANNOTATION_NAME.pattern(), " ").trim();
+      String cleaned = ANNOTATION_NAME.matcher(
+          maskAnnotationArguments(stripComments(raw))).replaceAll(" ").trim();
       cleaned = cleaned.replaceAll("\\b(final|volatile|transient)\\b", "").trim();
       if (cleaned.isBlank()) {
         continue;

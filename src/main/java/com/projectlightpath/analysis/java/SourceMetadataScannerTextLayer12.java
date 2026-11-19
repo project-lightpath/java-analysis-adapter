@@ -19,8 +19,8 @@ abstract class SourceMetadataScannerTextLayer12 extends SourceMetadataScannerTex
 
   /** Extracts the outer return type, retaining generic arguments for producer matching. */
 static String returnType(String declaration) {
-    String cleaned = maskAnnotationArguments(stripComments(declaration))
-        .replaceAll(ANNOTATION_NAME.pattern(), " ")
+    String cleaned = ANNOTATION_NAME.matcher(
+        maskAnnotationArguments(stripComments(declaration))).replaceAll(" ")
         .replaceAll("\\b(public|protected|private|static|final|synchronized|abstract|native|default|strictfp)\\b", " ")
         .trim();
     cleaned = compactGenericWhitespace(cleaned);

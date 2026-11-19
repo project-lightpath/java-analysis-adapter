@@ -20,7 +20,10 @@ import java.util.regex.Pattern;
 final class ServiceLoaderInheritance {
   /** The extends-clause reference in a type declaration header (no generics). */
   private static final Pattern EXTENDS_REFERENCE = Pattern.compile(
-      "(?U)extends\\s+([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
+      "(?U)extends\\s+(?:@[\\p{javaJavaIdentifierStart}]"
+          + "[\\p{javaJavaIdentifierPart}]*(?:\\s*\\.\\s*"
+          + "[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*\\s+)*"
+          + "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
           + "(?:\\s*\\.\\s*[\\p{javaJavaIdentifierStart}]"
           + "[\\p{javaJavaIdentifierPart}]*)*)");
 
@@ -143,7 +146,8 @@ final class ServiceLoaderInheritance {
 
   static String extendsReference(
       String source, SourceMetadataScannerState.TypeInfo type) {
-    String header = typeHeader(source, type);
+    String header = typeHeader(
+        SourceMetadataScanner.maskAnnotationArguments(source), type);
     if (header.isEmpty()) {
       return null;
     }
