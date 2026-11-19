@@ -7,7 +7,7 @@ compile a fixture and build a SootUp scene. Running each JVM serially costs
 JVM forks brings the wall time down to the longest shard.
 
 Usage:
-    python3 spike/scripts/sharded_test.py [--parallel N] [--keep] [--filter PATTERN]
+    python3 scripts/sharded_test.py [--parallel N] [--keep]
 
 The script compiles the test classes once, discovers annotated test methods
 from the sources, distributes them round-robin, and runs every shard in its own
@@ -41,7 +41,7 @@ IGNORED = {".git", "target", ".serena", ".zvec-grep", "__pycache__", ".idea"}
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[1]
 
 
 def maven_binary(root: Path) -> str:

@@ -75,7 +75,7 @@ green in isolation do not prove their composition.
   is documented in the EVIDENCE commit.
 - Gates after every item, mandatory: `make adapter-test` (execution count
   must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
-  `make adapter-test-sharded` runs the same discovered test methods in
+  `make adapter-test-sharded` (`scripts/sharded_test.py`) runs the same discovered test methods in
   method-level shards (one JVM and one project copy per shard, aggregated
   from surefire XML) and is the fast equivalent when wall time matters; it
   must report the same execution count and zero failures as `make adapter-test`.

@@ -4,7 +4,7 @@ adapter-test test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp test -f pom.xml
 
 adapter-test-sharded:
-	python3 spike/scripts/sharded_test.py
+	python3 scripts/sharded_test.py
 
 validator-test:
 	python3 -m unittest spike/scripts/test_validators.py
