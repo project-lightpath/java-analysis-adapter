@@ -1544,6 +1544,30 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).isEmpty());
   }
 
+  /** Inherited-member accessibility is judged from the importing site package. */
+  @Test
+  void staticOnDemandInheritedPackagePrivateMemberCrossPackageStaysAttributed()
+      throws IOException {
+    assertFalse(matrixSitesIn("matrix-cell-static-inherited-package-private", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools extends Base { }
+        """,
+            "a/Base.java", """
+        package a;
+        public class Base {
+          static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
   // ---- Issue #9: sourceFile owner '$' matching (c) ----
 
   private static final String DOLLAR_FLOW_SOURCE = """
