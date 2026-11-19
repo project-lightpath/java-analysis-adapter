@@ -43,8 +43,16 @@ static int qualifiedIdentifierEnd(String source, int start) {
     }
   }
 
+  /** Per-path cache: reflection loops rescan the same files many times. */
+  private static final Map<Path, List<TypeInfo>> TYPE_DECLARATIONS =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
   /** Finds declared top-level and nested Java types with bounded body ranges. */
 static List<TypeInfo> typeDeclarations(SourceFile file) {
+    List<TypeInfo> cached = TYPE_DECLARATIONS.get(file.path());
+    if (cached != null) {
+      return cached;
+    }
     String source = maskStringLiterals(file.structuralSource());
     Matcher matcher = TYPE_DECLARATION.matcher(source);
     List<TypeInfo> result = new ArrayList<>();
@@ -59,7 +67,9 @@ static List<TypeInfo> typeDeclarations(SourceFile file) {
       }
       result.add(new TypeInfo(matcher.group(1), matcher.group(2), matcher.start(), closing));
     }
-    return List.copyOf(result);
+    List<TypeInfo> declarations = List.copyOf(result);
+    TYPE_DECLARATIONS.put(file.path(), declarations);
+    return declarations;
   }
 
   /** Parses a single literal or literal array route expression. */
