@@ -110,7 +110,15 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     if (validDescriptorFilename(normalizedDeclared)) {
+      int descriptorStart = descriptors.size();
+      long retainedBefore = state.retainedBytes();
+      if (!state.tryRetain(displayPath(context, normalizedDeclared))) {
+        return;
+      }
       addFile(normalizedDeclared, context, dependencyEntries, descriptors, visited, state);
+      if (descriptors.size() == descriptorStart) {
+        state.restoreRetained(retainedBefore);
+      }
       return;
     }
     // An explicitly selected input must not vanish silently: the diagnostic
@@ -121,7 +129,6 @@ final class ServiceLoaderDescriptorReader {
         "explicitly selected service descriptor filename is not a binary class name");
   }
 
-  /** Scans one selected classpath entry, diagnosing unavailable entries on request. */
   /**
    * Scans one selected classpath entry. {@code descriptors} must be mutable: a
    * module-info retention rollback removes the descriptors this source

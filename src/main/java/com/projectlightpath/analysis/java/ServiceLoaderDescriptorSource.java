@@ -37,6 +37,10 @@ final class ServiceLoaderDescriptorSource {
     scanClasspathEntry(entry, descriptors, visited, state, false);
   }
 
+  /**
+   * Scans one selected classpath entry. {@code descriptors} must be mutable: a
+   * retention rollback removes the descriptors this source contributed.
+   */
   static void scanClasspathEntry(
       Path entry,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
@@ -91,7 +95,10 @@ final class ServiceLoaderDescriptorSource {
           state.restoreRetained(retainedBefore);
           return Optional.empty();
         }
-        if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)) {
+        if (ServiceLoaderDescriptorAuthorization.serviceFileCandidate(path, state)
+            && path.getFileName() != null
+            && ServiceLoaderDescriptorAuthorization.isBinaryClassName(
+                path.getFileName().toString())) {
           if (!state.tryRetain(path.toString())) {
             state.restoreRetained(retainedBefore);
             return Optional.empty();

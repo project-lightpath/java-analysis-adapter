@@ -91,9 +91,7 @@ final class ServiceLoaderDescriptorArchiveSource {
         ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
             entry.getName(), archive, state);
       }
-      if (entry.getName().startsWith(
-              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")
-          && !retainDescriptor(descriptors, entry, entryPath, state)) {
+      if (!retainDescriptor(descriptors, entry, entryPath, state)) {
         complete = false;
         break;
       }
@@ -117,7 +115,13 @@ final class ServiceLoaderDescriptorArchiveSource {
       ZipEntry entry,
       String path,
       ServiceLoaderDescriptorSource.ScanState state) {
+    String prefix = ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/";
     String name = entry.getName();
+    if (!name.startsWith(prefix)
+        || !ServiceLoaderDescriptorAuthorization.isBinaryClassName(
+            name.substring(prefix.length()))) {
+      return true;
+    }
     if (descriptors.containsKey(name)) {
       return true;
     }
