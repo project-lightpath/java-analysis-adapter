@@ -1432,13 +1432,18 @@ class ServiceLoaderCoverageTest {
       output.closeEntry();
       output.putNextEntry(new ZipEntry(unicodeName));
       output.closeEntry();
-      ZipEntry commented = new ZipEntry("noise/short");
-      commented.setComment("abcd");
+      ZipEntry commented = new ZipEntry("noise/c");
+      commented.setComment("c".repeat(100));
       output.putNextEntry(commented);
       output.closeEntry();
+      ZipEntry floor = new ZipEntry("noise/short");
+      floor.setComment("abcd");
+      output.putNextEntry(floor);
+      output.closeEntry();
     }
-    // 46 + 86 ASCII bytes + 10 extra; 46 + 86 UTF-8 bytes (46 chars); floor 122.
-    long expected = 142 + 132 + 122;
+    // 46 + 86 ASCII bytes + 10 extra; 46 + 86 UTF-8 bytes (46 chars);
+    // 46 + 7 name + 100 comment; 46 + 11 + 4 floored to 122.
+    long expected = 142 + 132 + 153 + 122;
 
     List<ServiceLoaderDescriptorScanner.Descriptor> largeDescriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState largeState =
@@ -1636,6 +1641,132 @@ class ServiceLoaderCoverageTest {
           units).call());
     }
     return Files.readAllBytes(classes.resolve("module-info.class"));
+  }
+
+  @Test
+  void decompressionExhaustionMidArchiveKeepsEarlierDescriptors() throws IOException {
+    String payload = "demo.ProviderImpl\n".repeat(64);
+    Path archive = temp.resolve("decompression-partial.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 3; index++) {
+        put(output, "META-INF/services/demo.Provider" + index, payload);
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1500,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals(2, state.diagnostics().stream()
+        .filter(item -> item.code().equals("archive_decompression_limit")).count(),
+        state.diagnostics().toString());
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_retention_limit")));
+  }
+
+  @Test
+  void exhaustedDirectoryListingStillScansModuleInfoIndependently() throws IOException {
+    byte[] module = moduleInfoBytes("directory-listing-module");
+    Path classes = temp.resolve("listing-module-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    for (String name : List.of("demo.A", "demo.B", "demo.C")) {
+      Files.writeString(services.resolve(name), "demo.ProviderImpl\n");
+    }
+    Files.write(classes.resolve("module-info.class"), module);
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertEquals(2, descriptors.size(), descriptors.toString());
+    assertTrue(descriptors.stream().allMatch(ServiceLoaderDescriptorScanner.Descriptor::moduleInfo));
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")),
+        state.diagnostics().toString());
+    assertEquals(2L * ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+  }
+
+  @Test
+  void observedSingleFileDescriptorsChargeRetention() throws IOException {
+    Path root = temp.resolve("observed-retention");
+    Path sourceRoot = root.resolve("src/main/java");
+    Files.createDirectories(sourceRoot);
+    Files.createDirectories(root.resolve("target/classes"));
+    Path first = root.resolve("observed/demo.One");
+    Path second = root.resolve("observed/demo.Two");
+    Files.createDirectories(first.getParent());
+    Files.writeString(first, "demo.OneImpl\n");
+    Files.writeString(second, "demo.TwoImpl\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("observed-retention")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("observed-retention")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "first", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            first.toString()))
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "second", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            second.toString()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+    assertEquals(1, scan.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_retention_limit")).count(),
+        scan.diagnostics().toString());
+  }
+
+  @Test
+  void nonDescriptorServiceEntriesDoNotConsumeRetention() throws IOException {
+    Path archive = temp.resolve("non-descriptor-entries.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/not-valid", "ignored");
+      put(output, "META-INF/services/a/b", "ignored");
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+    assertEquals(ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
   }
 
   @Test
