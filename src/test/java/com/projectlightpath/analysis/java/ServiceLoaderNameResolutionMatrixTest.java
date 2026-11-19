@@ -1400,10 +1400,10 @@ class ServiceLoaderNameResolutionMatrixTest {
         """)).isEmpty());
   }
 
-  /** No selected same-simple-name type, so the unselected owner adds no doubt. */
+  /** An unselected owner cannot be proven to lack the member, even without a lookalike. */
   @Test
-  void staticOnDemandUnselectedOwnerWithoutLookalikeStaysAttributed() throws IOException {
-    assertFalse(matrixSitesIn("matrix-cell-static-unselected-owner-plain", "demo", """
+  void staticOnDemandUnselectedOwnerWithoutLookalikeAbstains() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-unselected-owner-plain", "demo", """
         package demo;
         import java.util.*;
         import static a.Tools.*;
@@ -1411,6 +1411,45 @@ class ServiceLoaderNameResolutionMatrixTest {
           void audit() { ServiceLoader.load(Object.class); }
         }
         """, Map.of()).isEmpty());
+  }
+
+  /** A static member inherited by the owner participates in the wildcard import. */
+  @Test
+  void staticOnDemandInheritedMemberStaysAmbiguous() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-inherited-member", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of(
+            "a/Tools.java", """
+        package a;
+        public class Tools extends Base { }
+        """,
+            "a/Base.java", """
+        package a;
+        public class Base {
+          public static class ServiceLoader<T> { }
+        }
+        """)).isEmpty());
+  }
+
+  /** An unresolvable owner superclass leaves the inherited member set unproven. */
+  @Test
+  void staticOnDemandUnresolvedOwnerSuperclassAbstains() throws IOException {
+    assertTrue(matrixSitesIn("matrix-cell-static-unresolved-super", "demo", """
+        package demo;
+        import java.util.*;
+        import static a.Tools.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(Object.class); }
+        }
+        """, Map.of("a/Tools.java", """
+        package a;
+        public class Tools extends external.Base { }
+        """)).isEmpty());
   }
 
   // ---- Issue #9: sourceFile owner '$' matching (c) ----
