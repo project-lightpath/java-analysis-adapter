@@ -103,7 +103,7 @@ class ScannerExtractionCacheTest {
   }
 
   @Test
-  void braceDepthMatchesTheReferenceScanForEveryBoundaryCell() {
+  void braceDepthRestatedContractHoldsForEveryBoundaryCell() {
     List<String> sources = List.of(
         "",
         "{",
@@ -131,7 +131,7 @@ class ScannerExtractionCacheTest {
   }
 
   @Test
-  void fieldInitializerEndMatchesTheReferenceScanForEveryBoundaryCell() {
+  void fieldInitializerEndRestatedContractHoldsForEveryBoundaryCell() {
     List<String> sources = List.of(
         "",
         ";",
@@ -404,6 +404,23 @@ class ScannerExtractionCacheTest {
   }
 
   @Test
+  void rawSourceIdentityIsRequiredForReuse() {
+    String structural = "class Sample { }";
+    Path shared = Path.of("shared-raw-source.java");
+    SourceFile first = new SourceFile(
+        shared, "shared", "class Sample { }", structural,
+        "demo", "demo.Sample", "Sample", 0, false);
+    SourceFile samePathNewRaw = new SourceFile(
+        shared, "shared", "class Sample { /* edited */ }", structural,
+        "demo", "demo.Sample", "Sample", 0, false);
+
+    assertSame(first.structuralSource(), samePathNewRaw.structuralSource());
+    assertNotSame(SourceMetadataScannerFileExtracts.of(first),
+        SourceMetadataScannerFileExtracts.of(samePathNewRaw),
+        "extraction copies raw-source text, so a structural match alone must not be reused");
+  }
+
+  @Test
   void onDemandImportLookupUsesTheCachedSetAndKeepsDollarPackages() {
     SourceFile file = syntheticSource(
         "package demo;\nimport java.lang.reflect.*;\nimport a$b.*;\nclass Sample {}\n");
@@ -468,7 +485,7 @@ class ScannerExtractionCacheTest {
         .build();
   }
 
-  /** Independent restatement of the documented depth contract. */
+  /** Restatement of the documented depth contract; the index-side test is the real oracle. */
   private static int referenceBraceDepth(String source, int index) {
     int depth = 0;
     for (int position = 0; position < Math.min(index, source.length()); position++) {
@@ -481,7 +498,7 @@ class ScannerExtractionCacheTest {
     return depth;
   }
 
-  /** Independent restatement of the documented field-extent contract. */
+  /** Restatement of the documented extent contract; the index-side test is the real oracle. */
   private static int referenceFieldInitializerEnd(String source, int start) {
     int parentheses = 0;
     int brackets = 0;

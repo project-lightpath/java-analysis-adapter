@@ -38,6 +38,13 @@ import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
  * (fill is one synchronized get-validate-put; lazy slots synchronize on the
  * holder). Two scans reading the same path with <em>different</em> content
  * replace each other's entry, so they recompute rather than serve stale data.
+ * Construction runs inside the cache lock, so first touch of different files
+ * serializes; that keeps fill atomic and is free for the single-threaded
+ * scanner.
+ *
+ * <p>Both the raw and the structural source identity must match for reuse.
+ * Extraction copies text and line numbers out of the raw source, so a
+ * structural match alone is not enough.
  */
 final class SourceMetadataScannerFileExtracts {
   private static final Map<Path, SourceMetadataScannerFileExtracts> CACHE =
@@ -55,6 +62,7 @@ final class SourceMetadataScannerFileExtracts {
   record InitializerField(
       int matchStart, int equalsOffset, int end, int line, String name, String declaration) {}
 
+  private final String rawSource;
   private final String structuralSource;
   private final String literalMaskedSource;
   private final int[] bracePositions;
@@ -71,6 +79,7 @@ final class SourceMetadataScannerFileExtracts {
   private Set<String> onDemandImportPackages;
 
   private SourceMetadataScannerFileExtracts(SourceFile file) {
+    this.rawSource = file.source();
     this.structuralSource = file.structuralSource();
     this.literalMaskedSource = JavaSourceText.maskStringLiterals(structuralSource);
     List<Integer> positions = new ArrayList<>();
@@ -96,7 +105,9 @@ final class SourceMetadataScannerFileExtracts {
   static SourceMetadataScannerFileExtracts of(SourceFile file) {
     synchronized (CACHE) {
       SourceMetadataScannerFileExtracts cached = CACHE.get(file.path());
-      if (cached != null && cached.structuralSource == file.structuralSource()) {
+      if (cached != null
+          && cached.structuralSource == file.structuralSource()
+          && cached.rawSource == file.source()) {
         return cached;
       }
       SourceMetadataScannerFileExtracts created = new SourceMetadataScannerFileExtracts(file);
