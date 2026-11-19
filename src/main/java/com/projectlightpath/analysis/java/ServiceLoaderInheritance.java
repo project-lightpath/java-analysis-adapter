@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -44,8 +45,21 @@ final class ServiceLoaderInheritance {
         continue;
       }
       String owner = imported.name();
-      if (scanner.files().stream()
+      List<SourceMetadataScanner.SourceFile> owners = scanner.files().stream()
           .filter(candidate -> candidate.typeName().equals(owner))
+          .toList();
+      if (owners.isEmpty()) {
+        // The named owner is outside the selected files. If a selected type
+        // shares its simple name, the owner could still declare the member, so
+        // the ambiguity is unprovable and abstention is the safe direction.
+        String simpleName = imported.simpleName();
+        if (scanner.files().stream()
+            .anyMatch(candidate -> candidate.simpleTypeName().equals(simpleName))) {
+          return true;
+        }
+        continue;
+      }
+      if (owners.stream()
           .anyMatch(candidate -> declaresInheritableServiceLoaderType(
               candidate, file.packageName()))) {
         return true;
@@ -184,12 +198,18 @@ final class ServiceLoaderInheritance {
       SourceMetadataScanner.SourceFile candidate, String sitePackage) {
     List<SourceMetadataScannerState.TypeInfo> types =
         SourceMetadataScanner.typeDeclarations(candidate);
-    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
-    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
-    return types.stream()
+    List<SourceMetadataScannerState.TypeInfo> named = types.stream()
         .filter(type -> type.name().equals("ServiceLoader"))
         .filter(type -> !SourceMetadataScanner.isLocalType(candidate, type))
-        .filter(type -> isInheritableMemberType(candidate, masked, type, sitePackage))
+        .toList();
+    if (named.isEmpty()) {
+      return false;
+    }
+    String source = ServiceLoaderSourceMasker.mask(candidate.structuralSource());
+    String masked = SourceMetadataScanner.maskAnnotationArguments(source);
+    return named.stream()
+        .filter(type -> isInheritableMemberType(
+            candidate, masked, type, sitePackage, types))
         .anyMatch(type -> types.stream()
             .filter(other -> other.start() < type.start() && type.end() <= other.end())
             .allMatch(other -> other.name().equals(candidate.simpleTypeName())));
@@ -197,20 +217,34 @@ final class ServiceLoaderInheritance {
 
   /**
    * A private member type is never inherited; a package-private member type is
-   * inherited only inside its own package (JLS 8.5).
+   * inherited only inside its own package (JLS 8.5). Every member type of an
+   * interface is implicitly public (JLS 9.3).
    */
   private static boolean isInheritableMemberType(
       SourceMetadataScanner.SourceFile candidate,
       String source,
       SourceMetadataScannerState.TypeInfo type,
-      String sitePackage) {
+      String sitePackage,
+      List<SourceMetadataScannerState.TypeInfo> types) {
     String modifiers = declarationModifiers(source, type);
     if (PRIVATE_MODIFIER.matcher(modifiers).find()) {
       return false;
     }
     return candidate.packageName().equals(sitePackage)
         || PUBLIC_MODIFIER.matcher(modifiers).find()
-        || PROTECTED_MODIFIER.matcher(modifiers).find();
+        || PROTECTED_MODIFIER.matcher(modifiers).find()
+        || implicitlyPublicInterfaceMember(types, type);
+  }
+
+  /** True when the type's innermost enclosing type is an interface. */
+  private static boolean implicitlyPublicInterfaceMember(
+      List<SourceMetadataScannerState.TypeInfo> types,
+      SourceMetadataScannerState.TypeInfo type) {
+    return types.stream()
+        .filter(other -> other.start() < type.start() && type.end() <= other.end())
+        .max(Comparator.comparingInt(SourceMetadataScannerState.TypeInfo::start))
+        .map(other -> other.kind().equals("interface"))
+        .orElse(false);
   }
 
   /** The declaration header between the previous member boundary and the type. */
