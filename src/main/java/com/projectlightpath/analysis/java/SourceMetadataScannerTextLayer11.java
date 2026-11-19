@@ -30,7 +30,7 @@ static String methodDescriptor(MethodInfo method) {
 
   /** Extracts constructor bodies so dynamic sites retain an explicit initializer caller. */
 static List<MethodInfo> constructors(SourceFile file) {
-    return SourceMetadataScannerFileExtracts.of(file).constructors();
+    return SourceMetadataScannerFileExtracts.of(file).constructors(file);
   }
 
   /** Computes the constructor declarations for one file without consulting the cache. */

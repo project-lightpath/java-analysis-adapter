@@ -19,7 +19,7 @@ abstract class SourceMetadataScannerTextLayer13 extends SourceMetadataScannerTex
 
   /** Extracts bounded method declarations and their annotation blocks. */
   static List<MethodInfo> methods(SourceFile file) {
-    return SourceMetadataScannerFileExtracts.of(file).methods();
+    return SourceMetadataScannerFileExtracts.of(file).methods(file);
   }
 
   /** Computes the method declarations for one file without consulting the cache. */

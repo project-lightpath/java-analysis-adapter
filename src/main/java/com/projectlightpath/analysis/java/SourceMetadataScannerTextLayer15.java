@@ -30,7 +30,7 @@ static Optional<MethodInfo> initializerContaining(SourceFile file, int index) {
     String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     MethodInfo selected = initializerBlockContaining(file, source, index).orElse(null);
     for (SourceMetadataScannerFileExtracts.InitializerField field :
-        SourceMetadataScannerFileExtracts.of(file).initializerFields()) {
+        SourceMetadataScannerFileExtracts.of(file).initializerFields(file)) {
       if (field.equalsOffset() >= index || field.end() <= index) {
         continue;
       }
@@ -48,8 +48,7 @@ static Optional<MethodInfo> initializerContaining(SourceFile file, int index) {
 
   /** Captures every attributeable field declaration in one pass over the file. */
 static List<SourceMetadataScannerFileExtracts.InitializerField> extractInitializerFields(
-      SourceFile file) {
-    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
+      SourceFile file, String source) {
     Matcher matcher = INITIALIZER_FIELD.matcher(source);
     List<SourceMetadataScannerFileExtracts.InitializerField> result = new ArrayList<>();
     while (matcher.find()) {
@@ -112,8 +111,7 @@ static List<AnonymousType> anonymousTypes(SourceFile file) {
   }
 
   /** Computes the anonymous-class ranges for one file without consulting the cache. */
-static List<AnonymousType> extractAnonymousTypes(SourceFile file) {
-    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
+static List<AnonymousType> extractAnonymousTypes(String source) {
     Matcher matcher = NEW_EXPRESSION.matcher(source);
     List<AnonymousType> ranges = new ArrayList<>();
     while (matcher.find()) {

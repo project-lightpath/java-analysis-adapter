@@ -76,9 +76,9 @@ static Set<String> onDemandImportPackages(SourceFile sourceFile) {
   }
 
   /** Parses explicit import names once per file. */
-static List<String> extractImportedNames(SourceFile sourceFile) {
+static List<String> extractImportedNames(String source) {
     Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\s*;")
-        .matcher(SourceMetadataScannerFileExtracts.of(sourceFile).literalMaskedSource());
+        .matcher(source);
     List<String> result = new ArrayList<>();
     while (matcher.find()) {
       result.add(matcher.group(1));
@@ -87,14 +87,14 @@ static List<String> extractImportedNames(SourceFile sourceFile) {
   }
 
   /** Parses on-demand import packages once per file. */
-static Set<String> extractOnDemandImportPackages(SourceFile sourceFile) {
+static Set<String> extractOnDemandImportPackages(String source) {
     Matcher matcher = Pattern.compile("(?m)\\bimport\\s+([A-Za-z_][\\w.]*)\\.\\*\\s*;")
-        .matcher(SourceMetadataScannerFileExtracts.of(sourceFile).literalMaskedSource());
+        .matcher(source);
     Set<String> packages = new LinkedHashSet<>();
     while (matcher.find()) {
       packages.add(matcher.group(1));
     }
-    return Set.copyOf(packages);
+    return Collections.unmodifiableSet(packages);
   }
 
   /** Splits one call's arguments without crossing nested expressions. */

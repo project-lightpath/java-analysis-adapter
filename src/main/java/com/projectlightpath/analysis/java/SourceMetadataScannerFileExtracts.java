@@ -26,8 +26,18 @@ import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
  * the <em>same string instance</em> as the caller's. {@code read} builds that
  * string once per scan and {@code stripComments} always returns a new string, so
  * one run reuses entries and a re-read of the same path cannot reuse stale
- * extraction. The map is weakly keyed so entries are collectible once no equal
- * path is reachable.
+ * extraction.
+ *
+ * <p>Retention: the value deliberately holds no {@link SourceFile} and no
+ * {@link Path}. It only holds derived data, so it never keeps its own weak key
+ * reachable and the entry becomes collectible together with the scan's
+ * {@code SourceFile}s. Callers that need file identity (source text, line
+ * numbers, offset lookups) pass their {@code SourceFile} to the accessor.
+ *
+ * <p>Scope: the map is static, keyed by path, and correct under parallel scans
+ * (fill is one synchronized get-validate-put; lazy slots synchronize on the
+ * holder). Two scans reading the same path with <em>different</em> content
+ * replace each other's entry, so they recompute rather than serve stale data.
  */
 final class SourceMetadataScannerFileExtracts {
   private static final Map<Path, SourceMetadataScannerFileExtracts> CACHE =
@@ -35,9 +45,7 @@ final class SourceMetadataScannerFileExtracts {
 
   /** Field declaration captured once per file for visibility lookups. */
   record FieldCandidate(
-      int matchStart,
       int fieldOffset,
-      int declarationEnd,
       boolean memberScope,
       String sharedType,
       String declarators,
@@ -49,7 +57,6 @@ final class SourceMetadataScannerFileExtracts {
   record InitializerField(
       int matchStart, int equalsOffset, int end, int line, String name, String declaration) {}
 
-  private final SourceFile file;
   private final String structuralSource;
   private final String literalMaskedSource;
   private final int[] bracePositions;
@@ -66,7 +73,6 @@ final class SourceMetadataScannerFileExtracts {
   private Set<String> onDemandImportPackages;
 
   private SourceMetadataScannerFileExtracts(SourceFile file) {
-    this.file = file;
     this.structuralSource = file.structuralSource();
     this.literalMaskedSource = JavaSourceText.maskStringLiterals(structuralSource);
     List<Integer> positions = new ArrayList<>();
@@ -146,19 +152,19 @@ final class SourceMetadataScannerFileExtracts {
 
   synchronized List<TypeInfo> typeDeclarations() {
     if (typeDeclarations == null) {
-      typeDeclarations = SourceMetadataScannerTextLayer08.extractTypeDeclarations(file);
+      typeDeclarations = SourceMetadataScannerTextLayer08.extractTypeDeclarations(literalMaskedSource);
     }
     return typeDeclarations;
   }
 
-  synchronized List<MethodInfo> methods() {
+  synchronized List<MethodInfo> methods(SourceFile file) {
     if (methods == null) {
       methods = SourceMetadataScannerTextLayer13.extractMethods(file, declarationMaskedSource());
     }
     return methods;
   }
 
-  synchronized List<MethodInfo> constructors() {
+  synchronized List<MethodInfo> constructors(SourceFile file) {
     if (constructors == null) {
       constructors =
           SourceMetadataScannerTextLayer11.extractConstructors(file, declarationMaskedSource());
@@ -168,28 +174,30 @@ final class SourceMetadataScannerFileExtracts {
 
   synchronized List<AnonymousType> anonymousTypes() {
     if (anonymousTypes == null) {
-      anonymousTypes = SourceMetadataScannerTextLayer15.extractAnonymousTypes(file);
+      anonymousTypes = SourceMetadataScannerTextLayer15.extractAnonymousTypes(literalMaskedSource);
     }
     return anonymousTypes;
   }
 
-  synchronized List<InitializerField> initializerFields() {
+  synchronized List<InitializerField> initializerFields(SourceFile file) {
     if (initializerFields == null) {
-      initializerFields = SourceMetadataScannerTextLayer15.extractInitializerFields(file);
+      initializerFields =
+          SourceMetadataScannerTextLayer15.extractInitializerFields(file, literalMaskedSource);
     }
     return initializerFields;
   }
 
-  synchronized List<FieldCandidate> fieldCandidates() {
+  synchronized List<FieldCandidate> fieldCandidates(SourceFile file) {
     if (fieldCandidates == null) {
-      fieldCandidates = SourceMetadataScannerReflectionLayer02.extractFieldCandidates(file);
+      fieldCandidates =
+          SourceMetadataScannerReflectionLayer02.extractFieldCandidates(file, literalMaskedSource);
     }
     return fieldCandidates;
   }
 
   synchronized List<String> importedNames() {
     if (importedNames == null) {
-      importedNames = SourceMetadataScannerTextLayer06.extractImportedNames(file);
+      importedNames = SourceMetadataScannerTextLayer06.extractImportedNames(literalMaskedSource);
     }
     return importedNames;
   }
@@ -197,7 +205,7 @@ final class SourceMetadataScannerFileExtracts {
   synchronized Set<String> onDemandImportPackages() {
     if (onDemandImportPackages == null) {
       onDemandImportPackages =
-          SourceMetadataScannerTextLayer06.extractOnDemandImportPackages(file);
+          SourceMetadataScannerTextLayer06.extractOnDemandImportPackages(literalMaskedSource);
     }
     return onDemandImportPackages;
   }

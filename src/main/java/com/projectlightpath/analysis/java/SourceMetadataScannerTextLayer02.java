@@ -125,6 +125,7 @@ static String memberHeader(String source, int opening) {
     return source.substring(start + 1, opening).trim();
   }
 
+  /** Reference brace depth over an arbitrary source; used by tests and non-file strings. */
 static int braceDepthAt(String source, int index) {
     int depth = 0;
     for (int position = 0; position < Math.min(index, source.length()); position++) {

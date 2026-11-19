@@ -49,8 +49,7 @@ static List<TypeInfo> typeDeclarations(SourceFile file) {
   }
 
   /** Computes the type declarations for one file without consulting the cache. */
-static List<TypeInfo> extractTypeDeclarations(SourceFile file) {
-    String source = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
+static List<TypeInfo> extractTypeDeclarations(String source) {
     Matcher matcher = TYPE_DECLARATION.matcher(source);
     List<TypeInfo> result = new ArrayList<>();
     while (matcher.find()) {

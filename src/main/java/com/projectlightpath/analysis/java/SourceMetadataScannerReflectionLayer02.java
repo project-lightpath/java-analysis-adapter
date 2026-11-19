@@ -156,7 +156,7 @@ static LocalDeclaration sharedDeclarationMatch(
       Map<String, Integer> visibleOwners) {
     VisibleField selected = null;
     for (SourceMetadataScannerFileExtracts.FieldCandidate field :
-        SourceMetadataScannerFileExtracts.of(candidate).fieldCandidates()) {
+        SourceMetadataScannerFileExtracts.of(candidate).fieldCandidates(candidate)) {
       if (!field.memberScope()) {
         continue;
       }
@@ -182,10 +182,9 @@ static LocalDeclaration sharedDeclarationMatch(
 
   /** Captures the field declarations of one file once for every visibility lookup. */
   static List<SourceMetadataScannerFileExtracts.FieldCandidate> extractFieldCandidates(
-      SourceFile candidate) {
+      SourceFile candidate, String source) {
     SourceMetadataScannerFileExtracts extracts =
         SourceMetadataScannerFileExtracts.of(candidate);
-    String source = extracts.literalMaskedSource();
     Matcher matcher = FIELD_START.matcher(source);
     List<SourceMetadataScannerFileExtracts.FieldCandidate> result = new ArrayList<>();
     while (matcher.find()) {
@@ -194,9 +193,7 @@ static LocalDeclaration sharedDeclarationMatch(
       boolean memberScope = declarationEnd >= 0
           && isTypeMemberScope(candidate, source, declarationScopeIndex(source, matcher.start()));
       result.add(new SourceMetadataScannerFileExtracts.FieldCandidate(
-          matcher.start(),
           fieldOffset,
-          declarationEnd,
           memberScope,
           matcher.group(1),
           declarationEnd < 0 ? "" : source.substring(matcher.end(1), declarationEnd),

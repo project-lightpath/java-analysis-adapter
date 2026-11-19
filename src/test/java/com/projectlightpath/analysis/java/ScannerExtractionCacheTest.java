@@ -3,11 +3,13 @@ package com.projectlightpath.analysis.java;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.AnonymousType;
+import com.projectlightpath.analysis.java.SourceMetadataScannerState.FieldReference;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.MethodInfo;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.SourceFile;
 import com.projectlightpath.analysis.java.SourceMetadataScannerState.TypeInfo;
@@ -165,9 +167,9 @@ class ScannerExtractionCacheTest {
     SourceMetadataScannerFileExtracts second = SourceMetadataScannerFileExtracts.of(file);
 
     assertSame(first, second, "one run must reuse the extracts for a file");
-    assertSame(first.methods(), second.methods());
+    assertSame(first.methods(file), second.methods(file));
     assertSame(first.typeDeclarations(), second.typeDeclarations());
-    assertSame(first.constructors(), second.constructors());
+    assertSame(first.constructors(file), second.constructors(file));
     assertSame(first.anonymousTypes(), second.anonymousTypes());
     assertSame(first.literalMaskedSource(), second.literalMaskedSource());
     assertSame(first.declarationMaskedSource(), second.declarationMaskedSource());
@@ -176,12 +178,12 @@ class ScannerExtractionCacheTest {
   @Test
   void extractsDoNotDependOnRequestOrder() throws IOException {
     SourceFile methodsFirst = sourceFile("order-methods-first", SAMPLE);
-    List<MethodInfo> methods = SourceMetadataScannerFileExtracts.of(methodsFirst).methods();
+    List<MethodInfo> methods = SourceMetadataScannerFileExtracts.of(methodsFirst).methods(methodsFirst);
     List<TypeInfo> types = SourceMetadataScannerFileExtracts.of(methodsFirst).typeDeclarations();
 
     SourceFile typesFirst = sourceFile("order-types-first", SAMPLE);
     List<TypeInfo> otherTypes = SourceMetadataScannerFileExtracts.of(typesFirst).typeDeclarations();
-    List<MethodInfo> otherMethods = SourceMetadataScannerFileExtracts.of(typesFirst).methods();
+    List<MethodInfo> otherMethods = SourceMetadataScannerFileExtracts.of(typesFirst).methods(typesFirst);
 
     assertEquals(methods, otherMethods);
     assertEquals(types, otherTypes);
@@ -196,22 +198,22 @@ class ScannerExtractionCacheTest {
 
     SourceFile before = scannedSourceFile(id, firstContent, "demo/Sample.java");
     SourceMetadataScannerFileExtracts beforeExtracts = SourceMetadataScannerFileExtracts.of(before);
-    assertEquals(List.of("first"), methodNames(beforeExtracts));
+    assertEquals(List.of("first"), methodNames(before));
 
     SourceFile after = scannedSourceFile(id, secondContent, "demo/Sample.java");
     SourceMetadataScannerFileExtracts afterExtracts = SourceMetadataScannerFileExtracts.of(after);
-    assertEquals(List.of("second"), methodNames(afterExtracts));
+    assertEquals(List.of("second"), methodNames(after));
 
     assertNotSame(beforeExtracts, afterExtracts,
         "a re-read of the same path must never answer from the previous content");
-    assertEquals(List.of("first"), methodNames(beforeExtracts),
+    assertEquals(List.of("first"), methodNames(before),
         "previously returned extracts keep their own values");
 
     SourceFile back = scannedSourceFile(id, firstContent, "demo/Sample.java");
     SourceMetadataScannerFileExtracts backExtracts = SourceMetadataScannerFileExtracts.of(back);
     assertNotSame(afterExtracts, backExtracts,
         "A->B->A must not answer from the B entry");
-    assertEquals(List.of("first"), methodNames(backExtracts));
+    assertEquals(List.of("first"), methodNames(back));
   }
 
   @Test
@@ -275,10 +277,6 @@ class ScannerExtractionCacheTest {
             referenceFieldInitializerEnd(masked, start),
             extracts.fieldInitializerEnd(start),
             "source=" + source + " start=" + start);
-        assertEquals(
-            extracts.fieldInitializerEnd(start),
-            extracts.fieldInitializerEnd(start),
-            "the memoized extent must be stable for " + source + " start=" + start);
       }
     }
   }
@@ -302,8 +300,106 @@ class ScannerExtractionCacheTest {
         extracts.declarationMaskedSource());
   }
 
-  private static List<String> methodNames(SourceMetadataScannerFileExtracts extracts) {
-    return extracts.methods().stream().map(MethodInfo::name).toList();
+  @Test
+  void samePathWithIdenticalContentIsReReadNotShared() throws IOException {
+    String id = "identical-content";
+    String source = "package demo; class Sample { Object run() { return null; } }\n";
+    SourceFile first = scannedSourceFile(id, source, "demo/Sample.java");
+    SourceFile second = scannedSourceFile(id, source, "demo/Sample.java");
+
+    assertNotSame(first.structuralSource(), second.structuralSource(),
+        "every read must produce its own structural string");
+    assertNotSame(SourceMetadataScannerFileExtracts.of(first),
+        SourceMetadataScannerFileExtracts.of(second),
+        "freshness is per read, not per content equality");
+  }
+
+  @Test
+  void initializerAttributionKeepsFieldAndBlockPrecedence() throws IOException {
+    String id = "initializer-attribution";
+    Path root = temp.resolve(id).resolve("src/main/java");
+    Files.createDirectories(root.resolve("demo"));
+    Files.writeString(root.resolve("demo/Sample.java"), """
+        package demo;
+        class Sample {
+          static Object staticField = create("static");
+          Object instanceField = create("instance");
+          static { create("static-block"); }
+          { create("instance-block"); }
+          Object laterField = create("later");
+          static Object create(Object value) { return value; }
+        }
+        """);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(contextFor(id, root));
+    SourceFile file = scanner.files().get(0);
+
+    assertInitializerAt(scanner, file, "create(\"static\")", "<clinit>", "staticField");
+    assertInitializerAt(scanner, file, "create(\"instance\")", "<init>", "instanceField");
+    assertInitializerAt(scanner, file, "create(\"static-block\")", "<clinit>", "");
+    assertInitializerAt(scanner, file, "create(\"instance-block\")", "<init>", "");
+    assertInitializerAt(scanner, file, "create(\"later\")", "<init>", "laterField");
+  }
+
+  @Test
+  void visibleFieldSelectionKeepsTheNearestOwner() throws IOException {
+    String id = "visible-field";
+    Path root = temp.resolve(id).resolve("src/main/java");
+    Files.createDirectories(root.resolve("demo"));
+    Files.writeString(root.resolve("demo/Base.java"),
+        "package demo; class Base { protected Object value; }\n");
+    Files.writeString(root.resolve("demo/Sample.java"), """
+        package demo;
+        class Sample extends Base {
+          private Object value;
+          Object use() { return value; }
+          private Object late;
+          Object useLate() { return late; }
+        }
+        """);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(contextFor(id, root));
+    SourceFile sample = scanner.files().stream()
+        .filter(file -> file.simpleTypeName().equals("Sample"))
+        .findFirst()
+        .orElseThrow();
+
+    FieldReference nearest = scanner.visibleField(
+        sample, "value", offsetOf(sample, "return value"));
+    assertNotNull(nearest, "the subclass field must hide the inherited field");
+    assertEquals(sample.path(), nearest.file().path(), nearest.toString());
+    assertEquals("Object", nearest.type(), nearest.toString());
+
+    FieldReference late = scanner.visibleField(
+        sample, "late", offsetOf(sample, "return late"));
+    assertNotNull(late, "a field declared after the site is still visible");
+    assertEquals(sample.path(), late.file().path(), late.toString());
+  }
+
+  private void assertInitializerAt(
+      SourceMetadataScanner scanner,
+      SourceFile file,
+      String marker,
+      String expectedName,
+      String expectedDeclaration) {
+    int offset = offsetOf(file, marker);
+    MethodInfo info = SourceMetadataScannerTextLayer15.initializerContaining(file, offset)
+        .orElseThrow(() -> new AssertionError("no initializer for " + marker));
+    assertEquals(expectedName, info.name(), marker);
+    assertTrue(info.start() <= offset && info.end() > offset,
+        marker + " -> " + info);
+    if (!expectedDeclaration.isEmpty()) {
+      assertTrue(info.annotationBlock().contains(expectedDeclaration), info.toString());
+    }
+  }
+
+  private static int offsetOf(SourceFile file, String marker) {
+    int offset = file.source().indexOf(marker);
+    assertTrue(offset >= 0, "missing marker: " + marker);
+    return offset;
+  }
+
+  private static List<String> methodNames(SourceFile file) {
+    return SourceMetadataScannerFileExtracts.of(file).methods(file).stream()
+        .map(MethodInfo::name).toList();
   }
 
   private static SourceFile syntheticSource(String source) {
@@ -334,7 +430,11 @@ class ScannerExtractionCacheTest {
     Path source = root.resolve(relative);
     Files.createDirectories(source.getParent());
     Files.writeString(source, sourceText);
-    AnalysisContext context = AnalysisContext.builder()
+    return new SourceMetadataScanner(contextFor(id, root)).files().get(0);
+  }
+
+  private AnalysisContext contextFor(String id, Path root) {
+    return AnalysisContext.builder()
         .id(id)
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
@@ -348,7 +448,6 @@ class ScannerExtractionCacheTest {
         .dependencyClasspathRequired(false)
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
-    return new SourceMetadataScanner(context).files().get(0);
   }
 
   /** Independent restatement of the documented depth contract. */
