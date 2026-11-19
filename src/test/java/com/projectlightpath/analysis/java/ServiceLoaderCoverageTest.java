@@ -1520,32 +1520,7 @@ class ServiceLoaderCoverageTest {
 
   @Test
   void moduleInfoDescriptorsRespectRetentionBudget() throws IOException {
-    Path sourceRoot = Files.createDirectories(temp.resolve("retention-module-src"));
-    Path source = Files.createDirectories(sourceRoot.resolve("demo"));
-    for (String name : List.of("A", "B")) {
-      Files.writeString(source.resolve(name + ".java"),
-          "package demo; public interface " + name + " { void record(); }\n");
-      Files.writeString(source.resolve(name + "Impl.java"),
-          "package demo; public final class " + name + "Impl implements " + name
-              + " { public void record() {} }\n");
-    }
-    Files.writeString(sourceRoot.resolve("module-info.java"),
-        "module demo.provider { provides demo.A with demo.AImpl;"
-            + " provides demo.B with demo.BImpl; }\n");
-    Path classes = Files.createDirectories(temp.resolve("retention-module-classes"));
-    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
-    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
-      List<Path> sources = Files.walk(sourceRoot)
-          .filter(path -> path.toString().endsWith(".java"))
-          .sorted()
-          .toList();
-      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
-      assertTrue(compiler.getTask(
-          null, files, null, List.of("--release", "17", "-d", classes.toString()), null,
-          units).call());
-    }
-    byte[] bytes = Files.readAllBytes(classes.resolve("module-info.class"));
+    byte[] bytes = moduleInfoBytes("retention-module");
 
     List<ServiceLoaderDescriptorScanner.Descriptor> bounded = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState boundedState =
@@ -1571,6 +1546,86 @@ class ServiceLoaderCoverageTest {
         bytes, "module-info.class", complete, completeState);
     assertEquals(2, complete.size(), complete.toString());
     assertTrue(completeState.diagnostics().isEmpty(), completeState.diagnostics().toString());
+  }
+
+  @Test
+  void archiveModuleRetentionFailureRollsBackArchiveDescriptors() throws IOException {
+    byte[] module = moduleInfoBytes("archive-module-rollback");
+    Path archive = temp.resolve("module-retention.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(module);
+      output.closeEntry();
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertEquals(1, state.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_retention_limit")).count(),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void directoryModuleRetentionFailureRollsBackDirectoryDescriptors() throws IOException {
+    byte[] module = moduleInfoBytes("directory-module-rollback");
+    Path classes = temp.resolve("module-rollback-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.Provider"), "demo.ProviderImpl\n");
+    Files.write(classes.resolve("module-info.class"), module);
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertEquals(1, state.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_retention_limit")).count(),
+        state.diagnostics().toString());
+  }
+
+  private byte[] moduleInfoBytes(String name) throws IOException {
+    Path sourceRoot = Files.createDirectories(temp.resolve(name + "-src"));
+    Path source = Files.createDirectories(sourceRoot.resolve("demo"));
+    for (String service : List.of("A", "B")) {
+      Files.writeString(source.resolve(service + ".java"),
+          "package demo; public interface " + service + " { void record(); }\n");
+      Files.writeString(source.resolve(service + "Impl.java"),
+          "package demo; public final class " + service + "Impl implements " + service
+              + " { public void record() {} }\n");
+    }
+    Files.writeString(sourceRoot.resolve("module-info.java"),
+        "module demo.provider { provides demo.A with demo.AImpl;"
+            + " provides demo.B with demo.BImpl; }\n");
+    Path classes = Files.createDirectories(temp.resolve(name + "-classes"));
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(sourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null, files, null, List.of("--release", "17", "-d", classes.toString()), null,
+          units).call());
+    }
+    return Files.readAllBytes(classes.resolve("module-info.class"));
   }
 
   @Test
