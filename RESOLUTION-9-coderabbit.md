@@ -33,8 +33,8 @@ same `$`-unsafe annotation-name assumption appears in these fourteen places:
 | `SourceMetadataScannerTextLayer12.java:23` | strip annotation from return type | **fixed here** |
 | `SourceMetadataScannerTextLayer19.java:175` | strip annotation from parameter | **fixed here** |
 | `SourceMetadataScannerTextLayer02.java:80` | strip annotation from parameter type | **fixed here** |
-| `SourceMetadataScannerState.java:24` (`METHOD`) | method-declaration regex | deferred, safe direction (method lost → call site abstains) |
-| `SourceMetadataScannerState.java:100` (`INJECT_FIELD`) | field-declaration regex | deferred, safe direction (injection fact lost) |
+| `SourceMetadataScannerState.java:25-26` (`METHOD`) | method-declaration regex | deferred, safe direction (method lost → call site abstains) |
+| `SourceMetadataScannerState.java:101-102` (`INJECT_FIELD`) | field-declaration regex | deferred, safe direction (injection fact lost) |
 | `SourceMetadataScannerTextLayer11.java:38` | constructor regex | deferred; the pattern re-anchors only at `;`, `{`, `}`, or a newline (`TextLayer11.java:37`), so when the annotation and header share a line the constructor `MethodInfo` is lost and dynamic sites in that body lose their explicit caller, and when the annotation is on its own line the constructor is kept with an empty annotation block (qualifier lost) — not proven safe in either form, same follow-up |
 | `SourceMetadataScannerTextLayer15.java:25` | field/initializer regex | deferred, safe direction |
 | `SourceMetadataScannerReflectionLayer03.java:25` | reflection field regex | deferred, safe direction |

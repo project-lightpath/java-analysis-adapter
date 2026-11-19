@@ -100,8 +100,10 @@ changes.
 | A5 | A4 with bridge in `package a;` (owner `a.Bridge`) | site abstained (member accessible) | guard |
 | A6 | `package demo;` `import java.util.*;` `import static a.Tools.*`; `a.Tools` member `ServiceLoader` is `private` | site attributed | guard (predicate's private exclusion) |
 | A7 | `package demo;` `import java.util.*;` `import static a.Tools.*`; `a.Tools` member `ServiceLoader` is `protected` | site abstained | guard pinning the documented over-abstention |
-| A8 | owner `a.Tools` is outside the selected files, and a selected `b.Tools` shares the simple name | site abstained (owner's members unprovable) | **RED at GREEN_09**; GREEN_09b abstains |
-| A9 | owner `a.Tools` is outside the selected files and no selected type shares the simple name | site attributed | guard (pre-existing behavior) |
+| A8 | owner `a.Tools` is outside the selected files, and a selected `b.Tools` shares the simple name | site abstained (owner's members unprovable) | **RED at GREEN_09**; GREEN_09b/GREEN_09d abstain |
+| A9 | owner `a.Tools` is outside the selected files and no selected type shares the simple name | site abstained (owner's members unprovable regardless of lookalikes) | **RED at GREEN_09c**; GREEN_09d abstains |
+| A10 | owner `a.Tools extends a.Base`, and `a.Base` declares a public member `ServiceLoader` | site abstained (inherited member participates) | **RED at GREEN_09c**; GREEN_09d abstains |
+| A11 | owner `a.Tools extends external.Base` (superclass outside the selected files) | site abstained (inherited member set unproven) | **RED at GREEN_09c**; GREEN_09d abstains |
 
 All `(a)` cells include `import java.util.*;` so attribution is not vacuous.
 
@@ -268,11 +270,12 @@ Gates (after RED, after GREEN, after refactor):
   may be attributed to `java.util.ServiceLoader` even where javac resolves it
   to the imported member type. It is unchanged by this issue and belongs to
   FLPATH-5124 follow-up work.
-- A static-import owner type outside the selected files is treated as follows
-  (A8/A9): with a same-simple-name lookalike the scan abstains, without one it
-  attributes. That is the pre-existing attribution direction, not a new proof
-  of ownership. A package-private owner type behaves the same way when it is
-  not selected.
+- A static-import owner type outside the selected files is unprovable (A8/A9):
+  the scan abstains whether or not a selected type shares its simple name. An
+  owner whose extends clause cannot be resolved to a selected file also
+  abstains (A11), because an inherited member would participate in the
+  wildcard import. An owner whose selected direct superclass declares no
+  eligible member keeps the previous attribution (A1).
 - Import names are normalized by `JavaImports.appendNormalized` (identifier-
   ignorable code points stripped) while `typeName` is raw source text. An
   owner name containing an ignorable code point cannot match the owner
@@ -389,3 +392,31 @@ Full gates on GREEN_09c:
 - `make evidence-validate`: PASS.
 
 No diagnostics added; `ServiceLoaderScanner.isUnique` behavior unchanged.
+
+## Execution record (EVIDENCE_09d — independent PR review wave 2)
+
+An independent CodeRabbit-style review of PR #12 (zvec/Serena grounded) found
+that the unselected static-import owner branch was still unsound and that an
+owner's inherited static member types were never consulted.
+
+- **Unselected owner (major):** A9 had pinned attribution as "pre-existing
+  behavior", but an unselected owner can declare the member regardless of
+  lookalikes. The branch now abstains for every unselected owner; A9 is renamed
+  and flips to abstention.
+- **Inherited owner members (minor):** `ownerMayDeclareServiceLoader` now checks
+  the owner's direct superclass with the same accessibility predicate as the
+  site path, and abstains when the extends clause cannot be resolved (A10/A11).
+- **PR description (minor):** updated with the 09c/09d work, full commit list,
+  and current gate counts.
+- **Resolution line numbers (nit):** the two `SourceMetadataScannerState` rows
+  now point at the post-`ANNOTATION_NAME` lines (`25-26`, `101-102`).
+
+RED_09d (7aaa7e0): targeted matrix 92 tests, 3 failures (A9, A10, A11).
+
+GREEN_09d: targeted matrix 92/92 green.
+
+Full gates on GREEN_09d:
+
+- `make adapter-test`: pending re-run (expected 312; baseline 275).
+- `make java-lint`: pending.
+- `make evidence-validate`: pending.
