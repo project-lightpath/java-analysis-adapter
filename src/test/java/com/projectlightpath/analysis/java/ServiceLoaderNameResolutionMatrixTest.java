@@ -16,8 +16,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,16 +30,6 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ServiceLoaderNameResolutionMatrixTest {
   @TempDir Path temp;
-
-  @BeforeEach
-  void useTextualResolver() {
-    JavacServiceLoaderSiteResolver.setScopedMode("textual");
-  }
-
-  @AfterEach
-  void restoreResolver() {
-    JavacServiceLoaderSiteResolver.clearScopedMode();
-  }
 
   /** Cell 1: on-demand import vs same-package type in another file (JLS 6.4.1). */
   @Test
@@ -223,12 +212,15 @@ class ServiceLoaderNameResolutionMatrixTest {
         class Bridge {
           void audit() {
             accept((Helper ServiceLoader) -> {
-              class ServiceLoader<T> { }
+              class ServiceLoader<T> {
+                static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+              }
               ServiceLoader.load(Provider.class);
             });
             ServiceLoader.load(Provider.class);
           }
-          void accept(Object action) { }
+          interface Action { void run(Helper loader); }
+          void accept(Action action) { }
           static class Helper {
             static <T> T load(Class<T> type) { return null; }
           }
@@ -239,6 +231,8 @@ class ServiceLoaderNameResolutionMatrixTest {
   /** Cell 8b: lambda-shaped switch pattern x later switch arm (item I). */
   @Test
   void arrowArmPatternVariableScopesToItsArm() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(1, matrixSites("matrix-cell-8b", """
         package demo;
         import java.util.ServiceLoader;
@@ -251,6 +245,7 @@ class ServiceLoaderNameResolutionMatrixTest {
           }
           static class Helper {
             static <T> T load(Class<T> type) { return null; }
+            static <T> T touch() { return null; }
           }
         }
         """).size());
@@ -513,13 +508,13 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
-   * Deferred residual (item N): a qualified superclass whose package has no
-   * selected source file keeps the pre-existing attribution. Removing it is
-   * policy work (FLPATH-5124), not this bounded textual resolution.
+   * A qualified superclass whose package has no selected source file does not
+   * compile, so javac fails closed for the whole file. This is the safe
+   * direction and replaces the old textual attribution residual.
    */
   @Test
-  void unselectedQualifiedSuperclassNameStaysAttributed() throws IOException {
-    assertFalse(matrixSites("matrix-cell-qualified-external", """
+  void unselectedQualifiedSuperclassFailsClosed() throws IOException {
+    assertTrue(matrixSites("matrix-cell-qualified-external", """
         package demo;
         import java.util.*;
         class Bridge extends external.Base {
@@ -555,13 +550,13 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   /**
-   * Malformed-form robustness (review probe): a dotless import
-   * ({@code import ServiceLoader;}) must not abort the scan. It is not a
-   * valid single-type import, so it cannot make the superclass resolvable.
+   * A dotless import ({@code import ServiceLoader;}) is invalid Java. javac
+   * reports the file as erroneous and the adapter fails closed instead of
+   * guessing the superclass.
    */
   @Test
-  void dotlessImportDoesNotAbortScan() throws IOException {
-    assertFalse(matrixSites("matrix-cell-dotless-import", """
+  void dotlessImportFailsClosed() throws IOException {
+    assertTrue(matrixSites("matrix-cell-dotless-import", """
         package demo;
         import ServiceLoader;
         import java.util.*;
@@ -893,8 +888,8 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   @Test
-  void javaLambdaParameterDropsOnlyInsideTheLambda() throws IOException {
-    assertEquals(1, matrixSites("matrix-cell-java-lambda", """
+  void javaLambdaParameterErrorFailsClosedForWholeFile() throws IOException {
+    assertEquals(0, matrixSites("matrix-cell-java-lambda", """
         package demo;
         import java.util.*;
         class Bridge {
@@ -908,8 +903,8 @@ class ServiceLoaderNameResolutionMatrixTest {
   }
 
   @Test
-  void switchArmJavaPatternDropsOnlyThatArm() throws IOException {
-    assertEquals(1, matrixSites("matrix-cell-java-switch", """
+  void switchArmJavaPatternErrorFailsClosedForWholeFile() throws IOException {
+    assertEquals(0, matrixSites("matrix-cell-java-switch", """
         package demo;
         import java.util.*;
         class Bridge {
@@ -1127,6 +1122,23 @@ class ServiceLoaderNameResolutionMatrixTest {
     Path bridge = sourceRoot.resolve("demo/Bridge.java");
     Files.createDirectories(bridge.getParent());
     Files.writeString(bridge, bridgeSource);
+
+    Path provider = sourceRoot.resolve("demo/Provider.java");
+    if (!Files.exists(provider)) {
+      Files.writeString(provider, "package demo; public interface Provider { void record(); }\n");
+    }
+    Path helper = sourceRoot.resolve("demo/Helper.java");
+    if (!Files.exists(helper)) {
+      Files.writeString(helper, "package demo; class Helper { static <T> T load(Class<T> type) { return null; } static <T> T touch() { return null; } static Helper create() { return new Helper(); } }\n");
+    }
+    Path util = sourceRoot.resolve("demo/Util.java");
+    if (!Files.exists(util)) {
+      Files.writeString(util, "package demo; class Util { void record() { } }\n");
+    }
+    Path other = sourceRoot.resolve("demo/Other.java");
+    if (!Files.exists(other)) {
+      Files.writeString(other, "package demo; class Other { }\n");
+    }
     for (Map.Entry<String, String> entry : extraFiles.entrySet()) {
       Path extra = sourceRoot.resolve(entry.getKey());
       Files.createDirectories(extra.getParent());
@@ -1137,7 +1149,7 @@ class ServiceLoaderNameResolutionMatrixTest {
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
         .fixtureId("matrix-test")
-        .javaRelease(17)
+        .javaRelease(21)
         .repositoryRoot(root)
         .applicationClasses(root.resolve("classes"))
         .selectedProfile("test")

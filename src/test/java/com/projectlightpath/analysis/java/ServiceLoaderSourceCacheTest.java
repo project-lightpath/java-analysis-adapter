@@ -9,23 +9,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ServiceLoaderSourceCacheTest {
   @TempDir Path temp;
-
-  @BeforeEach
-  void useTextualResolver() {
-    JavacServiceLoaderSiteResolver.setScopedMode("textual");
-  }
-
-  @AfterEach
-  void restoreResolver() {
-    JavacServiceLoaderSiteResolver.clearScopedMode();
-  }
 
   @Test
   void reusesOneSourceModelForRepeatedEdges() throws IOException {
@@ -138,7 +127,9 @@ class ServiceLoaderSourceCacheTest {
         class Bridge {
           void audit() { ServiceLoader.load(Provider.class); }
           void helper() {
-            class ServiceLoader<T> { }
+            class ServiceLoader<T> {
+              static <S> ServiceLoader<S> load(Class<S> type) { return null; }
+            }
             ServiceLoader.load(Provider.class);
           }
         }
@@ -174,12 +165,16 @@ class ServiceLoaderSourceCacheTest {
         package demo;
         class ServiceLoader<T> { }
         """);
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"), """
+        package demo;
+        public interface Provider { void record(); }
+        """);
     AnalysisContext context = AnalysisContext.builder()
         .id(id)
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
         .fixtureId("cache-shadow-test")
-        .javaRelease(17)
+        .javaRelease(21)
         .repositoryRoot(root)
         .applicationClasses(root.resolve("classes"))
         .selectedProfile("test")
@@ -315,7 +310,7 @@ class ServiceLoaderSourceCacheTest {
         import java.util.ServiceLoader;
         class Bridge {
           void audit() {
-            try { int count = 1; }
+            try { throw new java.io.IOException(); }
             catch (java.io.IOException ServiceLoader) { ServiceLoader.toString(); }
             ServiceLoader.load(Provider.class);
           }
@@ -347,7 +342,7 @@ class ServiceLoaderSourceCacheTest {
         import java.util.ServiceLoader;
         import java.util.List;
         class Bridge {
-          private final List<ServiceLoader> loaders;
+          private final List<ServiceLoader> loaders = null;
           void audit() { ServiceLoader.load(Provider.class); }
         }
         """).size());
@@ -398,7 +393,7 @@ class ServiceLoaderSourceCacheTest {
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
         .fixtureId("cache-shadow-test")
-        .javaRelease(17)
+        .javaRelease(21)
         .repositoryRoot(root)
         .applicationClasses(root.resolve("classes"))
         .selectedProfile("test")
@@ -434,6 +429,8 @@ class ServiceLoaderSourceCacheTest {
 
   @Test
   void switchLabelPatternVariableInArrowArmScopesToTheArm() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(1, cachedSites("arrow-arm-pattern-scope", """
         package demo;
         import java.util.ServiceLoader;
@@ -453,6 +450,8 @@ class ServiceLoaderSourceCacheTest {
 
   @Test
   void colonSwitchLabelPatternVariableOverApproximatesToTheBlock() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(0, cachedSites("colon-arm-pattern-scope", """
         package demo;
         import java.util.ServiceLoader;
@@ -475,6 +474,8 @@ class ServiceLoaderSourceCacheTest {
 
   @Test
   void multiPatternSwitchLabelOverApproximatesToTheBlock() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(0, cachedSites("multi-pattern-arm-scope", """
         package demo;
         import java.util.ServiceLoader;
@@ -497,12 +498,29 @@ class ServiceLoaderSourceCacheTest {
     Path source = sourceRoot.resolve("demo/Bridge.java");
     Files.createDirectories(source.getParent());
     Files.writeString(source, sourceText);
+
+    Path provider = sourceRoot.resolve("demo/Provider.java");
+    if (!Files.exists(provider)) {
+      Files.writeString(provider, "package demo; public interface Provider { void record(); }\n");
+    }
+    Path helper = sourceRoot.resolve("demo/Helper.java");
+    if (!Files.exists(helper)) {
+      Files.writeString(helper, "package demo; class Helper { static <T> T load(Class<T> type) { return null; } static <T> T touch() { return null; } static Helper create() { return new Helper(); } }\n");
+    }
+    Path util = sourceRoot.resolve("demo/Util.java");
+    if (!Files.exists(util)) {
+      Files.writeString(util, "package demo; class Util { void record() { } }\n");
+    }
+    Path other = sourceRoot.resolve("demo/Other.java");
+    if (!Files.exists(other)) {
+      Files.writeString(other, "package demo; class Other { }\n");
+    }
     AnalysisContext context = AnalysisContext.builder()
         .id(id)
         .framework(AnalysisContext.Framework.QUARKUS)
         .frameworkVersion("3.40.1")
         .fixtureId("cache-shadow-test")
-        .javaRelease(17)
+        .javaRelease(21)
         .repositoryRoot(temp.resolve(id))
         .applicationClasses(temp.resolve(id).resolve("classes"))
         .selectedProfile("test")

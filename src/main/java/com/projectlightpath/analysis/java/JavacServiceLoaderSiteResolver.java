@@ -1,6 +1,5 @@
 package com.projectlightpath.analysis.java;
 
-import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
@@ -11,22 +10,30 @@ import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.stream.Collectors;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
@@ -39,47 +46,23 @@ import javax.tools.ToolProvider;
 /**
  * javac-backed ServiceLoader site discovery.
  *
- * <p>javac is the default resolver. The source cache asks this class for
- * compiler-bound sites instead of the textual parser; set
- * {@code -Dflpath.java.resolver=textual} to roll back.
+ * <p>javac Trees is the only source-symbol authority. The source cache asks
+ * this class for compiler-bound sites; there is no textual fallback.
  */
 final class JavacServiceLoaderSiteResolver {
-  static final String PROPERTY = "flpath.java.resolver";
   private static final String SERVICE_LOADER = "java.util.ServiceLoader";
   private static final String LOAD = "load";
 
   private JavacServiceLoaderSiteResolver() {}
 
-  private static final ThreadLocal<String> SCOPED_MODE = new ThreadLocal<>();
-
-  static boolean enabled() {
-    String scoped = SCOPED_MODE.get();
-    return "javac".equalsIgnoreCase(
-        scoped != null ? scoped : System.getProperty(PROPERTY, "javac"));
-  }
-
-  /**
-   * Sets the resolver mode for the current thread. Tests and embedders use this
-   * instead of a process-global system property so parallel test execution
-   * cannot flip the mode under another test.
-   */
-  static void setScopedMode(String mode) {
-    SCOPED_MODE.set(mode);
-  }
-
-  static void clearScopedMode() {
-    SCOPED_MODE.remove();
-  }
-
-  private static final java.util.Map<SourceMetadataScanner,
+  private static final Map<SourceMetadataScanner,
       Optional<Map<Path, List<ServiceLoaderCallSite>>>> CACHE =
-      java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+      Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
-   * Returns compiler-bound sites per source file when the flag is enabled.
-   * Empty Optional means the flag is off (textual path). A present empty map
-   * means javac was selected but could not produce a safe result; the caller
-   * must fail closed rather than fall back to textual guesses.
+   * Returns compiler-bound sites per source file. A present empty map means
+   * javac could not produce a safe result, so the caller fails closed rather
+   * than falling back to textual guesses.
    */
   static Optional<Map<Path, List<ServiceLoaderCallSite>>> sites(SourceMetadataScanner scanner) {
     return CACHE.computeIfAbsent(scanner, JavacServiceLoaderSiteResolver::resolveSites);
@@ -87,14 +70,20 @@ final class JavacServiceLoaderSiteResolver {
 
   private static Optional<Map<Path, List<ServiceLoaderCallSite>>> resolveSites(
       SourceMetadataScanner scanner) {
-    if (!enabled()) {
-      return Optional.empty();
-    }
     try {
       return Optional.of(compile(scanner));
     } catch (IOException | IllegalArgumentException error) {
       return Optional.of(Map.of());
     }
+  }
+
+  private static boolean causedByStackOverflow(Throwable error) {
+    for (Throwable cause = error.getCause(); cause != null; cause = cause.getCause()) {
+      if (cause instanceof StackOverflowError) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static Map<Path, List<ServiceLoaderCallSite>> compile(
@@ -103,8 +92,7 @@ final class JavacServiceLoaderSiteResolver {
     if (compiler == null) {
       return Map.of();
     }
-    List<Path> files = scanner.files().stream().map(SourceMetadataScanner.SourceFile::path).toList();
-    if (files.isEmpty()) {
+    if (scanner.files().isEmpty()) {
       return Map.of();
     }
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
@@ -117,7 +105,7 @@ final class JavacServiceLoaderSiteResolver {
       JavacTask task = (JavacTask) compiler.getTask(
           null, manager, diagnostics, options(scanner), null, units);
       Iterable<? extends CompilationUnitTree> parsed = task.parse();
-      task.analyze();
+      analyze(task);
       List<Diagnostic<? extends JavaFileObject>> capturedDiagnostics =
           List.copyOf(diagnostics.getDiagnostics());
       boolean globalError = capturedDiagnostics.stream()
@@ -125,14 +113,14 @@ final class JavacServiceLoaderSiteResolver {
       if (globalError) {
         return Map.of();
       }
-      java.util.Set<Path> errorFiles = capturedDiagnostics.stream()
+      Set<Path> errorFiles = capturedDiagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
           .map(item -> sourcePath(item.getSource()))
-          .filter(java.util.Objects::nonNull)
-          .collect(java.util.stream.Collectors.toSet());
+          .filter(Objects::nonNull)
+          .collect(Collectors.toSet());
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
-      javax.lang.model.util.Elements elements = task.getElements();
+      Elements elements = task.getElements();
       SiteScanner siteScanner = new SiteScanner(trees, types, elements);
       for (CompilationUnitTree unit : parsed) {
         siteScanner.scan(unit, null);
@@ -144,6 +132,19 @@ final class JavacServiceLoaderSiteResolver {
         }
       }
       return Map.copyOf(safe);
+    }
+  }
+
+  private static void analyze(JavacTask task) throws IOException {
+    try {
+      task.analyze();
+    } catch (IllegalStateException error) {
+      if (causedByStackOverflow(error)) {
+        throw new IOException("javac exhausted its parser stack", error);
+      }
+      throw error;
+    } catch (StackOverflowError error) {
+      throw new IOException("javac exhausted its parser stack", error);
     }
   }
 
@@ -172,7 +173,7 @@ final class JavacServiceLoaderSiteResolver {
     classpath.add(scanner.context.applicationClasses());
     if (!classpath.isEmpty()) {
       options.add("-classpath");
-      options.add(String.join(java.io.File.pathSeparator,
+      options.add(String.join(File.pathSeparator,
           classpath.stream().map(Path::toString).toList()));
     }
     return List.copyOf(options);
@@ -181,7 +182,7 @@ final class JavacServiceLoaderSiteResolver {
   private static final class TextSource extends SimpleJavaFileObject {
     private final String source;
 
-    TextSource(java.net.URI uri, String source) {
+    TextSource(URI uri, String source) {
       super(uri, JavaFileObject.Kind.SOURCE);
       this.source = source;
     }
@@ -195,10 +196,10 @@ final class JavacServiceLoaderSiteResolver {
   private static final class SiteScanner extends TreePathScanner<Void, Void> {
     private final Trees trees;
     private final Types types;
-    private final javax.lang.model.util.Elements elements;
+    private final Elements elements;
     private final Map<Path, List<ServiceLoaderCallSite>> sites = new LinkedHashMap<>();
 
-    SiteScanner(Trees trees, Types types, javax.lang.model.util.Elements elements) {
+    SiteScanner(Trees trees, Types types, Elements elements) {
       this.trees = trees;
       this.types = types;
       this.elements = elements;
@@ -246,7 +247,7 @@ final class JavacServiceLoaderSiteResolver {
       boolean explicitClassLoader = node.getArguments().size() == 2
           && classLiteralType(path, List.of(node.getArguments().get(0))) != null;
       sites.computeIfAbsent(file, ignored -> new ArrayList<>()).add(new ServiceLoaderCallSite(
-          serviceType, serviceType, explicitClassLoader, (int) position, line));
+          serviceType, explicitClassLoader, (int) position, line));
       return super.visitMethodInvocation(node, unused);
     }
 

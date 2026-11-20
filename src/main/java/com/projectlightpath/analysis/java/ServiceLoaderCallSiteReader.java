@@ -66,8 +66,7 @@ final class ServiceLoaderCallSiteReader {
     Objects.requireNonNull(context, "analysis context");
     Optional<ServiceLoaderSourceCache.CachedSource> cachedSource =
         ServiceLoaderSourceCache.source(scanner, edge.caller());
-    Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(edge.caller().owner());
-    if (cachedSource.isEmpty() || sourceFile.isEmpty()) {
+    if (cachedSource.isEmpty()) {
       return ServiceLoadHints.empty();
     }
     String source = cachedSource.get().sourceText();
@@ -78,8 +77,7 @@ final class ServiceLoaderCallSiteReader {
       return ServiceLoadHints.empty();
     }
     List<String> resolved = selected.stream()
-        .map(site -> scanner.resolveReferenceType(site.serviceType(), sourceFile.get(), site.offset())
-            .orElse(site.fallbackServiceType()))
+        .map(ServiceLoaderCallSite::serviceType)
         .toList();
     // A lineless edge (line <= 0) keeps the sole-site service-type hints for
     // POSSIBLE resolution but must never count as a bound call site: the

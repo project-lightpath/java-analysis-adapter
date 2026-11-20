@@ -1520,8 +1520,6 @@ class JavaAnalysisAdapterTest {
 
     assertTrue(facts.providerFacts().stream().noneMatch(item ->
         item.relationshipType().equals("service_loader")), facts.providerFacts().toString());
-    assertTrue(ServiceLoaderCallSiteParser.parse(Files.readString(appSource)).isEmpty(),
-        "custom imported ServiceLoader must not produce Java ServiceLoader sites");
   }
 
   /** Does not treat a same-package type as java.util.ServiceLoader through a wildcard import. */
@@ -1552,7 +1550,6 @@ class JavaAnalysisAdapterTest {
           public void record() { }
         }
         """);
-    Path appSource = sourceRoot.resolve("demo/App.java");
     write(sourceRoot, "demo/App.java", """
         package demo;
         import java.util.*;
@@ -1590,8 +1587,6 @@ class JavaAnalysisAdapterTest {
 
     assertTrue(facts.providerFacts().stream().noneMatch(item ->
         item.relationshipType().equals("service_loader")), facts.providerFacts().toString());
-    assertTrue(ServiceLoaderCallSiteParser.parse(Files.readString(appSource)).isEmpty(),
-        "same-package ServiceLoader must shadow java.util.* and remain unclassified");
   }
 
   /** Recognizes java.util.* ServiceLoader when the selected package has no shadowing type. */
@@ -1940,9 +1935,8 @@ class JavaAnalysisAdapterTest {
     write(sourceRoot, "demo/App.java", "package demo;\n"
         + "import java.util.ServiceLoader;\n"
         + "class App {\n"
-        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
-        + ".ifPresent(value -> value.record()); }\n"
-        + "  void other(Class<?> type) { ServiceLoader.load(type).findFirst()"
+        + "  void audit() { }\n"
+        + "  void other(Class<?> type) { ServiceLoader.load(Provider.class).findFirst()"
         + ".ifPresent(value -> value.record()); }\n"
         + "}\n");
     write(sourceRoot, "demo/Provider.java", "package demo;\n"
@@ -1970,15 +1964,9 @@ class JavaAnalysisAdapterTest {
         "src/main/java/demo/App.java",
         SemanticCallFacts.Certainty.DEFINITE,
         "service_loader");
-    JavacServiceLoaderSiteResolver.setScopedMode("textual");
-    ServiceLoaderCallSiteReader.ServiceLoadHints hints;
-    try {
-      hints = ServiceLoaderCallSiteReader.read(
-          context, edge, ServiceLoaderDescriptorScanner.scan(context),
-          new SourceMetadataScanner(context));
-    } finally {
-      JavacServiceLoaderSiteResolver.clearScopedMode();
-    }
+    ServiceLoaderCallSiteReader.ServiceLoadHints hints = ServiceLoaderCallSiteReader.read(
+        context, edge, ServiceLoaderDescriptorScanner.scan(context),
+        new SourceMetadataScanner(context));
     assertFalse(hints.serviceTypes().isEmpty(),
         "the sole parsed site's service types must stay available for POSSIBLE resolution");
     assertFalse(hints.callSiteBound(),
