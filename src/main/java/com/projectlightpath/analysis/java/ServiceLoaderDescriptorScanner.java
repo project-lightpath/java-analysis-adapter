@@ -20,6 +20,13 @@ final class ServiceLoaderDescriptorScanner {
     return ServiceLoaderDescriptorReader.scan(context, dependencies);
   }
 
+  static Scan scan(
+      AnalysisContext context,
+      SootUpInputLocationFactory.DependencyResolution dependencies,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    return ServiceLoaderDescriptorReader.scan(context, dependencies, state);
+  }
+
   static Resolution resolve(
       AnalysisContext context,
       CallEdge edge,

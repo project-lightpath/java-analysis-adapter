@@ -6,25 +6,29 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
-import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ServiceLoaderCoverageTest {
-  private static final int ENUMERATION_LIMIT = 1024;
 
   @TempDir Path temp;
 
@@ -228,11 +232,15 @@ class ServiceLoaderCoverageTest {
 
     // Directory module scanning is independent of an incomplete services listing.
     Path services = Files.createDirectories(moduleClasses.resolve("META-INF/services"));
-    for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+    for (int index = 0; index <= 1024; index++) {
       Files.writeString(services.resolve("noise" + index), "");
     }
     List<ServiceLoaderDescriptorScanner.Descriptor> boundedDirectory = new ArrayList<>();
-    ServiceLoaderDescriptorSource.ScanState directoryState = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.ScanState directoryState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            300,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
     ServiceLoaderDescriptorSource.scanClasspathEntry(
         moduleClasses, boundedDirectory, new java.util.HashSet<>(), directoryState);
     assertEquals(List.of("module_info"), boundedDirectory.stream()
@@ -247,12 +255,16 @@ class ServiceLoaderCoverageTest {
       output.write(Files.readAllBytes(moduleClasses.resolve("module-info.class")));
       output.closeEntry();
       put(output, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
-      for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+      for (int index = 0; index <= 1024; index++) {
         put(output, "noise/entry-" + index, "");
       }
     }
     List<ServiceLoaderDescriptorScanner.Descriptor> boundedArchive = new ArrayList<>();
-    ServiceLoaderDescriptorSource.ScanState archiveState = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.ScanState archiveState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            300,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
     ServiceLoaderDescriptorArchiveSource.scan(archive, boundedArchive, archiveState);
     assertTrue(boundedArchive.isEmpty(), boundedArchive.toString());
     assertTrue(archiveState.diagnostics().stream()
@@ -755,16 +767,19 @@ class ServiceLoaderCoverageTest {
   }
 
   @Test
-  void descriptorEnumerationStopsForDirectoriesAndArchives() throws IOException {
+  void descriptorEnumerationStopsAtByteBudgetForDirectoriesAndArchives() throws IOException {
     Path classes = temp.resolve("bounded-classes");
     Path services = classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY);
     Files.createDirectories(services);
-    for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+    for (int index = 0; index <= 1024; index++) {
       Files.writeString(services.resolve("demo.Provider" + index), "demo.ProviderImpl\n");
     }
     List<ServiceLoaderDescriptorScanner.Descriptor> directoryDescriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState directoryState =
-        new ServiceLoaderDescriptorSource.ScanState();
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            300,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
     ServiceLoaderDescriptorSource.scanClasspathEntry(
         classes, directoryDescriptors, new java.util.HashSet<>(), directoryState);
     assertTrue(directoryState.diagnostics().stream()
@@ -774,44 +789,53 @@ class ServiceLoaderCoverageTest {
     Path archive = temp.resolve("bounded.jar");
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
       put(output, "META-INF/services/demo.Archive", "demo.ArchiveProvider\n");
-      for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+      for (int index = 0; index <= 1024; index++) {
         put(output, "noise/entry-" + index, "ignored");
       }
     }
     List<ServiceLoaderDescriptorScanner.Descriptor> archiveDescriptors = new ArrayList<>();
     ServiceLoaderDescriptorSource.ScanState archiveState =
-        new ServiceLoaderDescriptorSource.ScanState();
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            300,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
     ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
     assertTrue(archiveState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
     assertTrue(archiveDescriptors.isEmpty(), archiveDescriptors.toString());
-    assertEquals(ENUMERATION_LIMIT, enumeratedEntries(directoryState));
-    assertEquals(ENUMERATION_LIMIT, enumeratedEntries(archiveState));
+    assertEquals(2 * ServiceLoaderDescriptorBudget.MEASURED_RAW_BYTES_PER_ENTRY,
+        directoryState.enumeratedBytes());
+    assertEquals(2 * ServiceLoaderDescriptorBudget.MEASURED_RAW_BYTES_PER_ENTRY,
+        archiveState.enumeratedBytes());
   }
 
   @Test
-  void sharedEnumerationLimitReportsEverySkippedArchive() throws IOException {
-    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+  void sharedByteBudgetReportsEverySkippedArchive() throws IOException {
+    long firstArchiveBytes =
+        513 * ServiceLoaderDescriptorBudget.MEASURED_RAW_BYTES_PER_ENTRY;
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(firstArchiveBytes);
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     List<Path> archives = List.of(temp.resolve("first.jar"), temp.resolve("second.jar"),
         temp.resolve("third.jar"));
     for (Path archive : archives) {
       try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
         put(output, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
-        for (int index = 0; index < ENUMERATION_LIMIT / 2; index++) {
+        for (int index = 0; index < 512; index++) {
           put(output, "noise/entry-" + index, "ignored");
         }
       }
       ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
     }
 
-    assertEquals(ENUMERATION_LIMIT, enumeratedEntries(state));
     assertEquals(1, descriptors.size(), descriptors.toString());
     for (Path archive : archives.subList(1, archives.size())) {
       assertTrue(state.diagnostics().stream()
           .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")
               && item.path().contains(archive.toString())), state.diagnostics().toString());
     }
+    assertTrue(state.diagnostics().stream()
+        .allMatch(item -> item.detail().contains("bytes")), state.diagnostics().toString());
   }
 
   @Test
@@ -953,7 +977,8 @@ class ServiceLoaderCoverageTest {
   void wildcardDependencyExpansionIsBoundedAndDiagnosed() throws IOException {
     Path dependencies = temp.resolve("dependencies");
     Files.createDirectories(dependencies);
-    for (int index = 0; index <= ENUMERATION_LIMIT; index++) {
+    for (int index = 0;
+        index <= SootUpInputLocationFactory.MAX_DEPENDENCY_ENTRIES; index++) {
       Files.write(dependencies.resolve("dependency-" + index + ".jar"), new byte[0]);
     }
     Path sourceRoot = temp.resolve("wildcard-src");
@@ -1021,17 +1046,6 @@ class ServiceLoaderCoverageTest {
     assertTrue(resolved.stream().noneMatch(path -> path.equals(linkedArchive.toAbsolutePath().normalize())));
     assertTrue(scan.descriptors().stream()
         .noneMatch(item -> item.path().contains("linked.jar")));
-  }
-
-  private static int enumeratedEntries(ServiceLoaderDescriptorSource.ScanState state) {
-    try {
-      Field field = ServiceLoaderDescriptorSource.ScanState.class
-          .getDeclaredField("enumeratedEntries");
-      field.setAccessible(true);
-      return field.getInt(state);
-    } catch (ReflectiveOperationException error) {
-      throw new AssertionError("scan budget state is not observable", error);
-    }
   }
 
   @Test
@@ -1160,6 +1174,979 @@ class ServiceLoaderCoverageTest {
     assertTrue(validState.diagnostics().stream()
         .anyMatch(item -> item.code().equals("versioned_module_info_unsupported")),
         validState.diagnostics().toString());
+  }
+
+  @Test
+  void directoryEnumerationScalesPastFormerEntryCap() throws IOException {
+    Path classes = temp.resolve("scale-directory-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    for (int index = 0; index < 1600; index++) {
+      Files.writeString(services.resolve("demo.Provider" + index), "demo.ProviderImpl\n");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertEquals(1600, descriptors.size());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+    assertTrue(state.enumeratedBytes() > 0);
+  }
+
+  @Test
+  void archiveEnumerationScalesPastFormerEntryCap() throws IOException {
+    Path archive = temp.resolve("scale-archive.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 1600; index++) {
+        put(output, "META-INF/services/demo.Provider" + index, "demo.ProviderImpl\n");
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1600, descriptors.size());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+  }
+
+  @Test
+  void sharedByteBudgetCrossesManyArchives() throws IOException {
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    List<Path> archives = new ArrayList<>();
+    for (int archiveIndex = 0; archiveIndex < 4; archiveIndex++) {
+      Path archive = temp.resolve("shared-" + archiveIndex + ".jar");
+      archives.add(archive);
+      try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+        put(output, "META-INF/services/demo.Provider" + archiveIndex, "demo.ProviderImpl\n");
+        for (int index = 0; index < 699; index++) {
+          put(output, "noise/entry-" + index, "ignored");
+        }
+      }
+      ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+    }
+
+    assertEquals(4, descriptors.size(), descriptors.toString());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+  }
+
+  @Test
+  void classicZipAtEntryCountBoundaryIsFullyEnumerated() throws IOException {
+    List<String> names = new ArrayList<>();
+    names.add("META-INF/services/demo.Provider");
+    for (int index = 0; index < 65534; index++) {
+      names.add("noise/e-" + index);
+    }
+    Path archive = temp.resolve("classic-65535.jar");
+    writeClassicZip(archive, names, "demo.ProviderImpl\n");
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals("demo.Provider", descriptors.get(0).serviceType());
+    assertEquals(List.of("demo.ProviderImpl"), descriptors.get(0).providers());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+
+    byte[] bytes = Files.readAllBytes(archive);
+    int end = lastIndexOf(bytes, new byte[] {0x50, 0x4b, 0x05, 0x06});
+    assertEquals(bytes.length - 22, end);
+    assertEquals(0xffff, (bytes[end + 10] & 0xff) | ((bytes[end + 11] & 0xff) << 8));
+    assertEquals(-1, lastIndexOf(bytes, new byte[] {0x50, 0x4b, 0x06, 0x07}));
+  }
+
+  @Test
+  @Tag("large-archive")
+  void zip64MillionEntryArchiveIsFullyEnumerated() throws IOException {
+    Path archive = temp.resolve("zip64-million.jar");
+    try (ZipOutputStream output = new ZipOutputStream(
+        new BufferedOutputStream(Files.newOutputStream(archive)))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+      for (int index = 0; index < 1_000_000; index++) {
+        putStored(output, "noise/e-" + index);
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals("demo.Provider", descriptors.get(0).serviceType());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+  }
+
+  @Test
+  void byteBudgetExhaustionRollsBackArchiveAndReportsBytes() throws IOException {
+    Path archive = temp.resolve("bounded-bytes.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+      put(output, "noise/a", "ignored");
+      put(output, "noise/b", "ignored");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(1, state.diagnostics().size(), state.diagnostics().toString());
+    ServiceLoaderDescriptorScanner.Diagnostic diagnostic = state.diagnostics().get(0);
+    assertEquals("descriptor_enumeration_limit", diagnostic.code());
+    assertTrue(diagnostic.detail().contains("bytes"), diagnostic.detail());
+    assertTrue(diagnostic.detail().contains("200"), diagnostic.detail());
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("archive_decompression_limit")));
+  }
+
+  @Test
+  void byteBudgetExhaustionRollsBackDirectoryAndReportsBytes() throws IOException {
+    Path classes = temp.resolve("bounded-directory-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    for (String name : List.of("demo.A", "demo.B", "demo.C")) {
+      Files.writeString(services.resolve(name), "demo.ProviderImpl\n");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(1, state.diagnostics().size(), state.diagnostics().toString());
+    assertEquals("descriptor_enumeration_limit", state.diagnostics().get(0).code());
+    assertTrue(state.diagnostics().get(0).detail().contains("bytes"));
+  }
+
+  @Test
+  void directoryCandidateWithoutDescriptorRestoresRetention() throws IOException {
+    Path classes = temp.resolve("restore-directory-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.Provider"), "demo.ProviderImpl\n");
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void archiveCandidateWithoutDescriptorRestoresRetention() throws IOException {
+    Path archive = temp.resolve("restore-archive.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void archiveUnreadEntriesReleaseRetention() throws IOException {
+    Path archive = temp.resolve("restore-unread.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 3; index++) {
+        put(output, "META-INF/services/demo.Provider" + index, "demo.ProviderImpl\n");
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            20,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals(ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+    assertEquals(2, state.diagnostics().stream()
+        .filter(item -> item.code().equals("archive_decompression_limit")).count(),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void archiveExhaustionContributesNoDescriptors() throws IOException {
+    Path archive = temp.resolve("bounded-after-collect.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+      put(output, "noise/a", "ignored");
+      put(output, "noise/b", "ignored");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(122);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+  }
+
+  @Test
+  void byteBudgetBoundaryIsExactForArchiveAndDirectory() throws IOException {
+    Path archive = temp.resolve("boundary.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.A", "demo.ProviderImpl\n");
+      put(output, "noise/a", "ignored");
+    }
+    long archiveBytes;
+    try (ZipFile zip = new ZipFile(archive.toFile())) {
+      archiveBytes = zip.stream()
+          .mapToLong(ServiceLoaderDescriptorBudget::centralDirectoryBytes).sum();
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> exactArchive = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState exactArchiveState =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(archiveBytes);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, exactArchive, exactArchiveState);
+    assertEquals(1, exactArchive.size(), exactArchive.toString());
+    assertTrue(exactArchiveState.diagnostics().isEmpty(),
+        exactArchiveState.diagnostics().toString());
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> shortArchive = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState shortArchiveState =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(archiveBytes - 1);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, shortArchive, shortArchiveState);
+    assertTrue(shortArchive.isEmpty(), shortArchive.toString());
+    assertEquals(1, shortArchiveState.diagnostics().size());
+
+    Path classes = temp.resolve("boundary-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.A"), "demo.ProviderImpl\n");
+    Files.writeString(services.resolve("demo.B"), "demo.ProviderImpl\n");
+    long directoryBytes;
+    try (var paths = Files.newDirectoryStream(services)) {
+      directoryBytes = 0;
+      for (Path path : paths) {
+        directoryBytes += ServiceLoaderDescriptorBudget.directoryEntryBytes(path);
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> exactDirectory = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState exactDirectoryState =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(directoryBytes);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, exactDirectory, new java.util.HashSet<>(), exactDirectoryState);
+    assertEquals(2, exactDirectory.size(), exactDirectory.toString());
+    assertTrue(exactDirectoryState.diagnostics().isEmpty(),
+        exactDirectoryState.diagnostics().toString());
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> shortDirectory = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState shortDirectoryState =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(directoryBytes - 1);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, shortDirectory, new java.util.HashSet<>(), shortDirectoryState);
+    assertTrue(shortDirectory.isEmpty(), shortDirectory.toString());
+    assertEquals(1, shortDirectoryState.diagnostics().size());
+  }
+
+  @Test
+  void enumerationBudgetChargesFloorAndRecordBytes() throws IOException {
+    Path plain = temp.resolve("plain-cost.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(plain))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> plainDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState plainState =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(plain, plainDescriptors, plainState);
+    assertEquals(ServiceLoaderDescriptorBudget.MEASURED_RAW_BYTES_PER_ENTRY,
+        plainState.enumeratedBytes());
+    assertTrue(plainState.diagnostics().isEmpty(), plainState.diagnostics().toString());
+
+    Path large = temp.resolve("record-cost.jar");
+    String longName = "noise/" + "x".repeat(80);
+    String unicodeName = "noise/" + "é".repeat(40);
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(large))) {
+      ZipEntry ascii = new ZipEntry(longName);
+      ascii.setExtra(new byte[10]);
+      output.putNextEntry(ascii);
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry(unicodeName));
+      output.closeEntry();
+      ZipEntry commented = new ZipEntry("noise/c");
+      commented.setComment("c".repeat(100));
+      output.putNextEntry(commented);
+      output.closeEntry();
+      ZipEntry floor = new ZipEntry("noise/short");
+      floor.setComment("abcd");
+      output.putNextEntry(floor);
+      output.closeEntry();
+    }
+    // 46 + 86 ASCII bytes + 10 extra; 46 + 86 UTF-8 bytes (46 chars);
+    // 46 + 7 name + 100 comment; 46 + 11 + 4 floored to 122.
+    long expected = 142 + 132 + 153 + 122;
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> largeDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState largeState =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(expected);
+    ServiceLoaderDescriptorArchiveSource.scan(large, largeDescriptors, largeState);
+    assertEquals(expected, largeState.enumeratedBytes());
+    assertTrue(largeState.diagnostics().isEmpty(), largeState.diagnostics().toString());
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> shortDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState shortState =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(expected - 1);
+    ServiceLoaderDescriptorArchiveSource.scan(large, shortDescriptors, shortState);
+    assertEquals(1, shortState.diagnostics().size());
+    assertTrue(shortState.diagnostics().get(0).detail().contains("bytes"));
+  }
+
+  @Test
+  void retainedDescriptorMetadataIsByteBounded() throws IOException {
+    long oneDescriptor = ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES;
+
+    Path archive = temp.resolve("retention.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.A", "demo.ProviderImpl\n");
+      put(output, "META-INF/services/demo.B", "demo.ProviderImpl\n");
+      put(output, "META-INF/services/demo.C", "demo.ProviderImpl\n");
+    }
+    List<ServiceLoaderDescriptorScanner.Descriptor> archiveDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState archiveState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            oneDescriptor * 2);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, archiveDescriptors, archiveState);
+    assertTrue(archiveDescriptors.isEmpty(), archiveDescriptors.toString());
+    assertTrue(archiveState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
+        archiveState.diagnostics().toString());
+    assertTrue(archiveState.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    ServiceLoaderDescriptorScanner.Diagnostic retention = archiveState.diagnostics().get(0);
+    assertTrue(retention.detail().contains("bytes"), retention.detail());
+    assertTrue(retention.detail().contains(Long.toString(oneDescriptor * 2)),
+        retention.detail());
+    assertEquals(0L, archiveState.retainedBytes());
+
+    Path laterArchive = temp.resolve("retention-later.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(laterArchive))) {
+      put(output, "META-INF/services/demo.C", "demo.ProviderImpl\n");
+      put(output, "META-INF/services/demo.D", "demo.ProviderImpl\n");
+    }
+    ServiceLoaderDescriptorSource.ScanState laterState = archiveState;
+    int diagnosticsBefore = laterState.diagnostics().size();
+    List<ServiceLoaderDescriptorScanner.Descriptor> laterDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorArchiveSource.scan(laterArchive, laterDescriptors, laterState);
+    assertEquals(2, laterDescriptors.size(), laterDescriptors.toString());
+    assertEquals(diagnosticsBefore, laterState.diagnostics().size(),
+        laterState.diagnostics().toString());
+
+    Path classes = temp.resolve("retention-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.A"), "demo.ProviderImpl\n");
+    Files.writeString(services.resolve("demo.B"), "demo.ProviderImpl\n");
+    List<ServiceLoaderDescriptorScanner.Descriptor> directoryDescriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState directoryState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            oneDescriptor);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, directoryDescriptors, new java.util.HashSet<>(), directoryState);
+    assertTrue(directoryDescriptors.isEmpty(), directoryDescriptors.toString());
+    assertTrue(directoryState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
+        directoryState.diagnostics().toString());
+    assertTrue(directoryState.diagnostics().get(0).detail().contains("bytes"));
+    assertEquals(0L, directoryState.retainedBytes());
+  }
+
+  @Test
+  void moduleInfoDescriptorsRespectRetentionBudget() throws IOException {
+    byte[] bytes = moduleInfoBytes("retention-module");
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> bounded = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState boundedState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorSource.addModuleBytes(
+        bytes, "module-info.class", bounded, boundedState);
+    assertTrue(bounded.isEmpty(), bounded.toString());
+    assertEquals(0L, boundedState.retainedBytes());
+    assertTrue(boundedState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
+        boundedState.diagnostics().toString());
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> complete = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState completeState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES * 2);
+    ServiceLoaderDescriptorSource.addModuleBytes(
+        bytes, "module-info.class", complete, completeState);
+    assertEquals(2, complete.size(), complete.toString());
+    assertTrue(completeState.diagnostics().isEmpty(), completeState.diagnostics().toString());
+  }
+
+  @Test
+  void archiveModuleRetentionFailureRollsBackArchiveDescriptors() throws IOException {
+    byte[] module = moduleInfoBytes("archive-module-rollback");
+    Path archive = temp.resolve("module-retention.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(module);
+      output.closeEntry();
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> complete = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState completeState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES * 3);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, complete, completeState);
+    assertEquals(3, complete.size(), complete.toString());
+    assertTrue(completeState.diagnostics().isEmpty(), completeState.diagnostics().toString());
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertEquals(1, state.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_retention_limit")).count(),
+        state.diagnostics().toString());
+  }
+
+  @Test
+  void directoryModuleRetentionFailureRollsBackDirectoryDescriptors() throws IOException {
+    byte[] module = moduleInfoBytes("directory-module-rollback");
+    Path classes = temp.resolve("module-rollback-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    Files.writeString(services.resolve("demo.Provider"), "demo.ProviderImpl\n");
+    Files.write(classes.resolve("module-info.class"), module);
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertEquals(0L, state.retainedBytes());
+    assertEquals(1, state.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_retention_limit")).count(),
+        state.diagnostics().toString());
+  }
+
+  private byte[] moduleInfoBytes(String name) throws IOException {
+    Path sourceRoot = Files.createDirectories(temp.resolve(name + "-src"));
+    Path source = Files.createDirectories(sourceRoot.resolve("demo"));
+    for (String service : List.of("A", "B")) {
+      Files.writeString(source.resolve(service + ".java"),
+          "package demo; public interface " + service + " { void record(); }\n");
+      Files.writeString(source.resolve(service + "Impl.java"),
+          "package demo; public final class " + service + "Impl implements " + service
+              + " { public void record() {} }\n");
+    }
+    Files.writeString(sourceRoot.resolve("module-info.java"),
+        "module demo.provider { provides demo.A with demo.AImpl;"
+            + " provides demo.B with demo.BImpl; }\n");
+    Path classes = Files.createDirectories(temp.resolve(name + "-classes"));
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Assumptions.assumeTrue(compiler != null, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(sourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null, files, null, List.of("--release", "17", "-d", classes.toString()), null,
+          units).call());
+    }
+    return Files.readAllBytes(classes.resolve("module-info.class"));
+  }
+
+  @Test
+  void decompressionExhaustionMidArchiveKeepsEarlierDescriptors() throws IOException {
+    String payload = "demo.ProviderImpl\n".repeat(64);
+    Path archive = temp.resolve("decompression-partial.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 3; index++) {
+        put(output, "META-INF/services/demo.Provider" + index, payload);
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1500,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertEquals(2, state.diagnostics().stream()
+        .filter(item -> item.code().equals("archive_decompression_limit")).count(),
+        state.diagnostics().toString());
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_retention_limit")));
+  }
+
+  @Test
+  void exhaustedDirectoryListingStillScansModuleInfoIndependently() throws IOException {
+    byte[] module = moduleInfoBytes("directory-listing-module");
+    Path classes = temp.resolve("listing-module-classes");
+    Path services = Files.createDirectories(
+        classes.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY));
+    for (String name : List.of("demo.A", "demo.B", "demo.C")) {
+      Files.writeString(services.resolve(name), "demo.ProviderImpl\n");
+    }
+    Files.write(classes.resolve("module-info.class"), module);
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorSource.scanClasspathEntry(
+        classes, descriptors, new java.util.HashSet<>(), state);
+
+    assertEquals(2, descriptors.size(), descriptors.toString());
+    assertTrue(descriptors.stream().allMatch(ServiceLoaderDescriptorScanner.Descriptor::moduleInfo));
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")),
+        state.diagnostics().toString());
+    assertEquals(2L * ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+  }
+
+  @Test
+  void observedSingleFileDescriptorsChargeRetention() throws IOException {
+    Path root = temp.resolve("observed-retention");
+    Path sourceRoot = root.resolve("src/main/java");
+    Files.createDirectories(sourceRoot);
+    Files.createDirectories(root.resolve("target/classes"));
+    Path first = root.resolve("observed/demo.One");
+    Path second = root.resolve("observed/demo.Two");
+    Files.createDirectories(first.getParent());
+    Files.writeString(first, "demo.OneImpl\n");
+    Files.writeString(second, "demo.TwoImpl\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("observed-retention")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("observed-retention")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "first", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            first.toString()))
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "second", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            second.toString()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+    assertEquals(1, scan.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_retention_limit")).count(),
+        scan.diagnostics().toString());
+  }
+
+  @Test
+  void nonDescriptorServiceEntriesDoNotConsumeRetention() throws IOException {
+    Path archive = temp.resolve("non-descriptor-entries.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/not-valid", "ignored");
+      put(output, "META-INF/services/a/b", "ignored");
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(1, descriptors.size(), descriptors.toString());
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+    assertEquals(ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES,
+        state.retainedBytes());
+  }
+
+  @Test
+  void enumerationExhaustionDowngradesCertaintyToPossible() throws IOException {
+    AnalysisContext context = certaintyContext("exhaustion-certainty");
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")),
+        scan.diagnostics().toString());
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, certainty(context, scan));
+  }
+
+  @Test
+  void retentionExhaustionDowngradesCertaintyToPossible() throws IOException {
+    AnalysisContext context = certaintyContext("retention-certainty");
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_retention_limit")),
+        scan.diagnostics().toString());
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, certainty(context, scan));
+  }
+
+  private AnalysisContext certaintyContext(String name) throws IOException {
+    Path root = temp.resolve(name);
+    Path sourceRoot = root.resolve("src/main/java");
+    Path resourceServices = root.resolve("src/main/resources/META-INF/services");
+    Files.createDirectories(sourceRoot.resolve("demo"));
+    Files.createDirectories(resourceServices);
+    Files.createDirectories(root.resolve("target/classes"));
+    Files.writeString(sourceRoot.resolve("demo/App.java"), "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App { void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); } }\n");
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"),
+        "package demo; interface Provider { void record(); }\n");
+    Files.writeString(resourceServices.resolve("demo.Provider"), "demo.DefaultProvider\n");
+    Path dependency = root.resolve("deps/dependency.jar");
+    Files.createDirectories(dependency.getParent());
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(dependency))) {
+      put(output, "META-INF/services/demo.Provider", "demo.OtherProvider\n");
+    }
+
+    return AnalysisContext.builder()
+        .id(name)
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId(name)
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependency))
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "resources", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/resources/META-INF/services"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+  }
+
+  private SemanticCallFacts.Certainty certainty(
+      AnalysisContext context, ServiceLoaderDescriptorScanner.Scan scan) {
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        3,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    return ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context)).certainty();
+  }
+
+  @Test
+  void decompressionAndEnumerationBudgetsAreOrthogonal() throws IOException {
+    Path archive = temp.resolve("orthogonal.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      put(output, "META-INF/services/demo.Provider", "demo.ProviderImpl\n");
+      put(output, "noise/a", "ignored");
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> enumeration = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState enumerationState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            ServiceLoaderDescriptorSource.MAX_ARCHIVE_DECOMPRESSED_BYTES,
+            122,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, enumeration, enumerationState);
+    assertTrue(enumerationState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    assertTrue(enumerationState.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("archive_decompression_limit")));
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> decompression = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState decompressionState =
+        ServiceLoaderDescriptorSource.ScanState.withBudgets(
+            1,
+            ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+            ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+    ServiceLoaderDescriptorArchiveSource.scan(archive, decompression, decompressionState);
+    assertTrue(decompressionState.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_decompression_limit")));
+    assertTrue(decompressionState.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+  }
+
+  @Test
+  void manyServiceEntriesWithinDecompressionBudgetComplete() throws IOException {
+    String payload = "demo.ProviderImpl\n".repeat(102);
+    Path archive = temp.resolve("many-services.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      for (int index = 0; index < 2000; index++) {
+        put(output, "META-INF/services/demo.Provider" + index, payload);
+      }
+    }
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+
+    assertEquals(2000, descriptors.size(), Integer.toString(descriptors.size()));
+    assertTrue(state.diagnostics().isEmpty(), state.diagnostics().toString());
+  }
+
+  @Test
+  void readerSourceOrderingStarvationIsDiagnosedPerSource() throws IOException {
+    Path root = temp.resolve("ordering");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path resourceServices = root.resolve("src/main/resources/META-INF/services");
+    Files.createDirectories(sourceRoot);
+    Files.createDirectories(resourceServices);
+    Files.createDirectories(root.resolve("target/classes"));
+    Files.writeString(resourceServices.resolve("demo.Provider"), "demo.DefaultProvider\n");
+    Path dependencies = root.resolve("deps");
+    Files.createDirectories(dependencies);
+    Path first = dependencies.resolve("first.jar");
+    Path second = dependencies.resolve("second.jar");
+    for (Path archive : List.of(first, second)) {
+      try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+        put(output, "META-INF/services/demo.Dependency", "demo.DependencyProvider\n");
+      }
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("ordering")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("ordering")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("target/classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(first, second))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorSource.ScanState state =
+        ServiceLoaderDescriptorSource.ScanState.withEnumerationBudget(200);
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context, SootUpInputLocationFactory.dependencyResolution(context), state);
+
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    assertEquals("demo.DefaultProvider", scan.descriptors().get(0).providers().get(0));
+    assertEquals(2, scan.diagnostics().stream()
+        .filter(item -> item.code().equals("descriptor_enumeration_limit")).count(),
+        scan.diagnostics().toString());
+  }
+
+  @Test
+  void defaultScanStateBudgetsAreTheAdoptedValues() {
+    ServiceLoaderDescriptorSource.ScanState state =
+        new ServiceLoaderDescriptorSource.ScanState();
+    assertEquals(2L * 1024 * 1024 * 1024, state.remainingEnumerated());
+    assertEquals(16L * 1024 * 1024, state.remainingRetained());
+    assertEquals(ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
+        state.remainingEnumerated());
+    assertEquals(ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES,
+        state.remainingRetained());
+    assertEquals(0L, state.enumeratedBytes());
+    assertEquals(0L, state.retainedBytes());
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceLoaderDescriptorSource.ScanState.withBudgets(0, 1, 1));
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceLoaderDescriptorSource.ScanState.withBudgets(1, 0, 1));
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceLoaderDescriptorSource.ScanState.withBudgets(1, 1, 0));
+  }
+
+  private static void writeClassicZip(Path archive, List<String> names, String firstContent)
+      throws IOException {
+    byte[] content = firstContent.getBytes(StandardCharsets.UTF_8);
+    java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+    crc.update(content);
+    try (OutputStream raw = new BufferedOutputStream(Files.newOutputStream(archive));
+        DataOutputStream output = new DataOutputStream(raw)) {
+      int[] offsets = new int[names.size()];
+      int position = 0;
+      for (int index = 0; index < names.size(); index++) {
+        byte[] name = names.get(index).getBytes(StandardCharsets.UTF_8);
+        int size = index == 0 ? content.length : 0;
+        long checksum = index == 0 ? crc.getValue() : 0;
+        offsets[index] = position;
+        writeLeInt(output, 0x04034b50);
+        writeLeShort(output, 10);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeInt(output, (int) checksum);
+        writeLeInt(output, size);
+        writeLeInt(output, size);
+        writeLeShort(output, name.length);
+        writeLeShort(output, 0);
+        output.write(name);
+        if (index == 0) {
+          output.write(content);
+        }
+        position += 30 + name.length + size;
+      }
+      int centralStart = position;
+      for (int index = 0; index < names.size(); index++) {
+        byte[] name = names.get(index).getBytes(StandardCharsets.UTF_8);
+        int size = index == 0 ? content.length : 0;
+        long checksum = index == 0 ? crc.getValue() : 0;
+        writeLeInt(output, 0x02014b50);
+        writeLeShort(output, 10);
+        writeLeShort(output, 10);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeInt(output, (int) checksum);
+        writeLeInt(output, size);
+        writeLeInt(output, size);
+        writeLeShort(output, name.length);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeShort(output, 0);
+        writeLeInt(output, 0);
+        writeLeInt(output, offsets[index]);
+        output.write(name);
+        position += 46 + name.length;
+      }
+      writeLeInt(output, 0x06054b50);
+      writeLeShort(output, 0);
+      writeLeShort(output, 0);
+      writeLeShort(output, names.size());
+      writeLeShort(output, names.size());
+      writeLeInt(output, position - centralStart);
+      writeLeInt(output, centralStart);
+      writeLeShort(output, 0);
+    }
+  }
+
+  private static int lastIndexOf(byte[] haystack, byte[] needle) {
+    for (int index = haystack.length - needle.length; index >= 0; index--) {
+      boolean match = true;
+      for (int offset = 0; offset < needle.length; offset++) {
+        if (haystack[index + offset] != needle[offset]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  private static void writeLeInt(DataOutputStream output, int value) throws IOException {
+    output.writeByte(value);
+    output.writeByte(value >>> 8);
+    output.writeByte(value >>> 16);
+    output.writeByte(value >>> 24);
+  }
+
+  private static void writeLeShort(DataOutputStream output, int value) throws IOException {
+    output.writeByte(value);
+    output.writeByte(value >>> 8);
+  }
+
+  private static void putStored(ZipOutputStream output, String name) throws IOException {
+    ZipEntry entry = new ZipEntry(name);
+    entry.setMethod(ZipEntry.STORED);
+    entry.setSize(0);
+    entry.setCompressedSize(0);
+    entry.setCrc(0);
+    output.putNextEntry(entry);
+    output.closeEntry();
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {

@@ -146,7 +146,11 @@ class ServiceLoaderWarDescriptorTest {
         .count();
     assertEquals(1, skipped, state.diagnostics().toString());
     assertEquals(1, suppressed, state.diagnostics().toString());
-    assertTrue(state.diagnostics().size() <= 3, state.diagnostics().toString());
+    assertEquals(2, state.diagnostics().size(), state.diagnostics().toString());
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_enumeration_limit")));
+    assertTrue(state.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("descriptor_retention_limit")));
   }
 
   private static void put(ZipOutputStream output, String name, String value) throws IOException {

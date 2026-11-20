@@ -65,6 +65,25 @@
                make adapter-test sizes this from the host via -Dtest.heap. -->
           <argLine>${test.heap}</argLine>
         </configuration>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <configuration>
+              <excludedGroups>large-archive</excludedGroups>
+            </configuration>
+          </execution>
+          <execution>
+            <id>large-archive-test</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <groups>large-archive</groups>
+              <argLine>-Xmx1g</argLine>
+              <reportsDirectory>${project.build.directory}/surefire-reports-large</reportsDirectory>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

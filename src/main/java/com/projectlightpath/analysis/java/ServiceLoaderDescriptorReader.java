@@ -24,9 +24,16 @@ final class ServiceLoaderDescriptorReader {
 
   static ServiceLoaderDescriptorScanner.Scan scan(
       AnalysisContext context, SootUpInputLocationFactory.DependencyResolution dependencyResolution) {
+    return scan(
+        context, dependencyResolution, new ServiceLoaderDescriptorSource.ScanState());
+  }
+
+  static ServiceLoaderDescriptorScanner.Scan scan(
+      AnalysisContext context,
+      SootUpInputLocationFactory.DependencyResolution dependencyResolution,
+      ServiceLoaderDescriptorSource.ScanState state) {
     List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
     Set<String> visited = new HashSet<>();
-    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
     for (Path wildcard : dependencyResolution.truncatedWildcards()) {
       state.diagnostic(
           "dependency_enumeration_limit", wildcard.toString(),
@@ -103,7 +110,15 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     if (validDescriptorFilename(normalizedDeclared)) {
+      int descriptorStart = descriptors.size();
+      long retainedBefore = state.retainedBytes();
+      if (!state.tryRetain(displayPath(context, normalizedDeclared))) {
+        return;
+      }
       addFile(normalizedDeclared, context, dependencyEntries, descriptors, visited, state);
+      if (descriptors.size() == descriptorStart) {
+        state.restoreRetained(retainedBefore);
+      }
       return;
     }
     // An explicitly selected input must not vanish silently: the diagnostic
@@ -114,7 +129,11 @@ final class ServiceLoaderDescriptorReader {
         "explicitly selected service descriptor filename is not a binary class name");
   }
 
-  /** Scans one selected classpath entry, diagnosing unavailable entries on request. */
+  /**
+   * Scans one selected classpath entry. {@code descriptors} must be mutable: a
+   * module-info retention rollback removes the descriptors this source
+   * contributed.
+   */
   static void scanSelectedEntry(
       Path entry,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
@@ -134,13 +153,18 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     if (attributes.isDirectory()) {
+      int descriptorStart = descriptors.size();
+      long retainedBefore = state.retainedBytes();
       if (ServiceLoaderDescriptorAuthorization.derivedDirectory(
           normalized, ServiceLoaderDescriptorSource.SERVICES_DIRECTORY, state)) {
         ServiceLoaderDescriptorSource.scanServiceDirectory(
             normalized.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY),
             normalized.toString(), "meta_inf_services", descriptors, visited, state);
       }
-      ServiceLoaderDescriptorSource.scanModuleInfo(normalized, descriptors, state);
+      if (!ServiceLoaderDescriptorSource.scanModuleInfo(normalized, descriptors, state)) {
+        descriptors.subList(descriptorStart, descriptors.size()).clear();
+        state.restoreRetained(retainedBefore);
+      }
     } else if (attributes.isRegularFile()) {
       ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
     } else if (diagnoseUnavailable) {
@@ -164,7 +188,11 @@ final class ServiceLoaderDescriptorReader {
         "descriptor_directory_read_error", state)
         .ifPresent(candidates -> {
           for (Path path : candidates) {
+            int descriptorStart = descriptors.size();
             addFile(path, context, dependencyEntries, descriptors, visited, state);
+            if (descriptors.size() == descriptorStart) {
+              state.releaseRetained();
+            }
           }
         });
   }

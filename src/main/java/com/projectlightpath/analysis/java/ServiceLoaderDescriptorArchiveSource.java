@@ -24,6 +24,10 @@ final class ServiceLoaderDescriptorArchiveSource {
 
   private ServiceLoaderDescriptorArchiveSource() {}
 
+  /**
+   * Scans one archive into {@code descriptors}, which must be mutable: a
+   * retention-budget rollback removes the descriptors this archive contributed.
+   */
   static void scan(
       Path archive,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
@@ -42,16 +46,25 @@ final class ServiceLoaderDescriptorArchiveSource {
           ServiceLoaderDescriptorSource.message(error));
       return;
     }
+    int descriptorStart = descriptors.size();
+    long retainedBefore = state.retainedBytes();
+    boolean complete = false;
     try (ZipFile zip = new ZipFile(normalized.toFile())) {
       ArchiveEntries entries = enumerate(zip, normalized, state);
       readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
-      readModule(zip, normalized, entries.module(), entries.versionedModule(), descriptors, state);
+      complete = readModule(
+          zip, normalized, entries.module(), entries.versionedModule(), descriptors, state);
     } catch (ZipException error) {
       state.diagnostic("invalid_archive", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
     } catch (IOException error) {
       state.diagnostic("archive_read_error", normalized.toString(),
           ServiceLoaderDescriptorSource.message(error));
+    } finally {
+      if (!complete) {
+        descriptors.subList(descriptorStart, descriptors.size()).clear();
+        state.restoreRetained(retainedBefore);
+      }
     }
   }
 
@@ -61,11 +74,13 @@ final class ServiceLoaderDescriptorArchiveSource {
     ZipEntry module = null;
     String versionedModule = null;
     boolean complete = true;
+    long retainedBefore = state.retainedBytes();
     Enumeration<? extends ZipEntry> entries = zip.entries();
     while (entries.hasMoreElements()) {
       ZipEntry entry = entries.nextElement();
       String entryPath = archive + "!/" + entry.getName();
-      if (!state.tryEnumerate(entryPath)) {
+      long entryBytes = ServiceLoaderDescriptorBudget.centralDirectoryBytes(entry);
+      if (!state.tryEnumerate(entryPath, entryBytes)) {
         complete = false;
         break;
       }
@@ -76,50 +91,45 @@ final class ServiceLoaderDescriptorArchiveSource {
         ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
             entry.getName(), archive, state);
       }
-      if (entry.getName().startsWith(
-              ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/")) {
-        retainDescriptor(descriptors, entry);
+      if (!retainDescriptor(descriptors, entry, entryPath, state)) {
+        complete = false;
+        break;
       }
       if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
         module = entry;
       }
-      if (versionedModule == null && isVersionedModuleInfo(entry.getName())) {
+      if (versionedModule == null && ServiceLoaderDescriptorEntryNames.isVersionedModuleInfo(
+          entry.getName())) {
         versionedModule = entry.getName();
       }
     }
-    return complete
-        ? new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule)
-        : new ArchiveEntries(List.of(), null, null);
+    if (!complete) {
+      state.restoreRetained(retainedBefore);
+      return new ArchiveEntries(List.of(), null, null);
+    }
+    return new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule);
   }
 
-  private static final String VERSIONED_PREFIX = "META-INF/versions/";
-  private static final String VERSIONED_SUFFIX = "/" + ServiceLoaderDescriptorSource.MODULE_INFO;
-
-  private static boolean isVersionedModuleInfo(String name) {
-    // Bounds first: a path whose prefix and suffix overlap (for example
-    // META-INF/versions/module-info.class) has no room for a version
-    // component, and an exactly-boundary path has an empty one.
-    if (name.length() <= VERSIONED_PREFIX.length() + VERSIONED_SUFFIX.length()
-        || !name.startsWith(VERSIONED_PREFIX) || !name.endsWith(VERSIONED_SUFFIX)) {
+  private static boolean retainDescriptor(
+      NavigableMap<String, ZipEntry> descriptors,
+      ZipEntry entry,
+      String path,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    String prefix = ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/";
+    String name = entry.getName();
+    if (!name.startsWith(prefix)
+        || !ServiceLoaderDescriptorAuthorization.isBinaryClassName(
+            name.substring(prefix.length()))) {
+      return true;
+    }
+    if (descriptors.containsKey(name)) {
+      return true;
+    }
+    if (!state.tryRetain(path)) {
       return false;
     }
-    String version = name.substring(
-        VERSIONED_PREFIX.length(), name.length() - VERSIONED_SUFFIX.length());
-    return version.chars().allMatch(Character::isDigit);
-  }
-
-  private static void retainDescriptor(
-      NavigableMap<String, ZipEntry> descriptors, ZipEntry entry) {
-    String name = entry.getName();
-    if (descriptors.containsKey(name)) {
-      return;
-    }
-    if (descriptors.size() < ServiceLoaderDescriptorSource.MAX_ENUMERATED_ENTRIES) {
-      descriptors.put(name, entry);
-    } else if (name.compareTo(descriptors.lastKey()) < 0) {
-      descriptors.pollLastEntry();
-      descriptors.put(name, entry);
-    }
+    descriptors.put(name, entry);
+    return true;
   }
 
   private static void readDescriptors(
@@ -128,6 +138,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       List<ZipEntry> entries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state) {
+    int processed = 0;
     for (ZipEntry entry : entries) {
       if (!state.hasDecompressedBudget()) {
         state.diagnostic(
@@ -135,11 +146,19 @@ final class ServiceLoaderDescriptorArchiveSource {
             "archive decompression budget exhausted before all entries were read");
         break;
       }
+      int descriptorStart = descriptors.size();
       addDescriptor(zip, archive, entry, descriptors, state);
+      if (descriptors.size() == descriptorStart) {
+        state.releaseRetained();
+      }
+      processed++;
+    }
+    for (int index = processed; index < entries.size(); index++) {
+      state.releaseRetained();
     }
   }
 
-  private static void readModule(
+  private static boolean readModule(
       ZipFile zip,
       Path archive,
       ZipEntry module,
@@ -153,19 +172,21 @@ final class ServiceLoaderDescriptorArchiveSource {
         state.diagnostic(
             "versioned_module_info_unsupported", archive.toString(), versionedModule);
       }
-      return;
+      return true;
     }
     String modulePath = archive + "!/" + module.getName();
     if (!state.hasDecompressedBudget()) {
       state.diagnostic(
           "archive_decompression_limit", modulePath,
           "module-info.class could not be read after the archive decompression budget was exhausted");
-      return;
+      return true;
     }
     byte[] bytes = readEntry(zip, module, state, modulePath);
-    if (bytes != null) {
-      ServiceLoaderDescriptorSource.addModuleBytes(bytes, modulePath, descriptors, state);
+    if (bytes == null) {
+      return true;
     }
+    return ServiceLoaderDescriptorSource.addModuleBytes(
+        bytes, modulePath, descriptors, state);
   }
 
   private static void addDescriptor(
