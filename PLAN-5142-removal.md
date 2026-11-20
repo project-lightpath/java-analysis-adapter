@@ -125,8 +125,9 @@ conversions plus a behaviour-neutral four-argument `ServiceLoaderCallSite`
 constructor (documented compile stub) and the frozen textual baseline. It fails
 on `textualRollbackFlagNoLongerDisablesJavac` and the deep-import stack probe.
 GREEN deletes the textual implementation, the flag, and the fallback field, and
-contains javac stack exhaustion. EVIDENCE adds this plan and the evidence
-record below.
+contains javac stack exhaustion. REFACTOR normalizes resolver imports and drops
+the unused file list under the green suite (no behavior change). EVIDENCE adds
+this plan and the evidence record below.
 
 `JavacServiceLoaderSiteResolver` keeps its `Optional<Map>` return contract to
 avoid a compile-only churn across seven resolver tests; it is always present.
