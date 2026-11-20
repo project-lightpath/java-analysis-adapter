@@ -153,7 +153,13 @@ final class JavacServiceLoaderSiteResolver {
           || !isServiceLoaderLoad(trees.getElement(new TreePath(path, select)))) {
         return super.visitMethodInvocation(node, unused);
       }
-      String serviceType = classLiteralType(path, node.getArguments());
+      String serviceType = null;
+      for (ExpressionTree argument : node.getArguments()) {
+        serviceType = classLiteralType(path, List.of(argument));
+        if (serviceType != null) {
+          break;
+        }
+      }
       if (serviceType == null) {
         return super.visitMethodInvocation(node, unused);
       }
@@ -164,8 +170,10 @@ final class JavacServiceLoaderSiteResolver {
       CompilationUnitTree unit = path.getCompilationUnit();
       Path file = Path.of(unit.getSourceFile().toUri()).normalize();
       int line = (int) unit.getLineMap().getLineNumber(position);
+      boolean explicitClassLoader = node.getArguments().size() == 2
+          && classLiteralType(path, List.of(node.getArguments().get(0))) != null;
       sites.computeIfAbsent(file, ignored -> new ArrayList<>()).add(new ServiceLoaderCallSite(
-          serviceType, serviceType, node.getArguments().size() == 2, (int) position, line));
+          serviceType, serviceType, explicitClassLoader, (int) position, line));
       return super.visitMethodInvocation(node, unused);
     }
 

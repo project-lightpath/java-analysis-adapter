@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,11 +26,10 @@ import org.junit.jupiter.api.io.TempDir;
 class JavacResolverAccuracyTest {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final Set<String> BASELINE_WRONG =
-      Set.of("N20", "N21", "N22", "N23", "N34", "N36", "A9", "A10", "A11", "A13",
-          "A14", "A15", "A16b", "A17", "A20", "I1", "I2", "I3", "I5");
+      Set.of("N22", "N23", "N34", "N36", "A9", "A10", "A11", "A13", "A14", "A15",
+          "A16b", "A17", "A20", "I1", "I2", "I3", "I5");
   private static final Set<String> BASELINE_LOST =
-      Set.of("N20", "N21", "N22", "N23", "N28", "N32", "A1", "A4", "A7",
-          "D1", "D3", "D4", "D6", "D7", "D8", "D9");
+      Set.of("N28", "N32", "A1", "A4", "A7", "D1", "D3", "D4", "D6", "D7", "D8", "D9");
 
   @TempDir Path temp;
 
@@ -50,10 +50,10 @@ class JavacResolverAccuracyTest {
     assertEquals(0, javac.abstentionMismatch());
 
     JavacResolverMetrics baseline = report.baselineTotals();
-    assertEquals(19, baseline.wrongDefinite());
-    assertEquals(16, baseline.lost());
-    assertEquals(12, baseline.added());
-    assertEquals(6, baseline.abstentionMismatch());
+    assertEquals(17, baseline.wrongDefinite());
+    assertEquals(12, baseline.lost());
+    assertEquals(8, baseline.added());
+    assertEquals(7, baseline.abstentionMismatch());
     assertEquals(BASELINE_WRONG, cellsWith(report, "wrongDefinite", true));
     assertEquals(BASELINE_LOST, cellsWith(report, "lost", true));
     assertEquals(0, report.cells().stream()
@@ -94,13 +94,14 @@ class JavacResolverAccuracyTest {
     Path second = temp.resolve("run-2.json");
     runHarness(temp.resolve("work-1"), first);
     runHarness(temp.resolve("work-2"), second);
-    assertEquals(canonicalFacts(MAPPER.readTree(first.toFile())),
-        canonicalFacts(MAPPER.readTree(second.toFile())));
-    JsonNode report = MAPPER.readTree(second.toFile());
-    assertTrue(report.get("deterministic").asBoolean());
-    assertEquals("javac-symbol-resolver-observation.v1", report.get("schema").asText());
-    assertEquals(JavacResolverFixtureCatalog.cells().size(), report.get("cells").size());
-    assertNoAbsolutePaths(report);
+    JsonNode firstReport = MAPPER.readTree(first.toFile());
+    JsonNode secondReport = MAPPER.readTree(second.toFile());
+    assertTrue(firstReport.get("deterministic").asBoolean());
+    assertTrue(secondReport.get("deterministic").asBoolean());
+    assertEquals(canonicalSites(firstReport), canonicalSites(secondReport));
+    assertEquals("javac-symbol-resolver-observation.v1", secondReport.get("schema").asText());
+    assertEquals(JavacResolverFixtureCatalog.cells().size(), secondReport.get("cells").size());
+    assertNoAbsolutePaths(secondReport);
   }
 
   @Test
@@ -175,15 +176,25 @@ class JavacResolverAccuracyTest {
     command.add(work.toString());
     command.add("--report");
     command.add(report.toString());
-    Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-    String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    Path outputFile = report.resolveSibling(report.getFileName() + ".log");
+    Process process = new ProcessBuilder(command)
+        .redirectErrorStream(true)
+        .redirectOutput(outputFile.toFile())
+        .start();
     int exit;
     try {
-      exit = process.waitFor();
+      if (!process.waitFor(5, TimeUnit.MINUTES)) {
+        process.destroyForcibly();
+        throw new IOException("javac harness exceeded its 5-minute deadline");
+      }
+      exit = process.exitValue();
     } catch (InterruptedException error) {
+      process.destroyForcibly();
       Thread.currentThread().interrupt();
       throw new IOException("interrupted while running the harness", error);
     }
+    String output = Files.exists(outputFile)
+        ? Files.readString(outputFile, StandardCharsets.UTF_8) : "";
     assertEquals(0, exit, output);
   }
 
@@ -212,15 +223,18 @@ class JavacResolverAccuracyTest {
         .orElseThrow();
   }
 
-  private static List<String> canonicalFacts(JsonNode report) {
-    List<String> facts = new ArrayList<>();
+  private static List<String> canonicalSites(JsonNode report) {
+    List<String> sites = new ArrayList<>();
     for (JsonNode cell : report.get("cells")) {
       for (JsonNode fact : cell.get("javac").get("facts")) {
-        facts.add(cell.get("id").asText() + "|" + canonical(fact));
+        sites.add(cell.get("id").asText() + "|fact|" + canonical(fact));
+      }
+      for (JsonNode abstention : cell.get("javac").get("abstentions")) {
+        sites.add(cell.get("id").asText() + "|abstention|" + canonical(abstention));
       }
     }
-    facts.sort(Comparator.naturalOrder());
-    return facts;
+    sites.sort(Comparator.naturalOrder());
+    return sites;
   }
 
   private static String canonical(JsonNode node) {
@@ -267,6 +281,8 @@ class JavacResolverAccuracyTest {
     for (JsonNode site : sorted) {
       ObjectNode item = result.addObject();
       item.put("path", site.get("path").asText());
+      item.put("line", site.get("line").asInt());
+      item.put("column", site.get("column").asInt());
       item.put("offset", site.get("offset").asInt());
       if (fact) {
         item.put("topLevel", site.get("topLevel").asText());
@@ -279,16 +295,21 @@ class JavacResolverAccuracyTest {
       } else {
         item.put("reason", site.get("reason").asText());
       }
-      List<String> codes = new ArrayList<>();
-      site.get("diagnostics").forEach(diagnostic -> codes.add(diagnostic.get("code").asText()));
-      codes.sort(java.util.Comparator.naturalOrder());
-      ArrayNode codeNodes = item.putArray("diagnosticCodes");
-      codes.forEach(codeNodes::add);
+      List<String> diagnostics = new ArrayList<>();
+      site.get("diagnostics").forEach(diagnostic -> diagnostics.add(
+          diagnostic.get("code").asText()
+              + "|" + diagnostic.get("path").asText()
+              + "|" + diagnostic.get("line").asLong()
+              + "|" + diagnostic.get("column").asLong()));
+      diagnostics.sort(java.util.Comparator.naturalOrder());
+      ArrayNode diagnosticNodes = item.putArray("diagnostics");
+      diagnostics.forEach(diagnosticNodes::add);
     }
     return result;
   }
 
-  private static void assertNoAbsolutePaths(JsonNode node) {    if (node.isTextual()) {
+  private static void assertNoAbsolutePaths(JsonNode node) {
+    if (node.isTextual()) {
       assertFalse(node.asText().startsWith("/"), "absolute path in report: " + node.asText());
     } else if (node.isObject()) {
       node.fieldNames().forEachRemaining(name -> assertNoAbsolutePaths(node.get(name)));

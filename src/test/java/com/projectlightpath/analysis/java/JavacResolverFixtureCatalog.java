@@ -323,7 +323,7 @@ final class JavacResolverFixtureCatalog {
                   }
                 }
                 """),
-            site(SHADOWED, "java.lang.Object"), site(DEFINITE, "java.lang.Object")),
+            site(SHADOWED, "java.lang.Object"), site(POSSIBLE, "java.lang.Object")),
         cell("N23", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 21,
             sources("demo/Bridge.java", """
                 package demo;
@@ -340,7 +340,7 @@ final class JavacResolverFixtureCatalog {
                   }
                 }
                 """),
-            site(SHADOWED, "java.lang.Object"), site(DEFINITE, "java.lang.Object")),
+            site(SHADOWED, "java.lang.Object"), site(POSSIBLE, "java.lang.Object")),
         cell("N24a", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
             sources("demo/Bridge.java", """
                 package demo;

@@ -53,10 +53,15 @@ final class JavacSourceSymbolResolver {
     if (compiler == null) {
       throw new IllegalStateException("a JDK compiler is required for the javac prototype");
     }
-    List<Path> sourceFiles = sourceFiles(unitRoots);
+    List<Path> sourceFiles = sourceFiles(unitRoots).stream()
+        .map(path -> path.toAbsolutePath().normalize())
+        .toList();
     if (sourceFiles.isEmpty()) {
       return JavacResolverResult.empty(cell.id());
     }
+    List<Path> normalizedRoots = unitRoots.stream()
+        .map(root -> root.toAbsolutePath().normalize())
+        .toList();
     DiagnosticCollector<JavaFileObject> collector = new DiagnosticCollector<>();
     Path emptyClasspath = Files.createDirectories(classesDirectory.resolve("empty-cp"));
     Path emptySourcepath = Files.createDirectories(classesDirectory.resolve("empty-sp"));
@@ -88,8 +93,8 @@ final class JavacSourceSymbolResolver {
       List<Diagnostic<? extends JavaFileObject>> diagnostics = List.copyOf(collector.getDiagnostics());
       boolean taskHasError = diagnostics.stream()
           .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR);
-      Path siteFile = unitRoots.get(0).resolve(cell.siteFile()).normalize();
-      Facts scanner = new Facts(cell, trees, types, parsed, diagnostics, taskHasError, unitRoots, siteFile);
+      Path siteFile = normalizedRoots.get(0).resolve(cell.siteFile()).normalize();
+      Facts scanner = new Facts(cell, trees, types, parsed, diagnostics, taskHasError, normalizedRoots, siteFile);
       for (CompilationUnitTree unit : parsed) {
         scanner.scan(unit, null);
       }
@@ -178,35 +183,10 @@ final class JavacSourceSymbolResolver {
     }
 
     JavacResolverResult result() {
-      java.util.Set<String> shadowSites = abstentions.stream()
-          .filter(item -> item.reason().equals("SHADOWED"))
-          .map(item -> item.path() + ":" + item.line())
-          .collect(java.util.stream.Collectors.toSet());
-      List<JavacResolverFact> stableFacts = new ArrayList<>();
-      for (JavacResolverFact fact : facts) {
-        if ("POSSIBLE".equals(fact.certainty())
-            && fact.promotion().isEmpty()
-            && !shadowSites.isEmpty()
-            && diagnostics.stream()
-                .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
-                .findAny()
-                .isPresent()
-            && diagnostics.stream()
-                .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
-                .allMatch(item -> shadowSites.contains(
-                    relativePath(item.getSource()) + ":" + item.getLineNumber()))) {
-          stableFacts.add(new JavacResolverFact(
-              fact.cellId(), fact.path(), fact.topLevel(), fact.line(), fact.column(),
-              fact.offset(), fact.serviceType(), fact.owner(), fact.member(),
-              fact.accessibility(), "DEFINITE", "shadow-only-errors", fact.diagnostics()));
-        } else {
-          stableFacts.add(fact);
-        }
-      }
-      stableFacts.sort(Comparator.comparingInt(JavacResolverFact::offset)
+      facts.sort(Comparator.comparingInt(JavacResolverFact::offset)
           .thenComparing(JavacResolverFact::serviceType));
       abstentions.sort(Comparator.comparingInt(JavacResolverAbstention::offset));
-      return new JavacResolverResult(cell.id(), stableFacts, abstentions);
+      return new JavacResolverResult(cell.id(), facts, abstentions);
     }
 
     @Override
@@ -235,7 +215,7 @@ final class JavacSourceSymbolResolver {
       if (isServiceLoaderLoad(method)) {
         addFact(invocationPath, position, line, column, method);
       } else {
-        addAbstention((int) position, line, column, reason(method, receiver, line));
+        addAbstention((int) position, line, column, reason(method, receiver, line, column));
       }
       return super.visitMethodInvocation(node, unused);
     }
@@ -273,8 +253,13 @@ final class JavacSourceSymbolResolver {
     private void addFact(
         TreePath invocationPath, long position, int line, int column, Element method) {
       MethodInvocationTree node = (MethodInvocationTree) invocationPath.getLeaf();
-      ClassLiteral literal = node.getArguments().isEmpty()
-          ? null : classLiteralType(invocationPath, node.getArguments().get(0));
+      ClassLiteral literal = null;
+      for (ExpressionTree argument : node.getArguments()) {
+        literal = classLiteralType(invocationPath, argument);
+        if (literal != null) {
+          break;
+        }
+      }
       if (literal == null) {
         addAbstention((int) position, line, column, "NO_CLASS_LITERAL");
         return;
@@ -311,7 +296,7 @@ final class JavacSourceSymbolResolver {
           cell.id(), cell.siteFile(), line, column, position, reason, diagnosticsFor(line)));
     }
 
-    private String reason(Element method, Element receiver, int line) {
+    private String reason(Element method, Element receiver, int line, int column) {
       if (receiver != null && isVariable(receiver)) {
         return "SHADOWED";
       }
@@ -326,7 +311,7 @@ final class JavacSourceSymbolResolver {
         }
         return "SHADOWED";
       }
-      List<JavacResolverDiagnostic> local = diagnosticsFor(line);
+      List<JavacResolverDiagnostic> local = diagnosticsAt(line, column);
       if (local.stream().anyMatch(item -> item.message().toLowerCase(Locale.ROOT).contains("ambiguous"))) {
         return "AMBIGUOUS";
       }
@@ -397,6 +382,21 @@ final class JavacSourceSymbolResolver {
         }
       }
       return packageName.isEmpty() ? outer : packageName + "." + outer;
+    }
+
+    private List<JavacResolverDiagnostic> diagnosticsAt(int line, int column) {
+      return diagnostics.stream()
+          .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
+          .filter(item -> item.getLineNumber() == line)
+          .map(item -> new JavacResolverDiagnostic(
+              item.getCode(), item.getMessage(Locale.ROOT), relativePath(item.getSource()),
+              item.getLineNumber(), item.getColumnNumber()))
+          .sorted(Comparator.comparing(JavacResolverDiagnostic::path)
+              .thenComparingLong(JavacResolverDiagnostic::line)
+              .thenComparingLong(JavacResolverDiagnostic::column)
+              .thenComparing(JavacResolverDiagnostic::code)
+              .thenComparing(JavacResolverDiagnostic::message))
+          .toList();
     }
 
     private List<JavacResolverDiagnostic> diagnosticsFor(int line) {

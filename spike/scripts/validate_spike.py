@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
@@ -354,6 +355,29 @@ def main() -> None:
             require(fact["owner"] == "java.util.ServiceLoader", f"javac fact {cell['id']} owner mismatch")
             require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
             require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
+        if not cell["blocked"]:
+            facts_by_offset = {fact["offset"]: fact for fact in cell["javac"]["facts"]}
+            abstentions_by_offset = {item["offset"]: item for item in cell["javac"]["abstentions"]}
+            for expected in cell["expected"]:
+                offset = expected["offset"]
+                expectation = expected["expectation"]
+                fact = facts_by_offset.get(offset)
+                abstention = abstentions_by_offset.get(offset)
+                if expectation == "DEFINITE":
+                    require(fact is not None and fact["certainty"] == "DEFINITE", f"{cell['id']} missing DEFINITE at {offset}")
+                    require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                elif expectation in {"POSSIBLE", "MISSING_INPUT"}:
+                    require(fact is not None and fact["certainty"] == "POSSIBLE", f"{cell['id']} missing POSSIBLE at {offset}")
+                    require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                elif expectation == "AMBIGUOUS":
+                    require(abstention is not None, f"{cell['id']} missing ambiguity abstention at {offset}")
+                    require(any("ambiguous" in diagnostic["message"].lower() or "ambiguous" in diagnostic["code"]
+                                for diagnostic in abstention["diagnostics"]), f"{cell['id']} ambiguity evidence missing at {offset}")
+                elif expectation == "SHADOWED":
+                    require(abstention is not None and abstention["reason"] == "SHADOWED", f"{cell['id']} shadow evidence missing at {offset}")
+                elif expectation == "NO_FACT":
+                    require(fact is None, f"{cell['id']} unexpected fact at {offset}")
+                    require(abstention is not None and abstention["reason"] == "NO_CLASS_LITERAL", f"{cell['id']} missing NO_CLASS_LITERAL at {offset}")
     recomputed = {metric: 0 for metric in javac_totals}
     for cell in javac_resolver["cells"]:
         for metric in recomputed:
@@ -363,7 +387,13 @@ def main() -> None:
     def javac_contains_host_path(value: object) -> bool:
         """Recursively reject machine-specific paths in the javac observation."""
         if isinstance(value, str):
-            return value.startswith("/") or "/Users/" in value or "/private/var/" in value
+            return (value.startswith("/")
+                    or value.startswith("\\\\")
+                    or re.match(r"^[A-Za-z]:[\\\\/]", value) is not None
+                    or "/Users/" in value
+                    or "/private/var/" in value
+                    or "/tmp/" in value
+                    or "\\\\Users\\\\" in value)
         if isinstance(value, list):
             return any(javac_contains_host_path(item) for item in value)
         if isinstance(value, dict):

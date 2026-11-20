@@ -1,19 +1,23 @@
 package com.projectlightpath.analysis.java;
 
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** Compares one path's facts and abstentions with a cell's per-site expectations. */
 final class Evaluation {
   private Evaluation() {}
 
   static JavacResolverMetrics evaluate(JavacResolverCell cell, JavacResolverResult result) {
-    List<Object> sites = new ArrayList<>();
-    sites.addAll(result.facts());
-    sites.addAll(result.abstentions());
-    sites.sort(Comparator.comparingInt(Evaluation::offset));
-    List<JavacResolverCell.ExpectedSite> expected = cell.expectedSites();
+    Map<Integer, Object> actual = new HashMap<>();
+    for (JavacResolverFact fact : result.facts()) {
+      actual.put(fact.offset(), fact);
+    }
+    for (JavacResolverAbstention abstention : result.abstentions()) {
+      actual.putIfAbsent(abstention.offset(), abstention);
+    }
     int wrongDefinite = 0;
     int wrongServiceType = 0;
     int lost = 0;
@@ -21,11 +25,19 @@ final class Evaluation {
     int added = 0;
     int unexpected = 0;
     int abstentionMismatch = 0;
-    int shared = Math.min(expected.size(), sites.size());
-    for (int index = 0; index < shared; index++) {
-      JavacResolverCell.ExpectedSite site = expected.get(index);
-      Object actual = sites.get(index);
-      if (actual instanceof JavacResolverFact fact) {
+    Set<Integer> matched = new HashSet<>();
+    for (JavacResolverCell.ExpectedSite site : cell.expectedSites()) {
+      Object found = actual.get(site.offset());
+      if (found == null) {
+        switch (site.expectation()) {
+          case DEFINITE -> lost++;
+          case POSSIBLE, AMBIGUOUS, MISSING_INPUT -> abstentionMismatch++;
+          default -> { }
+        }
+        continue;
+      }
+      matched.add(site.offset());
+      if (found instanceof JavacResolverFact fact) {
         boolean definite = "DEFINITE".equals(fact.certainty());
         switch (site.expectation()) {
           case DEFINITE -> {
@@ -44,7 +56,7 @@ final class Evaluation {
               wrongServiceType++;
             }
             if (site.expectation() == JavacResolverCell.Expectation.MISSING_INPUT
-                && fact.diagnostics().isEmpty()) {
+                && !hasEvidence(fact.diagnostics(), site.expectation())) {
               abstentionMismatch++;
             }
           }
@@ -57,37 +69,27 @@ final class Evaluation {
           }
         }
       } else {
-        JavacResolverAbstention abstention = (JavacResolverAbstention) actual;
+        JavacResolverAbstention abstention = (JavacResolverAbstention) found;
         switch (site.expectation()) {
-          case DEFINITE -> lost++;
+          case DEFINITE, POSSIBLE -> lost++;
           case AMBIGUOUS, MISSING_INPUT -> {
-            if (abstention.diagnostics().isEmpty()) {
+            if (!hasEvidence(abstention.diagnostics(), site.expectation())) {
               abstentionMismatch++;
             }
           }
           default -> { }
         }
-        String expectedReason = switch (site.expectation()) {
-          case AMBIGUOUS -> "AMBIGUOUS";
-          case SHADOWED -> "SHADOWED";
-          case NO_FACT -> "NO_CLASS_LITERAL";
-          default -> null;
-        };
+        String expectedReason = expectedReason(site.expectation());
         if (expectedReason != null && !expectedReason.equals(abstention.reason())) {
           abstentionMismatch++;
         }
       }
     }
-    for (int index = shared; index < expected.size(); index++) {
-      JavacResolverCell.ExpectedSite site = expected.get(index);
-      switch (site.expectation()) {
-        case DEFINITE -> lost++;
-        case AMBIGUOUS, MISSING_INPUT -> abstentionMismatch++;
-        default -> { }
+    for (Map.Entry<Integer, Object> entry : actual.entrySet()) {
+      if (matched.contains(entry.getKey())) {
+        continue;
       }
-    }
-    for (int index = shared; index < sites.size(); index++) {
-      if (sites.get(index) instanceof JavacResolverFact fact) {
+      if (entry.getValue() instanceof JavacResolverFact fact) {
         added++;
         unexpected++;
         if ("DEFINITE".equals(fact.certainty())) {
@@ -101,10 +103,30 @@ final class Evaluation {
         wrongDefinite, wrongServiceType, lost, downgraded, added, unexpected, abstentionMismatch);
   }
 
-  private static int offset(Object site) {
-    if (site instanceof JavacResolverFact fact) {
-      return fact.offset();
+  private static String expectedReason(JavacResolverCell.Expectation expectation) {
+    return switch (expectation) {
+      case AMBIGUOUS -> "AMBIGUOUS";
+      case SHADOWED -> "SHADOWED";
+      case NO_FACT -> "NO_CLASS_LITERAL";
+      default -> null;
+    };
+  }
+
+  private static boolean hasEvidence(
+      List<JavacResolverDiagnostic> diagnostics, JavacResolverCell.Expectation expectation) {
+    if (diagnostics.isEmpty()) {
+      return false;
     }
-    return ((JavacResolverAbstention) site).offset();
+    return diagnostics.stream().anyMatch(diagnostic -> switch (expectation) {
+      case AMBIGUOUS -> diagnostic.code().contains("ref.ambiguous")
+          || diagnostic.message().toLowerCase(java.util.Locale.ROOT).contains("ambiguous");
+      case MISSING_INPUT -> diagnostic.code().contains("doesnt.exist")
+          || diagnostic.code().contains("cant.resolve")
+          || diagnostic.code().contains("duplicate.class")
+          || diagnostic.code().contains("not.def.public")
+          || diagnostic.message().toLowerCase(java.util.Locale.ROOT).contains("does not exist")
+          || diagnostic.message().toLowerCase(java.util.Locale.ROOT).contains("cannot find symbol");
+      default -> false;
+    });
   }
 }

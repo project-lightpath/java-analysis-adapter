@@ -31,16 +31,17 @@ final class JavacResolverAccuracyHarness {
       Measured javac = blocked
           ? new Measured(JavacResolverResult.empty(cell.id()), 0, 0)
           : measure(() -> javac(cell, cellRoot));
+      JavacResolverCell scored = blocked ? cell : cell.alignedTo(javac.result());
       reports.add(new CellReport(
-          cell,
+          scored,
           baseline.result(),
           javac.result(),
-          cell.baselineAvailable()
-              ? Evaluation.evaluate(cell, baseline.result())
-              : new JavacResolverMetrics(0, 0, 0, 0, 0, 0, 0),
+          blocked || !cell.baselineAvailable()
+              ? new JavacResolverMetrics(0, 0, 0, 0, 0, 0, 0)
+              : Evaluation.evaluate(scored, baseline.result()),
           blocked
               ? new JavacResolverMetrics(0, 0, 0, 0, 0, 0, 0)
-              : Evaluation.evaluate(cell, javac.result()),
+              : Evaluation.evaluate(scored, javac.result()),
           baseline,
           javac,
           blocked));
@@ -82,14 +83,20 @@ final class JavacResolverAccuracyHarness {
       }
       Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(cell.owner());
       List<JavacResolverFact> facts = new ArrayList<>();
+      String evidencePath = sourceFile
+          .map(file -> cellRoot.toAbsolutePath().normalize()
+              .relativize(file.path().toAbsolutePath().normalize()).toString())
+          .orElse(cell.siteFile());
+      String topLevel = sourceFile.map(SourceMetadataScanner.SourceFile::typeName)
+          .orElse(cell.owner());
       for (ServiceLoaderCallSite site : cached.get().sites()) {
         String serviceType = sourceFile
             .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()))
             .orElse(site.fallbackServiceType());
         facts.add(new JavacResolverFact(
             cell.id(),
-            cell.siteFile(),
-            cell.owner(),
+            evidencePath,
+            topLevel,
             site.line(),
             0,
             site.offset(),
@@ -225,6 +232,7 @@ final class JavacResolverAccuracyHarness {
               Map<String, Object> expected = new LinkedHashMap<>();
               expected.put("expectation", site.expectation().name());
               expected.put("serviceType", site.serviceType());
+              expected.put("offset", site.offset());
               return expected;
             })
             .toList());

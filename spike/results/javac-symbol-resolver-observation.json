@@ -9,11 +9,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 61,
-      "peakHeapBytes" : 3217960,
+      "wallMillis" : 111,
+      "peakHeapBytes" : 3873320,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -24,7 +25,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -40,8 +41,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 308,
-      "peakHeapBytes" : 23306704,
+      "wallMillis" : 513,
+      "peakHeapBytes" : 23286592,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -74,11 +75,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 22588088,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 22599768,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -92,8 +94,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 46,
-      "peakHeapBytes" : 24008936,
+      "wallMillis" : 120,
+      "peakHeapBytes" : 24040560,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -120,11 +122,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 76
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 21627360,
+      "peakHeapBytes" : 22092328,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -135,7 +138,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -151,7 +154,7 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 30,
+      "wallMillis" : 35,
       "peakHeapBytes" : 32505856,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -185,11 +188,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 72
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 33554432,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 32505856,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -203,8 +207,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 45088768,
+      "wallMillis" : 55,
+      "peakHeapBytes" : 44040192,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -231,10 +235,11 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 92
     } ],
     "baseline" : {
-      "wallMillis" : 2,
+      "wallMillis" : 14,
       "peakHeapBytes" : 45088768,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -249,7 +254,7 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
+      "wallMillis" : 73,
       "peakHeapBytes" : 56623104,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -277,11 +282,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 57671680,
+      "wallMillis" : 7,
+      "peakHeapBytes" : 56623104,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -295,8 +301,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 69206016,
+      "wallMillis" : 59,
+      "peakHeapBytes" : 68157440,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -323,10 +329,11 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 173
     } ],
     "baseline" : {
-      "wallMillis" : 2,
+      "wallMillis" : 3,
       "peakHeapBytes" : 69206016,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -341,7 +348,7 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 30,
+      "wallMillis" : 54,
       "peakHeapBytes" : 78643200,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -369,11 +376,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 176
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 59768832,
+      "peakHeapBytes" : 59244544,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -387,8 +395,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 62085520,
+      "wallMillis" : 27,
+      "peakHeapBytes" : 64200448,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -415,11 +423,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 104
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 46356880,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 46374656,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -433,8 +442,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 57891216,
+      "wallMillis" : 30,
+      "peakHeapBytes" : 57908992,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -467,11 +476,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 57891216,
+      "wallMillis" : 4,
+      "peakHeapBytes" : 57908992,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -485,8 +495,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 65231248,
+      "wallMillis" : 43,
+      "peakHeapBytes" : 66297600,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -519,10 +529,11 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 151
     } ],
     "baseline" : {
-      "wallMillis" : 1,
+      "wallMillis" : 3,
       "peakHeapBytes" : 57671680,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -537,7 +548,7 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
+      "wallMillis" : 38,
       "peakHeapBytes" : 69206016,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -571,7 +582,8 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 125
     } ],
     "baseline" : {
       "wallMillis" : 1,
@@ -623,10 +635,11 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 133
     } ],
     "baseline" : {
-      "wallMillis" : 1,
+      "wallMillis" : 2,
       "peakHeapBytes" : 80740352,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -641,7 +654,7 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
+      "wallMillis" : 28,
       "peakHeapBytes" : 88080384,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -675,10 +688,11 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 151
     } ],
     "baseline" : {
-      "wallMillis" : 1,
+      "wallMillis" : 2,
       "peakHeapBytes" : 78643200,
       "metrics" : {
         "wrongDefinite" : 0,
@@ -693,8 +707,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 90177536,
+      "wallMillis" : 33,
+      "peakHeapBytes" : 81444224,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -727,11 +741,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 120
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 90177536,
+      "wallMillis" : 35,
+      "peakHeapBytes" : 81444224,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -745,8 +760,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 102760448,
+      "wallMillis" : 30,
+      "peakHeapBytes" : 92978560,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -779,11 +794,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 5,
-      "peakHeapBytes" : 102760448,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 94027136,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -797,8 +813,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 37,
-      "peakHeapBytes" : 102760448,
+      "wallMillis" : 86,
+      "peakHeapBytes" : 105561472,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -825,11 +841,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 77010496,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 105561472,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -840,7 +857,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -856,8 +873,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 88544832,
+      "wallMillis" : 32,
+      "peakHeapBytes" : 105561472,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -890,11 +907,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 89593408,
+      "wallMillis" : 5,
+      "peakHeapBytes" : 75483584,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -905,7 +923,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -921,8 +939,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 101127744,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 87017920,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -955,11 +973,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 101127744,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 88066496,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -973,8 +992,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 112662080,
+      "wallMillis" : 74,
+      "peakHeapBytes" : 99600832,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1001,25 +1020,27 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 212
     }, {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 257
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 113710656,
+      "wallMillis" : 4,
+      "peakHeapBytes" : 99600832,
       "metrics" : {
-        "wrongDefinite" : 1,
+        "wrongDefinite" : 0,
         "wrongServiceType" : 0,
-        "lost" : 1,
+        "lost" : 0,
         "downgraded" : 0,
-        "added" : 1,
-        "unexpectedFact" : 1,
+        "added" : 0,
+        "unexpectedFact" : 0,
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 11,
         "column" : 0,
@@ -1035,8 +1056,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 113710656,
+      "wallMillis" : 32,
+      "peakHeapBytes" : 110086592,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1076,25 +1097,27 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 229
     }, {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 273
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 93847552,
+      "wallMillis" : 5,
+      "peakHeapBytes" : 111135168,
       "metrics" : {
-        "wrongDefinite" : 1,
+        "wrongDefinite" : 0,
         "wrongServiceType" : 0,
-        "lost" : 1,
+        "lost" : 0,
         "downgraded" : 0,
-        "added" : 1,
-        "unexpectedFact" : 1,
+        "added" : 0,
+        "unexpectedFact" : 0,
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 11,
         "column" : 0,
@@ -1110,8 +1133,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 105381888,
+      "wallMillis" : 47,
+      "peakHeapBytes" : 111135168,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1151,25 +1174,27 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 134
     }, {
-      "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.Object",
+      "offset" : 199
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 106430464,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 92153824,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
-        "lost" : 1,
+        "lost" : 0,
         "downgraded" : 0,
-        "added" : 1,
-        "unexpectedFact" : 1,
+        "added" : 0,
+        "unexpectedFact" : 0,
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 9,
         "column" : 0,
@@ -1185,8 +1210,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 119013376,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 104736736,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1206,8 +1231,8 @@
         "owner" : "java.util.ServiceLoader",
         "member" : "load",
         "accessibility" : "PUBLIC_STATIC",
-        "certainty" : "DEFINITE",
-        "promotion" : "shadow-only-errors",
+        "certainty" : "POSSIBLE",
+        "promotion" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.cant.resolve.location.args",
           "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
@@ -1238,25 +1263,27 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 166
     }, {
-      "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.Object",
+      "offset" : 242
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 119013376,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 104736736,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
-        "lost" : 1,
+        "lost" : 0,
         "downgraded" : 0,
-        "added" : 1,
-        "unexpectedFact" : 1,
+        "added" : 0,
+        "unexpectedFact" : 0,
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 11,
         "column" : 0,
@@ -1272,8 +1299,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 131596288,
+      "wallMillis" : 55,
+      "peakHeapBytes" : 117319648,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1293,8 +1320,8 @@
         "owner" : "java.util.ServiceLoader",
         "member" : "load",
         "accessibility" : "PUBLIC_STATIC",
-        "certainty" : "DEFINITE",
-        "promotion" : "shadow-only-errors",
+        "certainty" : "POSSIBLE",
+        "promotion" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.cant.resolve.location.args",
           "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
@@ -1325,11 +1352,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 160
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 131596288,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 118368224,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1343,8 +1371,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 131596288,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 129902560,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1371,11 +1399,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 173
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 109051904,
+      "peakHeapBytes" : 129902560,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1389,8 +1418,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 109051904,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 129902560,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1417,11 +1446,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 98
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 106125672,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 105906176,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1435,8 +1465,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 118708584,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 105906176,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1463,11 +1493,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 95
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 118708584,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 105165776,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1481,8 +1512,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 130242920,
+      "wallMillis" : 48,
+      "peakHeapBytes" : 116700112,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1509,11 +1540,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 130242920,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 116700112,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1527,8 +1559,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 141777256,
+      "wallMillis" : 32,
+      "peakHeapBytes" : 127185872,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1555,11 +1587,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 141777256,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 128234448,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1573,8 +1606,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 153311592,
+      "wallMillis" : 63,
+      "peakHeapBytes" : 128234448,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1607,11 +1640,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 154360168,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 85699104,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1625,8 +1659,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 154360168,
+      "wallMillis" : 39,
+      "peakHeapBytes" : 96184864,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1653,11 +1687,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 138936320,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 97233440,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1672,7 +1707,7 @@
     },
     "javac" : {
       "wallMillis" : 17,
-      "peakHeapBytes" : 149422080,
+      "peakHeapBytes" : 108767776,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1705,11 +1740,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 150470656,
+      "wallMillis" : 5,
+      "peakHeapBytes" : 108767776,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1720,7 +1756,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -1736,8 +1772,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 160956416,
+      "wallMillis" : 75,
+      "peakHeapBytes" : 108767776,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1770,11 +1806,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 88
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 162004992,
+      "peakHeapBytes" : 95420416,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1788,8 +1825,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 162004992,
+      "wallMillis" : 27,
+      "peakHeapBytes" : 106954752,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1822,11 +1859,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "NO_FACT",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 84
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 147849216,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 108003328,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1840,8 +1878,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 147860336,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 118489088,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1868,11 +1906,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "NO_FACT",
-      "serviceType" : "int"
+      "serviceType" : "int",
+      "offset" : 66
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 148908912,
+      "peakHeapBytes" : 119537664,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -1883,7 +1922,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -1900,7 +1939,7 @@
     },
     "javac" : {
       "wallMillis" : 13,
-      "peakHeapBytes" : 159394672,
+      "peakHeapBytes" : 131072000,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1927,11 +1966,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "NO_FACT",
-      "serviceType" : "java.lang.Object[]"
+      "serviceType" : "java.lang.Object[]",
+      "offset" : 66
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 160443248,
+      "peakHeapBytes" : 131072000,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1945,8 +1985,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 160443248,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 142606336,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1973,11 +2013,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "NO_FACT",
-      "serviceType" : "Local"
+      "serviceType" : "Local",
+      "offset" : 90
     } ],
     "baseline" : {
       "wallMillis" : 3,
-      "peakHeapBytes" : 161480704,
+      "peakHeapBytes" : 143654912,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -1988,7 +2029,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 6,
         "column" : 0,
@@ -2004,8 +2045,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 171966464,
+      "wallMillis" : 26,
+      "peakHeapBytes" : 150994944,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2032,11 +2073,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 173015040,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 114268400,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2050,8 +2092,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 184549376,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 124754160,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2084,11 +2126,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 184549376,
+      "peakHeapBytes" : 125802736,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2102,8 +2145,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 28,
-      "peakHeapBytes" : 184549376,
+      "wallMillis" : 26,
+      "peakHeapBytes" : 136288496,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2136,11 +2179,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "SHADOWED",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 101
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 122231696,
+      "peakHeapBytes" : 137337072,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2154,8 +2198,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 133766032,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 147822832,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2182,11 +2226,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 133766032,
+      "peakHeapBytes" : 148871408,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2201,7 +2246,7 @@
     },
     "javac" : {
       "wallMillis" : 13,
-      "peakHeapBytes" : 144251792,
+      "peakHeapBytes" : 160405744,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2234,11 +2279,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 86
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 145300368,
+      "peakHeapBytes" : 160405744,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2252,8 +2298,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 145300368,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 160405744,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2286,11 +2332,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 134914688,
+      "peakHeapBytes" : 139984896,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2301,7 +2348,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2317,8 +2364,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 146449024,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 151519232,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2351,11 +2398,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 147497600,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 151519232,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2369,8 +2417,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 157983360,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 163053568,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2403,11 +2451,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "POSSIBLE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 159031936,
+      "wallMillis" : 7,
+      "peakHeapBytes" : 163053568,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2415,14 +2464,14 @@
         "downgraded" : 0,
         "added" : 0,
         "unexpectedFact" : 0,
-        "abstentionMismatch" : 0
+        "abstentionMismatch" : 1
       },
       "facts" : [ ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 170566272,
+      "wallMillis" : 42,
+      "peakHeapBytes" : 174587904,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2461,11 +2510,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "POSSIBLE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 171614848,
+      "wallMillis" : 26,
+      "peakHeapBytes" : 174587904,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2476,7 +2526,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2492,8 +2542,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 182100608,
+      "wallMillis" : 42,
+      "peakHeapBytes" : 178782208,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2532,11 +2582,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 140509184,
+      "peakHeapBytes" : 103809024,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2547,7 +2598,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2563,8 +2614,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 150994944,
+      "wallMillis" : 42,
+      "peakHeapBytes" : 114294784,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2597,11 +2648,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "POSSIBLE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 152043520,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 115343360,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2612,7 +2664,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2628,8 +2680,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 163577856,
+      "wallMillis" : 47,
+      "peakHeapBytes" : 126877696,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2668,11 +2720,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 163577856,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 127926272,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2683,7 +2736,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2699,8 +2752,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 175112192,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 127926272,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2733,11 +2786,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 175112192,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 113246208,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2748,7 +2802,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2765,7 +2819,7 @@
     },
     "javac" : {
       "wallMillis" : 13,
-      "peakHeapBytes" : 186646528,
+      "peakHeapBytes" : 123731968,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2798,11 +2852,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 186646528,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 124780544,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2813,7 +2868,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2829,8 +2884,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 186646528,
+      "wallMillis" : 37,
+      "peakHeapBytes" : 136314880,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2863,11 +2918,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "POSSIBLE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 177209344,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 136314880,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2878,7 +2934,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2894,8 +2950,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 177209344,
+      "wallMillis" : 28,
+      "peakHeapBytes" : 147849216,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2934,11 +2990,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 4,
-      "peakHeapBytes" : 171894208,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 147849216,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2949,7 +3006,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2965,8 +3022,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 52,
-      "peakHeapBytes" : 183428544,
+      "wallMillis" : 37,
+      "peakHeapBytes" : 159383552,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2999,11 +3056,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 4,
-      "peakHeapBytes" : 183428544,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 159383552,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3014,7 +3072,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "a/Bridge.java",
+        "path" : "src/main/java/a/Bridge.java",
         "topLevel" : "a.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3030,8 +3088,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 91,
-      "peakHeapBytes" : 194962880,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 170917888,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3064,11 +3122,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 5,
-      "peakHeapBytes" : 196011456,
+      "wallMillis" : 24,
+      "peakHeapBytes" : 170917888,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3079,7 +3138,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3095,8 +3154,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 40,
-      "peakHeapBytes" : 196011456,
+      "wallMillis" : 44,
+      "peakHeapBytes" : 133693440,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3129,11 +3188,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "AMBIGUOUS",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 111753360,
+      "wallMillis" : 7,
+      "peakHeapBytes" : 133693440,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3144,7 +3204,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3160,8 +3220,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 123287696,
+      "wallMillis" : 25,
+      "peakHeapBytes" : 146276352,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3194,11 +3254,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 123287696,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 146276352,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3209,7 +3270,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3225,8 +3286,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 134822032,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 157810688,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3259,11 +3320,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 67
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 134822032,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 157810688,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3277,8 +3339,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 134822032,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 169345024,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3311,11 +3373,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 121154320,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 170393600,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3326,8 +3389,8 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Outer.java",
-        "topLevel" : "demo.Outer$Inner",
+        "path" : "src/main/java/demo/Outer.java",
+        "topLevel" : "demo.Outer",
         "line" : 4,
         "column" : 0,
         "offset" : 86,
@@ -3342,8 +3405,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 132688656,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 180879360,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3376,11 +3439,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 69
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 133737232,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 180879360,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3394,8 +3458,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 144222992,
+      "wallMillis" : 50,
+      "peakHeapBytes" : 188219392,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3428,11 +3492,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 145271568,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 157810688,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3446,8 +3511,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 156805904,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 169345024,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3480,11 +3545,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 98
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 156805904,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 169345024,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3495,8 +3561,8 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
-        "topLevel" : "demo.Bridge$1",
+        "path" : "src/main/java/demo/Bridge.java",
+        "topLevel" : "demo.Bridge",
         "line" : 5,
         "column" : 0,
         "offset" : 98,
@@ -3511,8 +3577,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 168340240,
+      "wallMillis" : 26,
+      "peakHeapBytes" : 180879360,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3545,11 +3611,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 63
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 168340240,
+      "wallMillis" : 24,
+      "peakHeapBytes" : 180879360,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3563,8 +3630,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 179874576,
+      "wallMillis" : 53,
+      "peakHeapBytes" : 192413696,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3597,11 +3664,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 68
     } ],
     "baseline" : {
-      "wallMillis" : 8,
-      "peakHeapBytes" : 179874576,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 192413696,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3615,8 +3683,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 141033472,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 198705152,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3649,11 +3717,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 59
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 141033472,
+      "wallMillis" : 5,
+      "peakHeapBytes" : 170393600,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3667,8 +3736,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 152567808,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 180879360,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3701,11 +3770,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "DEFINITE",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 62
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 152567808,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 181927936,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3719,8 +3789,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 164102144,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 192413696,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3753,11 +3823,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "MISSING_INPUT",
-      "serviceType" : "Missing"
+      "serviceType" : "Missing",
+      "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 165150720,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 193462272,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3768,7 +3839,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -3784,8 +3855,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 175636480,
+      "wallMillis" : 60,
+      "peakHeapBytes" : 201850880,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3824,11 +3895,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "MISSING_INPUT",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 84
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 176685056,
+      "wallMillis" : 3,
+      "peakHeapBytes" : 180879360,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3839,7 +3911,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3855,8 +3927,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 188219392,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 192413696,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3895,11 +3967,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "MISSING_INPUT",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 87
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 189267968,
+      "wallMillis" : 6,
+      "peakHeapBytes" : 192413696,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3910,7 +3983,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3926,8 +3999,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 196608000,
+      "wallMillis" : 31,
+      "peakHeapBytes" : 192413696,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3966,11 +4039,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "MISSING_INPUT",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 61
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 160956416,
+      "peakHeapBytes" : 103720936,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3984,8 +4058,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 172490752,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 115255272,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -4024,11 +4098,12 @@
     "blocked" : false,
     "expected" : [ {
       "expectation" : "MISSING_INPUT",
-      "serviceType" : "java.lang.Object"
+      "serviceType" : "java.lang.Object",
+      "offset" : 89
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 172490752,
+      "peakHeapBytes" : 115255272,
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -4039,7 +4114,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "demo/Bridge.java",
+        "path" : "src/main/java/demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -4055,8 +4130,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 184025088,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 122595304,
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -4090,13 +4165,13 @@
     }
   } ],
   "baselineTotals" : {
-    "wrongDefinite" : 19,
+    "wrongDefinite" : 17,
     "wrongServiceType" : 0,
-    "lost" : 16,
+    "lost" : 12,
     "downgraded" : 0,
-    "added" : 12,
-    "unexpectedFact" : 12,
-    "abstentionMismatch" : 6
+    "added" : 8,
+    "unexpectedFact" : 8,
+    "abstentionMismatch" : 7
   },
   "javacTotals" : {
     "wrongDefinite" : 0,
