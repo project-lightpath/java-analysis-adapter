@@ -32,6 +32,24 @@ jobs:
       - name: Validate captured evidence
         run: make evidence-validate
 
+  service-loader-e2e:
+    name: ServiceLoader e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Run ServiceLoader e2e lane
+        run: make e2e-test
+
   java-lint:
     name: Java lint gate
     runs-on: ubuntu-latest
