@@ -81,33 +81,43 @@ final class JavacResolverAccuracyHarness {
               .relativize(file.path().toAbsolutePath().normalize()).toString())
           .orElse("");
       String topLevel = sourceFile.map(SourceMetadataScanner.SourceFile::typeName).orElse("");
-      Optional<ServiceLoaderSourceCache.CachedSource> cached =
-          ServiceLoaderSourceCache.source(
-              scanner, new MethodSymbol(cell.owner(), cell.method(), "()V"));
-      if (cached.isEmpty()) {
-        return new JavacResolverResult(cell.id(), List.of(), List.of(), evidencePath, topLevel);
+      String previousResolver = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
+      System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, "textual");
+      try {
+        Optional<ServiceLoaderSourceCache.CachedSource> cached =
+            ServiceLoaderSourceCache.source(
+                scanner, new MethodSymbol(cell.owner(), cell.method(), "()V"));
+        if (cached.isEmpty()) {
+          return new JavacResolverResult(cell.id(), List.of(), List.of(), evidencePath, topLevel);
+        }
+        List<JavacResolverFact> facts = new ArrayList<>();
+        for (ServiceLoaderCallSite site : cached.get().sites()) {
+          String serviceType = sourceFile
+              .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()))
+              .orElse(site.fallbackServiceType());
+          facts.add(new JavacResolverFact(
+              cell.id(),
+              evidencePath.isEmpty() ? cell.siteFile() : evidencePath,
+              topLevel.isEmpty() ? cell.owner() : topLevel,
+              site.line(),
+              0,
+              site.offset(),
+              serviceType,
+              "java.util.ServiceLoader",
+              "load",
+              "TEXTUAL_SITE",
+              "DEFINITE",
+              "",
+              List.of()));
+        }
+        return new JavacResolverResult(cell.id(), facts, List.of(), evidencePath, topLevel);
+      } finally {
+        if (previousResolver == null) {
+          System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
+        } else {
+          System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previousResolver);
+        }
       }
-      List<JavacResolverFact> facts = new ArrayList<>();
-      for (ServiceLoaderCallSite site : cached.get().sites()) {
-        String serviceType = sourceFile
-            .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()))
-            .orElse(site.fallbackServiceType());
-        facts.add(new JavacResolverFact(
-            cell.id(),
-            evidencePath.isEmpty() ? cell.siteFile() : evidencePath,
-            topLevel.isEmpty() ? cell.owner() : topLevel,
-            site.line(),
-            0,
-            site.offset(),
-            serviceType,
-            "java.util.ServiceLoader",
-            "load",
-            "TEXTUAL_SITE",
-            "DEFINITE",
-            "",
-            List.of()));
-      }
-      return new JavacResolverResult(cell.id(), facts, List.of(), evidencePath, topLevel);
     } catch (IOException error) {
       throw new IllegalStateException("cannot build baseline for " + cell.id(), error);
     }

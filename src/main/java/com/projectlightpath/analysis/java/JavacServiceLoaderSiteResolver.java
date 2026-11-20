@@ -37,12 +37,11 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 
 /**
- * Experimental flag-gated javac-backed ServiceLoader site discovery.
+ * javac-backed ServiceLoader site discovery.
  *
- * <p>When {@code -Dflpath.java.resolver=javac} is set, the source cache asks this
- * class for compiler-bound sites instead of the textual parser. The default is
- * the existing textual path, so adapter output is unchanged unless the flag is
- * explicitly enabled.
+ * <p>javac is the default resolver. The source cache asks this class for
+ * compiler-bound sites instead of the textual parser; set
+ * {@code -Dflpath.java.resolver=textual} to roll back.
  */
 final class JavacServiceLoaderSiteResolver {
   static final String PROPERTY = "flpath.java.resolver";
@@ -56,7 +55,7 @@ final class JavacServiceLoaderSiteResolver {
   static boolean enabled() {
     String scoped = SCOPED_MODE.get();
     return "javac".equalsIgnoreCase(
-        scoped != null ? scoped : System.getProperty(PROPERTY, "textual"));
+        scoped != null ? scoped : System.getProperty(PROPERTY, "javac"));
   }
 
   /**

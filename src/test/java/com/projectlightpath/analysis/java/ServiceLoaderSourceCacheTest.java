@@ -9,11 +9,29 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ServiceLoaderSourceCacheTest {
   @TempDir Path temp;
+  private String previousResolver;
+
+  @BeforeEach
+  void useTextualResolver() {
+    previousResolver = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
+    System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, "textual");
+  }
+
+  @AfterEach
+  void restoreResolver() {
+    if (previousResolver == null) {
+      System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
+    } else {
+      System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previousResolver);
+    }
+  }
 
   @Test
   void reusesOneSourceModelForRepeatedEdges() throws IOException {
