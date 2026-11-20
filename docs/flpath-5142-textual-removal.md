@@ -59,7 +59,9 @@ Baseline gate: **338** total. Final: **342** (`341` default + `1`
 large-archive). Count did not decrease.
 
 - `ServiceLoaderNameResolutionMatrixTest`: all 56 JLS cells now run through
-  javac. Pattern-switch cells use `javaRelease(21)`. Six cells changed
+  javac. Pattern-switch cells use `javaRelease(21)` and are skipped on a JDK
+  below 21 (the CI lane is Java 17); skipped tests still count toward the gate.
+  Three equivalent cache cells carry the same assumption. Six cells changed
   disposition because javac is stricter: two invalid-Java cells
   (`dotlessImportFailsClosed`, `unselectedQualifiedSuperclassFailsClosed`) and
   two per-file-error cells (`javaLambdaParameterErrorFailsClosedForWholeFile`,

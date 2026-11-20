@@ -16,6 +16,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -230,6 +231,8 @@ class ServiceLoaderNameResolutionMatrixTest {
   /** Cell 8b: lambda-shaped switch pattern x later switch arm (item I). */
   @Test
   void arrowArmPatternVariableScopesToItsArm() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(1, matrixSites("matrix-cell-8b", """
         package demo;
         import java.util.ServiceLoader;

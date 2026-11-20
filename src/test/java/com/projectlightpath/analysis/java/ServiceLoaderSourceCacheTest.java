@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -428,6 +429,8 @@ class ServiceLoaderSourceCacheTest {
 
   @Test
   void switchLabelPatternVariableInArrowArmScopesToTheArm() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(1, cachedSites("arrow-arm-pattern-scope", """
         package demo;
         import java.util.ServiceLoader;
@@ -447,6 +450,8 @@ class ServiceLoaderSourceCacheTest {
 
   @Test
   void colonSwitchLabelPatternVariableOverApproximatesToTheBlock() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(0, cachedSites("colon-arm-pattern-scope", """
         package demo;
         import java.util.ServiceLoader;
@@ -469,6 +474,8 @@ class ServiceLoaderSourceCacheTest {
 
   @Test
   void multiPatternSwitchLabelOverApproximatesToTheBlock() throws IOException {
+    Assumptions.assumeTrue(Runtime.version().feature() >= 21,
+        "switch patterns require Java 21");
     assertEquals(0, cachedSites("multi-pattern-arm-scope", """
         package demo;
         import java.util.ServiceLoader;
