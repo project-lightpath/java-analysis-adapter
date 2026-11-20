@@ -127,7 +127,8 @@ final class JavacServiceLoaderSiteResolver {
       }
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
-      SiteScanner siteScanner = new SiteScanner(trees, types);
+      javax.lang.model.util.Elements elements = task.getElements();
+      SiteScanner siteScanner = new SiteScanner(trees, types, elements);
       for (CompilationUnitTree unit : parsed) {
         siteScanner.scan(unit, null);
       }
@@ -171,11 +172,13 @@ final class JavacServiceLoaderSiteResolver {
   private static final class SiteScanner extends TreePathScanner<Void, Void> {
     private final Trees trees;
     private final Types types;
+    private final javax.lang.model.util.Elements elements;
     private final Map<Path, List<ServiceLoaderCallSite>> sites = new LinkedHashMap<>();
 
-    SiteScanner(Trees trees, Types types) {
+    SiteScanner(Trees trees, Types types, javax.lang.model.util.Elements elements) {
       this.trees = trees;
       this.types = types;
+      this.elements = elements;
     }
 
     Map<Path, List<ServiceLoaderCallSite>> sites() {
@@ -260,7 +263,7 @@ final class JavacServiceLoaderSiteResolver {
           || type.getNestingKind() == javax.lang.model.element.NestingKind.ANONYMOUS) {
         return null;
       }
-      String canonical = type.getQualifiedName().toString();
+      String canonical = elements.getBinaryName(type).toString();
       return canonical.isEmpty() ? null : canonical;
     }
   }
