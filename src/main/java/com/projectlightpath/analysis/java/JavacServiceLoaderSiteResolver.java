@@ -51,8 +51,25 @@ final class JavacServiceLoaderSiteResolver {
 
   private JavacServiceLoaderSiteResolver() {}
 
+  private static final ThreadLocal<String> SCOPED_MODE = new ThreadLocal<>();
+
   static boolean enabled() {
-    return "javac".equalsIgnoreCase(System.getProperty(PROPERTY, "textual"));
+    String scoped = SCOPED_MODE.get();
+    return "javac".equalsIgnoreCase(
+        scoped != null ? scoped : System.getProperty(PROPERTY, "textual"));
+  }
+
+  /**
+   * Sets the resolver mode for the current thread. Tests and embedders use this
+   * instead of a process-global system property so parallel test execution
+   * cannot flip the mode under another test.
+   */
+  static void setScopedMode(String mode) {
+    SCOPED_MODE.set(mode);
+  }
+
+  static void clearScopedMode() {
+    SCOPED_MODE.remove();
   }
 
   private static final java.util.Map<SourceMetadataScanner,

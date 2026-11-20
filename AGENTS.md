@@ -75,10 +75,13 @@ green in isolation do not prove their composition.
   is documented in the EVIDENCE commit.
 - Gates after every item, mandatory: `make adapter-test` (execution count
   must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
-  `make adapter-test-sharded` (`scripts/sharded_test.py`) runs the same discovered test methods in
-  method-level shards (one JVM and one project copy per shard, aggregated
-  from surefire XML) and is the fast equivalent when wall time matters; it
-  must report the same execution count and zero failures as `make adapter-test`.
+  `make adapter-test` is the only test target: JUnit schedules the test methods
+  in parallel (`src/test/resources/junit-platform.properties`) and the target
+  derives the pool from CPU count and memory (about 3 GB per slot, capped at 8;
+  `ADAPTER_TEST_PARALLELISM=N` overrides), so a green run always reports the
+  full execution count. On a memory-constrained host,
+  `JAVA_TOOL_OPTIONS=-Djunit.jupiter.execution.parallel.enabled=false make
+  adapter-test` runs the same suite serially.
 - Zero edits to existing tests unless the plan sanctions one explicitly.
 - If PMD forces a helper placement change, keep behavior identical and
   document the placement in the commit message.
