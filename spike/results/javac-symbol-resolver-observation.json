@@ -13,8 +13,10 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 111,
-      "peakHeapBytes" : 3873320,
+      "wallMillis" : 70,
+      "peakHeapBytes" : 4266536,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -25,7 +27,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -41,8 +43,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 513,
-      "peakHeapBytes" : 23286592,
+      "wallMillis" : 255,
+      "peakHeapBytes" : 21200088,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -80,7 +84,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 22599768,
+      "peakHeapBytes" : 17452184,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -94,8 +100,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 120,
-      "peakHeapBytes" : 24040560,
+      "wallMillis" : 39,
+      "peakHeapBytes" : 23092712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -126,8 +134,10 @@
       "offset" : 76
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 22092328,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 23092712,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -138,7 +148,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -154,8 +164,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 35,
-      "peakHeapBytes" : 32505856,
+      "wallMillis" : 21,
+      "peakHeapBytes" : 33578472,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -192,8 +204,10 @@
       "offset" : 72
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 32505856,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 34627048,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -207,8 +221,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 55,
-      "peakHeapBytes" : 44040192,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 46161384,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -239,8 +255,10 @@
       "offset" : 92
     } ],
     "baseline" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 45088768,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 46161384,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -254,8 +272,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 73,
-      "peakHeapBytes" : 56623104,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 57695720,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -286,8 +306,10 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 7,
-      "peakHeapBytes" : 56623104,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 58744296,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -301,8 +323,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 59,
-      "peakHeapBytes" : 68157440,
+      "wallMillis" : 24,
+      "peakHeapBytes" : 58744296,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -333,8 +357,10 @@
       "offset" : 173
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 69206016,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 53477376,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -348,8 +374,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 54,
-      "peakHeapBytes" : 78643200,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 53477376,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -381,7 +409,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 59244544,
+      "peakHeapBytes" : 48234496,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -395,8 +425,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 27,
-      "peakHeapBytes" : 64200448,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 58720256,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -427,8 +459,10 @@
       "offset" : 104
     } ],
     "baseline" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 46374656,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 58720256,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -442,8 +476,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 30,
-      "peakHeapBytes" : 57908992,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 60773416,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -480,8 +516,10 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 4,
-      "peakHeapBytes" : 57908992,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 61821992,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -495,8 +533,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 43,
-      "peakHeapBytes" : 66297600,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 71259176,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -533,8 +573,10 @@
       "offset" : 151
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 57671680,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 66060288,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -548,8 +590,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 38,
-      "peakHeapBytes" : 69206016,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 76546048,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -587,7 +631,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 69206016,
+      "peakHeapBytes" : 76546048,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -602,7 +648,9 @@
     },
     "javac" : {
       "wallMillis" : 14,
-      "peakHeapBytes" : 80740352,
+      "peakHeapBytes" : 89128960,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -639,8 +687,10 @@
       "offset" : 133
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 80740352,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 89128960,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -654,8 +704,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 28,
-      "peakHeapBytes" : 88080384,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 100663296,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -692,8 +744,10 @@
       "offset" : 151
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 78643200,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 101711872,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -707,8 +761,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 33,
-      "peakHeapBytes" : 81444224,
+      "wallMillis" : 25,
+      "peakHeapBytes" : 101711872,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -745,8 +801,10 @@
       "offset" : 120
     } ],
     "baseline" : {
-      "wallMillis" : 35,
-      "peakHeapBytes" : 81444224,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 87553856,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -760,8 +818,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 30,
-      "peakHeapBytes" : 92978560,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 99088192,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -798,8 +858,10 @@
       "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 94027136,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 100136768,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -813,8 +875,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 86,
-      "peakHeapBytes" : 105561472,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 111671104,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -845,8 +909,10 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 105561472,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 111671104,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -857,7 +923,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -873,8 +939,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 32,
-      "peakHeapBytes" : 105561472,
+      "wallMillis" : 21,
+      "peakHeapBytes" : 111671104,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -912,7 +980,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 5,
-      "peakHeapBytes" : 75483584,
+      "peakHeapBytes" : 97510872,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -923,7 +993,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -939,8 +1009,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 87017920,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 109045208,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -978,7 +1050,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 88066496,
+      "peakHeapBytes" : 109045208,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -992,8 +1066,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 74,
-      "peakHeapBytes" : 99600832,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 119530968,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1028,8 +1104,10 @@
       "offset" : 257
     } ],
     "baseline" : {
-      "wallMillis" : 4,
-      "peakHeapBytes" : 99600832,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 120579544,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1040,7 +1118,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 11,
         "column" : 0,
@@ -1056,8 +1134,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 32,
-      "peakHeapBytes" : 110086592,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 127919576,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1105,8 +1185,10 @@
       "offset" : 273
     } ],
     "baseline" : {
-      "wallMillis" : 5,
-      "peakHeapBytes" : 111135168,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 114819072,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1117,7 +1199,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 11,
         "column" : 0,
@@ -1133,8 +1215,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 47,
-      "peakHeapBytes" : 111135168,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 121379584,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1182,8 +1266,10 @@
       "offset" : 199
     } ],
     "baseline" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 92153824,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 121379584,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -1194,7 +1280,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 9,
         "column" : 0,
@@ -1211,7 +1297,9 @@
     },
     "javac" : {
       "wallMillis" : 23,
-      "peakHeapBytes" : 104736736,
+      "peakHeapBytes" : 121379584,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1271,8 +1359,10 @@
       "offset" : 242
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 104736736,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 76122432,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -1283,7 +1373,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 11,
         "column" : 0,
@@ -1299,8 +1389,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 55,
-      "peakHeapBytes" : 117319648,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 88705344,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1356,8 +1448,10 @@
       "offset" : 160
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 118368224,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 89753920,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1371,8 +1465,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 129902560,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 100239680,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1403,8 +1499,10 @@
       "offset" : 173
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 129902560,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 101288256,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1418,8 +1516,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 129902560,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 107579712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1451,7 +1551,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 105906176,
+      "peakHeapBytes" : 85983232,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1465,8 +1567,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 105906176,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 98566144,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1497,8 +1601,10 @@
       "offset" : 95
     } ],
     "baseline" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 105165776,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 98566144,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1512,8 +1618,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 48,
-      "peakHeapBytes" : 116700112,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 110100480,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1544,8 +1652,10 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 116700112,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 110100480,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1559,8 +1669,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 32,
-      "peakHeapBytes" : 127185872,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 121634816,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1591,8 +1703,10 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 128234448,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 122683392,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1606,8 +1720,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 63,
-      "peakHeapBytes" : 128234448,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 134217728,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1644,8 +1760,10 @@
       "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 85699104,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 134217728,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1659,8 +1777,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 39,
-      "peakHeapBytes" : 96184864,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 142606336,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1691,8 +1811,10 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 97233440,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 105381888,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1706,8 +1828,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 108767776,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 116916224,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1744,8 +1868,10 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 5,
-      "peakHeapBytes" : 108767776,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 116916224,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1756,7 +1882,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -1772,8 +1898,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 75,
-      "peakHeapBytes" : 108767776,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 128450560,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1811,7 +1939,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 95420416,
+      "peakHeapBytes" : 128450560,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1825,8 +1955,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 27,
-      "peakHeapBytes" : 106954752,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 138936320,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1864,7 +1996,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 108003328,
+      "peakHeapBytes" : 139984896,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1878,8 +2012,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 118489088,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 139984896,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1911,7 +2047,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 119537664,
+      "peakHeapBytes" : 121634816,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -1922,7 +2060,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -1938,8 +2076,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 131072000,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 132120576,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1971,7 +2111,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 131072000,
+      "peakHeapBytes" : 133169152,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -1985,8 +2127,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 142606336,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 144703488,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2017,8 +2161,10 @@
       "offset" : 90
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 143654912,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 144703488,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2029,7 +2175,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 6,
         "column" : 0,
@@ -2045,8 +2191,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 26,
-      "peakHeapBytes" : 150994944,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 156237824,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2077,8 +2225,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 114268400,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 157286400,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2092,8 +2242,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 124754160,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 168820736,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2131,7 +2283,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 125802736,
+      "peakHeapBytes" : 168820736,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2145,8 +2299,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 26,
-      "peakHeapBytes" : 136288496,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 176160768,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2183,8 +2339,10 @@
       "offset" : 101
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 137337072,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 143654912,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2198,8 +2356,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 147822832,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 155189248,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2231,7 +2391,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 148871408,
+      "peakHeapBytes" : 156237824,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2245,8 +2407,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 160405744,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 156237824,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2284,7 +2448,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 160405744,
+      "peakHeapBytes" : 94896128,
+      "selectedPath" : "a/Bridge.java",
+      "selectedTopLevel" : "a.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2298,8 +2464,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 160405744,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 106430464,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2336,8 +2504,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 139984896,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 106430464,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2348,7 +2518,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2364,8 +2534,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 151519232,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 117964800,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2402,8 +2574,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 151519232,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 117964800,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2417,8 +2591,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 163053568,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 129499136,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2455,8 +2631,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 7,
-      "peakHeapBytes" : 163053568,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 130547712,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2470,8 +2648,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 42,
-      "peakHeapBytes" : 174587904,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 130547712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2514,8 +2694,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 26,
-      "peakHeapBytes" : 174587904,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 115343360,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2526,7 +2708,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2542,8 +2724,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 42,
-      "peakHeapBytes" : 178782208,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 126877696,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2586,8 +2770,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 103809024,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 127926272,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2598,7 +2784,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2614,8 +2800,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 42,
-      "peakHeapBytes" : 114294784,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 138412032,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2652,8 +2840,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 115343360,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 139460608,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2664,7 +2854,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2680,8 +2870,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 47,
-      "peakHeapBytes" : 126877696,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 150994944,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2724,8 +2916,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 127926272,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 152043520,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2736,7 +2930,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2752,8 +2946,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 127926272,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 163577856,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2790,8 +2986,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 113246208,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 163577856,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2802,7 +3000,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2818,8 +3016,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 123731968,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 175112192,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2856,8 +3056,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 124780544,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 176160768,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2868,7 +3070,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2884,8 +3086,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 37,
-      "peakHeapBytes" : 136314880,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 176160768,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2922,8 +3126,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 136314880,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 136839168,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -2934,7 +3140,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -2950,8 +3156,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 28,
-      "peakHeapBytes" : 147849216,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 148373504,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -2994,8 +3202,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 147849216,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 149422080,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3006,7 +3216,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3022,8 +3232,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 37,
-      "peakHeapBytes" : 159383552,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 160956416,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3060,8 +3272,10 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 159383552,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 160956416,
+      "selectedPath" : "a/Bridge.java",
+      "selectedTopLevel" : "a.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3072,7 +3286,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/a/Bridge.java",
+        "path" : "a/Bridge.java",
         "topLevel" : "a.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3088,8 +3302,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 170917888,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 172490752,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3126,8 +3342,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 24,
-      "peakHeapBytes" : 170917888,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 173539328,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3138,7 +3356,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3154,8 +3372,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 44,
-      "peakHeapBytes" : 133693440,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 185073664,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3192,8 +3412,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 7,
-      "peakHeapBytes" : 133693440,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 185073664,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3204,7 +3426,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3220,8 +3442,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 25,
-      "peakHeapBytes" : 146276352,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 193462272,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3259,7 +3483,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 2,
-      "peakHeapBytes" : 146276352,
+      "peakHeapBytes" : 152043520,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3270,7 +3496,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3286,8 +3512,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 157810688,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 162529280,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3324,8 +3552,10 @@
       "offset" : 67
     } ],
     "baseline" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 157810688,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 163577856,
+      "selectedPath" : "demo/Cash.java",
+      "selectedTopLevel" : "demo.Cash",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3339,8 +3569,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 169345024,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 175112192,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3377,8 +3609,10 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 170393600,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 175112192,
+      "selectedPath" : "demo/Outer.java",
+      "selectedTopLevel" : "demo.Outer",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3389,7 +3623,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Outer.java",
+        "path" : "demo/Outer.java",
         "topLevel" : "demo.Outer",
         "line" : 4,
         "column" : 0,
@@ -3405,8 +3639,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 180879360,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 175112192,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3443,8 +3679,10 @@
       "offset" : 69
     } ],
     "baseline" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 180879360,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 163577856,
+      "selectedPath" : "demo/Outer.java",
+      "selectedTopLevel" : "demo.Outer",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3458,8 +3696,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 50,
-      "peakHeapBytes" : 188219392,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 163577856,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3496,8 +3736,10 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 157810688,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 161343040,
+      "selectedPath" : "a.java",
+      "selectedTopLevel" : "a",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3511,8 +3753,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 169345024,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 172877376,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3549,8 +3793,10 @@
       "offset" : 98
     } ],
     "baseline" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 169345024,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 172877376,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3561,7 +3807,7 @@
         "abstentionMismatch" : 0
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 5,
         "column" : 0,
@@ -3577,8 +3823,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 26,
-      "peakHeapBytes" : 180879360,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 184411712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3615,8 +3863,10 @@
       "offset" : 63
     } ],
     "baseline" : {
-      "wallMillis" : 24,
-      "peakHeapBytes" : 180879360,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 184411712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3630,8 +3880,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 53,
-      "peakHeapBytes" : 192413696,
+      "wallMillis" : 30,
+      "peakHeapBytes" : 184411712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3669,7 +3921,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 1,
-      "peakHeapBytes" : 192413696,
+      "peakHeapBytes" : 112109776,
+      "selectedPath" : "demo/Cash.java",
+      "selectedTopLevel" : "demo.Cash",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3683,8 +3937,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 198705152,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 122595536,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3721,8 +3977,10 @@
       "offset" : 59
     } ],
     "baseline" : {
-      "wallMillis" : 5,
-      "peakHeapBytes" : 170393600,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 123644112,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3736,8 +3994,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 180879360,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 134129872,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3774,8 +4034,10 @@
       "offset" : 62
     } ],
     "baseline" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 181927936,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 135178448,
+      "selectedPath" : "a.java",
+      "selectedTopLevel" : "a",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3789,8 +4051,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 192413696,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 145664208,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3827,8 +4091,10 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 193462272,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 146712784,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3839,7 +4105,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 3,
         "column" : 0,
@@ -3855,8 +4121,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 60,
-      "peakHeapBytes" : 201850880,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 146712784,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3899,8 +4167,10 @@
       "offset" : 84
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 180879360,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 132641216,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3911,7 +4181,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3927,8 +4197,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 192413696,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 144175552,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -3971,8 +4243,10 @@
       "offset" : 87
     } ],
     "baseline" : {
-      "wallMillis" : 6,
-      "peakHeapBytes" : 192413696,
+      "wallMillis" : 2,
+      "peakHeapBytes" : 145224128,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -3983,7 +4257,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -3999,8 +4273,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 31,
-      "peakHeapBytes" : 192413696,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 156758464,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -4044,7 +4320,9 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 103720936,
+      "peakHeapBytes" : 156758464,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -4058,8 +4336,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 115255272,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 169341376,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,
@@ -4102,8 +4382,10 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 115255272,
+      "wallMillis" : 1,
+      "peakHeapBytes" : 169341376,
+      "selectedPath" : "demo/Bridge.java",
+      "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
         "wrongDefinite" : 1,
         "wrongServiceType" : 0,
@@ -4114,7 +4396,7 @@
         "abstentionMismatch" : 1
       },
       "facts" : [ {
-        "path" : "src/main/java/demo/Bridge.java",
+        "path" : "demo/Bridge.java",
         "topLevel" : "demo.Bridge",
         "line" : 4,
         "column" : 0,
@@ -4130,8 +4412,10 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 122595304,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 180875712,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
       "metrics" : {
         "wrongDefinite" : 0,
         "wrongServiceType" : 0,

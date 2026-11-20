@@ -75,28 +75,27 @@ final class JavacResolverAccuracyHarness {
           .provenance(AnalysisContext.Provenance.forTesting())
           .build();
       SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+      Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(cell.owner());
+      String evidencePath = sourceFile
+          .map(file -> cellRoot.resolve("src/main/java").toAbsolutePath().normalize()
+              .relativize(file.path().toAbsolutePath().normalize()).toString())
+          .orElse("");
+      String topLevel = sourceFile.map(SourceMetadataScanner.SourceFile::typeName).orElse("");
       Optional<ServiceLoaderSourceCache.CachedSource> cached =
           ServiceLoaderSourceCache.source(
               scanner, new MethodSymbol(cell.owner(), cell.method(), "()V"));
       if (cached.isEmpty()) {
-        return JavacResolverResult.empty(cell.id());
+        return new JavacResolverResult(cell.id(), List.of(), List.of(), evidencePath, topLevel);
       }
-      Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(cell.owner());
       List<JavacResolverFact> facts = new ArrayList<>();
-      String evidencePath = sourceFile
-          .map(file -> cellRoot.toAbsolutePath().normalize()
-              .relativize(file.path().toAbsolutePath().normalize()).toString())
-          .orElse(cell.siteFile());
-      String topLevel = sourceFile.map(SourceMetadataScanner.SourceFile::typeName)
-          .orElse(cell.owner());
       for (ServiceLoaderCallSite site : cached.get().sites()) {
         String serviceType = sourceFile
             .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()))
             .orElse(site.fallbackServiceType());
         facts.add(new JavacResolverFact(
             cell.id(),
-            evidencePath,
-            topLevel,
+            evidencePath.isEmpty() ? cell.siteFile() : evidencePath,
+            topLevel.isEmpty() ? cell.owner() : topLevel,
             site.line(),
             0,
             site.offset(),
@@ -108,7 +107,7 @@ final class JavacResolverAccuracyHarness {
             "",
             List.of()));
       }
-      return new JavacResolverResult(cell.id(), facts, List.of());
+      return new JavacResolverResult(cell.id(), facts, List.of(), evidencePath, topLevel);
     } catch (IOException error) {
       throw new IllegalStateException("cannot build baseline for " + cell.id(), error);
     }
@@ -254,6 +253,8 @@ final class JavacResolverAccuracyHarness {
       Map<String, Object> item = new LinkedHashMap<>();
       item.put("wallMillis", phase.wallMillis());
       item.put("peakHeapBytes", phase.peakHeapBytes());
+      item.put("selectedPath", result.selectedPath());
+      item.put("selectedTopLevel", result.selectedTopLevel());
       item.put("metrics", metrics.asMap());
       List<Map<String, Object>> facts = new ArrayList<>();
       for (JavacResolverFact fact : result.facts()) {
