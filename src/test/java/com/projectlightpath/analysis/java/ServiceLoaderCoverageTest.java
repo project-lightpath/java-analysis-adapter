@@ -35,7 +35,7 @@ class ServiceLoaderCoverageTest {
   @Test
   void maskerHandlesMalformedLoadShapesWithoutThrowing() {
     assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load("));
-    assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load("));
+    assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load(()"));
     assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load()"));
     assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load(provider)"));
 
