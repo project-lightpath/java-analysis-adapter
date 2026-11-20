@@ -136,6 +136,35 @@ class JavacServiceLoaderSiteResolverTest {
     });
   }
 
+  @Test
+  void erroringFileSitesAreDroppedWhileValidSiblingSurvives() throws IOException {
+    SourceMetadataScanner scanner = scanner("error-file-site", """
+        package demo;
+        import java.util.*;
+        class Bridge { void audit() { ServiceLoader.load(Object.class); } }
+        """, Map.of("demo/Broken.java", """
+        package demo;
+        import java.util.*;
+        class Broken {
+          void audit() {
+            Missing value;
+            ServiceLoader.load(Object.class);
+          }
+        }
+        """));
+    withMode("javac", () -> {
+      Optional<Map<Path, List<ServiceLoaderCallSite>>> sites =
+          JavacServiceLoaderSiteResolver.sites(scanner);
+      assertTrue(sites.isPresent());
+      Path bridge = temp.resolve("error-file-site/src/main/java/demo/Bridge.java")
+          .toAbsolutePath().normalize();
+      Path broken = temp.resolve("error-file-site/src/main/java/demo/Broken.java")
+          .toAbsolutePath().normalize();
+      assertFalse(sites.get().getOrDefault(bridge, List.of()).isEmpty());
+      assertTrue(sites.get().getOrDefault(broken, List.of()).isEmpty());
+    });
+  }
+
   private SourceMetadataScanner scanner(String id, String bridgeSource) throws IOException {
     return scanner(id, bridgeSource, Map.of());
   }
