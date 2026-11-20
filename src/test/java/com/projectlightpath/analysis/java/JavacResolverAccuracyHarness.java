@@ -13,9 +13,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-/** Runs the textual baseline and the javac prototype over the same fixture catalog. */
+/** Runs the frozen textual baseline and the live javac path over the same fixture catalog. */
 final class JavacResolverAccuracyHarness {
   private static final MemoryMXBean MEMORY = ManagementFactory.getMemoryMXBean();
   private static JsonNode FROZEN_BASELINE;

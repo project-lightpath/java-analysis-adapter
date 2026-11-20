@@ -1,6 +1,5 @@
 package com.projectlightpath.analysis.java;
 
-import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
@@ -11,22 +10,30 @@ import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.stream.Collectors;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
@@ -48,9 +55,9 @@ final class JavacServiceLoaderSiteResolver {
 
   private JavacServiceLoaderSiteResolver() {}
 
-  private static final java.util.Map<SourceMetadataScanner,
+  private static final Map<SourceMetadataScanner,
       Optional<Map<Path, List<ServiceLoaderCallSite>>>> CACHE =
-      java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+      Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
    * Returns compiler-bound sites per source file. A present empty map means
@@ -85,8 +92,7 @@ final class JavacServiceLoaderSiteResolver {
     if (compiler == null) {
       return Map.of();
     }
-    List<Path> files = scanner.files().stream().map(SourceMetadataScanner.SourceFile::path).toList();
-    if (files.isEmpty()) {
+    if (scanner.files().isEmpty()) {
       return Map.of();
     }
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
@@ -107,14 +113,14 @@ final class JavacServiceLoaderSiteResolver {
       if (globalError) {
         return Map.of();
       }
-      java.util.Set<Path> errorFiles = capturedDiagnostics.stream()
+      Set<Path> errorFiles = capturedDiagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
           .map(item -> sourcePath(item.getSource()))
-          .filter(java.util.Objects::nonNull)
-          .collect(java.util.stream.Collectors.toSet());
+          .filter(Objects::nonNull)
+          .collect(Collectors.toSet());
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
-      javax.lang.model.util.Elements elements = task.getElements();
+      Elements elements = task.getElements();
       SiteScanner siteScanner = new SiteScanner(trees, types, elements);
       for (CompilationUnitTree unit : parsed) {
         siteScanner.scan(unit, null);
@@ -167,7 +173,7 @@ final class JavacServiceLoaderSiteResolver {
     classpath.add(scanner.context.applicationClasses());
     if (!classpath.isEmpty()) {
       options.add("-classpath");
-      options.add(String.join(java.io.File.pathSeparator,
+      options.add(String.join(File.pathSeparator,
           classpath.stream().map(Path::toString).toList()));
     }
     return List.copyOf(options);
@@ -176,7 +182,7 @@ final class JavacServiceLoaderSiteResolver {
   private static final class TextSource extends SimpleJavaFileObject {
     private final String source;
 
-    TextSource(java.net.URI uri, String source) {
+    TextSource(URI uri, String source) {
       super(uri, JavaFileObject.Kind.SOURCE);
       this.source = source;
     }
@@ -190,10 +196,10 @@ final class JavacServiceLoaderSiteResolver {
   private static final class SiteScanner extends TreePathScanner<Void, Void> {
     private final Trees trees;
     private final Types types;
-    private final javax.lang.model.util.Elements elements;
+    private final Elements elements;
     private final Map<Path, List<ServiceLoaderCallSite>> sites = new LinkedHashMap<>();
 
-    SiteScanner(Trees trees, Types types, javax.lang.model.util.Elements elements) {
+    SiteScanner(Trees trees, Types types, Elements elements) {
       this.trees = trees;
       this.types = types;
       this.elements = elements;

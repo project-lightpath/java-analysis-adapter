@@ -47,6 +47,10 @@ fails closed (`Optional.of(Map.of())`) instead of leaking an `Error` to callers.
   import probe, because javac's stack overflow was not yet contained.
 - `GREEN_1` — delete the textual implementation and flag; use compiler binary
   names verbatim; contain javac stack exhaustion.
+- `REFACTOR_1` — under the green suite, replace fully qualified JDK names in
+  `JavacServiceLoaderSiteResolver` with imports, repair the broken import line,
+  drop the unused file list and imports, and correct the harness description.
+  No behavior change.
 - `EVIDENCE_1` — this record.
 
 ## Test conversion and count
