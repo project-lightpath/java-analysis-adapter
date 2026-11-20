@@ -76,8 +76,10 @@ green in isolation do not prove their composition.
 - Gates after every item, mandatory: `make adapter-test` (execution count
   must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
   `make adapter-test` is the only test target: JUnit schedules the test methods
-  in parallel (`src/test/resources/junit-platform.properties`), so a green run
-  always reports the full execution count. On a memory-constrained host,
+  in parallel (`src/test/resources/junit-platform.properties`) and the target
+  derives the pool from CPU count and memory (about 3 GB per slot, capped at 8;
+  `ADAPTER_TEST_PARALLELISM=N` overrides), so a green run always reports the
+  full execution count. On a memory-constrained host,
   `JAVA_TOOL_OPTIONS=-Djunit.jupiter.execution.parallel.enabled=false make
   adapter-test` runs the same suite serially.
 - Zero edits to existing tests unless the plan sanctions one explicitly.

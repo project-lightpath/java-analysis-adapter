@@ -1,10 +1,20 @@
 .PHONY: package adapter-test adapter-package validator-test java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis e2e-test
 
 
-# The one adapter test target. JUnit schedules test methods in parallel
-# (src/test/resources/junit-platform.properties); Maven only compiles and runs.
+# JUnit runs the tests; this target only sizes the pool and heap from the host.
+# One concurrent SootUp scene needs ~3 GB; the pool is also capped by CPU count
+# and at 8. Override with ADAPTER_TEST_PARALLELISM=N (heap follows at 3 GB per slot).
+ADAPTER_TEST_PARALLELISM ?= $(shell sh -c '\
+	n=$$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4); \
+	m=$$(if [ "$$(uname)" = Darwin ]; then echo $$(( $$(sysctl -n hw.memsize) / 1073741824 )); \
+	else awk "/MemTotal/{print int(\$$2/1048576)}" /proc/meminfo 2>/dev/null || echo 8; fi); \
+	p=$$((m / 3)); [ "$$p" -gt "$$n" ] && p=$$n; [ "$$p" -gt 8 ] && p=8; \
+	[ "$$p" -lt 1 ] && p=1; echo "$$p"')
+
 adapter-test:
-	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp test -f pom.xml
+	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
+	JAVA_TOOL_OPTIONS="$${JAVA_TOOL_OPTIONS:-} -Djunit.jupiter.execution.parallel.config.fixed.parallelism=$(ADAPTER_TEST_PARALLELISM)" \
+	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 3))g
 
 e2e-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=ServiceLoaderEndToEndTest test -f pom.xml
