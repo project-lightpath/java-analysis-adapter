@@ -1,15 +1,20 @@
 package com.projectlightpath.analysis.java;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -141,6 +146,210 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
+  void erroringFileProducesASourceDiagnosticAndAbstains() throws IOException {
+    SourceMetadataScanner scanner = scanner("source-error", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            Missing value;
+            ServiceLoader.load(Object.class);
+          }
+        }
+        """);
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "audit", "()V"),
+        new MethodSymbol("demo.Provider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(scanner.context);
+
+    ServiceLoaderDescriptorScanner.Resolution resolution =
+        ServiceLoaderDescriptorScanner.resolve(scanner.context, edge, scan, scanner);
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().contains("javac_source_error"),
+        resolution.limitation());
+    assertTrue(resolution.evidence().stream().anyMatch(item ->
+        item.kind().equals("service_loader_scan_diagnostic")
+            && item.path().endsWith("Bridge.java")
+            && item.attributes().get("diagnosticCode").equals("javac_source_error")),
+        resolution.evidence().toString());
+  }
+
+  @Test
+  void sourceErrorInOneFileDowngradesACleanSiblingEdge() throws IOException {
+    String bridge = """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge { void audit() { ServiceLoader.load(Provider.class).findFirst()
+            .ifPresent(value -> value.record()); } }
+        """;
+    Map<String, String> clean = Map.of(
+        "demo/Provider.java", "package demo; interface Provider { void record(); }",
+        "demo/ProviderImpl.java",
+        "package demo; final class ProviderImpl implements Provider { public void record() { } }");
+    ServiceLoaderDescriptorScanner.Scan scan = new ServiceLoaderDescriptorScanner.Scan(List.of(
+        new ServiceLoaderDescriptorScanner.Descriptor(
+            "demo.Provider", List.of("demo.ProviderImpl"),
+            "META-INF/services/demo.Provider", "fingerprint", "meta_inf_services", List.of())));
+    CallEdge edge = providerEdge();
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
+        resolve(scanner("clean-sibling", bridge, clean), scan, edge).certainty());
+
+    Map<String, String> withError = new java.util.HashMap<>(clean);
+    withError.put("demo/Broken.java", "package demo; class Broken { Missing value; }");
+    ServiceLoaderDescriptorScanner.Resolution broken =
+        resolve(scanner("error-sibling", bridge, withError), scan, edge);
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, broken.certainty());
+    assertTrue(broken.limitation().contains("javac_source_error"), broken.limitation());
+  }
+
+  @Test
+  void jarSchemeDiagnosticsDoNotAbortTheScan() {
+    JavaFileObject jarEntry = jarEntry();
+    assertDoesNotThrow(() -> JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+    assertNull(JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+  }
+
+  @Test
+  void classpathEntryErrorIsDiagnosedOnTheReferencingSource() throws IOException {
+    Path root = temp.resolve("classpath-error");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path bridge = sourceRoot.resolve("demo/Bridge.java");
+    Files.createDirectories(bridge.getParent());
+    Files.writeString(bridge, """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge { void audit() { ServiceLoader.load(Broken.class); } }
+        """);
+    Path jar = temp.resolve("classpath-error/broken.jar");
+    Files.createDirectories(jar.getParent());
+    try (java.util.zip.ZipOutputStream output =
+        new java.util.zip.ZipOutputStream(Files.newOutputStream(jar))) {
+      output.putNextEntry(new java.util.zip.ZipEntry("demo/Broken.class"));
+      output.write(new byte[] {(byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE, 0, 0});
+      output.closeEntry();
+    }
+    AnalysisContext context = AnalysisContext.builder()
+        .id("classpath-error")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("javac-resolver-test")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(jar))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Resolution resolution = resolve(
+        new SourceMetadataScanner(context),
+        new ServiceLoaderDescriptorScanner.Scan(List.of()),
+        new CallEdge(
+            new MethodSymbol("demo.Bridge", "audit", "()V"),
+            new MethodSymbol("demo.ProviderImpl", "record", "()V"),
+            3,
+            "src/main/java/demo/Bridge.java",
+            SemanticCallFacts.Certainty.DEFINITE,
+            "service_loader"));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().contains("javac_source_error"), resolution.limitation());
+    assertTrue(resolution.evidence().stream().anyMatch(item ->
+        item.kind().equals("service_loader_scan_diagnostic")
+            && item.path().endsWith("Bridge.java")), resolution.evidence().toString());
+  }
+
+  @Test
+  void jarAttributedErrorIsClassifiedAsUnaddressable() {
+    Diagnostic<JavaFileObject> diagnostic = new Diagnostic<>() {
+      @Override
+      public Kind getKind() {
+        return Kind.ERROR;
+      }
+
+      @Override
+      public JavaFileObject getSource() {
+        return jarEntry();
+      }
+
+      @Override
+      public long getPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getStartPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getEndPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getLineNumber() {
+        return 0;
+      }
+
+      @Override
+      public long getColumnNumber() {
+        return 0;
+      }
+
+      @Override
+      public String getCode() {
+        return "compiler.err.bad.class.file";
+      }
+
+      @Override
+      public String getMessage(java.util.Locale locale) {
+        return "bad class file";
+      }
+    };
+    assertTrue(JavacServiceLoaderSiteResolver.hasUnaddressableError(List.of(diagnostic)));
+  }
+
+  @Test
+  void sourceDiagnosticPathsNeverLeakAbsolutePaths() throws IOException {
+    SourceMetadataScanner scanner = scanner("paths", "package demo; class Bridge { }");
+    Path root = temp.resolve("paths").toAbsolutePath().normalize();
+    assertEquals("a/B.java",
+        ServiceLoaderDescriptorScanner.diagnosticPath(scanner, root.resolve("a/B.java")));
+    assertEquals("<external>/B.java", ServiceLoaderDescriptorScanner.diagnosticPath(
+        scanner, temp.resolve("elsewhere/B.java").toAbsolutePath().normalize()));
+    assertEquals("<external>/B", ServiceLoaderDescriptorScanner.diagnosticPath(
+        scanner, temp.resolve("elsewhere/B").toAbsolutePath().normalize()));
+    assertEquals("<external>/B.java", ServiceLoaderDescriptorScanner.diagnosticPath(
+        scanner, temp.resolve("paths-other/B.java").toAbsolutePath().normalize()));
+    assertEquals("", ServiceLoaderDescriptorScanner.diagnosticPath(scanner, root));
+  }
+
+  @Test
+  void unresolvableImportProducesAGlobalSourceDiagnostic() throws IOException {
+    StringBuilder name = new StringBuilder("a");
+    for (int index = 0; index < 20000; index++) {
+      name.append(".b");
+    }
+    SourceMetadataScanner scanner = scanner("global-failure",
+        "package demo;\nimport " + name + ".*;\nclass Bridge { }\n");
+    ServiceLoaderDescriptorScanner.Resolution resolution = resolve(
+        scanner, new ServiceLoaderDescriptorScanner.Scan(List.of()), providerEdge());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().contains("javac_source_error"), resolution.limitation());
+    assertTrue(resolution.evidence().stream().anyMatch(item ->
+        item.kind().equals("service_loader_scan_diagnostic")
+            && item.path().equals("selected-sources")), resolution.evidence().toString());
+  }
+
+  @Test
   void erroringFileSitesAreDroppedWhileValidSiblingSurvives() throws IOException {
     SourceMetadataScanner scanner = scanner("error-file-site", """
         package demo;
@@ -165,6 +374,33 @@ class JavacServiceLoaderSiteResolverTest {
         .toAbsolutePath().normalize();
     assertFalse(sites.get().getOrDefault(bridge, List.of()).isEmpty());
     assertTrue(sites.get().getOrDefault(broken, List.of()).isEmpty());
+  }
+
+  private static JavaFileObject jarEntry() {
+    return new javax.tools.SimpleJavaFileObject(
+        URI.create("file:/tmp/Foo.class"), JavaFileObject.Kind.CLASS) {
+      @Override
+      public URI toUri() {
+        return URI.create("jar:file:/libs/foo.jar!/demo/Foo.class");
+      }
+    };
+  }
+
+  private static CallEdge providerEdge() {
+    return new CallEdge(
+        new MethodSymbol("demo.Bridge", "audit", "()V"),
+        new MethodSymbol("demo.ProviderImpl", "record", "()V"),
+        4,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+  }
+
+  private static ServiceLoaderDescriptorScanner.Resolution resolve(
+      SourceMetadataScanner scanner,
+      ServiceLoaderDescriptorScanner.Scan scan,
+      CallEdge edge) {
+    return ServiceLoaderDescriptorScanner.resolve(scanner.context, edge, scan, scanner);
   }
 
   private SourceMetadataScanner scanner(String id, String bridgeSource) throws IOException {

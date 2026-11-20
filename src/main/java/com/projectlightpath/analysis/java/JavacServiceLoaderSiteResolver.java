@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,8 +56,16 @@ final class JavacServiceLoaderSiteResolver {
 
   private JavacServiceLoaderSiteResolver() {}
 
-  private static final Map<SourceMetadataScanner,
-      Optional<Map<Path, List<ServiceLoaderCallSite>>>> CACHE =
+  /** A compile-wide failure that has no single source file. */
+  record Failure(String code, String detail) {}
+
+  /** Compiler-bound sites plus the files javac rejected, keyed by source path. */
+  private record Analysis(
+      Map<Path, List<ServiceLoaderCallSite>> sites,
+      Map<Path, String> errors,
+      Failure failure) {}
+
+  private static final Map<SourceMetadataScanner, Optional<Analysis>> CACHE =
       Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
@@ -65,15 +74,29 @@ final class JavacServiceLoaderSiteResolver {
    * than falling back to textual guesses.
    */
   static Optional<Map<Path, List<ServiceLoaderCallSite>>> sites(SourceMetadataScanner scanner) {
+    return analysis(scanner).map(Analysis::sites);
+  }
+
+  /** Returns the source files javac rejected and the reason recorded for each. */
+  static Map<Path, String> errors(SourceMetadataScanner scanner) {
+    return analysis(scanner).map(Analysis::errors).orElse(Map.of());
+  }
+
+  /** Returns a compile-wide failure that is not attributable to one source file. */
+  static Optional<Failure> failure(SourceMetadataScanner scanner) {
+    return analysis(scanner).map(Analysis::failure);
+  }
+
+  private static Optional<Analysis> analysis(SourceMetadataScanner scanner) {
     return CACHE.computeIfAbsent(scanner, JavacServiceLoaderSiteResolver::resolveSites);
   }
 
-  private static Optional<Map<Path, List<ServiceLoaderCallSite>>> resolveSites(
-      SourceMetadataScanner scanner) {
+  private static Optional<Analysis> resolveSites(SourceMetadataScanner scanner) {
     try {
       return Optional.of(compile(scanner));
     } catch (IOException | IllegalArgumentException error) {
-      return Optional.of(Map.of());
+      return Optional.of(new Analysis(Map.of(), Map.of(), new Failure(
+          "javac_source_error", "javac could not analyze the selected sources")));
     }
   }
 
@@ -86,14 +109,14 @@ final class JavacServiceLoaderSiteResolver {
     return false;
   }
 
-  private static Map<Path, List<ServiceLoaderCallSite>> compile(
-      SourceMetadataScanner scanner) throws IOException {
+  private static Analysis compile(SourceMetadataScanner scanner) throws IOException {
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
     if (compiler == null) {
-      return Map.of();
+      return new Analysis(Map.of(), Map.of(), new Failure(
+          "javac_unavailable", "javac is not available; ServiceLoader sites cannot be resolved"));
     }
     if (scanner.files().isEmpty()) {
-      return Map.of();
+      return new Analysis(Map.of(), Map.of(), null);
     }
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
     try (StandardJavaFileManager manager =
@@ -110,14 +133,26 @@ final class JavacServiceLoaderSiteResolver {
           List.copyOf(diagnostics.getDiagnostics());
       boolean globalError = capturedDiagnostics.stream()
           .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR && item.getSource() == null);
+      boolean unaddressableError = hasUnaddressableError(capturedDiagnostics);
       if (globalError) {
-        return Map.of();
+        return new Analysis(Map.of(), Map.of(), new Failure(
+            "javac_global_error", "javac reported a global error; ServiceLoader sites are unavailable"));
       }
-      Set<Path> errorFiles = capturedDiagnostics.stream()
+      if (unaddressableError) {
+        return new Analysis(Map.of(), Map.of(), new Failure(
+            "javac_source_error",
+            "javac reported an error in a classpath entry; ServiceLoader sites are unavailable"));
+      }
+      Map<Path, String> errors = capturedDiagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
           .map(item -> sourcePath(item.getSource()))
           .filter(Objects::nonNull)
-          .collect(Collectors.toSet());
+          .distinct()
+          .collect(Collectors.toMap(
+              path -> path,
+              path -> "javac reported an error; ServiceLoader sites in this file are unavailable",
+              (first, next) -> first,
+              LinkedHashMap::new));
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
       Elements elements = task.getElements();
@@ -127,11 +162,11 @@ final class JavacServiceLoaderSiteResolver {
       }
       Map<Path, List<ServiceLoaderCallSite>> safe = new LinkedHashMap<>();
       for (Map.Entry<Path, List<ServiceLoaderCallSite>> entry : siteScanner.sites().entrySet()) {
-        if (!errorFiles.contains(entry.getKey())) {
+        if (!errors.containsKey(entry.getKey())) {
           safe.put(entry.getKey(), entry.getValue());
         }
       }
-      return Map.copyOf(safe);
+      return new Analysis(Map.copyOf(safe), Map.copyOf(errors), null);
     }
   }
 
@@ -148,13 +183,22 @@ final class JavacServiceLoaderSiteResolver {
     }
   }
 
-  private static Path sourcePath(JavaFileObject source) {
+  static boolean hasUnaddressableError(
+      List<Diagnostic<? extends JavaFileObject>> diagnostics) {
+    return diagnostics.stream().anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR
+        && item.getSource() != null && sourcePath(item.getSource()) == null);
+  }
+
+  static Path sourcePath(JavaFileObject source) {
     if (source == null) {
       return null;
     }
     try {
       return Path.of(source.toUri()).toAbsolutePath().normalize();
-    } catch (IllegalArgumentException error) {
+    } catch (IllegalArgumentException | FileSystemNotFoundException | SecurityException error) {
+      // Classpath diagnostics point at jar entries (jar:file:...!/...); the
+      // default filesystem cannot map them. Treat them as file-less so the
+      // scan fails closed instead of aborting.
       return null;
     }
   }

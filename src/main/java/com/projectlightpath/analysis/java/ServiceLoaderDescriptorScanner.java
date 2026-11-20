@@ -1,9 +1,11 @@
 package com.projectlightpath.analysis.java;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,6 +29,35 @@ final class ServiceLoaderDescriptorScanner {
     return ServiceLoaderDescriptorReader.scan(context, dependencies, state);
   }
 
+  /**
+   * Adds the files javac rejected to the scan diagnostics. This is scan-global,
+   * as required for descriptor diagnostics: one source error downgrades every
+   * ServiceLoader edge in the scan to POSSIBLE.
+   */
+  static Scan withSourceDiagnostics(Scan scan, SourceMetadataScanner scanner) {
+    Map<Path, String> errors = JavacServiceLoaderSiteResolver.errors(scanner);
+    Optional<JavacServiceLoaderSiteResolver.Failure> failure =
+        JavacServiceLoaderSiteResolver.failure(scanner);
+    if (errors.isEmpty() && failure.isEmpty()) {
+      return scan;
+    }
+    List<Diagnostic> diagnostics = new ArrayList<>(scan.diagnostics());
+    failure.ifPresent(item -> diagnostics.add(
+        new Diagnostic(item.code(), "selected-sources", item.detail())));
+    errors.forEach((path, detail) -> diagnostics.add(new Diagnostic(
+        "javac_source_error", diagnosticPath(scanner, path), detail)));
+    return new Scan(scan.descriptors(), diagnostics);
+  }
+
+  static String diagnosticPath(SourceMetadataScanner scanner, Path path) {
+    Path root = scanner.context.repositoryRoot().toAbsolutePath().normalize();
+    if (path.startsWith(root)) {
+      return root.relativize(path).toString();
+    }
+    Path fileName = path.getFileName();
+    return fileName == null ? "<external>" : "<external>/" + fileName;
+  }
+
   static Resolution resolve(
       AnalysisContext context,
       CallEdge edge,
@@ -41,17 +72,19 @@ final class ServiceLoaderDescriptorScanner {
       Scan scan,
       SourceMetadataScanner scanner,
       ServiceLoaderDescriptorEvidenceCache cache) {
+    Scan effective = withSourceDiagnostics(scan, scanner);
     ServiceLoaderCallSiteReader.ServiceLoadHints hints =
-        ServiceLoaderCallSiteReader.read(context, edge, scan, scanner);
-    List<Descriptor> descriptors = selectedDescriptors(hints, scan);
+        ServiceLoaderCallSiteReader.read(context, edge, effective, scanner);
+    List<Descriptor> descriptors = selectedDescriptors(hints, effective);
     Set<String> providers = providerNames(descriptors);
     boolean moduleVisibilityProven = descriptors.stream().noneMatch(Descriptor::moduleInfo);
-    boolean unique = isUnique(hints, edge, scan, descriptors, providers, moduleVisibilityProven);
+    boolean unique =
+        isUnique(hints, edge, effective, descriptors, providers, moduleVisibilityProven);
     String selection = selection(descriptors, unique);
     return new Resolution(
         certainty(edge, unique),
-        evidence(edge, hints, scan, descriptors, providers, selection, cache),
-        limitation(unique, scan, descriptors, moduleVisibilityProven));
+        evidence(edge, hints, effective, descriptors, providers, selection, cache),
+        limitation(unique, effective, descriptors, moduleVisibilityProven));
   }
 
   private static List<Descriptor> selectedDescriptors(
