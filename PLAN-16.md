@@ -6,6 +6,15 @@ Companion documents: `AGENTS.md`. The A-cell text is copied into this plan
 from `PLAN-9.md` on `origin/issue-9/certainty-gaps`; this plan does not depend
 on PR #12. The baseline is explicitly `0ced20a`, **before** PR #12's fixes.
 
+## Implementation note (post-spike)
+
+FLPATH-5142 added the production seam: `JavacServiceLoaderSiteResolver` in
+`src/main`, flag-gated by `-Dflpath.java.resolver=javac`, with
+`ServiceLoaderSourceCache` using compiler-bound sites when enabled. The
+default path and output remain textual. The "test scope only" wording below
+is the original spike record; the production seam is now present and
+flag-gated.
+
 ## Scope (binding)
 
 This is a spike. It must not change default fact output, must not delete or

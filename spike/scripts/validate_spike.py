@@ -358,17 +358,26 @@ def main() -> None:
         if not cell["blocked"]:
             facts_by_offset = {fact["offset"]: fact for fact in cell["javac"]["facts"]}
             abstentions_by_offset = {item["offset"]: item for item in cell["javac"]["abstentions"]}
+            expected_offsets = {expected["offset"] for expected in cell["expected"]}
+            require(set(facts_by_offset).issubset(expected_offsets), f"{cell['id']} has a fact outside its expected sites")
+            require(set(abstentions_by_offset).issubset(expected_offsets), f"{cell['id']} has an abstention outside its expected sites")
             for expected in cell["expected"]:
                 offset = expected["offset"]
                 expectation = expected["expectation"]
                 fact = facts_by_offset.get(offset)
                 abstention = abstentions_by_offset.get(offset)
+                missing_codes = ("doesnt.exist", "cant.resolve", "duplicate.class", "not.def.public")
                 if expectation == "DEFINITE":
                     require(fact is not None and fact["certainty"] == "DEFINITE", f"{cell['id']} missing DEFINITE at {offset}")
                     require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
-                elif expectation in {"POSSIBLE", "MISSING_INPUT"}:
+                elif expectation == "POSSIBLE":
                     require(fact is not None and fact["certainty"] == "POSSIBLE", f"{cell['id']} missing POSSIBLE at {offset}")
                     require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                elif expectation == "MISSING_INPUT":
+                    require(fact is not None and fact["certainty"] == "POSSIBLE", f"{cell['id']} missing POSSIBLE at {offset}")
+                    require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                    require(any(code in diagnostic["code"] for diagnostic in fact["diagnostics"] for code in missing_codes),
+                            f"{cell['id']} missing-input diagnostic missing at {offset}")
                 elif expectation == "AMBIGUOUS":
                     require(abstention is not None, f"{cell['id']} missing ambiguity abstention at {offset}")
                     require(any("ambiguous" in diagnostic["message"].lower() or "ambiguous" in diagnostic["code"]

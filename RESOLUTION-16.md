@@ -16,9 +16,9 @@ facts, 8 added facts, and 7 missing abstentions on the same cells. The
 prototype is deterministic across fresh JVM runs and stays inside the
 `-Xmx256m` child.
 
-This is an accuracy GO, not a production-adoption GO: the prototype is
-test-scope only. Migration is a separate follow-up (issue filed after this
-report).
+This is an accuracy GO, now backed by a flag-gated production seam
+(`JavacServiceLoaderSiteResolver`). The default adapter path remains textual
+until the flag is enabled; full enablement is the migration follow-up.
 
 ## Baseline vs prototype (all 71 cells)
 
@@ -106,9 +106,12 @@ Gate receipts on the GREEN/EVIDENCE tree:
 - `make evidence-validate` — PASS, including the new
   `javac-symbol-resolver-observation.json` schema/GO-evidence/host-path check.
 
-## What did not change
+## What changed in the production path
 
-- No `src/main` edits. Default adapter output is unchanged.
+- Added a flag-gated production seam (`JavacServiceLoaderSiteResolver`) and
+  wired `ServiceLoaderSourceCache` to it when `-Dflpath.java.resolver=javac`.
+- Default adapter output is unchanged with the flag off; textual resolvers
+  remain the default path.
 - Textual resolvers, dynamic/reflection logic, descriptor logic, dependency
   resolution, and certainty semantics are untouched.
 - No production diagnostics were added, so the `ServiceLoaderScanner.isUnique`
@@ -116,8 +119,8 @@ Gate receipts on the GREEN/EVIDENCE tree:
 
 ## Residuals / follow-ups
 
-- The prototype is test-scope. A production seam and flag-gated wiring are the
-  migration issue, not this spike.
+- The production seam is flag-gated; enabling it by default is the migration
+  follow-up.
 - Task-global ERROR downgrade is deliberately conservative: any error in a
   cell's compiler task downgrades every fact in it. It may over-abstain on
   unrelated errors; the harness records this and the migration must scope the

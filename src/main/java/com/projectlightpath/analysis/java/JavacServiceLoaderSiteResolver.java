@@ -55,30 +55,31 @@ final class JavacServiceLoaderSiteResolver {
   }
 
   /**
-   * Returns compiler-bound sites per source file, or empty when the flag is off
-   * or the compiler cannot attribute the selected source set. An empty result
-   * keeps the caller on the textual path.
+   * Returns compiler-bound sites per source file when the flag is enabled.
+   * Empty Optional means the flag is off (textual path). A present empty map
+   * means javac was selected but could not produce a safe result; the caller
+   * must fail closed rather than fall back to textual guesses.
    */
   static Optional<Map<Path, List<ServiceLoaderCallSite>>> sites(SourceMetadataScanner scanner) {
     if (!enabled()) {
       return Optional.empty();
     }
     try {
-      return compile(scanner);
+      return Optional.of(compile(scanner));
     } catch (IOException | IllegalArgumentException error) {
-      return Optional.empty();
+      return Optional.of(Map.of());
     }
   }
 
-  private static Optional<Map<Path, List<ServiceLoaderCallSite>>> compile(
+  private static Map<Path, List<ServiceLoaderCallSite>> compile(
       SourceMetadataScanner scanner) throws IOException {
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
     if (compiler == null) {
-      return Optional.empty();
+      return Map.of();
     }
     List<Path> files = scanner.files().stream().map(SourceMetadataScanner.SourceFile::path).toList();
     if (files.isEmpty()) {
-      return Optional.of(Map.of());
+      return Map.of();
     }
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
     try (StandardJavaFileManager manager =
@@ -93,7 +94,7 @@ final class JavacServiceLoaderSiteResolver {
       if (failed) {
         // No certainty channel exists on ServiceLoaderCallSite yet. Abstain from
         // the compiler path rather than emit DEFINITE facts from an incomplete build.
-        return Optional.of(Map.of());
+        return Map.of();
       }
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
@@ -101,7 +102,7 @@ final class JavacServiceLoaderSiteResolver {
       for (CompilationUnitTree unit : parsed) {
         siteScanner.scan(unit, null);
       }
-      return Optional.of(siteScanner.sites());
+      return siteScanner.sites();
     }
   }
 

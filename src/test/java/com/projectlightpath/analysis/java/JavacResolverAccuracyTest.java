@@ -30,6 +30,10 @@ class JavacResolverAccuracyTest {
           "A16b", "A17", "A20", "I1", "I2", "I3", "I5");
   private static final Set<String> BASELINE_LOST =
       Set.of("N28", "N32", "A1", "A4", "A7", "D1", "D3", "D4", "D6", "D7", "D8", "D9");
+  private static final Set<String> BASELINE_ADDED =
+      Set.of("N34", "N36", "A10", "A13", "A14", "A16b", "A17", "A20");
+  private static final Set<String> BASELINE_ABSTENTION =
+      Set.of("A2", "A5", "A8", "I1", "I2", "I3", "I5");
 
   @TempDir Path temp;
 
@@ -50,12 +54,20 @@ class JavacResolverAccuracyTest {
     assertEquals(0, javac.abstentionMismatch());
 
     JavacResolverMetrics baseline = report.baselineTotals();
-    assertEquals(17, baseline.wrongDefinite());
-    assertEquals(12, baseline.lost());
-    assertEquals(8, baseline.added());
-    assertEquals(7, baseline.abstentionMismatch());
-    assertEquals(BASELINE_WRONG, cellsWith(report, "wrongDefinite", true));
-    assertEquals(BASELINE_LOST, cellsWith(report, "lost", true));
+    Set<String> blocked = new TreeSet<>();
+    for (JavacResolverAccuracyHarness.CellReport item : report.cells()) {
+      if (item.blocked()) {
+        blocked.add(item.cell().id());
+      }
+    }
+    assertEquals(expectedCount(BASELINE_WRONG, blocked), baseline.wrongDefinite());
+    assertEquals(expectedCount(BASELINE_LOST, blocked), baseline.lost());
+    assertEquals(expectedCount(BASELINE_ADDED, blocked), baseline.added());
+    assertEquals(expectedCount(BASELINE_ABSTENTION, blocked), baseline.abstentionMismatch());
+    assertEquals(expectedCells(BASELINE_WRONG, blocked),
+        cellsWith(report, "wrongDefinite", true));
+    assertEquals(expectedCells(BASELINE_LOST, blocked),
+        cellsWith(report, "lost", true));
     assertEquals(0, report.cells().stream()
         .filter(JavacResolverAccuracyHarness.CellReport::blocked)
         .filter(item -> !List.of("N22", "N23").contains(item.cell().id()))
@@ -196,6 +208,16 @@ class JavacResolverAccuracyTest {
     String output = Files.exists(outputFile)
         ? Files.readString(outputFile, StandardCharsets.UTF_8) : "";
     assertEquals(0, exit, output);
+  }
+
+  private static long expectedCount(Set<String> cells, Set<String> blocked) {
+    return cells.stream().filter(id -> !blocked.contains(id)).count();
+  }
+
+  private static Set<String> expectedCells(Set<String> cells, Set<String> blocked) {
+    Set<String> result = new TreeSet<>(cells);
+    result.removeAll(blocked);
+    return result;
   }
 
   private static Set<String> cellsWith(
