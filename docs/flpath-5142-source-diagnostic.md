@@ -54,10 +54,26 @@ Three findings from an independent Engram-grounded review, all addressed:
    Boundary tests cover an in-root file, an outside-root file, a one-character
    name, a sibling path with a shared prefix, and the root itself.
 
+## Review round 2
+
+Two new findings, both addressed:
+
+1. **HIGH — jar-scheme diagnostics could abort the scan.** javac attributes
+   classpath errors to `jar:file:...!/...` entries; `Path.of(URI)` throws
+   `FileSystemNotFoundException`, not `IllegalArgumentException`. `sourcePath`
+   now catches that (and `SecurityException`) and returns `null`, so the scan
+   degrades to a diagnostic instead of propagating. A regression test builds a
+   jar-scheme `JavaFileObject` and asserts no throw plus a null path.
+2. **LOW — misleading global-failure test name.** The 20,000-import fixture is
+   attributed to `Bridge.java`, so it exercises the catch path, not the
+   source-less global-error branch. Renamed to
+   `unresolvableImportProducesASourceDiagnostic`; the untested global branch
+   stays disclosed in the residual below.
+
 ## Gates
 
-- `make adapter-test`: **345** default + **1** large-archive = **346**, 0
-  failures (gate >= 338; four new regression tests).
+- `make adapter-test`: **346** default + **1** large-archive = **347**, 0
+  failures (gate >= 338; five new regression tests).
 - `make java-lint`: PASS, 0 PMD/CPD findings.
 - `make evidence-validate`: PASS.
 

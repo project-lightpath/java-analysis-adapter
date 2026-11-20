@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -176,13 +177,16 @@ final class JavacServiceLoaderSiteResolver {
     }
   }
 
-  private static Path sourcePath(JavaFileObject source) {
+  static Path sourcePath(JavaFileObject source) {
     if (source == null) {
       return null;
     }
     try {
       return Path.of(source.toUri()).toAbsolutePath().normalize();
-    } catch (IllegalArgumentException error) {
+    } catch (IllegalArgumentException | FileSystemNotFoundException | SecurityException error) {
+      // Classpath diagnostics point at jar entries (jar:file:...!/...); the
+      // default filesystem cannot map them. Treat them as file-less so the
+      // scan fails closed instead of aborting.
       return null;
     }
   }

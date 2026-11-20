@@ -1,15 +1,19 @@
 package com.projectlightpath.analysis.java;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.tools.JavaFileObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -203,6 +207,78 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
+  void jarSchemeDiagnosticsDoNotAbortTheScan() {
+    JavaFileObject jarEntry = new JavaFileObject() {
+      @Override
+      public URI toUri() {
+        return URI.create("jar:file:/libs/foo.jar!/demo/Foo.class");
+      }
+
+      @Override
+      public String getName() {
+        return "demo/Foo.class";
+      }
+
+      @Override
+      public JavaFileObject.Kind getKind() {
+        return JavaFileObject.Kind.CLASS;
+      }
+
+      @Override
+      public boolean isNameCompatible(String simpleName, JavaFileObject.Kind kind) {
+        return true;
+      }
+
+      @Override
+      public javax.lang.model.element.NestingKind getNestingKind() {
+        return null;
+      }
+
+      @Override
+      public javax.lang.model.element.Modifier getAccessLevel() {
+        return null;
+      }
+
+      @Override
+      public java.io.InputStream openInputStream() {
+        return java.io.InputStream.nullInputStream();
+      }
+
+      @Override
+      public java.io.OutputStream openOutputStream() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public java.io.Reader openReader(boolean ignoreEncodingErrors) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public java.io.Writer openWriter() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public long getLastModified() {
+        return 0;
+      }
+
+      @Override
+      public boolean delete() {
+        return false;
+      }
+    };
+    assertDoesNotThrow(() -> JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+    assertNull(JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+  }
+
+  @Test
   void sourceDiagnosticPathsNeverLeakAbsolutePaths() throws IOException {
     SourceMetadataScanner scanner = scanner("paths", "package demo; class Bridge { }");
     Path root = temp.resolve("paths").toAbsolutePath().normalize();
@@ -218,7 +294,7 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
-  void globalCompileFailureProducesASourceDiagnostic() throws IOException {
+  void unresolvableImportProducesASourceDiagnostic() throws IOException {
     StringBuilder name = new StringBuilder("a");
     for (int index = 0; index < 20000; index++) {
       name.append(".b");
