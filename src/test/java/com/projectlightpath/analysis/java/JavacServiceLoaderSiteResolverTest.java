@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -173,6 +174,7 @@ class JavacServiceLoaderSiteResolverTest {
         resolution.limitation());
     assertTrue(resolution.evidence().stream().anyMatch(item ->
         item.kind().equals("service_loader_scan_diagnostic")
+            && item.path().endsWith("Bridge.java")
             && item.attributes().get("diagnosticCode").equals("javac_source_error")),
         resolution.evidence().toString());
   }
@@ -208,74 +210,108 @@ class JavacServiceLoaderSiteResolverTest {
 
   @Test
   void jarSchemeDiagnosticsDoNotAbortTheScan() {
-    JavaFileObject jarEntry = new JavaFileObject() {
+    JavaFileObject jarEntry = jarEntry();
+    assertDoesNotThrow(() -> JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+    assertNull(JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+  }
+
+  @Test
+  void classpathEntryErrorProducesASourceDiagnostic() throws IOException {
+    Path root = temp.resolve("classpath-error");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path bridge = sourceRoot.resolve("demo/Bridge.java");
+    Files.createDirectories(bridge.getParent());
+    Files.writeString(bridge, """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge { void audit() { ServiceLoader.load(Broken.class); } }
+        """);
+    Path jar = temp.resolve("classpath-error/broken.jar");
+    Files.createDirectories(jar.getParent());
+    try (java.util.zip.ZipOutputStream output =
+        new java.util.zip.ZipOutputStream(Files.newOutputStream(jar))) {
+      output.putNextEntry(new java.util.zip.ZipEntry("demo/Broken.class"));
+      output.write(new byte[] {(byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE, 0, 0});
+      output.closeEntry();
+    }
+    AnalysisContext context = AnalysisContext.builder()
+        .id("classpath-error")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("javac-resolver-test")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(jar))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Resolution resolution = resolve(
+        new SourceMetadataScanner(context),
+        new ServiceLoaderDescriptorScanner.Scan(List.of()),
+        new CallEdge(
+            new MethodSymbol("demo.Bridge", "audit", "()V"),
+            new MethodSymbol("demo.ProviderImpl", "record", "()V"),
+            3,
+            "src/main/java/demo/Bridge.java",
+            SemanticCallFacts.Certainty.DEFINITE,
+            "service_loader"));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().contains("javac_source_error"), resolution.limitation());
+  }
+
+  @Test
+  void jarAttributedErrorIsClassifiedAsUnaddressable() {
+    Diagnostic<JavaFileObject> diagnostic = new Diagnostic<>() {
       @Override
-      public URI toUri() {
-        return URI.create("jar:file:/libs/foo.jar!/demo/Foo.class");
+      public Kind getKind() {
+        return Kind.ERROR;
       }
 
       @Override
-      public String getName() {
-        return "demo/Foo.class";
+      public JavaFileObject getSource() {
+        return jarEntry();
       }
 
       @Override
-      public JavaFileObject.Kind getKind() {
-        return JavaFileObject.Kind.CLASS;
-      }
-
-      @Override
-      public boolean isNameCompatible(String simpleName, JavaFileObject.Kind kind) {
-        return true;
-      }
-
-      @Override
-      public javax.lang.model.element.NestingKind getNestingKind() {
-        return null;
-      }
-
-      @Override
-      public javax.lang.model.element.Modifier getAccessLevel() {
-        return null;
-      }
-
-      @Override
-      public java.io.InputStream openInputStream() {
-        return java.io.InputStream.nullInputStream();
-      }
-
-      @Override
-      public java.io.OutputStream openOutputStream() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public java.io.Reader openReader(boolean ignoreEncodingErrors) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public CharSequence getCharContent(boolean ignoreEncodingErrors) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public java.io.Writer openWriter() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public long getLastModified() {
+      public long getPosition() {
         return 0;
       }
 
       @Override
-      public boolean delete() {
-        return false;
+      public long getStartPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getEndPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getLineNumber() {
+        return 0;
+      }
+
+      @Override
+      public long getColumnNumber() {
+        return 0;
+      }
+
+      @Override
+      public String getCode() {
+        return "compiler.err.bad.class.file";
+      }
+
+      @Override
+      public String getMessage(java.util.Locale locale) {
+        return "bad class file";
       }
     };
-    assertDoesNotThrow(() -> JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
-    assertNull(JavacServiceLoaderSiteResolver.sourcePath(jarEntry));
+    assertTrue(JavacServiceLoaderSiteResolver.hasUnaddressableError(List.of(diagnostic)));
   }
 
   @Test
@@ -294,7 +330,7 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
-  void unresolvableImportProducesASourceDiagnostic() throws IOException {
+  void unresolvableImportProducesAGlobalSourceDiagnostic() throws IOException {
     StringBuilder name = new StringBuilder("a");
     for (int index = 0; index < 20000; index++) {
       name.append(".b");
@@ -305,6 +341,9 @@ class JavacServiceLoaderSiteResolverTest {
         scanner, new ServiceLoaderDescriptorScanner.Scan(List.of()), providerEdge());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
     assertTrue(resolution.limitation().contains("javac_source_error"), resolution.limitation());
+    assertTrue(resolution.evidence().stream().anyMatch(item ->
+        item.kind().equals("service_loader_scan_diagnostic")
+            && item.path().equals("selected-sources")), resolution.evidence().toString());
   }
 
   @Test
@@ -332,6 +371,16 @@ class JavacServiceLoaderSiteResolverTest {
         .toAbsolutePath().normalize();
     assertFalse(sites.get().getOrDefault(bridge, List.of()).isEmpty());
     assertTrue(sites.get().getOrDefault(broken, List.of()).isEmpty());
+  }
+
+  private static JavaFileObject jarEntry() {
+    return new javax.tools.SimpleJavaFileObject(
+        URI.create("file:/tmp/Foo.class"), JavaFileObject.Kind.CLASS) {
+      @Override
+      public URI toUri() {
+        return URI.create("jar:file:/libs/foo.jar!/demo/Foo.class");
+      }
+    };
   }
 
   private static CallEdge providerEdge() {

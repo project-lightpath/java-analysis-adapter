@@ -133,9 +133,15 @@ final class JavacServiceLoaderSiteResolver {
           List.copyOf(diagnostics.getDiagnostics());
       boolean globalError = capturedDiagnostics.stream()
           .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR && item.getSource() == null);
+      boolean unaddressableError = hasUnaddressableError(capturedDiagnostics);
       if (globalError) {
         return new Analysis(Map.of(), Map.of(), new Failure(
             "javac_global_error", "javac reported a global error; ServiceLoader sites are unavailable"));
+      }
+      if (unaddressableError) {
+        return new Analysis(Map.of(), Map.of(), new Failure(
+            "javac_source_error",
+            "javac reported an error in a classpath entry; ServiceLoader sites are unavailable"));
       }
       Map<Path, String> errors = capturedDiagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
@@ -175,6 +181,12 @@ final class JavacServiceLoaderSiteResolver {
     } catch (StackOverflowError error) {
       throw new IOException("javac exhausted its parser stack", error);
     }
+  }
+
+  static boolean hasUnaddressableError(
+      List<Diagnostic<? extends JavaFileObject>> diagnostics) {
+    return diagnostics.stream().anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR
+        && item.getSource() != null && sourcePath(item.getSource()) == null);
   }
 
   static Path sourcePath(JavaFileObject source) {

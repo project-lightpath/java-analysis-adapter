@@ -70,10 +70,25 @@ Two new findings, both addressed:
    `unresolvableImportProducesASourceDiagnostic`; the untested global branch
    stays disclosed in the residual below.
 
+## Review round 3
+
+Two new findings, both addressed:
+
+1. **MEDIUM — jar-attributed errors were silently dropped.** An ERROR whose
+   source is a jar entry has a non-null source but no mappable path, so it fell
+   into neither the per-file map nor the global failure. `hasUnaddressableError`
+   now classifies it and emits a scan-global `javac_source_error` diagnostic
+   with the `selected-sources` token. A synthetic jar-scheme diagnostic test
+   covers the classification.
+2. **LOW — the renamed test still did not distinguish branches.** The
+   per-file test now asserts a `Bridge.java` diagnostic path; the 20,000-import
+   test asserts the `selected-sources` global token. The two paths are now
+   observably different.
+
 ## Gates
 
-- `make adapter-test`: **346** default + **1** large-archive = **347**, 0
-  failures (gate >= 338; five new regression tests).
+- `make adapter-test`: **348** default + **1** large-archive = **349**, 0
+  failures (gate >= 338; six new regression tests).
 - `make java-lint`: PASS, 0 PMD/CPD findings.
 - `make evidence-validate`: PASS.
 
