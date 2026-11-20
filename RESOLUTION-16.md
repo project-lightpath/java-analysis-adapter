@@ -17,8 +17,11 @@ prototype is deterministic across fresh JVM runs and stays inside the
 `-Xmx256m` child.
 
 This is an accuracy GO, now backed by a production seam
-(`JavacServiceLoaderSiteResolver`). javac is the default adapter path;
-`-Dflpath.java.resolver=textual` remains the rollback switch.
+(`JavacServiceLoaderSiteResolver`). javac is the default adapter path.
+
+> Update 2026-11-20 (FLPATH-5142): the rollback window closed. The textual
+> name-resolution implementation and the `-Dflpath.java.resolver=textual`
+> switch were deleted. See `docs/flpath-5142-textual-removal.md`.
 
 ## Baseline vs prototype (all 71 cells)
 
