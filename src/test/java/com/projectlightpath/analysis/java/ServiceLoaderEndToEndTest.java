@@ -30,25 +30,18 @@ import org.junit.jupiter.api.io.TempDir;
  * callers.
  */
 class ServiceLoaderEndToEndTest {
-  private static final String RESOLVER_PROPERTY = "flpath.java.resolver";
   private static final String EXPECTED_PROVIDER = "demo.DefaultProvider#record";
 
   @TempDir Path temp;
-  private String previousResolver;
 
   @BeforeEach
   void enableJavacResolver() {
-    previousResolver = System.getProperty(RESOLVER_PROPERTY);
-    System.setProperty(RESOLVER_PROPERTY, "javac");
+    JavacServiceLoaderSiteResolver.setScopedMode("javac");
   }
 
   @AfterEach
   void restoreResolver() {
-    if (previousResolver == null) {
-      System.clearProperty(RESOLVER_PROPERTY);
-    } else {
-      System.setProperty(RESOLVER_PROPERTY, previousResolver);
-    }
+    JavacServiceLoaderSiteResolver.clearScopedMode();
   }
 
   @Test

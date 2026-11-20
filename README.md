@@ -23,6 +23,14 @@ make adapter-test
 make package
 ```
 
+`make adapter-test` runs the suite in one JVM and lets JUnit schedule the test
+methods in parallel (fixed pool of four). On a memory-constrained host, force a
+serial run through the same target:
+
+```sh
+JAVA_TOOL_OPTIONS=-Djunit.jupiter.execution.parallel.enabled=false make adapter-test
+```
+
 The `Adapter tests` CI lane runs `make adapter-test` and `make evidence-validate`
 on pull requests and pushes to `main`. The separate `Java lint` CI lane runs
 the enforced production-quality gate with `make java-lint` and uploads the

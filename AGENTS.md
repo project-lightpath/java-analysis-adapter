@@ -77,7 +77,9 @@ green in isolation do not prove their composition.
   must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
   `make adapter-test` is the only test target: JUnit schedules the test methods
   in parallel (`src/test/resources/junit-platform.properties`), so a green run
-  always reports the full execution count.
+  always reports the full execution count. On a memory-constrained host,
+  `JAVA_TOOL_OPTIONS=-Djunit.jupiter.execution.parallel.enabled=false make
+  adapter-test` runs the same suite serially.
 - Zero edits to existing tests unless the plan sanctions one explicitly.
 - If PMD forces a helper placement change, keep behavior identical and
   document the placement in the commit message.

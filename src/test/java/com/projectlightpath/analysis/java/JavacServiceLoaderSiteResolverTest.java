@@ -126,16 +126,11 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   private static void withMode(String mode, ThrowingRunnable action) {
-    String previous = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-    System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, mode);
+    JavacServiceLoaderSiteResolver.setScopedMode(mode);
     try {
       action.run();
     } finally {
-      if (previous == null) {
-        System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-      } else {
-        System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previous);
-      }
+      JavacServiceLoaderSiteResolver.clearScopedMode();
     }
   }
 
