@@ -216,7 +216,7 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
-  void classpathEntryErrorProducesASourceDiagnostic() throws IOException {
+  void classpathEntryErrorIsDiagnosedOnTheReferencingSource() throws IOException {
     Path root = temp.resolve("classpath-error");
     Path sourceRoot = root.resolve("src/main/java");
     Path bridge = sourceRoot.resolve("demo/Bridge.java");
@@ -261,6 +261,9 @@ class JavacServiceLoaderSiteResolverTest {
             "service_loader"));
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
     assertTrue(resolution.limitation().contains("javac_source_error"), resolution.limitation());
+    assertTrue(resolution.evidence().stream().anyMatch(item ->
+        item.kind().equals("service_loader_scan_diagnostic")
+            && item.path().endsWith("Bridge.java")), resolution.evidence().toString());
   }
 
   @Test

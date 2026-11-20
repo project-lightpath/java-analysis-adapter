@@ -85,6 +85,18 @@ Two new findings, both addressed:
    test asserts the `selected-sources` global token. The two paths are now
    observably different.
 
+## Review round 4
+
+One finding: the classpath-error test did not prove which branch fired.
+
+Investigation: javac attributes the corrupt-jar error to the referencing
+`Bridge.java`, not to the jar entry, so asserting the `selected-sources` token
+there would fail. The test now asserts the actual per-file path
+(`Bridge.java`), and the unaddressable branch is pinned separately by
+`jarAttributedErrorIsClassifiedAsUnaddressable`, which feeds a jar-scheme
+`Diagnostic` through `hasUnaddressableError`. Both branches are now asserted
+where they actually occur.
+
 ## Gates
 
 - `make adapter-test`: **348** default + **1** large-archive = **349**, 0
