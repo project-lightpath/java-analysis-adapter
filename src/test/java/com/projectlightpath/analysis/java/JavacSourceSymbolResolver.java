@@ -204,6 +204,9 @@ final class JavacSourceSymbolResolver {
       }
       int line = lineNumber(invocationPath, position);
       int column = columnNumber(invocationPath, position);
+      long end = endPosition(invocationPath);
+      int endLine = end < 0 ? line : lineNumber(invocationPath, end);
+      int endColumn = end < 0 ? column : columnNumber(invocationPath, end);
       Element method = trees.getElement(new TreePath(invocationPath, selectTree));
       if (selectTree instanceof com.sun.source.tree.IdentifierTree && !isServiceLoaderLoad(method)) {
         return super.visitMethodInvocation(node, unused);
@@ -215,7 +218,8 @@ final class JavacSourceSymbolResolver {
       if (isServiceLoaderLoad(method)) {
         addFact(invocationPath, position, line, column, method);
       } else {
-        addAbstention((int) position, line, column, reason(method, receiver, line, column));
+        addAbstention((int) position, line, column,
+            reason(method, receiver, line, column, endLine, endColumn));
       }
       return super.visitMethodInvocation(node, unused);
     }
@@ -296,7 +300,8 @@ final class JavacSourceSymbolResolver {
           cell.id(), cell.siteFile(), line, column, position, reason, diagnosticsFor(line)));
     }
 
-    private String reason(Element method, Element receiver, int line, int column) {
+    private String reason(
+        Element method, Element receiver, int line, int column, int endLine, int endColumn) {
       if (receiver != null && isVariable(receiver)) {
         return "SHADOWED";
       }
@@ -311,7 +316,7 @@ final class JavacSourceSymbolResolver {
         }
         return "SHADOWED";
       }
-      List<JavacResolverDiagnostic> local = diagnosticsAt(line, column);
+      List<JavacResolverDiagnostic> local = diagnosticsAt(line, column, endLine, endColumn);
       if (local.stream().anyMatch(item -> item.message().toLowerCase(Locale.ROOT).contains("ambiguous"))) {
         return "AMBIGUOUS";
       }
@@ -384,10 +389,37 @@ final class JavacSourceSymbolResolver {
       return packageName.isEmpty() ? outer : packageName + "." + outer;
     }
 
-    private List<JavacResolverDiagnostic> diagnosticsAt(int line, int column) {
+    private boolean sameSource(JavaFileObject source) {
+      if (source == null) {
+        return false;
+      }
+      try {
+        return Path.of(source.toUri()).normalize().equals(siteFile);
+      } catch (IllegalArgumentException error) {
+        return false;
+      }
+    }
+
+    private static boolean within(
+        Diagnostic<? extends JavaFileObject> item,
+        int line, int column, int endLine, int endColumn) {
+      long itemLine = item.getLineNumber();
+      long itemColumn = item.getColumnNumber();
+      if (itemLine < line || itemLine > endLine) {
+        return false;
+      }
+      if (itemLine == line && itemColumn < column) {
+        return false;
+      }
+      return itemLine != endLine || itemColumn <= endColumn;
+    }
+
+    private List<JavacResolverDiagnostic> diagnosticsAt(
+        int line, int column, int endLine, int endColumn) {
       return diagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
-          .filter(item -> item.getLineNumber() == line)
+          .filter(item -> sameSource(item.getSource()))
+          .filter(item -> within(item, line, column, endLine, endColumn))
           .map(item -> new JavacResolverDiagnostic(
               item.getCode(), item.getMessage(Locale.ROOT), relativePath(item.getSource()),
               item.getLineNumber(), item.getColumnNumber()))
@@ -438,6 +470,11 @@ final class JavacSourceSymbolResolver {
     private long startPosition(TreePath path) {
       SourcePositions positions = trees.getSourcePositions();
       return positions.getStartPosition(path.getCompilationUnit(), path.getLeaf());
+    }
+
+    private long endPosition(TreePath path) {
+      SourcePositions positions = trees.getSourcePositions();
+      return positions.getEndPosition(path.getCompilationUnit(), path.getLeaf());
     }
 
     private int lineNumber(TreePath path, long position) {

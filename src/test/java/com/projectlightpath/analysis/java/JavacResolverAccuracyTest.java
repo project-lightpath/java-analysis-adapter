@@ -135,6 +135,21 @@ class JavacResolverAccuracyTest {
   }
 
   @Test
+  void baselineSelectionEvidenceIsExplicit() throws IOException {
+    JavacResolverAccuracyHarness.Report report =
+        JavacResolverAccuracyHarness.run(temp.resolve("selection-work"),
+            JavacResolverFixtureCatalog.cells());
+    assertEquals("demo/Cash.java", cell(report, "D1").baseline().selectedPath());
+    assertEquals("demo/Outer.java", cell(report, "D2").baseline().selectedPath());
+    assertEquals("demo/Outer.java", cell(report, "D3").baseline().selectedPath());
+    assertEquals("a.java", cell(report, "D4").baseline().selectedPath());
+    assertEquals("", cell(report, "D6").baseline().selectedPath());
+    assertEquals("demo/Cash.java", cell(report, "D7").baseline().selectedPath());
+    assertEquals("", cell(report, "D8").baseline().selectedPath());
+    assertEquals("a.java", cell(report, "D9").baseline().selectedPath());
+  }
+
+  @Test
   void tooNewReleaseIsBlockedInsteadOfFailingTheGate() throws IOException {
     JavacResolverCell blocked = new JavacResolverCell(
         "BLOCKED", JavacResolverCell.Family.PRECEDENCE, "demo/Bridge.java", "demo.Bridge",
