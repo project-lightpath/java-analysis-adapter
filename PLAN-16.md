@@ -298,7 +298,7 @@ Files:
   thresholds, determinism, baseline golden, evidence completeness,
   diagnostics, type probes, and report schema.
 
-No `src/main` edit. The report is copied to
+A flag-gated production seam now exists in `src/main`; the report is copied to
 `spike/results/javac-symbol-resolver-observation.json` before
 `make evidence-validate`; only relative paths are stored.
 `spike/scripts/validate_spike.py` gains a schema/count/no-host-path check for
@@ -332,8 +332,8 @@ column — never `toString()`, absolute paths, or temp classpaths.
 
 ## Residuals / risks
 
-- Test-scope prototype: production wiring and a flag-gated `src/main` seam are
-  a follow-up only after GO.
+- The production seam is flag-gated; production wiring is now present and
+  default enablement is the follow-up.
 - The harness covers ServiceLoader source facts only. Other name-resolution
   consumers (`StaticImportOwnerResolver` does not exist on this branch; PR #12
   consumers, framework annotations, reflection) are not migrated here.

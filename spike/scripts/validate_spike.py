@@ -356,6 +356,8 @@ def main() -> None:
             require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
             require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
         if not cell["blocked"]:
+            require(cell["expected"], f"{cell['id']} has no expected sites")
+            require(all(expected["offset"] >= 0 for expected in cell["expected"]), f"{cell['id']} has an unaligned expected site")
             facts_by_offset = {fact["offset"]: fact for fact in cell["javac"]["facts"]}
             abstentions_by_offset = {item["offset"]: item for item in cell["javac"]["abstentions"]}
             expected_offsets = {expected["offset"] for expected in cell["expected"]}

@@ -54,6 +54,10 @@ final class JavacServiceLoaderSiteResolver {
     return "javac".equalsIgnoreCase(System.getProperty(PROPERTY, "textual"));
   }
 
+  private static final java.util.Map<SourceMetadataScanner,
+      Optional<Map<Path, List<ServiceLoaderCallSite>>>> CACHE =
+      java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
   /**
    * Returns compiler-bound sites per source file when the flag is enabled.
    * Empty Optional means the flag is off (textual path). A present empty map
@@ -61,6 +65,11 @@ final class JavacServiceLoaderSiteResolver {
    * must fail closed rather than fall back to textual guesses.
    */
   static Optional<Map<Path, List<ServiceLoaderCallSite>>> sites(SourceMetadataScanner scanner) {
+    return CACHE.computeIfAbsent(scanner, JavacServiceLoaderSiteResolver::resolveSites);
+  }
+
+  private static Optional<Map<Path, List<ServiceLoaderCallSite>>> resolveSites(
+      SourceMetadataScanner scanner) {
     if (!enabled()) {
       return Optional.empty();
     }

@@ -290,9 +290,24 @@ class JavacResolverAccuracyTest {
       item.set("baselineAbstentions", stableSites(cell.get("baseline").get("abstentions"), false));
       item.set("javacAbstentions", stableSites(cell.get("javac").get("abstentions"), false));
     }
-    view.set("baselineTotals", report.get("baselineTotals"));
-    view.set("javacTotals", report.get("javacTotals"));
+    view.set("baselineTotals", sumMetrics(report, "baseline", excludedCells));
+    view.set("javacTotals", sumMetrics(report, "javac", excludedCells));
     return view.toString();
+  }
+
+  private static ObjectNode sumMetrics(JsonNode report, String path, Set<String> excludedCells) {
+    ObjectNode totals = MAPPER.createObjectNode();
+    java.util.Map<String, Integer> values = new java.util.LinkedHashMap<>();
+    for (JsonNode cell : report.get("cells")) {
+      if (excludedCells.contains(cell.get("id").asText())) {
+        continue;
+      }
+      JsonNode metrics = cell.get(path).get("metrics");
+      metrics.fieldNames().forEachRemaining(name ->
+          values.merge(name, metrics.get(name).asInt(), Integer::sum));
+    }
+    values.forEach(totals::put);
+    return totals;
   }
 
   private static ArrayNode stableSites(JsonNode sites, boolean fact) {

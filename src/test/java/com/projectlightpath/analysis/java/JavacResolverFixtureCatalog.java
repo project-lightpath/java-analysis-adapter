@@ -291,7 +291,7 @@ final class JavacResolverFixtureCatalog {
                   }
                 }
                 """),
-            site(SHADOWED, "java.lang.Object"), site(DEFINITE, "java.lang.Object")),
+            site(SHADOWED, "java.lang.Object", 212), site(DEFINITE, "java.lang.Object", 257)),
         cell("N21", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
             sources("demo/Bridge.java", """
                 package demo;
@@ -308,7 +308,7 @@ final class JavacResolverFixtureCatalog {
                   }
                 }
                 """),
-            site(SHADOWED, "java.lang.Object"), site(DEFINITE, "java.lang.Object")),
+            site(SHADOWED, "java.lang.Object", 229), site(DEFINITE, "java.lang.Object", 273)),
         cell("N22", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 21,
             sources("demo/Bridge.java", """
                 package demo;
@@ -323,7 +323,7 @@ final class JavacResolverFixtureCatalog {
                   }
                 }
                 """),
-            site(SHADOWED, "java.lang.Object"), site(POSSIBLE, "java.lang.Object")),
+            site(SHADOWED, "java.lang.Object", 134), site(POSSIBLE, "java.lang.Object", 199)),
         cell("N23", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 21,
             sources("demo/Bridge.java", """
                 package demo;
@@ -340,7 +340,7 @@ final class JavacResolverFixtureCatalog {
                   }
                 }
                 """),
-            site(SHADOWED, "java.lang.Object"), site(POSSIBLE, "java.lang.Object")),
+            site(SHADOWED, "java.lang.Object", 166), site(POSSIBLE, "java.lang.Object", 242)),
         cell("N24a", PRECEDENCE, "demo/Bridge.java", "demo.Bridge", 17,
             sources("demo/Bridge.java", """
                 package demo;
@@ -830,6 +830,11 @@ final class JavacResolverFixtureCatalog {
   private static JavacResolverCell.ExpectedSite site(
       JavacResolverCell.Expectation expectation, String serviceType) {
     return new JavacResolverCell.ExpectedSite(expectation, serviceType);
+  }
+
+  private static JavacResolverCell.ExpectedSite site(
+      JavacResolverCell.Expectation expectation, String serviceType, int offset) {
+    return new JavacResolverCell.ExpectedSite(expectation, serviceType, offset);
   }
 
   private static Map<String, String> sources(String... entries) {
