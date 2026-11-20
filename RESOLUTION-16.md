@@ -16,9 +16,9 @@ facts, 8 added facts, and 7 missing abstentions on the same cells. The
 prototype is deterministic across fresh JVM runs and stays inside the
 `-Xmx256m` child.
 
-This is an accuracy GO, now backed by a flag-gated production seam
-(`JavacServiceLoaderSiteResolver`). The default adapter path remains textual
-until the flag is enabled; full enablement is the migration follow-up.
+This is an accuracy GO, now backed by a production seam
+(`JavacServiceLoaderSiteResolver`). javac is the default adapter path;
+`-Dflpath.java.resolver=textual` remains the rollback switch.
 
 ## Baseline vs prototype (all 71 cells)
 
@@ -98,8 +98,8 @@ per cell. They are identical. Fact order is sorted by offset and service type.
 
 Gate receipts on the GREEN/EVIDENCE tree:
 
-- `make adapter-test` — **307 tests**, 0 failures, 0 errors (baseline 291,
-  +16).
+- `make adapter-test` — **312 tests**, 0 failures, 0 errors (baseline 291,
+  +21).
 - `make java-lint` — PASS, 0 PMD/CPD findings. The project's
   `<includeTests>false</includeTests>` means this gate does not lint the
   test-scope spike code; review covers that gap explicitly.
@@ -108,8 +108,9 @@ Gate receipts on the GREEN/EVIDENCE tree:
 
 ## What changed in the production path
 
-- Added a flag-gated production seam (`JavacServiceLoaderSiteResolver`) and
-  wired `ServiceLoaderSourceCache` to it when `-Dflpath.java.resolver=javac`.
+- Added a `JavacServiceLoaderSiteResolver` production seam and wired
+  `ServiceLoaderSourceCache` to it. javac is the default; textual remains
+  available via `-Dflpath.java.resolver=textual`.
 - Default adapter output is unchanged with the flag off; textual resolvers
   remain the default path.
 - Textual resolvers, dynamic/reflection logic, descriptor logic, dependency
@@ -119,8 +120,8 @@ Gate receipts on the GREEN/EVIDENCE tree:
 
 ## Residuals / follow-ups
 
-- The production seam is flag-gated; enabling it by default is the migration
-  follow-up.
+- The production seam defaults to javac; textual rollback is still available
+  for one release.
 - Task-global ERROR downgrade is deliberately conservative: any error in a
   cell's compiler task downgrades every fact in it. It may over-abstain on
   unrelated errors; the harness records this and the migration must scope the

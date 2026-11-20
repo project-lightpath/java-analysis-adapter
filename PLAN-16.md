@@ -9,11 +9,10 @@ on PR #12. The baseline is explicitly `0ced20a`, **before** PR #12's fixes.
 ## Implementation note (post-spike)
 
 FLPATH-5142 added the production seam: `JavacServiceLoaderSiteResolver` in
-`src/main`, flag-gated by `-Dflpath.java.resolver=javac`, with
-`ServiceLoaderSourceCache` using compiler-bound sites when enabled. The
-default path and output remain textual. The "test scope only" wording below
-is the original spike record; the production seam is now present and
-flag-gated.
+`src/main`, with javac as the default and textual fallback selected by
+`-Dflpath.java.resolver=textual`. The default path is javac; the textual path
+remains available for rollback. The "test scope only" wording below is the
+original spike record.
 
 ## Scope (binding)
 
