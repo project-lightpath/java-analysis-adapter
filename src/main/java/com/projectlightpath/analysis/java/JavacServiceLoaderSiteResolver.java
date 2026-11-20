@@ -142,8 +142,9 @@ final class JavacServiceLoaderSiteResolver {
     options.add("-encoding");
     options.add("UTF-8");
     if (scanner.context.javaRelease() > 0) {
+      int release = Math.min(scanner.context.javaRelease(), Runtime.version().feature());
       options.add("--release");
-      options.add(Integer.toString(scanner.context.javaRelease()));
+      options.add(Integer.toString(release));
     }
     List<Path> classpath = new ArrayList<>(scanner.context.dependencyClasspath());
     classpath.add(scanner.context.applicationClasses());
