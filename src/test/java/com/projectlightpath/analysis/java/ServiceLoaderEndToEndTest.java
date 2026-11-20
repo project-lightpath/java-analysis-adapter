@@ -63,10 +63,42 @@ class ServiceLoaderEndToEndTest {
 
   @Test
   void doesNotAttributeASamePackageLookalike() throws IOException {
-    assertServiceFacts("shadowed-same-package", Set.of());
+    SemanticCallFacts facts = analyze("shadowed-same-package");
+    assertTrue(facts.providerFacts().stream().anyMatch(fact ->
+        fact.relationshipType().equals("invokes")
+            && fact.caller().equals("demo.App#audit")
+            && fact.callee().equals("demo.ServiceLoader#load")), facts.providerFacts().toString());
+    assertServiceFacts(facts, Set.of());
   }
 
   private void assertServiceFacts(String fixture, Set<String> expectedCallees) throws IOException {
+    assertServiceFacts(analyze(fixture), expectedCallees);
+  }
+
+  private void assertServiceFacts(SemanticCallFacts facts, Set<String> expectedCallees) {
+    List<SemanticCallFacts.Fact> serviceFacts = facts.providerFacts().stream()
+        .filter(fact -> fact.relationshipType().equals("service_loader"))
+        .toList();
+    Set<String> callees = serviceFacts.stream()
+        .map(SemanticCallFacts.Fact::callee)
+        .collect(Collectors.toSet());
+    assertEquals(expectedCallees, callees, serviceFacts.toString());
+    assertTrue(serviceFacts.stream()
+        .allMatch(fact -> fact.certainty() == SemanticCallFacts.Certainty.DEFINITE),
+        serviceFacts.toString());
+    assertTrue(serviceFacts.stream()
+        .allMatch(fact -> fact.status() == SemanticCallFacts.Status.EMITTED),
+        serviceFacts.toString());
+    assertTrue(serviceFacts.stream().allMatch(fact -> fact.evidence().stream()
+        .anyMatch(item -> item.kind().equals("service_loader_descriptor"))), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().allMatch(fact -> fact.evidence().stream()
+        .anyMatch(item -> item.kind().equals("service_loader_resolution")
+            && "demo.Provider".equals(item.attributes().get("serviceType"))
+            && "demo.DefaultProvider".equals(item.attributes().get("providerCandidates"))
+            && "true".equals(item.attributes().get("callSiteBound")))), serviceFacts.toString());
+  }
+
+  private SemanticCallFacts analyze(String fixture) throws IOException {
     Path fixtureRoot = temp.resolve(fixture);
     copyFixture(fixture, fixtureRoot);
     Path sourceRoot = fixtureRoot.resolve("src/main/java");
@@ -93,39 +125,31 @@ class ServiceLoaderEndToEndTest {
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
 
-    List<SemanticCallFacts.Fact> serviceFacts =
-        new JavaAnalysisAdapter().analyze(context).providerFacts().stream()
-            .filter(fact -> fact.relationshipType().equals("service_loader"))
-            .toList();
-    Set<String> callees = serviceFacts.stream()
-        .map(SemanticCallFacts.Fact::callee)
-        .collect(Collectors.toSet());
-    assertEquals(expectedCallees, callees, serviceFacts.toString());
-    assertTrue(serviceFacts.stream()
-        .allMatch(fact -> fact.certainty() == SemanticCallFacts.Certainty.DEFINITE),
-        serviceFacts.toString());
-    assertTrue(serviceFacts.stream()
-        .allMatch(fact -> fact.status() == SemanticCallFacts.Status.EMITTED),
-        serviceFacts.toString());
-    assertFalse(serviceFacts.stream().anyMatch(fact -> fact.evidence().isEmpty()),
-        serviceFacts.toString());
+    return new JavaAnalysisAdapter().analyze(context);
   }
 
   private void copyFixture(String fixture, Path destination) throws IOException {
     URL resource = getClass().getResource("/e2e/service-loader/" + fixture);
     assertFalse(resource == null, "missing e2e fixture: " + fixture);
-    try (Stream<Path> paths = Files.walk(Path.of(resource.toURI()))) {
-      for (Path source : paths.toList()) {
-        Path target = destination.resolve(Path.of(resource.toURI()).relativize(source).toString());
-        if (Files.isDirectory(source)) {
+    assertEquals("file", resource.getProtocol(),
+        "e2e fixtures must be extracted classpath directories: " + resource);
+    Path root;
+    try {
+      root = Path.of(resource.toURI()).toAbsolutePath().normalize();
+    } catch (URISyntaxException error) {
+      throw new IOException("cannot locate e2e fixture " + fixture, error);
+    }
+    try (Stream<Path> paths = Files.walk(root)) {
+      for (Path source : paths.sorted().toList()) {
+        Path target = destination.resolve(root.relativize(source).toString());
+        if (Files.isDirectory(source, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
           Files.createDirectories(target);
         } else {
           Files.createDirectories(target.getParent());
-          Files.copy(source, target);
+          Files.copy(source, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+              java.nio.file.LinkOption.NOFOLLOW_LINKS);
         }
       }
-    } catch (URISyntaxException error) {
-      throw new IOException("cannot locate e2e fixture " + fixture, error);
     }
   }
 
