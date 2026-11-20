@@ -88,7 +88,7 @@ class ServiceLoaderEndToEndTest {
             "service-loader-resources",
             "service_loader_descriptor",
             AnalysisContext.MetadataStatus.OBSERVED,
-            fixture + "/src/main/resources/META-INF/services"))
+            "src/main/resources/META-INF/services"))
         .dependencyClasspathRequired(false)
         .provenance(AnalysisContext.Provenance.forTesting())
         .build();
