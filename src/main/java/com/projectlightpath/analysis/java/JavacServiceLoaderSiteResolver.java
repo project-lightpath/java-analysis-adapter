@@ -37,12 +37,11 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 
 /**
- * Experimental flag-gated javac-backed ServiceLoader site discovery.
+ * javac-backed ServiceLoader site discovery.
  *
- * <p>When {@code -Dflpath.java.resolver=javac} is set, the source cache asks this
- * class for compiler-bound sites instead of the textual parser. The default is
- * the existing textual path, so adapter output is unchanged unless the flag is
- * explicitly enabled.
+ * <p>javac is the default resolver. The source cache asks this class for
+ * compiler-bound sites instead of the textual parser; set
+ * {@code -Dflpath.java.resolver=textual} to roll back.
  */
 final class JavacServiceLoaderSiteResolver {
   static final String PROPERTY = "flpath.java.resolver";
@@ -56,7 +55,7 @@ final class JavacServiceLoaderSiteResolver {
   static boolean enabled() {
     String scoped = SCOPED_MODE.get();
     return "javac".equalsIgnoreCase(
-        scoped != null ? scoped : System.getProperty(PROPERTY, "textual"));
+        scoped != null ? scoped : System.getProperty(PROPERTY, "javac"));
   }
 
   /**
@@ -119,20 +118,43 @@ final class JavacServiceLoaderSiteResolver {
           null, manager, diagnostics, options(scanner), null, units);
       Iterable<? extends CompilationUnitTree> parsed = task.parse();
       task.analyze();
-      boolean failed = diagnostics.getDiagnostics().stream()
-          .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR);
-      if (failed) {
-        // No certainty channel exists on ServiceLoaderCallSite yet. Abstain from
-        // the compiler path rather than emit DEFINITE facts from an incomplete build.
+      List<Diagnostic<? extends JavaFileObject>> capturedDiagnostics =
+          List.copyOf(diagnostics.getDiagnostics());
+      boolean globalError = capturedDiagnostics.stream()
+          .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR && item.getSource() == null);
+      if (globalError) {
         return Map.of();
       }
+      java.util.Set<Path> errorFiles = capturedDiagnostics.stream()
+          .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
+          .map(item -> sourcePath(item.getSource()))
+          .filter(java.util.Objects::nonNull)
+          .collect(java.util.stream.Collectors.toSet());
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
-      SiteScanner siteScanner = new SiteScanner(trees, types);
+      javax.lang.model.util.Elements elements = task.getElements();
+      SiteScanner siteScanner = new SiteScanner(trees, types, elements);
       for (CompilationUnitTree unit : parsed) {
         siteScanner.scan(unit, null);
       }
-      return siteScanner.sites();
+      Map<Path, List<ServiceLoaderCallSite>> safe = new LinkedHashMap<>();
+      for (Map.Entry<Path, List<ServiceLoaderCallSite>> entry : siteScanner.sites().entrySet()) {
+        if (!errorFiles.contains(entry.getKey())) {
+          safe.put(entry.getKey(), entry.getValue());
+        }
+      }
+      return Map.copyOf(safe);
+    }
+  }
+
+  private static Path sourcePath(JavaFileObject source) {
+    if (source == null) {
+      return null;
+    }
+    try {
+      return Path.of(source.toUri()).toAbsolutePath().normalize();
+    } catch (IllegalArgumentException error) {
+      return null;
     }
   }
 
@@ -142,8 +164,9 @@ final class JavacServiceLoaderSiteResolver {
     options.add("-encoding");
     options.add("UTF-8");
     if (scanner.context.javaRelease() > 0) {
+      int release = Math.min(scanner.context.javaRelease(), Runtime.version().feature());
       options.add("--release");
-      options.add(Integer.toString(scanner.context.javaRelease()));
+      options.add(Integer.toString(release));
     }
     List<Path> classpath = new ArrayList<>(scanner.context.dependencyClasspath());
     classpath.add(scanner.context.applicationClasses());
@@ -172,11 +195,13 @@ final class JavacServiceLoaderSiteResolver {
   private static final class SiteScanner extends TreePathScanner<Void, Void> {
     private final Trees trees;
     private final Types types;
+    private final javax.lang.model.util.Elements elements;
     private final Map<Path, List<ServiceLoaderCallSite>> sites = new LinkedHashMap<>();
 
-    SiteScanner(Trees trees, Types types) {
+    SiteScanner(Trees trees, Types types, javax.lang.model.util.Elements elements) {
       this.trees = trees;
       this.types = types;
+      this.elements = elements;
     }
 
     Map<Path, List<ServiceLoaderCallSite>> sites() {
@@ -257,12 +282,11 @@ final class JavacServiceLoaderSiteResolver {
       }
       Element element = ((DeclaredType) erased).asElement();
       if (!(element instanceof TypeElement type)
-          || type.getNestingKind() == javax.lang.model.element.NestingKind.LOCAL
           || type.getNestingKind() == javax.lang.model.element.NestingKind.ANONYMOUS) {
         return null;
       }
-      String canonical = type.getQualifiedName().toString();
-      return canonical.isEmpty() ? null : canonical;
+      String binary = elements.getBinaryName(type).toString();
+      return binary.isEmpty() ? null : binary;
     }
   }
 }

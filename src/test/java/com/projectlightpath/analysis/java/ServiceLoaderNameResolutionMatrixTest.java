@@ -16,6 +16,8 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -29,6 +31,16 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ServiceLoaderNameResolutionMatrixTest {
   @TempDir Path temp;
+
+  @BeforeEach
+  void useTextualResolver() {
+    JavacServiceLoaderSiteResolver.setScopedMode("textual");
+  }
+
+  @AfterEach
+  void restoreResolver() {
+    JavacServiceLoaderSiteResolver.clearScopedMode();
+  }
 
   /** Cell 1: on-demand import vs same-package type in another file (JLS 6.4.1). */
   @Test

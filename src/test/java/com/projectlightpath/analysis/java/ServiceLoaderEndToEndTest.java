@@ -55,6 +55,12 @@ class ServiceLoaderEndToEndTest {
   }
 
   @Test
+  void defaultResolverModeUsesJavac() throws IOException {
+    JavacServiceLoaderSiteResolver.clearScopedMode();
+    assertServiceFacts("static-import-owner", Set.of(EXPECTED_PROVIDER));
+  }
+
+  @Test
   void doesNotAttributeASamePackageLookalike() throws IOException {
     SemanticCallFacts facts = analyze("shadowed-same-package");
     assertTrue(facts.providerFacts().stream().anyMatch(fact ->
