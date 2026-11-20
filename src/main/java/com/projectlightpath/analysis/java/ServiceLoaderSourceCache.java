@@ -98,6 +98,13 @@ final class ServiceLoaderSourceCache {
   private static CachedSource create(
       SourceMetadataScanner scanner, SourceMetadataScanner.SourceFile file) {
     String source = file.source();
+    Optional<Map<Path, List<ServiceLoaderCallSite>>> compilerSites =
+        JavacServiceLoaderSiteResolver.sites(scanner);
+    if (compilerSites.isPresent()) {
+      return new CachedSource(
+          source,
+          compilerSites.get().getOrDefault(file.path().toAbsolutePath().normalize(), List.of()));
+    }
     String structuralSource = ServiceLoaderSourceMasker.mask(source);
     boolean samePackageTypeShadow = scanner.files().stream()
         .filter(candidate -> candidate.packageName().equals(file.packageName()))

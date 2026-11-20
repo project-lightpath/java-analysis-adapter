@@ -27,7 +27,10 @@ final class JavacResolverAccuracyHarness {
       Path cellRoot = workRoot.resolve(cell.id());
       Files.createDirectories(cellRoot);
       Measured baseline = measure(() -> baseline(cell, cellRoot));
-      Measured javac = measure(() -> javac(cell, cellRoot));
+      boolean blocked = cell.release() > Runtime.version().feature();
+      Measured javac = blocked
+          ? new Measured(JavacResolverResult.empty(cell.id()), 0, 0)
+          : measure(() -> javac(cell, cellRoot));
       reports.add(new CellReport(
           cell,
           baseline.result(),
@@ -35,10 +38,12 @@ final class JavacResolverAccuracyHarness {
           cell.baselineAvailable()
               ? Evaluation.evaluate(cell, baseline.result())
               : new JavacResolverMetrics(0, 0, 0, 0, 0, 0, 0),
-          Evaluation.evaluate(cell, javac.result()),
+          blocked
+              ? new JavacResolverMetrics(0, 0, 0, 0, 0, 0, 0)
+              : Evaluation.evaluate(cell, javac.result()),
           baseline,
           javac,
-          isBlocked(cell, javac.result())));
+          blocked));
     }
     return new Report(reports);
   }
@@ -126,11 +131,6 @@ final class JavacResolverAccuracyHarness {
       Files.createDirectories(file.getParent());
       Files.writeString(file, entry.getValue(), StandardCharsets.UTF_8);
     }
-  }
-
-  private static boolean isBlocked(JavacResolverCell cell, JavacResolverResult javac) {
-    return cell.release() > Runtime.version().feature()
-        || javac.facts().stream().anyMatch(fact -> fact.serviceType().equals("<unresolved>"));
   }
 
   private static Measured measure(ThrowingSupplier<JavacResolverResult> action) {

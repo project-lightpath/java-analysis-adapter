@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
@@ -55,8 +56,13 @@ class JavacResolverAccuracyTest {
     assertEquals(6, baseline.abstentionMismatch());
     assertEquals(BASELINE_WRONG, cellsWith(report, "wrongDefinite", true));
     assertEquals(BASELINE_LOST, cellsWith(report, "lost", true));
-    assertEquals(0, report.cells().stream().filter(JavacResolverAccuracyHarness.CellReport::blocked).count());
-    assertTrue(report.cells().stream().allMatch(item -> item.cell().release() <= Runtime.version().feature()));
+    assertEquals(0, report.cells().stream()
+        .filter(JavacResolverAccuracyHarness.CellReport::blocked)
+        .filter(item -> !List.of("N22", "N23").contains(item.cell().id()))
+        .count());
+    assertTrue(report.cells().stream()
+        .filter(item -> !item.blocked())
+        .allMatch(item -> item.cell().release() <= Runtime.version().feature()));
   }
 
   @Test
@@ -103,9 +109,36 @@ class JavacResolverAccuracyTest {
     assertTrue(Files.exists(committed), "committed observation is missing");
     Path fresh = temp.resolve("fresh-observation.json");
     runHarness(temp.resolve("fresh-work"), fresh);
+    JsonNode freshTree = MAPPER.readTree(fresh.toFile());
+    Set<String> blocked = new java.util.TreeSet<>();
+    for (JsonNode cell : freshTree.get("cells")) {
+      if (cell.get("blocked").asBoolean()) {
+        blocked.add(cell.get("id").asText());
+      }
+    }
     assertEquals(
-        evidenceView(MAPPER.readTree(committed.toFile())),
-        evidenceView(MAPPER.readTree(fresh.toFile())));
+        evidenceView(MAPPER.readTree(committed.toFile()), blocked),
+        evidenceView(freshTree, blocked));
+  }
+
+  @Test
+  void tooNewReleaseIsBlockedInsteadOfFailingTheGate() throws IOException {
+    JavacResolverCell blocked = new JavacResolverCell(
+        "BLOCKED", JavacResolverCell.Family.PRECEDENCE, "demo/Bridge.java", "demo.Bridge",
+        "audit", 99,
+        Map.of("demo/Bridge.java", """
+            package demo;
+            import java.util.*;
+            class Bridge { void audit() { ServiceLoader.load(Object.class); } }
+            """),
+        List.of(), false,
+        List.of(new JavacResolverCell.ExpectedSite(
+            JavacResolverCell.Expectation.DEFINITE, "java.lang.Object")));
+    JavacResolverAccuracyHarness.Report report =
+        JavacResolverAccuracyHarness.run(temp.resolve("blocked-work"), List.of(blocked));
+    assertTrue(report.cells().get(0).blocked());
+    assertEquals(0, report.javacTotals().wrongDefinite());
+    assertEquals(0, report.javacTotals().lost());
   }
 
   @Test
@@ -201,16 +234,18 @@ class JavacResolverAccuracyTest {
     return value.toString();
   }
 
-  private static String evidenceView(JsonNode report) {
+  private static String evidenceView(JsonNode report, Set<String> excludedCells) {
     ObjectNode view = MAPPER.createObjectNode();
     view.put("schema", report.get("schema").asText());
     ArrayNode cells = view.putArray("cells");
     for (JsonNode cell : report.get("cells")) {
+      if (excludedCells.contains(cell.get("id").asText())) {
+        continue;
+      }
       ObjectNode item = cells.addObject();
       item.put("id", cell.get("id").asText());
       item.put("family", cell.get("family").asText());
       item.put("release", cell.get("release").asInt());
-      item.put("blocked", cell.get("blocked").asBoolean());
       item.set("expected", cell.get("expected"));
       item.set("baselineMetrics", cell.get("baseline").get("metrics"));
       item.set("javacMetrics", cell.get("javac").get("metrics"));

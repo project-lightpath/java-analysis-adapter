@@ -113,7 +113,7 @@ final class JavacSourceSymbolResolver {
       JavaFileObject unit = manager.getJavaFileObjectsFromPaths(List.of(file)).iterator().next();
       JavacTask task = (JavacTask) compiler.getTask(
           null, manager, collector,
-          List.of("-proc:none", "--release", "21", "-encoding", "UTF-8",
+          List.of("-proc:none", "--release", "17", "-encoding", "UTF-8",
               "-classpath", classes.toString(), "-d", classes.toString()),
           null, List.of(unit));
       task.parse();
