@@ -81,8 +81,7 @@ final class JavacResolverAccuracyHarness {
               .relativize(file.path().toAbsolutePath().normalize()).toString())
           .orElse("");
       String topLevel = sourceFile.map(SourceMetadataScanner.SourceFile::typeName).orElse("");
-      String previousResolver = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-      System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, "textual");
+      JavacServiceLoaderSiteResolver.setScopedMode("textual");
       try {
         Optional<ServiceLoaderSourceCache.CachedSource> cached =
             ServiceLoaderSourceCache.source(
@@ -112,11 +111,7 @@ final class JavacResolverAccuracyHarness {
         }
         return new JavacResolverResult(cell.id(), facts, List.of(), evidencePath, topLevel);
       } finally {
-        if (previousResolver == null) {
-          System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-        } else {
-          System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previousResolver);
-        }
+        JavacServiceLoaderSiteResolver.clearScopedMode();
       }
     } catch (IOException error) {
       throw new IllegalStateException("cannot build baseline for " + cell.id(), error);

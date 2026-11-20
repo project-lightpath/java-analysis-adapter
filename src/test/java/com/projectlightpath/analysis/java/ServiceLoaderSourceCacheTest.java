@@ -16,21 +16,15 @@ import org.junit.jupiter.api.io.TempDir;
 
 class ServiceLoaderSourceCacheTest {
   @TempDir Path temp;
-  private String previousResolver;
 
   @BeforeEach
   void useTextualResolver() {
-    previousResolver = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-    System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, "textual");
+    JavacServiceLoaderSiteResolver.setScopedMode("textual");
   }
 
   @AfterEach
   void restoreResolver() {
-    if (previousResolver == null) {
-      System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-    } else {
-      System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previousResolver);
-    }
+    JavacServiceLoaderSiteResolver.clearScopedMode();
   }
 
   @Test

@@ -31,21 +31,15 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ServiceLoaderNameResolutionMatrixTest {
   @TempDir Path temp;
-  private String previousResolver;
 
   @BeforeEach
   void useTextualResolver() {
-    previousResolver = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-    System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, "textual");
+    JavacServiceLoaderSiteResolver.setScopedMode("textual");
   }
 
   @AfterEach
   void restoreResolver() {
-    if (previousResolver == null) {
-      System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-    } else {
-      System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previousResolver);
-    }
+    JavacServiceLoaderSiteResolver.clearScopedMode();
   }
 
   /** Cell 1: on-demand import vs same-package type in another file (JLS 6.4.1). */

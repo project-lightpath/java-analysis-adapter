@@ -56,7 +56,7 @@ class ServiceLoaderEndToEndTest {
 
   @Test
   void defaultResolverModeUsesJavac() throws IOException {
-    System.clearProperty(RESOLVER_PROPERTY);
+    JavacServiceLoaderSiteResolver.clearScopedMode();
     assertServiceFacts("static-import-owner", Set.of(EXPECTED_PROVIDER));
   }
 

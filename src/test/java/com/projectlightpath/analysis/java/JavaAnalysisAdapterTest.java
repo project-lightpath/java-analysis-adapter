@@ -1970,19 +1970,14 @@ class JavaAnalysisAdapterTest {
         "src/main/java/demo/App.java",
         SemanticCallFacts.Certainty.DEFINITE,
         "service_loader");
-    String previousResolver = System.getProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-    System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, "textual");
+    JavacServiceLoaderSiteResolver.setScopedMode("textual");
     ServiceLoaderCallSiteReader.ServiceLoadHints hints;
     try {
       hints = ServiceLoaderCallSiteReader.read(
           context, edge, ServiceLoaderDescriptorScanner.scan(context),
           new SourceMetadataScanner(context));
     } finally {
-      if (previousResolver == null) {
-        System.clearProperty(JavacServiceLoaderSiteResolver.PROPERTY);
-      } else {
-        System.setProperty(JavacServiceLoaderSiteResolver.PROPERTY, previousResolver);
-      }
+      JavacServiceLoaderSiteResolver.clearScopedMode();
     }
     assertFalse(hints.serviceTypes().isEmpty(),
         "the sole parsed site's service types must stay available for POSSIBLE resolution");
