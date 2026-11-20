@@ -16,8 +16,6 @@ import java.util.stream.Stream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,16 +32,6 @@ class ServiceLoaderEndToEndTest {
 
   @TempDir Path temp;
 
-  @BeforeEach
-  void enableJavacResolver() {
-    JavacServiceLoaderSiteResolver.setScopedMode("javac");
-  }
-
-  @AfterEach
-  void restoreResolver() {
-    JavacServiceLoaderSiteResolver.clearScopedMode();
-  }
-
   @Test
   void emitsTheProviderCallbackForAValidWildcardImport() throws IOException {
     assertServiceFacts("valid-wildcard", Set.of(EXPECTED_PROVIDER));
@@ -56,7 +44,6 @@ class ServiceLoaderEndToEndTest {
 
   @Test
   void defaultResolverModeUsesJavac() throws IOException {
-    JavacServiceLoaderSiteResolver.clearScopedMode();
     assertServiceFacts("static-import-owner", Set.of(EXPECTED_PROVIDER));
   }
 

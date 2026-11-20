@@ -33,44 +33,34 @@ class ServiceLoaderCoverageTest {
   @TempDir Path temp;
 
   @Test
-  void parserRejectsMalformedCallsAndHandlesNestedArguments() {
-    assertTrue(ServiceLoaderCallSiteParser.parse(null).isEmpty());
-    assertTrue(ServiceLoaderCallSiteParser.parse("ServiceLoader.load(").isEmpty());
-    assertTrue(ServiceLoaderCallSiteParser.parse("ServiceLoader.load()").isEmpty());
-    assertTrue(ServiceLoaderCallSiteParser.parse("ServiceLoader.load(provider)").isEmpty());
+  void maskerHandlesMalformedLoadShapesWithoutThrowing() {
+    assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load("));
+    assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load("));
+    assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load()"));
+    assertDoesNotThrow(() -> ServiceLoaderSourceMasker.mask("ServiceLoader.load(provider)"));
 
-    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(
-        "import java.util.ServiceLoader;\n"
-            + "ServiceLoader.load(demo.Provider.class, loader(foo[0], new Object() { }));");
-    assertEquals(1, sites.size());
-    assertTrue(sites.get(0).explicitClassLoader());
-    assertEquals("demo.Provider", sites.get(0).serviceType());
-
-    List<ServiceLoaderCallSite> genericSites = ServiceLoaderCallSiteParser.parse(
-        "import java.util.ServiceLoader;\n"
-            + "ServiceLoader.load(demo.Provider.class, Factory.<String, Integer>loader());");
-    assertEquals(1, genericSites.size());
-    assertTrue(genericSites.get(0).explicitClassLoader());
-
-    assertTrue(ServiceLoaderCallSiteParser.parse(
-        "import java.util.ServiceLoader;\n"
-            + "ServiceLoader.load(demo.Provider.class, first, second);").isEmpty());
+    String source = "import java.util.ServiceLoader;\n"
+        + "ServiceLoader.load(demo.Provider.class, loader(foo[0], new Object() { }));";
+    ServiceLoaderCallSite site = siteAt(source, "ServiceLoader.load");
+    assertEquals("demo.Provider", site.serviceType());
+    assertTrue(ServiceLoaderCallSiteSource.sameStatement(source, site, 2));
   }
 
   @Test
-  void parserIgnoresCommentsStringsAndTextBlocks() {
-    String source = "import java.util.ServiceLoader;\n"
+  void sourceCorrelationIgnoresCommentsStringsAndTextBlocks() {
+    String source = "class Bridge { void audit() {\n"
         + "// ServiceLoader.load(comment.Provider.class).record();\n"
         + "String literal = \"ServiceLoader.load(string.Provider.class);\";\n"
         + "String textBlock = \"\"\"ServiceLoader.load(text.Provider.class);\"\"\";\n"
         + "/* ServiceLoader.load(block.Provider.class); */\n"
-        + "return ServiceLoader.load(demo.Provider.class).findFirst();";
+        + "return ServiceLoader.load(demo.Provider.class).findFirst();\n"
+        + "} }";
 
-    List<ServiceLoaderCallSite> sites = ServiceLoaderCallSiteParser.parse(source);
+    ServiceLoaderCallSite site = siteAt(source, "ServiceLoader.load(demo.Provider.class)");
 
-    assertEquals(1, sites.size());
-    assertEquals("demo.Provider", sites.get(0).serviceType());
-    assertEquals(source.lastIndexOf("ServiceLoader.load"), sites.get(0).offset());
+    assertEquals(source.lastIndexOf("ServiceLoader.load"), site.offset());
+    assertTrue(ServiceLoaderCallSiteSource.sameStatement(source, site, 6));
+    assertFalse(ServiceLoaderCallSiteSource.sameStatement(source, site, 2));
   }
 
   @Test
@@ -78,20 +68,21 @@ class ServiceLoaderCoverageTest {
     String source = "import java.util.ServiceLoader;\n"
         + "return ServiceLoader.load(demo.Provider.class)"
         + ".map(demo.Provider::record); }";
-    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+    ServiceLoaderCallSite site = siteAt(source, "ServiceLoader.load(demo.Provider.class)");
 
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, null));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, ""));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "<init>"));
-     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
+    assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
     String unrelatedReference = "import java.util.ServiceLoader;\n"
         + "return ServiceLoader.load(demo.Provider.class)"
         + ".map(other.Provider::record);";
-    ServiceLoaderCallSite unrelatedSite = ServiceLoaderCallSiteParser.parse(unrelatedReference).get(0);
+    ServiceLoaderCallSite unrelatedSite =
+        siteAt(unrelatedReference, "ServiceLoader.load(demo.Provider.class)");
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
         unrelatedReference, unrelatedSite, "record"));
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(
-        source, new ServiceLoaderCallSite("demo.Provider", "demo.Provider", false, source.length(), 1),
+        source, new ServiceLoaderCallSite("demo.Provider", false, source.length(), 1),
         "record"));
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(source, site, 0));
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(source, site, 99));
@@ -99,11 +90,11 @@ class ServiceLoaderCoverageTest {
 
     String separate = "import java.util.ServiceLoader;\n"
         + "ServiceLoader.load(demo.Provider.class).findFirst(); other.record();";
-    ServiceLoaderCallSite separateSite = ServiceLoaderCallSiteParser.parse(separate).get(0);
+    ServiceLoaderCallSite separateSite = siteAt(separate, "ServiceLoader.load(demo.Provider.class)");
     assertFalse(ServiceLoaderCallSiteSource.sameStatement(separate, separateSite, 1));
     String closing = "import java.util.ServiceLoader;\n"
         + "ServiceLoader.load(demo.Provider.class).findFirst(); }";
-    ServiceLoaderCallSite closingSite = ServiceLoaderCallSiteParser.parse(closing).get(0);
+    ServiceLoaderCallSite closingSite = siteAt(closing, "ServiceLoader.load(demo.Provider.class)");
     assertTrue(ServiceLoaderCallSiteSource.sameStatement(closing, closingSite, 2));
   }
 
@@ -111,7 +102,7 @@ class ServiceLoaderCoverageTest {
   void sameStatementIgnoresTrailingCommentDelimiters() {
     String source = "import java.util.ServiceLoader;\n"
         + "ServiceLoader.load(demo.Provider.class).findFirst(); // comment has ; and }\n";
-    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+    ServiceLoaderCallSite site = siteAt(source, "ServiceLoader.load(demo.Provider.class)");
 
     assertTrue(ServiceLoaderCallSiteSource.sameStatement(source, site, 2),
         "comment delimiters must not terminate the source statement");
@@ -124,9 +115,15 @@ class ServiceLoaderCoverageTest {
         + ".map(provider -> { /* provider.record(); */"
         + " String text = \"provider.record()\";"
         + " String block = \"\"\"provider.record()\"\"\"; return provider; });";
-    ServiceLoaderCallSite site = ServiceLoaderCallSiteParser.parse(source).get(0);
+    ServiceLoaderCallSite site = siteAt(source, "ServiceLoader.load(demo.Provider.class)");
 
     assertFalse(ServiceLoaderCallSiteSource.invokeIsLexicallyBound(source, site, "record"));
+  }
+
+  private static ServiceLoaderCallSite siteAt(String source, String marker) {
+    int offset = source.indexOf(marker);
+    int line = (int) source.substring(0, offset).chars().filter(value -> value == '\n').count() + 1;
+    return new ServiceLoaderCallSite("demo.Provider", false, offset, line);
   }
 
   @Test

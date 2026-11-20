@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.util.Optional;
 /** Runs the textual baseline and the javac prototype over the same fixture catalog. */
 final class JavacResolverAccuracyHarness {
   private static final MemoryMXBean MEMORY = ManagementFactory.getMemoryMXBean();
+  private static JsonNode FROZEN_BASELINE;
 
   private JavacResolverAccuracyHarness() {}
 
@@ -49,73 +51,81 @@ final class JavacResolverAccuracyHarness {
     return new Report(reports);
   }
 
+  /**
+   * Returns the frozen textual baseline captured before the textual resolver
+   * was removed. It is historical comparison data, not a live measurement.
+   */
   static JavacResolverResult baseline(JavacResolverCell cell, Path cellRoot) {
     if (!cell.baselineAvailable()) {
       return JavacResolverResult.empty(cell.id());
     }
-    Path sourceRoot = cellRoot.resolve("src/main/java");
-    try {
-      for (Map.Entry<String, String> entry : cell.sources().entrySet()) {
-        Path file = sourceRoot.resolve(entry.getKey());
-        Files.createDirectories(file.getParent());
-        Files.writeString(file, entry.getValue(), StandardCharsets.UTF_8);
-      }
-      AnalysisContext context = AnalysisContext.builder()
-          .id("javac-resolver-" + cell.id())
-          .framework(AnalysisContext.Framework.QUARKUS)
-          .frameworkVersion("3.40.1")
-          .fixtureId("javac-resolver-spike")
-          .javaRelease(cell.release())
-          .repositoryRoot(cellRoot)
-          .applicationClasses(cellRoot.resolve("classes"))
-          .selectedProfile("test")
-          .analysisScope(AnalysisContext.Scope.PRODUCTION)
-          .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
-          .dependencyClasspathRequired(false)
-          .provenance(AnalysisContext.Provenance.forTesting())
-          .build();
-      SourceMetadataScanner scanner = new SourceMetadataScanner(context);
-      Optional<SourceMetadataScanner.SourceFile> sourceFile = scanner.sourceFile(cell.owner());
-      String evidencePath = sourceFile
-          .map(file -> cellRoot.resolve("src/main/java").toAbsolutePath().normalize()
-              .relativize(file.path().toAbsolutePath().normalize()).toString())
-          .orElse("");
-      String topLevel = sourceFile.map(SourceMetadataScanner.SourceFile::typeName).orElse("");
-      JavacServiceLoaderSiteResolver.setScopedMode("textual");
-      try {
-        Optional<ServiceLoaderSourceCache.CachedSource> cached =
-            ServiceLoaderSourceCache.source(
-                scanner, new MethodSymbol(cell.owner(), cell.method(), "()V"));
-        if (cached.isEmpty()) {
-          return new JavacResolverResult(cell.id(), List.of(), List.of(), evidencePath, topLevel);
-        }
-        List<JavacResolverFact> facts = new ArrayList<>();
-        for (ServiceLoaderCallSite site : cached.get().sites()) {
-          String serviceType = sourceFile
-              .flatMap(file -> scanner.resolveReferenceType(site.serviceType(), file, site.offset()))
-              .orElse(site.fallbackServiceType());
-          facts.add(new JavacResolverFact(
-              cell.id(),
-              evidencePath.isEmpty() ? cell.siteFile() : evidencePath,
-              topLevel.isEmpty() ? cell.owner() : topLevel,
-              site.line(),
-              0,
-              site.offset(),
-              serviceType,
-              "java.util.ServiceLoader",
-              "load",
-              "TEXTUAL_SITE",
-              "DEFINITE",
-              "",
-              List.of()));
-        }
-        return new JavacResolverResult(cell.id(), facts, List.of(), evidencePath, topLevel);
-      } finally {
-        JavacServiceLoaderSiteResolver.clearScopedMode();
-      }
-    } catch (IOException error) {
-      throw new IllegalStateException("cannot build baseline for " + cell.id(), error);
+    JsonNode entry = frozenBaseline().path("cells").path(cell.id());
+    if (entry.isMissingNode()) {
+      return JavacResolverResult.empty(cell.id());
     }
+    List<JavacResolverFact> facts = new ArrayList<>();
+    for (JsonNode fact : entry.path("facts")) {
+      facts.add(new JavacResolverFact(
+          cell.id(),
+          text(fact, "path"),
+          text(fact, "topLevel"),
+          fact.path("line").asInt(),
+          fact.path("column").asInt(),
+          fact.path("offset").asInt(),
+          text(fact, "serviceType"),
+          text(fact, "owner"),
+          text(fact, "member"),
+          text(fact, "accessibility"),
+          text(fact, "certainty"),
+          text(fact, "promotion"),
+          diagnostics(fact.path("diagnostics"))));
+    }
+    List<JavacResolverAbstention> abstentions = new ArrayList<>();
+    for (JsonNode abstention : entry.path("abstentions")) {
+      abstentions.add(new JavacResolverAbstention(
+          cell.id(),
+          text(abstention, "path"),
+          abstention.path("line").asInt(),
+          abstention.path("column").asInt(),
+          abstention.path("offset").asInt(),
+          text(abstention, "reason"),
+          diagnostics(abstention.path("diagnostics"))));
+    }
+    return new JavacResolverResult(
+        cell.id(),
+        facts,
+        abstentions,
+        text(entry, "selectedPath"),
+        text(entry, "selectedTopLevel"));
+  }
+
+  private static JsonNode frozenBaseline() {
+    if (FROZEN_BASELINE == null) {
+      try {
+        FROZEN_BASELINE = new ObjectMapper().readTree(
+            Path.of("spike/results/javac-symbol-resolver-textual-baseline.json").toFile());
+      } catch (IOException error) {
+        throw new IllegalStateException("cannot read the frozen textual baseline", error);
+      }
+    }
+    return FROZEN_BASELINE;
+  }
+
+  private static String text(JsonNode node, String field) {
+    return node.path(field).asText("");
+  }
+
+  private static List<JavacResolverDiagnostic> diagnostics(JsonNode nodes) {
+    List<JavacResolverDiagnostic> diagnostics = new ArrayList<>();
+    for (JsonNode node : nodes) {
+      diagnostics.add(new JavacResolverDiagnostic(
+          text(node, "code"),
+          text(node, "message"),
+          text(node, "path"),
+          node.path("line").asLong(),
+          node.path("column").asLong()));
+    }
+    return List.copyOf(diagnostics);
   }
 
   static JavacResolverResult javac(JavacResolverCell cell, Path cellRoot) {

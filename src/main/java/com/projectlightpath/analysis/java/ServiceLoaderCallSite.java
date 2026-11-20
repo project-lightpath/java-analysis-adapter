@@ -6,4 +6,11 @@ record ServiceLoaderCallSite(
     String fallbackServiceType,
     boolean explicitClassLoader,
     int offset,
-    int line) {}
+    int line) {
+
+  /** Compile stub for the removal slice; production still supplies both types. */
+  ServiceLoaderCallSite(
+      String serviceType, boolean explicitClassLoader, int offset, int line) {
+    this(serviceType, serviceType, explicitClassLoader, offset, line);
+  }
+}
