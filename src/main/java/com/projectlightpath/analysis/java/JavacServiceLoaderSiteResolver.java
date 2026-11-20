@@ -118,13 +118,18 @@ final class JavacServiceLoaderSiteResolver {
           null, manager, diagnostics, options(scanner), null, units);
       Iterable<? extends CompilationUnitTree> parsed = task.parse();
       task.analyze();
-      boolean failed = diagnostics.getDiagnostics().stream()
-          .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR);
-      if (failed) {
-        // No certainty channel exists on ServiceLoaderCallSite yet. Abstain from
-        // the compiler path rather than emit DEFINITE facts from an incomplete build.
+      List<Diagnostic<? extends JavaFileObject>> capturedDiagnostics =
+          List.copyOf(diagnostics.getDiagnostics());
+      boolean globalError = capturedDiagnostics.stream()
+          .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR && item.getSource() == null);
+      if (globalError) {
         return Map.of();
       }
+      java.util.Set<Path> errorFiles = capturedDiagnostics.stream()
+          .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
+          .map(item -> sourcePath(item.getSource()))
+          .filter(java.util.Objects::nonNull)
+          .collect(java.util.stream.Collectors.toSet());
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
       javax.lang.model.util.Elements elements = task.getElements();
@@ -132,7 +137,24 @@ final class JavacServiceLoaderSiteResolver {
       for (CompilationUnitTree unit : parsed) {
         siteScanner.scan(unit, null);
       }
-      return siteScanner.sites();
+      Map<Path, List<ServiceLoaderCallSite>> safe = new LinkedHashMap<>();
+      for (Map.Entry<Path, List<ServiceLoaderCallSite>> entry : siteScanner.sites().entrySet()) {
+        if (!errorFiles.contains(entry.getKey())) {
+          safe.put(entry.getKey(), entry.getValue());
+        }
+      }
+      return Map.copyOf(safe);
+    }
+  }
+
+  private static Path sourcePath(JavaFileObject source) {
+    if (source == null) {
+      return null;
+    }
+    try {
+      return Path.of(source.toUri()).toAbsolutePath().normalize();
+    } catch (IllegalArgumentException error) {
+      return null;
     }
   }
 
@@ -260,12 +282,11 @@ final class JavacServiceLoaderSiteResolver {
       }
       Element element = ((DeclaredType) erased).asElement();
       if (!(element instanceof TypeElement type)
-          || type.getNestingKind() == javax.lang.model.element.NestingKind.LOCAL
           || type.getNestingKind() == javax.lang.model.element.NestingKind.ANONYMOUS) {
         return null;
       }
-      String canonical = elements.getBinaryName(type).toString();
-      return canonical.isEmpty() ? null : canonical;
+      String binary = elements.getBinaryName(type).toString();
+      return binary.isEmpty() ? null : binary;
     }
   }
 }

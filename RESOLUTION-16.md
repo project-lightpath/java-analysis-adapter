@@ -111,8 +111,8 @@ Gate receipts on the GREEN/EVIDENCE tree:
 - Added a `JavacServiceLoaderSiteResolver` production seam and wired
   `ServiceLoaderSourceCache` to it. javac is the default; textual remains
   available via `-Dflpath.java.resolver=textual`.
-- Default adapter output is unchanged with the flag off; textual resolvers
-  remain the default path.
+- javac is the default path; textual resolvers remain available for rollback
+  and are still covered by their legacy tests.
 - Textual resolvers, dynamic/reflection logic, descriptor logic, dependency
   resolution, and certainty semantics are untouched.
 - No production diagnostics were added, so the `ServiceLoaderScanner.isUnique`
@@ -122,10 +122,9 @@ Gate receipts on the GREEN/EVIDENCE tree:
 
 - The production seam defaults to javac; textual rollback is still available
   for one release.
-- Task-global ERROR downgrade is deliberately conservative: any error in a
-  cell's compiler task downgrades every fact in it. It may over-abstain on
-  unrelated errors; the harness records this and the migration must scope the
-  downgrade to the relevant attribution unit.
+- Production ERROR downgrade is scoped per source file: sites in files with
+  compiler errors are dropped, while unaffected files still emit. The test
+  harness remains task-global and conservative.
 - Duplicate binary names are detected as diagnostics; the prototype does not
   choose a winner.
 - The harness covers ServiceLoader source facts only. Framework annotations,

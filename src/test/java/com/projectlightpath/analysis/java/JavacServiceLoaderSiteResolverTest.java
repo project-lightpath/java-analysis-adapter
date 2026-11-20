@@ -92,6 +92,50 @@ class JavacServiceLoaderSiteResolverTest {
     });
   }
 
+  @Test
+  void unrelatedErrorDoesNotDropValidFileSites() throws IOException {
+    SourceMetadataScanner scanner = scanner("unrelated-error", """
+        package demo;
+        import java.util.*;
+        class Bridge { void audit() { ServiceLoader.load(Object.class); } }
+        """, Map.of("demo/Broken.java", """
+        package demo;
+        class Broken { Missing value; }
+        """));
+    withMode("javac", () -> {
+      Optional<Map<Path, List<ServiceLoaderCallSite>>> sites =
+          JavacServiceLoaderSiteResolver.sites(scanner);
+      assertTrue(sites.isPresent());
+      Path bridge = temp.resolve("unrelated-error/src/main/java/demo/Bridge.java")
+          .toAbsolutePath().normalize();
+      assertFalse(sites.get().getOrDefault(bridge, List.of()).isEmpty());
+    });
+  }
+
+  @Test
+  void localClassServiceTypeIsPreserved() throws IOException {
+    SourceMetadataScanner scanner = scanner("local-service", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            class LocalService { }
+            ServiceLoader.load(LocalService.class);
+          }
+        }
+        """);
+    withMode("javac", () -> {
+      Optional<Map<Path, List<ServiceLoaderCallSite>>> sites =
+          JavacServiceLoaderSiteResolver.sites(scanner);
+      assertTrue(sites.isPresent());
+      Path bridge = temp.resolve("local-service/src/main/java/demo/Bridge.java")
+          .toAbsolutePath().normalize();
+      List<ServiceLoaderCallSite> found = sites.get().getOrDefault(bridge, List.of());
+      assertFalse(found.isEmpty());
+      assertTrue(found.get(0).serviceType().endsWith("$1LocalService"), found.toString());
+    });
+  }
+
   private SourceMetadataScanner scanner(String id, String bridgeSource) throws IOException {
     return scanner(id, bridgeSource, Map.of());
   }
