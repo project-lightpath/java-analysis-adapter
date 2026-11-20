@@ -55,8 +55,11 @@ final class JavacServiceLoaderSiteResolver {
 
   private JavacServiceLoaderSiteResolver() {}
 
-  private static final Map<SourceMetadataScanner,
-      Optional<Map<Path, List<ServiceLoaderCallSite>>>> CACHE =
+  /** Compiler-bound sites plus the files javac rejected, keyed by source path. */
+  private record Analysis(
+      Map<Path, List<ServiceLoaderCallSite>> sites, Map<Path, String> errors) {}
+
+  private static final Map<SourceMetadataScanner, Optional<Analysis>> CACHE =
       Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
@@ -65,15 +68,23 @@ final class JavacServiceLoaderSiteResolver {
    * than falling back to textual guesses.
    */
   static Optional<Map<Path, List<ServiceLoaderCallSite>>> sites(SourceMetadataScanner scanner) {
+    return analysis(scanner).map(Analysis::sites);
+  }
+
+  /** Returns the source files javac rejected and the reason recorded for each. */
+  static Map<Path, String> errors(SourceMetadataScanner scanner) {
+    return analysis(scanner).map(Analysis::errors).orElse(Map.of());
+  }
+
+  private static Optional<Analysis> analysis(SourceMetadataScanner scanner) {
     return CACHE.computeIfAbsent(scanner, JavacServiceLoaderSiteResolver::resolveSites);
   }
 
-  private static Optional<Map<Path, List<ServiceLoaderCallSite>>> resolveSites(
-      SourceMetadataScanner scanner) {
+  private static Optional<Analysis> resolveSites(SourceMetadataScanner scanner) {
     try {
       return Optional.of(compile(scanner));
     } catch (IOException | IllegalArgumentException error) {
-      return Optional.of(Map.of());
+      return Optional.of(new Analysis(Map.of(), Map.of()));
     }
   }
 
@@ -86,14 +97,13 @@ final class JavacServiceLoaderSiteResolver {
     return false;
   }
 
-  private static Map<Path, List<ServiceLoaderCallSite>> compile(
-      SourceMetadataScanner scanner) throws IOException {
+  private static Analysis compile(SourceMetadataScanner scanner) throws IOException {
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
     if (compiler == null) {
-      return Map.of();
+      return new Analysis(Map.of(), Map.of());
     }
     if (scanner.files().isEmpty()) {
-      return Map.of();
+      return new Analysis(Map.of(), Map.of());
     }
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
     try (StandardJavaFileManager manager =
@@ -111,13 +121,18 @@ final class JavacServiceLoaderSiteResolver {
       boolean globalError = capturedDiagnostics.stream()
           .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR && item.getSource() == null);
       if (globalError) {
-        return Map.of();
+        return new Analysis(Map.of(), Map.of());
       }
-      Set<Path> errorFiles = capturedDiagnostics.stream()
+      Map<Path, String> errors = capturedDiagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
           .map(item -> sourcePath(item.getSource()))
           .filter(Objects::nonNull)
-          .collect(Collectors.toSet());
+          .distinct()
+          .collect(Collectors.toMap(
+              path -> path,
+              path -> "javac reported an error; ServiceLoader sites in this file are unavailable",
+              (first, next) -> first,
+              LinkedHashMap::new));
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
       Elements elements = task.getElements();
@@ -127,11 +142,11 @@ final class JavacServiceLoaderSiteResolver {
       }
       Map<Path, List<ServiceLoaderCallSite>> safe = new LinkedHashMap<>();
       for (Map.Entry<Path, List<ServiceLoaderCallSite>> entry : siteScanner.sites().entrySet()) {
-        if (!errorFiles.contains(entry.getKey())) {
+        if (!errors.containsKey(entry.getKey())) {
           safe.put(entry.getKey(), entry.getValue());
         }
       }
-      return Map.copyOf(safe);
+      return new Analysis(Map.copyOf(safe), Map.copyOf(errors));
     }
   }
 
