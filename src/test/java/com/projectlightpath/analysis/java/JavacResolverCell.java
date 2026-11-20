@@ -36,7 +36,9 @@ record JavacResolverCell(
     List<ExpectedSite> aligned = new ArrayList<>();
     for (int index = 0; index < expectedSites.size(); index++) {
       ExpectedSite site = expectedSites.get(index);
-      int offset = index < sites.size() ? offset(sites.get(index)) : -1;
+      int offset = site.offset() >= 0
+          ? site.offset()
+          : (index < sites.size() ? offset(sites.get(index)) : -1);
       aligned.add(new ExpectedSite(site.expectation(), site.serviceType(), offset));
     }
     return new JavacResolverCell(

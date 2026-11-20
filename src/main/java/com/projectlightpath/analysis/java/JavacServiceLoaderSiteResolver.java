@@ -33,6 +33,7 @@ import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
+import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 
 /**
@@ -93,7 +94,10 @@ final class JavacServiceLoaderSiteResolver {
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
     try (StandardJavaFileManager manager =
         compiler.getStandardFileManager(diagnostics, Locale.ROOT, StandardCharsets.UTF_8)) {
-      Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromPaths(files);
+      List<JavaFileObject> units = new ArrayList<>();
+      for (SourceMetadataScanner.SourceFile file : scanner.files()) {
+        units.add(new TextSource(file.path().toUri(), file.source()));
+      }
       JavacTask task = (JavacTask) compiler.getTask(
           null, manager, diagnostics, options(scanner), null, units);
       Iterable<? extends CompilationUnitTree> parsed = task.parse();
@@ -134,6 +138,20 @@ final class JavacServiceLoaderSiteResolver {
     return List.copyOf(options);
   }
 
+  private static final class TextSource extends SimpleJavaFileObject {
+    private final String source;
+
+    TextSource(java.net.URI uri, String source) {
+      super(uri, JavaFileObject.Kind.SOURCE);
+      this.source = source;
+    }
+
+    @Override
+    public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+      return source;
+    }
+  }
+
   private static final class SiteScanner extends TreePathScanner<Void, Void> {
     private final Trees trees;
     private final Types types;
@@ -164,13 +182,16 @@ final class JavacServiceLoaderSiteResolver {
         return super.visitMethodInvocation(node, unused);
       }
       String serviceType = null;
-      for (ExpressionTree argument : node.getArguments()) {
-        serviceType = classLiteralType(path, List.of(argument));
+      int classLiteralIndex = -1;
+      for (int index = 0; index < node.getArguments().size(); index++) {
+        serviceType = classLiteralType(path, List.of(node.getArguments().get(index)));
         if (serviceType != null) {
+          classLiteralIndex = index;
           break;
         }
       }
-      if (serviceType == null) {
+      if (classLiteralIndex != 0) {
+        // The module-layer overload does not discover classpath providers.
         return super.visitMethodInvocation(node, unused);
       }
       long position = startPosition(path);

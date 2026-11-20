@@ -52,7 +52,7 @@ class JavacServiceLoaderSiteResolverTest {
     SourceMetadataScanner scanner = scanner("lookalike", """
         package demo;
         import java.util.*;
-        import static a.Tools.*;
+        import static a.Tools.ServiceLoader;
         class Bridge { void audit() { ServiceLoader.load(Object.class); } }
         """, Map.of("a/Tools.java", """
         package a;
@@ -67,6 +67,26 @@ class JavacServiceLoaderSiteResolverTest {
           JavacServiceLoaderSiteResolver.sites(scanner);
       assertTrue(sites.isPresent());
       Path bridge = temp.resolve("lookalike/src/main/java/demo/Bridge.java")
+          .toAbsolutePath().normalize();
+      assertTrue(sites.get().getOrDefault(bridge, List.of()).isEmpty());
+    });
+  }
+
+  @Test
+  void moduleLayerLoadIsNotAClasspathFact() throws IOException {
+    SourceMetadataScanner scanner = scanner("module-layer", """
+        package demo;
+        import java.lang.ModuleLayer;
+        import java.util.*;
+        class Bridge {
+          void audit() { ServiceLoader.load(ModuleLayer.boot(), Object.class); }
+        }
+        """);
+    withMode("javac", () -> {
+      Optional<Map<Path, List<ServiceLoaderCallSite>>> sites =
+          JavacServiceLoaderSiteResolver.sites(scanner);
+      assertTrue(sites.isPresent());
+      Path bridge = temp.resolve("module-layer/src/main/java/demo/Bridge.java")
           .toAbsolutePath().normalize();
       assertTrue(sites.get().getOrDefault(bridge, List.of()).isEmpty());
     });

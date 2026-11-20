@@ -71,8 +71,8 @@ final class Evaluation {
       } else {
         JavacResolverAbstention abstention = (JavacResolverAbstention) found;
         switch (site.expectation()) {
-          case DEFINITE, POSSIBLE -> lost++;
-          case AMBIGUOUS, MISSING_INPUT -> {
+          case DEFINITE, POSSIBLE, MISSING_INPUT -> lost++;
+          case AMBIGUOUS -> {
             if (!hasEvidence(abstention.diagnostics(), site.expectation())) {
               abstentionMismatch++;
             }

@@ -360,6 +360,8 @@ def main() -> None:
             require(all(expected["offset"] >= 0 for expected in cell["expected"]), f"{cell['id']} has an unaligned expected site")
             facts_by_offset = {fact["offset"]: fact for fact in cell["javac"]["facts"]}
             abstentions_by_offset = {item["offset"]: item for item in cell["javac"]["abstentions"]}
+            require(len(facts_by_offset) == len(cell["javac"]["facts"]), f"{cell['id']} has duplicate fact offsets")
+            require(len(abstentions_by_offset) == len(cell["javac"]["abstentions"]), f"{cell['id']} has duplicate abstention offsets")
             expected_offsets = {expected["offset"] for expected in cell["expected"]}
             require(set(facts_by_offset).issubset(expected_offsets), f"{cell['id']} has a fact outside its expected sites")
             require(set(abstentions_by_offset).issubset(expected_offsets), f"{cell['id']} has an abstention outside its expected sites")
@@ -381,10 +383,12 @@ def main() -> None:
                     require(any(code in diagnostic["code"] for diagnostic in fact["diagnostics"] for code in missing_codes),
                             f"{cell['id']} missing-input diagnostic missing at {offset}")
                 elif expectation == "AMBIGUOUS":
+                    require(fact is None, f"{cell['id']} has a fact at an ambiguous site {offset}")
                     require(abstention is not None, f"{cell['id']} missing ambiguity abstention at {offset}")
                     require(any("ambiguous" in diagnostic["message"].lower() or "ambiguous" in diagnostic["code"]
                                 for diagnostic in abstention["diagnostics"]), f"{cell['id']} ambiguity evidence missing at {offset}")
                 elif expectation == "SHADOWED":
+                    require(fact is None, f"{cell['id']} has a fact at a shadowed site {offset}")
                     require(abstention is not None and abstention["reason"] == "SHADOWED", f"{cell['id']} shadow evidence missing at {offset}")
                 elif expectation == "NO_FACT":
                     require(fact is None, f"{cell['id']} unexpected fact at {offset}")
