@@ -2,7 +2,7 @@
 
 Issue: https://redhat.atlassian.net/browse/FLPATH-5123
 Branch: `flpath-5123/enumeration-budgets`
-Base: `origin/main` @ `6a46a85`
+Base: `origin/main` @ `64eab23` (rebased after parallel-test and e2e-lane changes)
 Plan: `PLAN-5123.md` (v5, adversarial plan review `PLAN_REVIEW_CLEAN`)
 
 ## Change
@@ -38,15 +38,16 @@ diagnostic downgrades every ServiceLoader edge in the analysis to POSSIBLE.
   non-descriptor entries rejected before charging, and the test-count gate.
 - `RED_6` / `GREEN_5` — PR review round 5: candidates that add no descriptor
   release their retention slot; archive-exhaustion cell renamed to its real
-  claim; count gate at 302.
+  claim; count gate at 302 before the rebase.
 
 ## Gates (final tree)
 
-- `make adapter-test`: **302** tests (301 default + 1 large-archive),
-  0 failures (baseline before RED: 275 tests, 0 failures). The target removes
-  both report directories, then runs `spike/scripts/check_test_count.py 302`,
-  which sums them and requires the large-archive execution to have run at
-  least one test and the total to be at least 302.
+- `make adapter-test`: **338** tests (337 default + 1 large-archive),
+  0 failures (baseline before RED: 275 tests, 0 failures; after rebase onto
+  current main: 338 total). The target removes both report directories, then
+  runs `spike/scripts/check_test_count.py 338`, which sums them and requires
+  the large-archive execution to have run at least one test and the total to
+  be at least 338.
 - `make java-lint`: PASS, 0 findings outside the reviewed baseline, 0 CPD.
 - `make evidence-validate`: passes (10 acceptance criteria, 3 candidates,
   10 capability cases, 21 expected relationships, 10 observed results).
@@ -110,9 +111,10 @@ in `PLAN-5123.md`; the load-bearing ones are:
   exhausted, duplicate, unprocessed after an early stop) release their
   retention slot; the misnamed archive-exhaustion cell no longer claims
   rollback coverage; plan version and count-gate wording corrected.
-- CodeRabbit: rate-limited on this repository; `@coderabbitai full review` was
-  posted and returned "Review rate limited", so no bot findings exist yet. The
-  command must be re-run after the quota resets before merge.
+- Rebase integration: current main's parallel JUnit target, e2e lane, and
+  count gate preserved; default 337 plus large-archive 1 = 338 tests.
+- CodeRabbit: `@coderabbitai full review` was posted after rebase; disposition
+  its findings when the review completes.
 
 ## Java 17 parity
 
