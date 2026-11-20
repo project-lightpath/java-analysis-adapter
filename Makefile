@@ -1,13 +1,13 @@
-.PHONY: test package adapter-test adapter-package validator-test java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis e2e-test
+.PHONY: package adapter-test adapter-package validator-test java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis e2e-test
 
-adapter-test test:
+
+# The one adapter test target. JUnit schedules test methods in parallel
+# (src/test/resources/junit-platform.properties); Maven only compiles and runs.
+adapter-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp test -f pom.xml
 
 e2e-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=ServiceLoaderEndToEndTest test -f pom.xml
-
-adapter-test-sharded:
-	python3 scripts/sharded_test.py
 
 validator-test:
 	python3 -m unittest spike/scripts/test_validators.py

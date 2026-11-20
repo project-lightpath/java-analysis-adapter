@@ -19,7 +19,7 @@ uniquely identified remains unresolved/abstained.
 Run the adapter checks with:
 
 ```sh
-make test
+make adapter-test
 make package
 ```
 
