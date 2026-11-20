@@ -97,8 +97,9 @@ large-archive). Count did not decrease.
   diagnostic for javac errors.
 - **R2:** textual re-resolution in the reader is gone. javac binary names are
   used verbatim, including `$` for nested and local types.
-- **R3:** the frozen baseline timings are zero; the evidence view excludes them.
-  The raw JSON must not be read as a fresh performance measurement.
+- **R3:** the frozen baseline's `wallMillis`/`peakHeapBytes` reflect a JSON read,
+  not the removed textual resolver. The evidence view excludes them; the raw
+  report must not be read as a fresh performance measurement.
 - **R4:** the `Javac` class prefix remains although the resolver is now the only
   path. Renaming is deferred to avoid churn.
 - **R5:** catching javac's wrapped `StackOverflowError` trades a crash for a

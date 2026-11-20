@@ -150,8 +150,9 @@ avoid a compile-only churn across seven resolver tests; it is always present.
 - **R3:** `ServiceLoaderCallSite` loses `fallbackServiceType`; external/test
   constructors must use the 4-argument form. Only `ServiceLoaderCoverageTest`
   constructs one in tests.
-- **R4:** frozen baseline timings are zero; evidence view ignores them. A reader
-  of the raw JSON must not treat `0` as a measurement.
+- **R4:** frozen baseline timing fields reflect a JSON read, not the removed
+  resolver; the evidence view ignores them. A reader of the raw JSON must not
+  treat them as a measurement.
 - **R5:** the `Javac` prefix remains although the resolver is now the only path;
   renaming is deferred to avoid churn.
 
