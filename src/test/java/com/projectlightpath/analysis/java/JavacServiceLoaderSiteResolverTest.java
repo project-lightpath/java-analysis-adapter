@@ -141,6 +141,39 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
+  void erroringFileProducesASourceDiagnosticAndAbstains() throws IOException {
+    SourceMetadataScanner scanner = scanner("source-error", """
+        package demo;
+        import java.util.*;
+        class Bridge {
+          void audit() {
+            Missing value;
+            ServiceLoader.load(Object.class);
+          }
+        }
+        """);
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "audit", "()V"),
+        new MethodSymbol("demo.Provider", "record", "()V"),
+        5,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(scanner.context);
+
+    ServiceLoaderDescriptorScanner.Resolution resolution =
+        ServiceLoaderDescriptorScanner.resolve(scanner.context, edge, scan, scanner);
+
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().contains("javac_source_error"),
+        resolution.limitation());
+    assertTrue(resolution.evidence().stream().anyMatch(item ->
+        item.kind().equals("service_loader_scan_diagnostic")
+            && item.attributes().get("diagnosticCode").equals("javac_source_error")),
+        resolution.evidence().toString());
+  }
+
+  @Test
   void erroringFileSitesAreDroppedWhileValidSiblingSurvives() throws IOException {
     SourceMetadataScanner scanner = scanner("error-file-site", """
         package demo;
