@@ -38,10 +38,26 @@ safe direction and the reason the diagnostic is explicit rather than per-file.
   root.
 - `EVIDENCE_2` — this record.
 
+## Review round 1
+
+Three findings from an independent Engram-grounded review, all addressed:
+
+1. **Global javac failures were still silent.** Compiler-unavailable, global
+   error, and contained stack-exhaustion now produce `javac_unavailable`,
+   `javac_global_error`, or `javac_source_error` diagnostics with the stable
+   path token `selected-sources`.
+2. **The original test did not prove causation.** Added a clean-sibling
+   counterfactual: the same edge is DEFINITE without an error file and POSSIBLE
+   once a sibling file fails javac. This proves the scan-global downgrade.
+3. **Outside-root paths could leak absolute paths.** The fallback is now
+   `<external>/<file-name>` (or `<external>` when there is no file name).
+   Boundary tests cover an in-root file, an outside-root file, a one-character
+   name, a sibling path with a shared prefix, and the root itself.
+
 ## Gates
 
-- `make adapter-test`: **342** default + **1** large-archive = **343**, 0
-  failures (gate >= 338; one new regression test).
+- `make adapter-test`: **345** default + **1** large-archive = **346**, 0
+  failures (gate >= 338; four new regression tests).
 - `make java-lint`: PASS, 0 PMD/CPD findings.
 - `make evidence-validate`: PASS.
 
@@ -49,10 +65,9 @@ safe direction and the reason the diagnostic is explicit rather than per-file.
 
 - The diagnostic detail is intentionally generic; the compiler message is not
   copied into evidence.
-- A global javac failure (compiler unavailable, global error, or contained
-  parser stack exhaustion) still fails closed with an empty site map and no
-  per-file diagnostic. Follow-up candidate: a `javac_source_error` diagnostic
-  with an empty path for the global case.
+- `javac_unavailable` and `javac_global_error` are covered by construction and
+  review, not by a fixture (the test JVM always has a compiler and forcing a
+  source-less global javac error is not portable).
 - The scan-global downgrade is coarse: an unrelated bad file hides valid
   ServiceLoader DEFINITEs. This is intentional under the existing certainty
   policy; per-declaration error scoping is the alternative.

@@ -174,6 +174,64 @@ class JavacServiceLoaderSiteResolverTest {
   }
 
   @Test
+  void sourceErrorInOneFileDowngradesACleanSiblingEdge() throws IOException {
+    String bridge = """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge { void audit() { ServiceLoader.load(Provider.class).findFirst()
+            .ifPresent(value -> value.record()); } }
+        """;
+    Map<String, String> clean = Map.of(
+        "demo/Provider.java", "package demo; interface Provider { void record(); }",
+        "demo/ProviderImpl.java",
+        "package demo; final class ProviderImpl implements Provider { public void record() { } }");
+    ServiceLoaderDescriptorScanner.Scan scan = new ServiceLoaderDescriptorScanner.Scan(List.of(
+        new ServiceLoaderDescriptorScanner.Descriptor(
+            "demo.Provider", List.of("demo.ProviderImpl"),
+            "META-INF/services/demo.Provider", "fingerprint", "meta_inf_services", List.of())));
+    CallEdge edge = providerEdge();
+
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
+        resolve(scanner("clean-sibling", bridge, clean), scan, edge).certainty());
+
+    Map<String, String> withError = new java.util.HashMap<>(clean);
+    withError.put("demo/Broken.java", "package demo; class Broken { Missing value; }");
+    ServiceLoaderDescriptorScanner.Resolution broken =
+        resolve(scanner("error-sibling", bridge, withError), scan, edge);
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, broken.certainty());
+    assertTrue(broken.limitation().contains("javac_source_error"), broken.limitation());
+  }
+
+  @Test
+  void sourceDiagnosticPathsNeverLeakAbsolutePaths() throws IOException {
+    SourceMetadataScanner scanner = scanner("paths", "package demo; class Bridge { }");
+    Path root = temp.resolve("paths").toAbsolutePath().normalize();
+    assertEquals("a/B.java",
+        ServiceLoaderDescriptorScanner.diagnosticPath(scanner, root.resolve("a/B.java")));
+    assertEquals("<external>/B.java", ServiceLoaderDescriptorScanner.diagnosticPath(
+        scanner, temp.resolve("elsewhere/B.java").toAbsolutePath().normalize()));
+    assertEquals("<external>/B", ServiceLoaderDescriptorScanner.diagnosticPath(
+        scanner, temp.resolve("elsewhere/B").toAbsolutePath().normalize()));
+    assertEquals("<external>/B.java", ServiceLoaderDescriptorScanner.diagnosticPath(
+        scanner, temp.resolve("paths-other/B.java").toAbsolutePath().normalize()));
+    assertEquals("", ServiceLoaderDescriptorScanner.diagnosticPath(scanner, root));
+  }
+
+  @Test
+  void globalCompileFailureProducesASourceDiagnostic() throws IOException {
+    StringBuilder name = new StringBuilder("a");
+    for (int index = 0; index < 20000; index++) {
+      name.append(".b");
+    }
+    SourceMetadataScanner scanner = scanner("global-failure",
+        "package demo;\nimport " + name + ".*;\nclass Bridge { }\n");
+    ServiceLoaderDescriptorScanner.Resolution resolution = resolve(
+        scanner, new ServiceLoaderDescriptorScanner.Scan(List.of()), providerEdge());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().contains("javac_source_error"), resolution.limitation());
+  }
+
+  @Test
   void erroringFileSitesAreDroppedWhileValidSiblingSurvives() throws IOException {
     SourceMetadataScanner scanner = scanner("error-file-site", """
         package demo;
@@ -198,6 +256,23 @@ class JavacServiceLoaderSiteResolverTest {
         .toAbsolutePath().normalize();
     assertFalse(sites.get().getOrDefault(bridge, List.of()).isEmpty());
     assertTrue(sites.get().getOrDefault(broken, List.of()).isEmpty());
+  }
+
+  private static CallEdge providerEdge() {
+    return new CallEdge(
+        new MethodSymbol("demo.Bridge", "audit", "()V"),
+        new MethodSymbol("demo.ProviderImpl", "record", "()V"),
+        4,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+  }
+
+  private static ServiceLoaderDescriptorScanner.Resolution resolve(
+      SourceMetadataScanner scanner,
+      ServiceLoaderDescriptorScanner.Scan scan,
+      CallEdge edge) {
+    return ServiceLoaderDescriptorScanner.resolve(scanner.context, edge, scan, scanner);
   }
 
   private SourceMetadataScanner scanner(String id, String bridgeSource) throws IOException {

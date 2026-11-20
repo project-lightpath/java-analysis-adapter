@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,18 +36,26 @@ final class ServiceLoaderDescriptorScanner {
    */
   static Scan withSourceDiagnostics(Scan scan, SourceMetadataScanner scanner) {
     Map<Path, String> errors = JavacServiceLoaderSiteResolver.errors(scanner);
-    if (errors.isEmpty()) {
+    Optional<JavacServiceLoaderSiteResolver.Failure> failure =
+        JavacServiceLoaderSiteResolver.failure(scanner);
+    if (errors.isEmpty() && failure.isEmpty()) {
       return scan;
     }
     List<Diagnostic> diagnostics = new ArrayList<>(scan.diagnostics());
+    failure.ifPresent(item -> diagnostics.add(
+        new Diagnostic(item.code(), "selected-sources", item.detail())));
     errors.forEach((path, detail) -> diagnostics.add(new Diagnostic(
         "javac_source_error", diagnosticPath(scanner, path), detail)));
     return new Scan(scan.descriptors(), diagnostics);
   }
 
-  private static String diagnosticPath(SourceMetadataScanner scanner, Path path) {
+  static String diagnosticPath(SourceMetadataScanner scanner, Path path) {
     Path root = scanner.context.repositoryRoot().toAbsolutePath().normalize();
-    return path.startsWith(root) ? root.relativize(path).toString() : path.toString();
+    if (path.startsWith(root)) {
+      return root.relativize(path).toString();
+    }
+    Path fileName = path.getFileName();
+    return fileName == null ? "<external>" : "<external>/" + fileName;
   }
 
   static Resolution resolve(

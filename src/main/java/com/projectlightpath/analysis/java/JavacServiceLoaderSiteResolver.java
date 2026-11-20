@@ -55,9 +55,14 @@ final class JavacServiceLoaderSiteResolver {
 
   private JavacServiceLoaderSiteResolver() {}
 
+  /** A compile-wide failure that has no single source file. */
+  record Failure(String code, String detail) {}
+
   /** Compiler-bound sites plus the files javac rejected, keyed by source path. */
   private record Analysis(
-      Map<Path, List<ServiceLoaderCallSite>> sites, Map<Path, String> errors) {}
+      Map<Path, List<ServiceLoaderCallSite>> sites,
+      Map<Path, String> errors,
+      Failure failure) {}
 
   private static final Map<SourceMetadataScanner, Optional<Analysis>> CACHE =
       Collections.synchronizedMap(new WeakHashMap<>());
@@ -76,6 +81,11 @@ final class JavacServiceLoaderSiteResolver {
     return analysis(scanner).map(Analysis::errors).orElse(Map.of());
   }
 
+  /** Returns a compile-wide failure that is not attributable to one source file. */
+  static Optional<Failure> failure(SourceMetadataScanner scanner) {
+    return analysis(scanner).map(Analysis::failure);
+  }
+
   private static Optional<Analysis> analysis(SourceMetadataScanner scanner) {
     return CACHE.computeIfAbsent(scanner, JavacServiceLoaderSiteResolver::resolveSites);
   }
@@ -84,7 +94,8 @@ final class JavacServiceLoaderSiteResolver {
     try {
       return Optional.of(compile(scanner));
     } catch (IOException | IllegalArgumentException error) {
-      return Optional.of(new Analysis(Map.of(), Map.of()));
+      return Optional.of(new Analysis(Map.of(), Map.of(), new Failure(
+          "javac_source_error", "javac could not analyze the selected sources")));
     }
   }
 
@@ -100,10 +111,11 @@ final class JavacServiceLoaderSiteResolver {
   private static Analysis compile(SourceMetadataScanner scanner) throws IOException {
     JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
     if (compiler == null) {
-      return new Analysis(Map.of(), Map.of());
+      return new Analysis(Map.of(), Map.of(), new Failure(
+          "javac_unavailable", "javac is not available; ServiceLoader sites cannot be resolved"));
     }
     if (scanner.files().isEmpty()) {
-      return new Analysis(Map.of(), Map.of());
+      return new Analysis(Map.of(), Map.of(), null);
     }
     DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
     try (StandardJavaFileManager manager =
@@ -121,7 +133,8 @@ final class JavacServiceLoaderSiteResolver {
       boolean globalError = capturedDiagnostics.stream()
           .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR && item.getSource() == null);
       if (globalError) {
-        return new Analysis(Map.of(), Map.of());
+        return new Analysis(Map.of(), Map.of(), new Failure(
+            "javac_global_error", "javac reported a global error; ServiceLoader sites are unavailable"));
       }
       Map<Path, String> errors = capturedDiagnostics.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
@@ -146,7 +159,7 @@ final class JavacServiceLoaderSiteResolver {
           safe.put(entry.getKey(), entry.getValue());
         }
       }
-      return new Analysis(Map.copyOf(safe), Map.copyOf(errors));
+      return new Analysis(Map.copyOf(safe), Map.copyOf(errors), null);
     }
   }
 
