@@ -98,8 +98,8 @@ per cell. They are identical. Fact order is sorted by offset and service type.
 
 Gate receipts on the GREEN/EVIDENCE tree:
 
-- `make adapter-test` — **306 tests**, 0 failures, 0 errors (baseline 291,
-  +15).
+- `make adapter-test` — **307 tests**, 0 failures, 0 errors (baseline 291,
+  +16).
 - `make java-lint` — PASS, 0 PMD/CPD findings. The project's
   `<includeTests>false</includeTests>` means this gate does not lint the
   test-scope spike code; review covers that gap explicitly.
