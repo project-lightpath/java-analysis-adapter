@@ -60,6 +60,8 @@
         <version>3.5.0</version>
         <configuration>
           <useModulePath>false</useModulePath>
+          <!-- Parallel JUnit execution builds several SootUp scenes at once. -->
+          <argLine>-Xmx10g</argLine>
         </configuration>
       </plugin>
       <plugin>
