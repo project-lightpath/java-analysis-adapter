@@ -63,9 +63,9 @@ final class ServiceLoaderDescriptorArchiveSource {
     ServiceLoaderDescriptorSpill spill = null;
     try {
       SeekableByteChannel channel = config.channelOpener().open(normalized);
-      spill = new ServiceLoaderDescriptorSpill(config);
       directory = new ServiceLoaderDescriptorZipDirectory(
           channel, size, config, state);
+      spill = new ServiceLoaderDescriptorSpill(config);
       ArchiveEntries entries = enumerate(normalized, directory, spill, state);
       if (!entries.complete()) {
         return;
@@ -140,9 +140,15 @@ final class ServiceLoaderDescriptorArchiveSource {
     ServiceLoaderDescriptorSpill.Sort selectedSort = spill.new Sort(
         Comparator.comparing(ServiceLoaderDescriptorZipEntry::name)
             .thenComparingLong(ServiceLoaderDescriptorZipEntry::local));
-    ServiceLoaderDescriptorSpill.Sort rangeSort = spill.new Sort(
-        Comparator.comparingLong(ServiceLoaderDescriptorZipEntry::local)
-            .thenComparingLong(ServiceLoaderDescriptorZipEntry::end));
+    ServiceLoaderDescriptorSpill.Sort rangeSort;
+    try {
+      rangeSort = spill.new Sort(
+          Comparator.comparingLong(ServiceLoaderDescriptorZipEntry::local)
+              .thenComparingLong(ServiceLoaderDescriptorZipEntry::end));
+    } catch (IOException error) {
+      closeSort(selectedSort);
+      throw error;
+    }
     try {
       directory.walk(entry -> {
         String entryPath = archive + "!/" + entry.name();
@@ -152,6 +158,7 @@ final class ServiceLoaderDescriptorArchiveSource {
           complete[0] = false;
           throw new StopWalk();
         }
+        rangeSort.add(entry);
         if (entry.directory()) {
           return;
         }
@@ -175,7 +182,10 @@ final class ServiceLoaderDescriptorArchiveSource {
             throw new StopWalk();
           }
           retainedNames.add(entry.name());
-          selectedSort.add(entry);
+          selectedSort.add(entry.comment().isEmpty() ? entry : new ServiceLoaderDescriptorZipEntry(
+              entry.name(), entry.flags(), entry.method(), entry.crc(),
+              entry.compressed(), entry.length(), entry.local(), entry.data(),
+              entry.end(), entry.extraLength(), ""));
         }
         if (entry.name().equals(ServiceLoaderDescriptorSource.MODULE_INFO)
             && module[0] == null) {
@@ -185,7 +195,6 @@ final class ServiceLoaderDescriptorArchiveSource {
             && ServiceLoaderDescriptorEntryNames.isVersionedModuleInfo(entry.name())) {
           versionedModule[0] = entry.name();
         }
-        rangeSort.add(entry);
       });
       if (!complete[0]) {
         return new ArchiveEntries(List.of(), null, null, false);
@@ -288,7 +297,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       }
       return ServiceLoaderDescriptorSource.addModuleBytes(
           bytes, modulePath, descriptors, state);
-    } catch (InterruptedIOException error) {
+    } catch (InterruptedIOException | ServiceLoaderDescriptorZipDirectory.RawIoLimitException error) {
       throw error;
     } catch (IOException error) {
       state.diagnostic(
@@ -324,7 +333,7 @@ final class ServiceLoaderDescriptorArchiveSource {
           ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
           parsed.malformedEntries()));
-    } catch (InterruptedIOException error) {
+    } catch (InterruptedIOException | ServiceLoaderDescriptorZipDirectory.RawIoLimitException error) {
       throw error;
     } catch (IOException error) {
       state.diagnostic(

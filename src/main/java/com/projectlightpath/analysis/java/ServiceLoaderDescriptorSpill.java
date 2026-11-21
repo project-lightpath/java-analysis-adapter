@@ -72,7 +72,6 @@ final class ServiceLoaderDescriptorSpill implements AutoCloseable {
       createdRoot = Files.createTempDirectory(parent, "flpath-5124-spill-");
     }
     root = createdRoot;
-    root.toFile().deleteOnExit();
   }
 
   Path root() {
@@ -110,7 +109,6 @@ final class ServiceLoaderDescriptorSpill implements AutoCloseable {
 
     Tape() throws IOException {
       path = Files.createTempFile(root, "tape-", ".bin");
-      path.toFile().deleteOnExit();
       files++;
       created++;
       peakFiles = Math.max(peakFiles, files);
@@ -459,11 +457,13 @@ final class ServiceLoaderDescriptorSpill implements AutoCloseable {
           }
         }
       }
-    } catch (IOException error) {
+    } catch (IOException | java.nio.file.DirectoryIteratorException error) {
+      Throwable cause = error instanceof java.nio.file.DirectoryIteratorException iterator
+          ? iterator.getCause() : error;
       if (failure == null) {
-        failure = new SpillCleanupException("spill root read failed", error);
+        failure = new SpillCleanupException("spill root read failed", cause);
       } else {
-        failure.addSuppressed(error);
+        failure.addSuppressed(cause);
       }
     }
     try {

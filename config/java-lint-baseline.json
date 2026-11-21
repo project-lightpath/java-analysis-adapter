@@ -8,12 +8,12 @@
     "findings": [
       {
         "classification": "maintainability",
-        "fingerprint": "48bb48166d71183803738f17ad75665fc91df146ffb978ccc13f5656da6760ba",
+        "fingerprint": "bce1ecf19a1280bb3619a87e76c147db3032bea11d55edd096a12f25d9d16fab",
         "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
       },
       {
         "classification": "maintainability",
-        "fingerprint": "9a9e129495ad9efc8ec2e36a5a3b962ad93aa72867f047fed9a664d88d4334da",
+        "fingerprint": "b9781ec04ff2c953f18dacf4ae457ef3108928231451f8f2be63b3a0880119a2",
         "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
       },
       {
@@ -68,12 +68,17 @@
       },
       {
         "classification": "maintainability",
-        "fingerprint": "33083542bb260c699bc39064545f8f78f280b2d057f0faee43f95691caf205e1",
+        "fingerprint": "99e443e86810a5737dfc457cbb0e80d6df9e31e7a3826eac4a86757f990442f9",
         "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
       },
       {
         "classification": "maintainability",
-        "fingerprint": "7fe7556d6fadf0642b69597b69f4ed47c815fda51b21b397245d156cfc9632e8",
+        "fingerprint": "51432c1cc347917c6c300c781ff4fa4d0e4c96b10a40ac0c04eaf47f4ae4efc3",
+        "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
+      },
+      {
+        "classification": "maintainability",
+        "fingerprint": "69e52a600ed3455db96edb8bad6ecac8b209bb0857df3d92815ae26d131a1db9",
         "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
       },
       {
@@ -88,12 +93,12 @@
       },
       {
         "classification": "maintainability",
-        "fingerprint": "ffc16755f8b000d248d7071716499532e16875e3a4db9046c5b16a7794a32e79",
+        "fingerprint": "f692877b0b761b163cccd4aa3517f8a1ac6af883a772b50e0382430da74f6635",
         "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
       },
       {
         "classification": "maintainability",
-        "fingerprint": "051bd46dbdd9820b0f8d6768e1e712c04bc6cce101dbb46d50caf56e50a79a47",
+        "fingerprint": "592874351e49201189a31737b98093a2fbb594ef9891812507279f1bb3efc16b",
         "rationale": "FLPATH-5124 seekable ZIP reader: inherent to the bounded central-directory/parser state machine and covered by differential, budget and lifetime tests; reviewed in the integration PR."
       },
       {

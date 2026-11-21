@@ -180,7 +180,7 @@ class ServiceLoaderSeekableZipTest {
     assertTrue(state.diagnostics().stream()
         .anyMatch(item -> item.code().equals("descriptor_scan_interrupted")),
         state.diagnostics().toString());
-    assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+    assertTrue(empty(spillRoot), "spill root not empty");
   }
 
   @Test
@@ -206,7 +206,7 @@ class ServiceLoaderSeekableZipTest {
         .anyMatch(item -> item.code().equals("descriptor_scan_interrupted")),
         state.diagnostics().toString());
     assertFalse(Thread.currentThread().isInterrupted());
-    assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+    assertTrue(empty(spillRoot), "spill root not empty");
   }
 
   private static final class InterruptingChannel implements SeekableByteChannel {
@@ -285,7 +285,7 @@ class ServiceLoaderSeekableZipTest {
     assertTrue(state.diagnostics().stream()
         .anyMatch(item -> item.code().equals("archive_spill_limit")),
         state.diagnostics().toString());
-    assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+    assertTrue(empty(spillRoot), "spill root not empty");
   }
 
   @Test
@@ -301,7 +301,7 @@ class ServiceLoaderSeekableZipTest {
         ServiceLoaderDescriptorArchiveConfig.defaults().withTempRoot(spillRoot));
 
     assertEquals(1, descriptors.size(), state.diagnostics().toString());
-    assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+    assertTrue(empty(spillRoot), "spill root not empty");
   }
 
   @Test
@@ -342,7 +342,7 @@ class ServiceLoaderSeekableZipTest {
     assertTrue(state.diagnostics().stream().anyMatch(item ->
         item.code().equals("invalid_archive")
             || item.code().equals("archive_read_error")), state.diagnostics().toString());
-    assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+    assertTrue(empty(spillRoot), "spill root not empty");
   }
 
   private static final class FailingChannel implements SeekableByteChannel {

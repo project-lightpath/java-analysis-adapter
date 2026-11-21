@@ -152,12 +152,23 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     int length = (int) Math.min(size, 65_557);
     byte[] tail = read(size - length, length);
     int eocd = -1;
+    int lastCandidate = -1;
     for (int index = length - 22; index >= 0; index--) {
       if (u32(tail, index) == 0x06054b50L
           && index + 22 + u16(tail, index + 20) == length) {
-        eocd = index;
-        break;
+        if (lastCandidate < 0) {
+          lastCandidate = index;
+        }
+        if (u16(tail, index + 10) > 0
+            || u32(tail, index + 12) > 0
+            || u32(tail, index + 16) > 0) {
+          eocd = index;
+          break;
+        }
       }
+    }
+    if (eocd < 0) {
+      eocd = lastCandidate;
     }
     require(eocd >= 0, "missing_or_truncated_eocd");
     require(u16(tail, eocd + 4) == 0 && u16(tail, eocd + 6) == 0, "unsupported_multidisk");
@@ -169,7 +180,7 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     require(u16(tail, eocd + 8) == expected, "eocd_count_mismatch");
     boolean sentinel = bytes == U32 || offset == U32;
     byte[] locator = end >= 20 ? read(end - 20, 20) : new byte[20];
-    if (u32(locator, 0) == 0x07064b50L) {
+    if ((sentinel || expected == 65_535) && u32(locator, 0) == 0x07064b50L) {
       require(u32(locator, 4) == 0 && u32(locator, 16) == 1, "unsupported_multidisk");
       long zip64Position = u64(locator, 8);
       byte[] zip64 = read(zip64Position, 56);
@@ -199,6 +210,8 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     cenEnd = endCen;
     prefix = cenStart - offset;
     require(expected <= bytes / 46, "impossible_entry_count");
+    require(expected == 0 || u32(read(cenStart, 4), 0) == 0x02014b50L,
+        "invalid_cen_signature");
   }
 
   static long[] extra(
@@ -287,6 +300,7 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     require((flags & ~(0x800 | 8 | 6)) == 0, "unsupported_flags_or_encryption");
     require(method == 0 || method == 8, "unsupported_method");
     boolean utf8 = (flags & 0x800) != 0;
+    boolean cenZip64Sizes = u32(header, 24) == U32 || u32(header, 20) == U32;
     byte[] nameBytes = read(position + 46, nameLength);
     String name = decode(nameBytes, utf8);
     require(nameLength > 0 && name.indexOf('\0') < 0, "invalid_name");
@@ -319,7 +333,8 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
               && localFields[1] == fields[1],
           "local_cen_sizes_crc_mismatch");
     } else {
-      boolean wide = u32(localHeader, 18) == U32
+      boolean wide = cenZip64Sizes
+          || u32(localHeader, 18) == U32
           || u32(localHeader, 22) == U32
           || fields[0] >= U32
           || fields[1] >= U32;
@@ -504,6 +519,9 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
       int count = Math.min(length, available);
       System.arraycopy(output, 0, target, offset, count);
       available -= count;
+      if (available > 0) {
+        System.arraycopy(output, count, output, 0, available);
+      }
       return count;
     }
 
