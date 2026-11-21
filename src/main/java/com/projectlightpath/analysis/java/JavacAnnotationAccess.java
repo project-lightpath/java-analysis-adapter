@@ -32,19 +32,13 @@ final class JavacAnnotationAccess {
   /** Returns the unique index member matching owner, name, and arity. */
   Optional<JavacSourceSymbolIndex.MemberInfo> member(
       String typeName, String memberName, int parameterCount) {
-    if (!enabled()) {
-      return Optional.empty();
-    }
-    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
-    if (index.isEmpty()) {
-      return Optional.empty();
-    }
-    List<JavacSourceSymbolIndex.MemberInfo> matches =
-        index.get().members(typeName, memberName).stream()
+    return JavacSourceSymbolIndex.of(context)
+        .map(index -> index.members(typeName, memberName).stream()
             .filter(member -> member.kind().equals("method")
                 && member.parameterTypes().size() == parameterCount)
-            .toList();
-    return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+            .toList())
+        .filter(matches -> matches.size() == 1)
+        .map(matches -> matches.get(0));
   }
 
   /**
@@ -113,9 +107,6 @@ final class JavacAnnotationAccess {
       String rawParameter, String ownerType, String memberName,
       int parameterCount, int parameterIndex) {
     String textual = SourceMetadataScanner.parameterType(rawParameter);
-    if (!enabled() || !repairTriggered(rawParameter)) {
-      return textual;
-    }
     return repairedParameterType(rawParameter, ownerType, memberName,
             parameterCount, parameterIndex)
         .orElse(textual);
