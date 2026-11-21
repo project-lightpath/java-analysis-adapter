@@ -189,8 +189,11 @@ Cache keys: `Map<Path, List<TypeInfo>>` by source file;
 `package-info.java` walk path (backing `packageAnnotations`);
 `Map<String,
 List<TypeInfo>>` by canonical name and by binary name (nested types
-included; local/anonymous classes have empty canonical names and are keyed
-by binary name only; lists absorb duplicate binary names). The per-file
+included; local/anonymous classes are keyed by binary name only — the
+pre-RED scratch probe showed a local class's `getQualifiedName()` is its
+**bare simple name** (`LocalService`, collides across files) and an
+anonymous class's is empty, so neither is a usable canonical key; lists
+absorb duplicate binary names). The per-file
 map's keys and `TypeInfo.file` are **absolute normalized walk paths** —
 only `IndexDiagnostic.path` is rendered (displayPath/repository-relative);
 a displayPath-keyed implementation would silently miss every in-repo
@@ -358,6 +361,21 @@ precedence cells are out of scope here:
     `javac_unavailable` diagnostic, zero-compilation delta; a second
     `of()` returns the same cached index with the delta still 0
     (failure caching pinned).
+
+## Pre-RED scratch probe results (run 2026-11-20, JDK 27, --release 17)
+
+- **D3 collision**: both entries survive `analyze()` — nested
+  `demo.Outer.Inner` (qualified `demo.Outer.Inner`, binary
+  `demo.Outer$Inner`, `DECLARED`, unflagged) and top-level
+  `demo.Outer$Inner` (qualified/binary `demo.Outer$Inner`, asType
+  `ERROR`) plus a `compiler.err.duplicate.class` diagnostic. The cell's
+  double-assertion holds as written.
+- **Local class qualified name**: `LocalService` — the bare simple name,
+  not empty. Anonymous: empty. Neither is a unique canonical key, so
+  the cache-keys rule above keys both by binary name only (amended).
+- **Nested member type**: parameter `Inner p` renders `demo.Outer.Inner`
+  in both `toString()` and erasure — the canonical dotted spelling
+  holds.
 
 ## TDD sequence
 
