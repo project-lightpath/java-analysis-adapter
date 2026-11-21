@@ -107,21 +107,26 @@ The textual path emits **source spellings with generics retained**
 wholesale replacement would change every descriptor, not just
 annotation-broken ones. Decision:
 
-- **Repair trigger (loop-2/3 fix)**: a parameter is annotation-broken
+- **Repair trigger (loop-2/3/4 fix)**: a parameter is annotation-broken
   when its raw text contains an annotation the textual stripper cannot
   fully consume: `@` not followed by `[A-Za-z_]` (Unicode/`$` names),
-  an ASCII annotation name immediately followed by `$` or a non-ASCII
-  character (the `@Mar` + `$k` partial-consumption tail), or a
-  post-strip output that still contains `@` or `(`. Plain ASCII
-  annotations (`@Deprecated`, `@Ann String`) and type-use annotations
-  inside generics (`List<@Ann String>`) strip cleanly and stay
-  textual — a cell pins `@Deprecated String p` identical under both
-  flags. (Loop-2's justification erred on one shape: `(value=1)String`
-  does contain `(`; the provable miss is the `$k` tail only.) A
-  pre-RED scratch probe pins the predicate against every issue cell
-  shape (plain, `final`, annotated-plain, annotated-with-args,
-  qualified, `$`-named, Unicode, varargs, array, generic with type-use
-  annotation) before RED.
+  the character at the end of the **maximal
+  `@[A-Za-z_][\w.]*` match** being `$` or non-ASCII (the `@Ma` + `Ωga`
+  and `@pkg.` + `Ωmega` partial-consumption tails), or a post-strip
+  output that still contains `@` or `(`. Plain ASCII annotations
+  (`@Deprecated`, `@Ann String`) and type-use annotations inside
+  generics (`List<@Ann String>`) strip cleanly and stay textual — a
+  cell pins `@Deprecated String p` identical under both flags. The
+  trigger is implemented as a character-class scan
+  (`Character.isJavaIdentifierPart`-based), so the helper carries no
+  `@[A-Za-z_]` regex literal (cell 12 compatibility). (Loop-2's
+  justification erred on one shape: `(value=1)String` does contain
+  `(`; the provable miss is the `$k` tail only.) A pre-RED scratch
+  probe pins the predicate against every issue cell shape (plain,
+  `final`, annotated-plain, annotated-with-args, qualified,
+  `$`-named, Unicode-initial, mixed ASCII/non-ASCII (`@MaΩga`,
+  `@pkg.Ωmega`), varargs, array, generic with type-use annotation)
+  before RED.
 - The migrated `methodDescriptor` path uses index parameter types
   **only for triggered parameters**; clean parameters keep their
   textual source spelling.
@@ -155,12 +160,21 @@ annotation-broken ones. Decision:
    the CDI `Named:` default-name rewrite and `ResourceDefault:<name>`
    derivation (from `AnnotationInfo.values`), so a flag-on `@Resource`
    field does not lose its derived qualifier. The output shape is the
-   textual family, pinned by a shape table: `Resource:<name>`,
-   `ResourceDefault:<name>`, bean-name forms, `Qualifier:<quoted>`,
-   `Named:<quoted>`, simple name otherwise; `NON_QUALIFIER_ANNOTATIONS`
-   membership by simple name. Per-parameter qualifiers on
-   constructor/method injection stay textual (no per-parameter
-   annotation API in the index; #24 scope) — recorded as a residual.
+   textual family, pinned by a shape table: **the canonical-Spring
+   guard first** (bean type-level Spring site only: a
+   `SPRING_BEAN_ANNOTATION_TYPES` simple name that is not the canonical
+   Spring/jakarta annotation emits **nothing** — compared by
+   `AnnotationInfo.canonicalName`; the field-injection arm reproduces
+   the textual `file == null` behavior and applies **no** guard), then
+   `Resource:<name>`, `ResourceDefault:<name>`, bean-name forms,
+   `Qualifier:<content>`, `Named:<content>`, simple name otherwise;
+   quoted families emit the **unquoted string content** (the #21
+   renderer's surrounding `"` is stripped) and non-literal values fall
+   back to the rendered expression verbatim;
+   `NON_QUALIFIER_ANNOTATIONS` membership by simple name. Per-parameter
+   qualifiers on constructor/method injection stay textual (no
+   per-parameter annotation API in the index; #24 scope) — recorded as
+   a residual.
 
 A package-private `JavacAnnotationAccess` helper (holds the per-context
 index from `JavacSourceSymbolIndex.of(context)`) wraps the lookup +
@@ -208,9 +222,9 @@ Unicode, qualified names — the D-series lesson):
 5. `$`-named annotation `@Mar$k` on each member kind.
 6. Annotation values: array, class literal, enum constant, nested
    annotation — asserted at **helper level** through
-   `JavacAnnotationAccess` (no migrated consumer reads values yet; the
-   #21 renderer spellings are the contract), with the #21 renderer's
-   spellings.
+   `JavacAnnotationAccess` (no migrated consumer reads values yet); the
+   contract is the #21 renderer spellings **minus the string quoting**,
+   per the shape table.
 7. Varargs and type-use annotations before and after the type.
 8. Annotation-like text inside a string or comment is not an
    annotation (index path: it never was; the cell pins that the
@@ -223,21 +237,28 @@ Unicode, qualified names — the D-series lesson):
     diagnostics added (non-goal: scan-global diagnostics).
 11. Determinism: two fresh contexts produce equal migrated output.
 12. No annotation-name regex remains reachable from the migrated call
-    sites: a source-scan test asserts the `@[A-Za-z_]` literal is
-    absent from `JavacAnnotationAccess` and that the gated sites route
-    through it (finding 9: literal-absence on a moved helper changes
-    nothing; the assertion names the symbols).
+    sites: a source-scan test asserts the name-capturing regex family
+    (`@(...)?name\b`, `qualifierNames`) is absent from
+    `JavacAnnotationAccess` and that the gated sites route through it;
+    the trigger's character-class scan carries no `@[A-Za-z_]`
+    literal by construction (finding 9: literal-absence on a moved
+    helper changes nothing; the assertion names the symbols).
 13. Cache poisoning: a flag-on scan followed by a flag-off scan on the
     same file in one JVM yields byte-for-byte textual output for the
     flag-off scan (the `SourceMetadataScannerFileExtracts` invariant).
 14. Positive qualifier delta, pinned to the **bean type-level Spring
     site** (the only end-to-end constructible absent→present shape): a
     `@Ωmega`/qualified type-level qualifier is **emitted flag-on and
-    absent flag-off**. Field-site cells assert **correction** deltas
+    absent flag-off**. A user-defined `@Named`/`@Service` at the same
+    site emits **nothing in either flag state** (the canonical-Spring
+    guard family). Field-site cells assert **correction** deltas
     instead (`@Mar$k` → flag-off qualifier `"Mar"` becomes `"Mar$k"`
     flag-on); Unicode-named qualifiers on field injection points are
     undiscoverable in both flag states (the `INJECT_FIELD` discovery
     regex is ASCII-gated) — recorded as a residual.
+14b. Mixed-name trigger shapes: `@MaΩga` and `@pkg.Ωmega` parameters
+    are triggered and repaired flag-on (the maximal-match boundary
+    shapes from the probe).
 15. Spelling delta: a clean generic parameter's descriptor is
     identical under both flags; a triggered parameter's descriptor
     records the intended canonical-erasure delta
@@ -251,13 +272,16 @@ Unicode, qualified names — the D-series lesson):
 - **RED_22**: the matrix above plus a behavior-neutral seam (the
   `JavacAnnotationAccess` helper returning textual values
   unconditionally), expected-red cells enumerated in the commit.
-  Expected-red at RED (enumerated in-plan, PLAN-21 style): cells 2,
-  2b, 3–11, 13–16 (any cell requiring a flag-on index answer or a
-  delta); expected-green: cell 1 (flag-off equality — the seam changes
-  nothing observable flag-off) and cell 12's reachability arm against
-  the stub only if the stub carries no regex (the stub is
-  behavior-neutral textual, so cell 12 is red at RED and green at
-  GREEN).
+  Expected-red at RED (loop-4 re-derivation from the stub's actual
+  behavior — the stub delegates to the textual helpers, so any cell
+  whose flag-on assertion is satisfied by textual output passes at
+  RED): cells 2 (triggered arm), 3–8, 14, 14b, 15 (any cell requiring
+  a flag-on index answer or a delta). Expected-green at RED: cells 1,
+  2b, 9, 10, 11, 13, 16 (equality/fallback/determinism cells the
+  textual stub already satisfies), and cell 12's literal-absence arm
+  (the delegating stub carries no regex literal); cell 12's
+  routing arm is red at RED (the gated sites are not wired until
+  GREEN) and green at GREEN.
 - **GREEN_22**: implement the correlation and the two migration
   points; targeted green; full gates; Makefile floor raised to the new
   strict total.
@@ -317,7 +341,8 @@ Loop 2 findings folded back:
     scope (finding 4).
 12. **Cross-class flag race**: first production flag reader — shared
     `@ResourceLock` on all flag-touching test classes; forked JVM for
-    full-scan flag-on cells (finding 5).
+    full-scan flag-on cells (finding 5; mechanism superseded by loop-3
+    finding 14's `@Isolated`).
 13. Cells 2/6 marked helper-level where no migrated consumer reads
     them (finding 6); positive qualifier-delta cell added (finding 7);
     `BoundedFrameworkModelCandidateMetadata.methodDescriptor`
@@ -354,6 +379,26 @@ Loop 3 findings folded back:
     recorded (finding 7); expected-red partition enumerated in-plan
     (finding 8).
 
+Loop 4 findings folded back:
+
+19. **The shape table missed the canonical-Spring guard family and its
+    per-site split** — without it, a user-defined `@Named`/`@Service`
+    at the bean site fabricates a qualifier flag-on. Added as the
+    first family (bean Spring site only, canonical-name comparison;
+    field arm unguarded), with the both-states-empty cell (finding 1).
+20. **Expected-red partition re-derived from the stub's actual
+    behavior** — six cells were mis-classified red; the delegating
+    stub makes them green at RED (finding 2).
+21. **Quoted-value contract conflict** between cell 6 and the shape
+    table — quoted families emit unquoted content, non-literal values
+    fall back to the rendered expression verbatim (finding 3).
+22. Trigger clause 2 pinned at the maximal-match end with
+    `@MaΩga`/`@pkg.Ωmega` probe shapes and cells; the trigger is a
+    character-class scan so cell 12's literal-absence arm holds
+    (findings 4–5); loop-2's superseded `@ResourceLock` text annotated
+    (finding 6); the second ASCII gate (`hasInjectionAnnotation`)
+    enumerated in the field-qualifier residual (finding 7).
+
 ## Residuals / risks
 
 - **Deferred consumers**: `TextLayer09.annotationOccurrences`/
@@ -385,8 +430,11 @@ Loop 3 findings folded back:
   flag-on delta) until a source-spelling renderer is worth its cost;
   the #26 parity harness owns that decision.
 - Unicode-named qualifiers on **field injection points** are
-  undiscoverable in both flag states (the `INJECT_FIELD` discovery
-  regex is ASCII-gated); discovery is out of scope per the loop-1
+  undiscoverable in both flag states through **two** ASCII gates: the
+  `INJECT_FIELD` discovery regex and
+  `hasInjectionAnnotation`/`hasAnnotation` upstream of it (the same
+  manifestation family, both enumerated per the AGENTS
+  weakness-disposition rule); discovery is out of scope per the loop-1
   boundary.
 - The QUARKUS arm of `FrameworkBeanScanning.qualifiers` (1-arg
   `qualifierNames`) and producer-method qualifiers stay textual until
