@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "callees": [
+    {
+      "name": "directCall",
+      "qualified_name": "com.lightpath.fixture.StaticHelper.directCall",
+      "signature": "public static String directCall() {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/StaticHelper.java",
+      "line": 7,
+      "start_byte": 106,
+      "end_byte": 225,
+      "name_start_byte": 127,
+      "name_end_byte": 137,
+      "id": "234cb9b8-88a3-5163-8796-5c44b6fe3af1"
+    },
+    {
+      "name": "log",
+      "qualified_name": "com.lightpath.fixture.Trace.log",
+      "signature": "public static void log(String tag) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/Trace.java",
+      "line": 21,
+      "start_byte": 610,
+      "end_byte": 953,
+      "name_start_byte": 629,
+      "name_end_byte": 632,
+      "id": "ba5394bb-82c2-54e8-b2c6-081b0e827395"
+    },
+    {
+      "name": "helper",
+      "qualified_name": "com.lightpath.fixture.StaticHelper.helper",
+      "signature": "private static String helper() {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/StaticHelper.java",
+      "line": 12,
+      "start_byte": 231,
+      "end_byte": 339,
+      "name_start_byte": 253,
+      "name_end_byte": 259,
+      "id": "2a0beb24-684f-53c5-95ad-325b882bb7e7"
+    }
+  ],
+  "total": 3
+}

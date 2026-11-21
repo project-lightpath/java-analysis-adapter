@@ -1,0 +1,4 @@
+entry:App.main:registry
+registry:ScenarioRegistry.run
+registry:CommandRegistry.dispatch
+registry:AuditCommand.execute

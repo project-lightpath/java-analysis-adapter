@@ -1,0 +1,44 @@
+=== callees-ScenarioDiSelect.json
+  com.lightpath.fixture.AlertService.raise
+  com.lightpath.fixture.Trace.log
+  com.lightpath.fixture.MiniContainer.resolve
+  com.lightpath.fixture.Notifier.send
+ total: 4
+=== callees-ScenarioDirect.json
+  com.lightpath.fixture.Trace.log
+  com.lightpath.fixture.StaticHelper.directCall
+  com.lightpath.fixture.StaticHelper.helper
+ total: 3
+=== callees-ScenarioEventBus.json
+  com.lightpath.fixture.Trace.log
+  com.lightpath.fixture.AuditListener.register
+  com.lightpath.fixture.EventBus.publish
+  com.lightpath.fixture.AuditListener.onDeployFailed
+  com.lightpath.fixture.EventBus.subscribe
+  com.lightpath.fixture.EventBus.subscribe.$lambda$0
+ total: 6
+=== callees-ScenarioLambda.json
+  com.lightpath.fixture.ScenarioLambda.run.$lambda$0
+  com.lightpath.fixture.Trace.log
+ total: 2
+=== callees-ScenarioProxy.json
+  com.lightpath.fixture.Trace.log
+  com.lightpath.fixture.Echo.echo
+ total: 2
+=== callees-ScenarioReflection.json
+  com.lightpath.fixture.Trace.log
+ total: 1
+=== callees-ScenarioRegistry.json
+  com.lightpath.fixture.CommandRegistry.dispatch
+  com.lightpath.fixture.Trace.log
+  com.lightpath.fixture.Command.execute
+ total: 3
+=== callees-ScenarioServiceLoader.json
+  com.lightpath.fixture.Trace.log
+ total: 1
+=== callees-ScenarioSingleImpl.json
+  com.lightpath.fixture.Trace.log
+ total: 1
+=== callees-ScenarioTemplate.json
+  com.lightpath.fixture.Trace.log
+ total: 1

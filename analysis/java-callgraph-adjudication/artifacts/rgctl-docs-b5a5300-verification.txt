@@ -1,0 +1,48 @@
+# rgctl doc-quote verification at pinned commit b5a530072462a7cd497847b0185852babb0403ac (= tag v0.4.30, 2026-11-20)
+
+b5a530072462a7cd497847b0185852babb0403ac 2026-11-20 21:49:27 +0100 Merge pull request #238 from sshaaf/4_30
+b5a530072462a7cd497847b0185852babb0403ac
+
+== docs/design/blast-radius-design.md:179
+1. **Static Call Graph Scope:** Reachability follows static `Calls` edges (plus `Overrides` and optional `--scip` overlay edges). Dynamic reflection (`Method.invoke`) or runtime-configured message bus topics without static annotations are not connected.
+
+== docs/tier-1-language-support.md:35
+Honesty limits still apply (no full points-to, no reflection, dynamic languages may emit more `Unresolved` receivers) — but plugins must ship the same *shapes* and golden mutation fixture as Java.
+
+== docs/releases/v0.4.10.md:45
+DI-heavy frameworks (Magento/Symfony) still produce sparse `Calls` edges for interface-typed receivers — tracked for future work in [#75](https://github.com/rgctl/rgctl/issues/75).
+
+== docs/design/tier1-callable-identity.md:210-214
+## 6. Known Limitations & By-Design Boundaries
+
+- Source resolution remains conservative. Type aliases, implicit conversions,
+  dynamic dispatch, arbitrary expressions, and inferred external types can require
+  evidence unavailable to the extractor. This design does not ingest dependencies.
+
+== docs/design/hybrid-cpg-plan.md:180-181
+1. **Soundness-Bounded Local Receiver Type Resolution:** Receiver types for `obj.field = ...` are recovered from local variable declarations, formal parameters, enclosing class fields, and imports without running a full compiler type-checker. Dynamic or unannotated receivers are placed in the `Unresolved` bucket (queryable via `--include-unresolved`).
+2. **Reflection, Bytecode & Macro Codegen:** Reflective field mutations (`Field.setAccessible(true)`), JNI native writes, or Lombok bytecode-synthesized setters not present in source files are outside static tree-sitter CPG visibility.
+
+== crates/rgctl-graph/src/schema.rs:324-328 (is_call_traversal: Calls only)
+impl EdgeType {
+    /// Whether this edge type participates in call-graph blast-radius traversals.
+    pub fn is_call_traversal(self) -> bool {
+        matches!(self, EdgeType::Calls)
+    }
+
+== src/cli/cpg.rs:135-146 (--include-unresolved wired for mutations only)
+            include_unresolved,
+        } => CpgArgs {
+            op: CpgOp::Mutations,
+            symbol: None,
+            type_name: Some(type_name.clone()),
+            file: None,
+            line: None,
+            variable: None,
+            function: None,
+            exclude_ctors: *exclude_ctors,
+            member: member.clone(),
+            include_unresolved: *include_unresolved,
+
+== docs/design/hybrid-cpg-plan.md:108 (doc example: cpg mutations ... --include-unresolved)
+rgctl cpg mutations OrderDTO --exclude-ctors --member status --include-unresolved -f json

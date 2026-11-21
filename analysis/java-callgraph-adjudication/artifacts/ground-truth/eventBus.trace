@@ -1,0 +1,5 @@
+entry:App.main:eventBus
+eventBus:ScenarioEventBus.run
+eventBus:AuditListener.register
+eventBus:EventBus.publish
+eventBus:AuditListener.onDeployFailed

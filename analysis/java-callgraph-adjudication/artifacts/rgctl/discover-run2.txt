@@ -1,0 +1,18 @@
+[>] rgctl discover
+==> Analyzing: /private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2
+graph build sub-phase timings [3mresolution_index_secs[0m[2m=[0m3.2709e-5 [3mpass2_relation_resolution_secs[0m[2m=[0m0.006028125 [3mspill_and_columnar_secs[0m[2m=[0m0.020727917 [3mparked_save_secs[0m[2m=[0m0.002499334 [3mextract_read_cpu_secs[0m[2m=[0m0.007096499 [3mextract_parse_cpu_secs[0m[2m=[0m0.411867668 [3mextract_pass1_wall_secs[0m[2m=[0m0.011605292
+[✓] Indexed 36 files -> 236 nodes, 566 edges (0.1s)
+[✓] Analyzed 70 functions (avg complexity: 1.3, 1 high, 0 medium)
+[✓] Detected 173 communities (modularity: 0.52)
+[*] Top hotspot: Command (PageRank: 0.0110)
+[!] Found 9 circular dependencies
+[✓] Analysis complete
+[✓] Saved to .rgctl/ (0.0 MB total)
+[✓] Completed in 0.5s (peak 22 MB; ingest 20 MB, analysis 22 MB)
+
+[i] Next steps:
+   rgctl -f json find --type function --limit 20
+   rgctl -f json inventory --by type
+   rgctl -f json relations --edge calls --limit 20
+   rgctl slice <file> --line <N> --variable <VAR>
+[✓] rgctl discover finished in 558ms

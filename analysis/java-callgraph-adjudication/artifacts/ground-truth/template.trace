@@ -1,0 +1,6 @@
+entry:App.main:template
+template:ScenarioTemplate.run
+template:AbstractJob.run
+template:AbstractJob.before
+template:NightlyJob.doWork
+template:AbstractJob.after

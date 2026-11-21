@@ -1,0 +1,4 @@
+entry:App.main:singleImpl
+singleImpl:ScenarioSingleImpl.run
+singleImpl:GreeterClient.render
+singleImpl:SimpleGreeter.greet

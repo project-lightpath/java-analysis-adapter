@@ -1,0 +1,4 @@
+entry:App.main:proxy
+proxy:ScenarioProxy.run
+proxy:LoggingHandler.invoke
+proxy:RealEcho.echo

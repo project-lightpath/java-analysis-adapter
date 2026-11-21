@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "callees": [
+    {
+      "name": "log",
+      "qualified_name": "com.lightpath.fixture.Trace.log",
+      "signature": "public static void log(String tag) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/src/com/lightpath/fixture/Trace.java",
+      "line": 21,
+      "start_byte": 610,
+      "end_byte": 953,
+      "name_start_byte": 629,
+      "name_end_byte": 632,
+      "id": "3829ce33-c02e-5998-8edb-664fbea1ae5a"
+    }
+  ],
+  "total": 1
+}

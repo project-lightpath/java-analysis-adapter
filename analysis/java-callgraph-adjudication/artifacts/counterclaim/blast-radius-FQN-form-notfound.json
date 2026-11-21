@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": "not_found",
+  "error_code": "NOT_FOUND",
+  "message": "No symbol matched criteria: 'send' (Filters: Class=Some(\"com.lightpath.fixture.EmailNotifier\"), File=None)",
+  "recovery_command": "rgctl blast-radius send --file <PATH> --class <CLASS> --line <N>"
+}

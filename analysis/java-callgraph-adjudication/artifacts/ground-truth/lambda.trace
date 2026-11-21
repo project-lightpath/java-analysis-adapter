@@ -1,0 +1,3 @@
+entry:App.main:lambda
+lambda:ScenarioLambda.run
+lambda:ScenarioLambda.lambdaBody
