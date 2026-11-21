@@ -190,6 +190,11 @@ erasure.
   (`/tmpfoo`) is over-replaced to `<tmp>foo` — message mangling, never
   a path leak; a separator-aware match is the follow-up if ever
   actioned.
+- Errors other than a parser `StackOverflowError` (e.g.
+  `OutOfMemoryError`) escape `of()` by design: the fail-visible guard
+  covers `IOException`, `RuntimeException`, and parser stack exhaustion
+  only, because catching `Throwable` would mask JVM-level failure. The
+  failure is then not cached (a retry re-attempts the build).
 - `javac_global_error` and the compile-triggered `index_build_error`
   path have no end-to-end cells: the source-less-error trigger needs a
   slow pathological unit and the build-error trigger is not reliably

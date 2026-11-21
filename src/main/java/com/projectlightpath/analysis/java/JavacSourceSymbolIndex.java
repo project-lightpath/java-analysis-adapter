@@ -182,10 +182,11 @@ final class JavacSourceSymbolIndex {
   }
 
   // The RuntimeException catch below is deliberate and inventoried for manual
-  // review: the fail-visible contract routes ANY failure — input scan,
-  // supplier, task, or extraction pass — into a present index with an
-  // index_build_error row, never a thrown exception out of of(), and the
-  // failure is cached like a success.
+  // review: the fail-visible contract routes any IOException or
+  // RuntimeException — input scan, supplier, task, or extraction pass — and a
+  // parser StackOverflowError into a present index with an index_build_error
+  // row, cached like a success. Other Errors (OutOfMemoryError and kin) escape
+  // of() by design: catching them would mask JVM-level failure.
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   private static JavacSourceSymbolIndex build(AnalysisContext context) {
     long startNano = System.nanoTime();
