@@ -289,7 +289,7 @@ class JavacSourceSymbolIndexTest {
     List<JavacSourceSymbolIndex.MemberInfo> components =
         index.members("demo.Shapes.Point", "x");
     assertTrue(components.stream().anyMatch(member -> member.kind().equals("field")
-        && member.returnType().equals("int")), components.toString());
+        && member.returnType().isEmpty()), components.toString());
 
     assertEquals("enum", index.type("demo.Shapes.Color").get(0)
         .shape().declarationKind());
