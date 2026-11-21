@@ -86,13 +86,11 @@ The migration correlates at the points where a consumer asks a
   `TypeInfo` (canonical or binary), then
   `index.members(typeName, memberName)` for every overload's
   `annotations()`, `parameterTypes()`, `returnType()`.
-- **Constructor names**: the scanner's `MethodInfo` names constructors
-  `<init>`; the #21 index names them after the type's simple name. The
-  correlation layer translates `<init>` → the owning type's simple
-  name. A pre-RED scratch probe pins the index's constructor
-  `MemberInfo.name` spelling (AGENTS: probe, don't inspect).
-  Initializer-block pseudo-members (`<clinit>`-shaped `MethodInfo`)
-  have no index counterpart and always fall back.
+- **Constructor names**: dropped in loop 2 — the only migrated
+  `methodDescriptor` call site maps interface **methods**, never
+  constructors; the `<init>` translation was dead code in scope.
+  Constructor/`<clinit>` correlation lands with #24's member-model
+  rework. Initializer-block pseudo-members always fall back.
 - Overload disambiguation: the textual `MethodInfo` knows its parameter
   count; when exactly one index overload matches the arity, its values
   are used. Zero matches (unindexed source, error type, local class)
@@ -101,7 +99,7 @@ The migration correlates at the points where a consumer asks a
 - The index gains **no position/offset API** and **no new type-spelling
   API** in this subissue.
 
-### Type-spelling decision (probe-gated)
+### Type-spelling and repair-trigger decision (probe-gated)
 
 The textual path emits **source spellings with generics retained**
 (`List<String>`); the index emits **canonical erased**
@@ -109,39 +107,64 @@ The textual path emits **source spellings with generics retained**
 wholesale replacement would change every descriptor, not just
 annotation-broken ones. Decision:
 
+- **Repair trigger (loop-2 fix)**: a parameter is annotation-broken
+  when its **raw parameter text** (the `MethodInfo` parameter string
+  before any stripping) contains `@` or an annotation-argument `(` —
+  the post-strip output predicate provably missed both headline shapes
+  (`(value=1)String` has no residue; `@Mar$k` leaves `$k` with balanced
+  parens). A pre-RED scratch probe pins the predicate against every
+  issue cell shape (plain, `final`, annotated, qualified, `$`-named,
+  varargs, Unicode, array, generic) before RED.
 - The migrated `methodDescriptor` path uses index parameter types
-  **only for parameters whose textual parse is annotation-broken**
-  (the textual `parameterType` output still contains `@` or an
-  unbalanced `(`). Clean parameters keep their textual source
-  spelling.
+  **only for triggered parameters**; clean parameters keep their
+  textual source spelling.
 - For a repaired parameter, the emitted spelling is the index's
   canonical erased name — an **intended, cell-asserted flag-on delta**
-  (`String@$Ann[]` → `java.lang.String[]`). A pre-RED scratch probe
-  records what `TypeMirror.toString()` and erasure yield per shape
-  (array/nested/generic/varargs); if the probe shows a cheaper
-  source-spelling render exists (it likely does not without new index
-  API), the plan is amended before RED.
+  (`String@$Ann[]` → `java.lang.String[]`, `@Ann(value = 1) String p`
+  → `java.lang.String`). The probe also records `TypeMirror.toString()`
+  vs erasure per shape; if a cheaper source-spelling render exists, the
+  plan is amended before RED.
 - A matrix cell asserts the descriptor spelling for a generic
   parameter under **both** flag states (clean parameter: identical;
-  annotation-broken parameter: the recorded delta).
+  triggered parameter: the recorded delta).
 
-### Migration points (narrowed)
+### Migration points (narrowed, loop-2-corrected)
 
 1. `TextLayer11.methodDescriptor` via
    `SourceMetadataScanner.proxyFeaturesForInterface`: flag-on repair of
-   annotation-broken parameter shapes per the spelling decision.
-2. `TextLayer19` qualifier/injection extraction (file in scope):
-   flag-on annotation names from `AnnotationInfo`, with the
-   simple/canonical spelling contract above.
+   triggered parameter shapes. Correlation owner is the **resolved
+   interface name** (the descriptor's `method` belongs to the interface
+   file, not the caller); when the interface file is absent the
+   descriptor is `""` and the path is always-textual.
+2. Injection/bean qualifier reads at the call sites that actually hold
+   the correlation triple — **field injection points**
+   (`FrameworkInjectionScanning.fieldInjectionPoints`, file + owning
+   type + field) and **type-level bean annotations**
+   (`FrameworkBeanScanning`'s `qualifierNames(file, block)` sites).
+   Flag-on annotation names come from `AnnotationInfo` with the
+   simple/canonical spelling contract. The textual
+   `TextLayer18.qualifierNames` chain is **duplicated-and-owned** in
+   `JavacAnnotationAccess` for these gated sites (un-deferring it
+   wholesale would drag the block-only T09/T16 chain along).
+   Per-parameter qualifiers on constructor/method injection stay
+   textual (the index has no per-parameter annotation API; growing one
+   is #24 scope) — recorded as a residual.
 
 A package-private `JavacAnnotationAccess` helper (holds the per-context
 index from `JavacSourceSymbolIndex.of(context)`) wraps the lookup +
 fallback + spelling rules so both consumers share one implementation.
 
-### Flag
+### Flag and test isolation (loop-2 fix)
 
-Reuse `flpath.java.symbolindex`. Flag off (default): byte-for-byte
-today's output — pinned by a scan-equality cell in both directions.
+Reuse `flpath.java.symbolindex`. This subissue adds the **first
+production reader** of the flag, so in-JVM flag toggling in tests races
+concurrently running scan tests (classes run concurrent, parallelism 4;
+SAME_THREAD does not isolate cross-class). Every flag-touching test
+class (`JavacAnnotationMigrationTest` and the existing
+`JavacSourceSymbolIndexTest`) declares a shared JUnit
+`@ResourceLock("flpath.java.symbolindex")`; flag-on **end-to-end scan**
+cells run in a forked JVM (the `JavacResolverAccuracyTest` harness
+pattern) if a cell needs a full adapter scan with the flag on.
 
 ## Test matrix (`JavacAnnotationMigrationTest`, new file; SAME_THREAD)
 
@@ -150,14 +173,20 @@ Unicode, qualified names — the D-series lesson):
 
 1. Flag off: output identical to the textual path (scan equality on a
    fixture with annotated members).
-2. `@$Ann` on a parameter, field, method return, and type: names and
-   shapes resolve (A18/A19: `java.lang.String[]`, `java.lang.String`).
+2. `@$Ann` on a parameter and on a **field injection point** (the two
+   member kinds the migrated consumers read): names and shapes resolve
+   (A18/A19: `java.lang.String[]`, `java.lang.String` flag-on).
+   Method-return and type-annotation **shape** questions have no
+   migrated consumer in this scope; their cells exercise
+   `JavacAnnotationAccess` directly and are marked helper-level.
 3. Unicode-initial annotation name (e.g. `@Ωmega`).
 4. Fully qualified annotation name `@pkg.Outer.Ann`.
 5. `$`-named annotation `@Mar$k` on each member kind.
 6. Annotation values: array, class literal, enum constant, nested
-   annotation — read back through the migrated consumer with the #21
-   renderer's spellings.
+   annotation — asserted at **helper level** through
+   `JavacAnnotationAccess` (no migrated consumer reads values yet; the
+   #21 renderer spellings are the contract), with the #21 renderer's
+   spellings.
 7. Varargs and type-use annotations before and after the type.
 8. Annotation-like text inside a string or comment is not an
    annotation (index path: it never was; the cell pins that the
@@ -169,22 +198,24 @@ Unicode, qualified names — the D-series lesson):
 10. Error types / unindexed sources: silent textual fallback, no
     diagnostics added (non-goal: scan-global diagnostics).
 11. Determinism: two fresh contexts produce equal migrated output.
-12. No `@[A-Za-z_]` annotation-name regex remains in the migrated call
-    sites — a source-scan test asserts the literal is absent from
-    `SourceMetadataScannerTextLayer19` and the migrated
-    `methodDescriptor` path.
+12. No annotation-name regex remains reachable from the migrated call
+    sites: a source-scan test asserts the `@[A-Za-z_]` literal is
+    absent from `JavacAnnotationAccess` and that the gated sites route
+    through it (finding 9: literal-absence on a moved helper changes
+    nothing; the assertion names the symbols).
 13. Cache poisoning: a flag-on scan followed by a flag-off scan on the
     same file in one JVM yields byte-for-byte textual output for the
     flag-off scan (the `SourceMetadataScannerFileExtracts` invariant).
-14. Constructors: `methodDescriptor`-adjacent constructor correlation
-    maps `<init>` to the type's simple name (probe-pinned); `<clinit>`
-    pseudo-members always fall back.
+14. Positive qualifier delta: a `@Ωmega`/`@Mar$k`/qualified qualifier
+    on a field injection point or bean type is **emitted flag-on and
+    absent flag-off** — migration point 2 proven non-vacuous.
 15. Spelling delta: a clean generic parameter's descriptor is
-    identical under both flags; an annotation-broken parameter's
-    descriptor records the intended canonical-erasure delta
-    (`String@$Ann[]` → `java.lang.String[]`).
-16. `@Inject` on an injection point emits no new qualifier flag-on
-    (simple-name membership contract).
+    identical under both flags; a triggered parameter's descriptor
+    records the intended canonical-erasure delta
+    (`String@$Ann[]` → `java.lang.String[]`, `@Ann(value = 1) String p`
+    → `java.lang.String`).
+16. `@Inject` on a field injection point emits no new qualifier
+    flag-on (simple-name membership contract).
 
 ## TDD sequence
 
@@ -236,6 +267,31 @@ source):
 8. `maskAnnotationArguments` caveat (finding 8) and cell-12 decision
    (finding 9) folded into the boundary note and matrix.
 
+Loop 2 findings folded back:
+
+9. **The repair trigger provably missed both headline shapes**
+   (`(value=1)String` leaves no residue; `@Mar$k` leaves balanced
+   `$k`) — trigger redefined on the raw parameter text, probe-pinned
+   before RED (findings 1–2).
+10. **Migration point 2 named no implementable call site** — replaced
+    with the field-injection and bean-type sites that hold the
+    correlation triple; the T18 chain is duplicated-and-owned; per-
+    parameter qualifiers stay textual (#24) (finding 3).
+11. Constructor cell and `<init>` translation dropped as dead code in
+    scope (finding 4).
+12. **Cross-class flag race**: first production flag reader — shared
+    `@ResourceLock` on all flag-touching test classes; forked JVM for
+    full-scan flag-on cells (finding 5).
+13. Cells 2/6 marked helper-level where no migrated consumer reads
+    them (finding 6); positive qualifier-delta cell added (finding 7);
+    `BoundedFrameworkModelCandidateMetadata.methodDescriptor`
+    dispositioned in the inventory (finding 8, #24 scope); cell 12
+    asserts symbol reachability, not literal absence (finding 9); the
+    issue-acceptance interpretation is recorded for RESOLUTION-22:
+    #22's acceptance is met at the consumer level, with the retained
+    textual helpers deleted only after #26 parity (finding 10);
+    absent-interface proxy fallback is always-textual (finding 11).
+
 ## Residuals / risks
 
 - **Deferred consumers**: `TextLayer09.annotationOccurrences`/
@@ -244,7 +300,16 @@ source):
   blindness in both flag states until the #24 member-model rework (or
   an explicit signature-sweep follow-up); the issue's acceptance for
   those sites is met by #24, recorded here per the AGENTS
-  open-cell rule.
+  open-cell rule. RESOLUTION-22 states the interpretation explicitly:
+  issue #22's acceptance is satisfied at the **consumer** level — the
+  `@[A-Za-z_]` copies are gone from the migrated call sites, the
+  static helpers stay until #26 parity green permits deletion.
+- Per-parameter qualifiers on constructor/method injection stay textual
+  (no per-parameter annotation API in the index; #24 scope).
+- `BoundedFrameworkModelCandidateMetadata.methodDescriptor` (JVM
+  descriptor assembly from textual parameters) is #24 framework
+  semantics; its annotation-broken inputs improve only via the #26
+  parity path.
 - `TextLayer12.returnType` and producer-signature generics are #24
   scope (deliberate generics retention for producer matching).
 - Name+arity correlation cannot distinguish same-arity overloads —
