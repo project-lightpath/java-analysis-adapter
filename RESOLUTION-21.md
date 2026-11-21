@@ -47,7 +47,7 @@ same caveat as PLAN-16). Wall time is dominated by javac startup inside
 a shared test JVM; the one-parse-per-context amortization is the point,
 not single-build latency.
 
-## Coverage (18 cells)
+## Coverage (19 cells)
 
 Flag-off seam; one-parse regression; `$`-name D-series boundary cells
 including the D3 binary collision double-assertion (top-level
@@ -72,7 +72,10 @@ null-supplier with failure caching.
 JaCoCo 0.8.13 focused unit run at `2e7a925` (JDK 27): **371/412 = 90.05%
 line**, **148/188 = 78.72% branch**. Branch coverage is below 80%;
 the weakest area remains `IndexRenderer`'s defensive rendering branches.
-Line coverage is the recorded gate.
+Line coverage is the recorded gate. The two later review cells
+(demotion selection and absent absolute root) add coverage for the
+`IndexRenderer` branches; the exact receipt above is pinned to
+`2e7a925`.
 
 ## Review round 1 (PR #33)
 
