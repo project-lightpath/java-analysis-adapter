@@ -9,10 +9,10 @@ import com.sun.source.util.Trees;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.FileSystemNotFoundException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -327,7 +327,7 @@ final class JavacSourceSymbolIndex {
         AnalysisContext.SourceRoot root, Map<Path, AnalysisContext.SourceRoot> discovered) {
       if (!Files.isDirectory(root.path())) {
         diagnostics.add(IndexRenderer.row("missing_source_root",
-            "source root is unavailable: " + root.declaredPath(),
+            "source root is unavailable: " + IndexRenderer.declaredRootPath(root),
             IndexRenderer.declaredRootPath(root), 0, 0));
         return;
       }
@@ -459,8 +459,12 @@ final class JavacSourceSymbolIndex {
 
     static String declaredRootPath(AnalysisContext.SourceRoot root) {
       String declared = root.declaredPath();
-      if (!Path.of(declared).isAbsolute()) {
-        return declared;
+      try {
+        if (!Path.of(declared).isAbsolute()) {
+          return declared;
+        }
+      } catch (InvalidPathException error) {
+        return "<external>";
       }
       Path fileName = root.path().getFileName();
       return fileName == null ? "<external>" : "<external>/" + fileName;

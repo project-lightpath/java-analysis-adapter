@@ -47,7 +47,7 @@ same caveat as PLAN-16). Wall time is dominated by javac startup inside
 a shared test JVM; the one-parse-per-context amortization is the point,
 not single-build latency.
 
-## Coverage (17 cells)
+## Coverage (18 cells)
 
 Flag-off seam; one-parse regression; `$`-name D-series boundary cells
 including the D3 binary collision double-assertion (top-level
@@ -69,8 +69,10 @@ flag wiring invariant; absolute-path-free diagnostics (including the
 absolute-`declaredPath` fallback); `javac_unavailable` via an injected
 null-supplier with failure caching.
 
-JaCoCo 0.8.13 focused unit run: **359/411 = 87.35% line**, **142/184 =
-77.17% branch**; weakest `IndexRenderer` 30/53 lines before review round 1.
+JaCoCo 0.8.13 focused unit run at `2e7a925` (JDK 27): **371/412 = 90.05%
+line**, **148/188 = 78.72% branch**. Branch coverage is below 80%;
+the weakest area remains `IndexRenderer`'s defensive rendering branches.
+Line coverage is the recorded gate.
 
 ## Review round 1 (PR #33)
 
@@ -119,11 +121,12 @@ erasure.
   included. This diverges from `scanner.files()`, which excludes both.
 - `packageAnnotations` cannot distinguish a miss from an indexed
   `package-info` with zero annotations (both return empty).
-- `javac_global_error` and `index_build_error` (including the jar-entry
-  demotion path) have no test cells: the source-less-error trigger
-  needs a slow pathological unit and the build-error trigger is not
-  reliably constructible across filesystems. Defensive rows, code
-  reviewed.
+- `javac_global_error` and the compile-triggered `index_build_error`
+  path have no end-to-end cells: the source-less-error trigger needs a
+  slow pathological unit and the build-error trigger is not reliably
+  constructible across filesystems. The jar-entry demotion *selection*
+  (`firstUnmappableName`) has a direct two-diagnostic cell. Defensive
+  rows, code reviewed.
 - Sub-floor `javaRelease` values surface as `index_build_error` (same
   behavior as the existing seam); no cell.
 - `typesIn`/`packageAnnotations` normalization is lexical; a different

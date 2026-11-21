@@ -528,6 +528,34 @@ class JavacSourceSymbolIndexTest {
   }
 
   @Test
+  void absentAbsoluteSourceRootDoesNotLeakItsPath() {
+    Path root = temp.resolve("absent-root");
+    Path missing = root.resolve("src/main/java");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("absent-absolute-root")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("javac-index-test")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot(missing.toString(), missing, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    JavacSourceSymbolIndex index = withFlag(() -> JavacSourceSymbolIndex.of(context))
+        .orElseThrow();
+    JavacSourceSymbolIndex.IndexDiagnostic row = index.diagnostics().stream()
+        .filter(item -> item.code().equals("missing_source_root"))
+        .findFirst()
+        .orElseThrow();
+    assertFalse(row.message().contains(temp.toString()), row.toString());
+    assertEquals("<external>/java", row.path());
+  }
+
+  @Test
   void unavailableCompilerYieldsADiagnosticAndIsCached() throws IOException {
     long before = JavacSourceSymbolIndex.COMPILATIONS.get();
     JavacSourceSymbolIndex.COMPILER.set(() -> null);
