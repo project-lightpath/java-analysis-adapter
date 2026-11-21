@@ -129,6 +129,14 @@ the RuntimeException containment end-to-end (present index,
 through `row()`); the sanitization scope beyond `java.io.tmpdir` is
 recorded as a residual below.
 
+Round-2d (coordinating-session re-review, both findings addressed):
+`throwingSupplierIsContainedAsIndexBuildError` injects a supplier that
+throws — red before the guard move (the supplier call escaped `of()` at
+`3ad8cd1`), green after — and every failure-cached cell
+(throwing-compiler, throwing-supplier, `javac_unavailable`) now asserts
+`assertSame` on the two `of()` results, proving the WeakHashMap returns
+the same failed instance rather than rebuilding it.
+
 ## Pre-RED scratch probe results
 
 Recorded in `PLAN-21.md`: the D3 collision leaves both entries usable
@@ -147,6 +155,7 @@ erasure.
 | REVIEW_33_1/2 (coordinating session) | 368 = 366 + 2 review cells (floor left at 366 — the round-2 fix) | 0 findings | pass |
 | REVIEW round 2 (this PR) | 369 = 368 + 1 sanitizer cell (floor raised 366 → 369) | 0 findings (one inventoried suppression on `build`) | pass |
 | REVIEW round 2b (coordinating-session findings) | 370 = 369 + 1 throwing-compiler cell (floor raised 369 → 370) | 0 findings (same single inventoried suppression) | pass |
+| REVIEW round 2d (re-review findings) | 371 = 370 + 1 throwing-supplier cell (floor raised 370 → 371) | 0 findings (same single inventoried suppression) | pass |
 
 ## Residuals
 

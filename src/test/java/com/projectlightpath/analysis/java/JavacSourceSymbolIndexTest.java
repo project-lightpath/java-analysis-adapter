@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -467,8 +468,34 @@ class JavacSourceSymbolIndexTest {
             && !row.message().contains(tempPrefix)),
         first.get().diagnostics().toString());
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
-    Optional<JavacSourceSymbolIndex> second = JavacSourceSymbolIndex.of(context);
-    assertTrue(second.isPresent());
+    JavacSourceSymbolIndex second = JavacSourceSymbolIndex.of(context).orElseThrow();
+    // The same failed instance is returned from the cache, not rebuilt.
+    assertSame(first.get(), second);
+    assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+  }
+
+  @Test
+  void throwingSupplierIsContainedAsIndexBuildError() throws IOException {
+    long before = JavacSourceSymbolIndex.COMPILATIONS.get();
+    String tempPrefix = System.getProperty("java.io.tmpdir");
+    JavacSourceSymbolIndex.COMPILER.set(() -> {
+      throw new IllegalStateException("supplier failed in " + tempPrefix);
+    });
+    AnalysisContext context = context("throwing-supplier", Map.of("demo/App.java",
+        "package demo; public class App {}"));
+    System.setProperty(FLAG, "true");
+    // The supplier call is inside build()'s guard: a throwing supplier returns
+    // a present index with an index_build_error row instead of escaping of().
+    Optional<JavacSourceSymbolIndex> first = JavacSourceSymbolIndex.of(context);
+    assertTrue(first.isPresent());
+    assertTrue(first.get().diagnostics().stream().anyMatch(
+        row -> row.code().equals("index_build_error")
+            && row.message().contains("<tmp>")
+            && !row.message().contains(tempPrefix)),
+        first.get().diagnostics().toString());
+    assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+    JavacSourceSymbolIndex second = JavacSourceSymbolIndex.of(context).orElseThrow();
+    assertSame(first.get(), second);
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
   }
 
@@ -647,7 +674,7 @@ class JavacSourceSymbolIndexTest {
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
     Optional<JavacSourceSymbolIndex> second = JavacSourceSymbolIndex.of(context);
     assertTrue(second.isPresent());
-    assertSameEntries(first.get(), second.get());
+    assertSame(first.get(), second.get());
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
   }
 
