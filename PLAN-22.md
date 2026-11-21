@@ -107,14 +107,21 @@ The textual path emits **source spellings with generics retained**
 wholesale replacement would change every descriptor, not just
 annotation-broken ones. Decision:
 
-- **Repair trigger (loop-2 fix)**: a parameter is annotation-broken
-  when its **raw parameter text** (the `MethodInfo` parameter string
-  before any stripping) contains `@` or an annotation-argument `(` —
-  the post-strip output predicate provably missed both headline shapes
-  (`(value=1)String` has no residue; `@Mar$k` leaves `$k` with balanced
-  parens). A pre-RED scratch probe pins the predicate against every
-  issue cell shape (plain, `final`, annotated, qualified, `$`-named,
-  varargs, Unicode, array, generic) before RED.
+- **Repair trigger (loop-2/3 fix)**: a parameter is annotation-broken
+  when its raw text contains an annotation the textual stripper cannot
+  fully consume: `@` not followed by `[A-Za-z_]` (Unicode/`$` names),
+  an ASCII annotation name immediately followed by `$` or a non-ASCII
+  character (the `@Mar` + `$k` partial-consumption tail), or a
+  post-strip output that still contains `@` or `(`. Plain ASCII
+  annotations (`@Deprecated`, `@Ann String`) and type-use annotations
+  inside generics (`List<@Ann String>`) strip cleanly and stay
+  textual — a cell pins `@Deprecated String p` identical under both
+  flags. (Loop-2's justification erred on one shape: `(value=1)String`
+  does contain `(`; the provable miss is the `$k` tail only.) A
+  pre-RED scratch probe pins the predicate against every issue cell
+  shape (plain, `final`, annotated-plain, annotated-with-args,
+  qualified, `$`-named, Unicode, varargs, array, generic with type-use
+  annotation) before RED.
 - The migrated `methodDescriptor` path uses index parameter types
   **only for triggered parameters**; clean parameters keep their
   textual source spelling.
@@ -139,32 +146,45 @@ annotation-broken ones. Decision:
 2. Injection/bean qualifier reads at the call sites that actually hold
    the correlation triple — **field injection points**
    (`FrameworkInjectionScanning.fieldInjectionPoints`, file + owning
-   type + field) and **type-level bean annotations**
-   (`FrameworkBeanScanning`'s `qualifierNames(file, block)` sites).
-   Flag-on annotation names come from `AnnotationInfo` with the
-   simple/canonical spelling contract. The textual
-   `TextLayer18.qualifierNames` chain is **duplicated-and-owned** in
-   `JavacAnnotationAccess` for these gated sites (un-deferring it
-   wholesale would drag the block-only T09/T16 chain along).
-   Per-parameter qualifiers on constructor/method injection stay
-   textual (the index has no per-parameter annotation API; growing one
-   is #24 scope) — recorded as a residual.
+   type + field) and **type-level bean annotations on the Spring arm**
+   (`FrameworkBeanScanning.qualifierNames(file, block)`, SPRING_BOOT
+   only — the QUARKUS 1-arg arm and producer-method qualifiers stay
+   textual, recorded as residuals).
+   `JavacAnnotationAccess` owns the **full T18 + T19
+   `injectionQualifiers` chain** — not just name capture — including
+   the CDI `Named:` default-name rewrite and `ResourceDefault:<name>`
+   derivation (from `AnnotationInfo.values`), so a flag-on `@Resource`
+   field does not lose its derived qualifier. The output shape is the
+   textual family, pinned by a shape table: `Resource:<name>`,
+   `ResourceDefault:<name>`, bean-name forms, `Qualifier:<quoted>`,
+   `Named:<quoted>`, simple name otherwise; `NON_QUALIFIER_ANNOTATIONS`
+   membership by simple name. Per-parameter qualifiers on
+   constructor/method injection stay textual (no per-parameter
+   annotation API in the index; #24 scope) — recorded as a residual.
 
 A package-private `JavacAnnotationAccess` helper (holds the per-context
 index from `JavacSourceSymbolIndex.of(context)`) wraps the lookup +
 fallback + spelling rules so both consumers share one implementation.
 
-### Flag and test isolation (loop-2 fix)
+### Flag and test isolation (loop-2/3 fix)
 
 Reuse `flpath.java.symbolindex`. This subissue adds the **first
 production reader** of the flag, so in-JVM flag toggling in tests races
-concurrently running scan tests (classes run concurrent, parallelism 4;
-SAME_THREAD does not isolate cross-class). Every flag-touching test
-class (`JavacAnnotationMigrationTest` and the existing
-`JavacSourceSymbolIndexTest`) declares a shared JUnit
-`@ResourceLock("flpath.java.symbolindex")`; flag-on **end-to-end scan**
-cells run in a forked JVM (the `JavacResolverAccuracyTest` harness
-pattern) if a cell needs a full adapter scan with the flag on.
+concurrently running scan-driving classes (`JavaAnalysisAdapterTest`,
+`SootUpBaseGraphProviderIntegrationTest`,
+`ServiceLoaderEndToEndTest`, `SootUpDependencyBoundaryIntegrationTest`
+— none can see a `@ResourceLock` they do not declare). Fix: every
+flag-**writing** test class (`JavacAnnotationMigrationTest` and the
+existing `JavacSourceSymbolIndexTest`) is annotated
+`org.junit.jupiter.api.parallel.Isolated`, which JUnit guarantees runs
+exclusively of all other classes — no existing-test semantics change
+beyond the annotation, and no other class needs editing. Flag-on
+**end-to-end adapter** cells (if any) run in a forked JVM (the
+`JavacResolverAccuracyTest` harness pattern). The existing
+`JavacSourceSymbolIndexTest` wiring-invariant cell's flag write is
+covered by the same `@Isolated`; its scan equality remains green by
+fixture content (no annotations/proxies/beans in its fixture) —
+recorded as a residual.
 
 ## Test matrix (`JavacAnnotationMigrationTest`, new file; SAME_THREAD)
 
@@ -176,9 +196,13 @@ Unicode, qualified names — the D-series lesson):
 2. `@$Ann` on a parameter and on a **field injection point** (the two
    member kinds the migrated consumers read): names and shapes resolve
    (A18/A19: `java.lang.String[]`, `java.lang.String` flag-on).
-   Method-return and type-annotation **shape** questions have no
+   Plain `@Deprecated String p` is **identical under both flags**
+   (clean-strip pin). Method-return and type-annotation **shape** questions have no
    migrated consumer in this scope; their cells exercise
    `JavacAnnotationAccess` directly and are marked helper-level.
+2b. Qualifier shape equality: a fixture with `@Resource`/`@Named`/
+   `@Qualifier` fields produces byte-identical qualifier families
+   under both flags (the enrichment and shape table are pinned).
 3. Unicode-initial annotation name (e.g. `@Ωmega`).
 4. Fully qualified annotation name `@pkg.Outer.Ann`.
 5. `$`-named annotation `@Mar$k` on each member kind.
@@ -206,9 +230,14 @@ Unicode, qualified names — the D-series lesson):
 13. Cache poisoning: a flag-on scan followed by a flag-off scan on the
     same file in one JVM yields byte-for-byte textual output for the
     flag-off scan (the `SourceMetadataScannerFileExtracts` invariant).
-14. Positive qualifier delta: a `@Ωmega`/`@Mar$k`/qualified qualifier
-    on a field injection point or bean type is **emitted flag-on and
-    absent flag-off** — migration point 2 proven non-vacuous.
+14. Positive qualifier delta, pinned to the **bean type-level Spring
+    site** (the only end-to-end constructible absent→present shape): a
+    `@Ωmega`/qualified type-level qualifier is **emitted flag-on and
+    absent flag-off**. Field-site cells assert **correction** deltas
+    instead (`@Mar$k` → flag-off qualifier `"Mar"` becomes `"Mar$k"`
+    flag-on); Unicode-named qualifiers on field injection points are
+    undiscoverable in both flag states (the `INJECT_FIELD` discovery
+    regex is ASCII-gated) — recorded as a residual.
 15. Spelling delta: a clean generic parameter's descriptor is
     identical under both flags; a triggered parameter's descriptor
     records the intended canonical-erasure delta
@@ -222,7 +251,14 @@ Unicode, qualified names — the D-series lesson):
 - **RED_22**: the matrix above plus a behavior-neutral seam (the
   `JavacAnnotationAccess` helper returning textual values
   unconditionally), expected-red cells enumerated in the commit.
-- **GREEN_22**: implement the correlation and the three migration
+  Expected-red at RED (enumerated in-plan, PLAN-21 style): cells 2,
+  2b, 3–11, 13–16 (any cell requiring a flag-on index answer or a
+  delta); expected-green: cell 1 (flag-off equality — the seam changes
+  nothing observable flag-off) and cell 12's reachability arm against
+  the stub only if the stub carries no regex (the stub is
+  behavior-neutral textual, so cell 12 is red at RED and green at
+  GREEN).
+- **GREEN_22**: implement the correlation and the two migration
   points; targeted green; full gates; Makefile floor raised to the new
   strict total.
 - **REFACTOR_22**: under green.
@@ -292,6 +328,32 @@ Loop 2 findings folded back:
     textual helpers deleted only after #26 parity (finding 10);
     absent-interface proxy fallback is always-textual (finding 11).
 
+Loop 3 findings folded back:
+
+14. **Isolation was one-sided** — every scan-driving class races the
+    first production flag reader; fixed with `@Isolated` on the
+    flag-writing classes (exclusive execution, no existing-test edits)
+    and forked-JVM for any full-adapter flag-on cell (finding 1).
+15. **The raw-text trigger over-fired** on cleanly-stripped shapes
+    (`@Deprecated`, `List<@Ann String>`); refined to
+    unconsumable-annotation detection, plain-annotation identity cell
+    added, and loop-2's `(value=1)String` justification corrected
+    (finding 2).
+16. **Cell 14 was unconstructible at the field site** (Unicode
+    qualifiers undiscoverable by the ASCII-gated `INJECT_FIELD`
+    discovery; `$` names emit a wrong-but-present qualifier flag-off) —
+    pinned to the bean type-level Spring site with correction-delta
+    field cells (finding 3).
+17. **The owned chain must include the T19 `injectionQualifiers`
+    enrichment** (`Named:`/`ResourceDefault:` derivations) with an
+    output-shape table and a shape-equality cell, or `@Resource`
+    fields lose derived qualifiers flag-on (finding 4).
+18. Spring-only arm, Quarkus 1-arg and producer-method qualifier
+    deferrals named (finding 5); stale migration-point count fixed
+    (finding 6); the wiring-invariant cell's fixture-content greenness
+    recorded (finding 7); expected-red partition enumerated in-plan
+    (finding 8).
+
 ## Residuals / risks
 
 - **Deferred consumers**: `TextLayer09.annotationOccurrences`/
@@ -322,3 +384,13 @@ Loop 2 findings folded back:
 - Repaired parameters emit canonical erased spellings (intended
   flag-on delta) until a source-spelling renderer is worth its cost;
   the #26 parity harness owns that decision.
+- Unicode-named qualifiers on **field injection points** are
+  undiscoverable in both flag states (the `INJECT_FIELD` discovery
+  regex is ASCII-gated); discovery is out of scope per the loop-1
+  boundary.
+- The QUARKUS arm of `FrameworkBeanScanning.qualifiers` (1-arg
+  `qualifierNames`) and producer-method qualifiers stay textual until
+  #24.
+- `JavacSourceSymbolIndexTest`'s wiring-invariant cell stays green by
+  fixture content (no annotations/proxies/beans); its flag write is
+  owned by the `@Isolated` fix.
