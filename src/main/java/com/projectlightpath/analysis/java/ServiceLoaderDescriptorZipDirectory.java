@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CharsetDecoder;
@@ -81,7 +82,15 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     long offset = position;
     while (buffer.hasRemaining()) {
       channel.position(offset);
-      int count = channel.read(buffer);
+      int count;
+      try {
+        count = channel.read(buffer);
+      } catch (ClosedByInterruptException error) {
+        InterruptedIOException interrupted =
+            new InterruptedIOException("descriptor scan interrupted");
+        interrupted.initCause(error);
+        throw interrupted;
+      }
       if (count <= 0) {
         throw new ZipFormatException("short_read");
       }

@@ -1,6 +1,7 @@
 package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -103,6 +104,45 @@ class ServiceLoaderSeekableZipTest {
   }
 
   @Test
+  void dataDescriptorWithAndWithoutSignatureIsAccepted() throws IOException {
+    for (boolean signature : new boolean[] {true, false}) {
+      Path archive = temp.resolve("descriptor-" + signature + ".jar");
+      writeDataDescriptor(archive, signature);
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+      ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+      ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+      assertEquals(1, descriptors.size(), state.diagnostics().toString());
+      assertEquals(List.of("demo.Impl"), descriptors.get(0).providers());
+    }
+  }
+
+  @Test
+  void encryptedEntryIsRejected() throws IOException {
+    Path archive = temp.resolve("encrypted.jar");
+    writeZip(archive, List.of(entry(SERVICE, "demo.Impl\n")));
+    patchFlags(archive, 1);
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+    assertTrue(descriptors.isEmpty());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("invalid_archive")), state.diagnostics().toString());
+  }
+
+  @Test
+  void malformedEfsNameIsRejected() throws IOException {
+    Path archive = temp.resolve("bad-utf8.jar");
+    writeZip(archive, List.of(entry(SERVICE, "demo.Impl\n")));
+    setEfsAndCorruptName(archive);
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(archive, descriptors, state);
+    assertTrue(descriptors.isEmpty());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("invalid_archive")), state.diagnostics().toString());
+  }
+
+  @Test
   void exceptionalDeflateOutputIsChargedExactlyOnce() throws IOException {
     Path archive = temp.resolve("bad-deflate.jar");
     writeMalformedDeflate(archive, 4096);
@@ -141,6 +181,89 @@ class ServiceLoaderSeekableZipTest {
         .anyMatch(item -> item.code().equals("descriptor_scan_interrupted")),
         state.diagnostics().toString());
     assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+  }
+
+  @Test
+  void interruptDuringEntryReadRollsBackAndClearsTheFlag() throws IOException {
+    Path archive = temp.resolve("interrupt-payload.jar");
+    StringBuilder payload = new StringBuilder();
+    for (int index = 0; index < 20_000; index++) {
+      payload.append("demo.Impl\n");
+    }
+    writeZip(archive, List.of(storedEntry(SERVICE, payload.toString())));
+    Path spillRoot = Files.createDirectory(temp.resolve("interrupt-payload-spill"));
+
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(
+        archive, descriptors, state,
+        ServiceLoaderDescriptorArchiveConfig.defaults()
+            .withTempRoot(spillRoot)
+            .withChannelOpener(path -> new InterruptingChannel(path, 12)));
+
+    assertTrue(descriptors.isEmpty(), descriptors.toString());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("descriptor_scan_interrupted")),
+        state.diagnostics().toString());
+    assertFalse(Thread.currentThread().isInterrupted());
+    assertTrue(empty(spillRoot), Files.list(spillRoot).toList().toString());
+  }
+
+  private static final class InterruptingChannel implements SeekableByteChannel {
+    private final SeekableByteChannel delegate;
+    private final int interruptAt;
+    private int reads;
+
+    InterruptingChannel(Path path, int interruptAt) throws IOException {
+      delegate = Files.newByteChannel(path, StandardOpenOption.READ);
+      this.interruptAt = interruptAt;
+    }
+
+    @Override
+    public int read(ByteBuffer destination) throws IOException {
+      reads++;
+      if (reads == interruptAt) {
+        Thread.currentThread().interrupt();
+      }
+      return delegate.read(destination);
+    }
+
+    @Override
+    public int write(ByteBuffer source) throws IOException {
+      return delegate.write(source);
+    }
+
+    @Override
+    public long position() throws IOException {
+      return delegate.position();
+    }
+
+    @Override
+    public SeekableByteChannel position(long newPosition) throws IOException {
+      delegate.position(newPosition);
+      return this;
+    }
+
+    @Override
+    public long size() throws IOException {
+      return delegate.size();
+    }
+
+    @Override
+    public SeekableByteChannel truncate(long size) throws IOException {
+      delegate.truncate(size);
+      return this;
+    }
+
+    @Override
+    public boolean isOpen() {
+      return delegate.isOpen();
+    }
+
+    @Override
+    public void close() throws IOException {
+      delegate.close();
+    }
   }
 
   @Test
@@ -283,10 +406,27 @@ class ServiceLoaderSeekableZipTest {
     return new Pair(name, value.getBytes(StandardCharsets.UTF_8), false);
   }
 
+  private static Pair storedEntry(String name, String value) {
+    return new Pair(name, value.getBytes(StandardCharsets.UTF_8), true);
+  }
+
   private static void writeZip(Path archive, List<Pair> entries) throws IOException {
     try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
       for (Pair entry : entries) {
-        put(output, entry.name(), new String(entry.bytes(), StandardCharsets.UTF_8));
+        if (entry.stored()) {
+          CRC32 crc = new CRC32();
+          crc.update(entry.bytes());
+          ZipEntry stored = new ZipEntry(entry.name());
+          stored.setMethod(ZipEntry.STORED);
+          stored.setSize(entry.bytes().length);
+          stored.setCompressedSize(entry.bytes().length);
+          stored.setCrc(crc.getValue());
+          output.putNextEntry(stored);
+          output.write(entry.bytes());
+          output.closeEntry();
+        } else {
+          put(output, entry.name(), new String(entry.bytes(), StandardCharsets.UTF_8));
+        }
       }
     }
   }
@@ -326,6 +466,71 @@ class ServiceLoaderSeekableZipTest {
       putLeShort(data, position + 8, readLeShort(data, position + 8) & ~0x800);
       position += 4;
     }
+    Files.write(archive, data);
+  }
+
+  private static void writeDataDescriptor(Path archive, boolean signature) throws IOException {
+    byte[] data = "demo.Impl\n".getBytes(StandardCharsets.UTF_8);
+    byte[] name = SERVICE.getBytes(StandardCharsets.UTF_8);
+    CRC32 crc = new CRC32();
+    crc.update(data);
+    ByteArrayOutputStream file = new ByteArrayOutputStream();
+    ByteBuffer local = ByteBuffer.allocate(30).order(ByteOrder.LITTLE_ENDIAN);
+    local.putInt(0x04034b50).putShort((short) 20).putShort((short) 8)
+        .putShort((short) 0).putShort((short) 0).putShort((short) 0)
+        .putInt(0).putInt(0).putInt(0)
+        .putShort((short) name.length).putShort((short) 0);
+    file.write(local.array());
+    file.write(name);
+    file.write(data);
+    if (signature) {
+      file.write(new byte[] {0x50, 0x4b, 0x07, 0x08});
+    }
+    file.write(intLe((int) crc.getValue()));
+    file.write(intLe(data.length));
+    file.write(intLe(data.length));
+    int cenOffset = file.size();
+    ByteBuffer cen = ByteBuffer.allocate(46).order(ByteOrder.LITTLE_ENDIAN);
+    cen.putInt(0x02014b50).putShort((short) 20).putShort((short) 20)
+        .putShort((short) 8).putShort((short) 0).putShort((short) 0)
+        .putShort((short) 0).putInt((int) crc.getValue())
+        .putInt(data.length).putInt(data.length)
+        .putShort((short) name.length).putShort((short) 0).putShort((short) 0)
+        .putShort((short) 0).putShort((short) 0).putInt(0).putInt(0);
+    file.write(cen.array());
+    file.write(name);
+    writeEocd(file, file.size() - cenOffset, cenOffset);
+    Files.write(archive, file.toByteArray());
+  }
+
+  private static byte[] intLe(int value) {
+    return new byte[] {
+        (byte) value, (byte) (value >>> 8), (byte) (value >>> 16), (byte) (value >>> 24)};
+  }
+
+  private static void patchFlags(Path archive, int extraBits) throws IOException {
+    byte[] data = Files.readAllBytes(archive);
+    int position = 0;
+    while ((position = indexOf(data, new byte[] {0x50, 0x4b, 0x03, 0x04}, position)) >= 0) {
+      putLeShort(data, position + 6, readLeShort(data, position + 6) | extraBits);
+      position += 4;
+    }
+    position = 0;
+    while ((position = indexOf(data, new byte[] {0x50, 0x4b, 0x01, 0x02}, position)) >= 0) {
+      putLeShort(data, position + 8, readLeShort(data, position + 8) | extraBits);
+      position += 4;
+    }
+    Files.write(archive, data);
+  }
+
+  private static void setEfsAndCorruptName(Path archive) throws IOException {
+    byte[] data = Files.readAllBytes(archive);
+    int local = indexOf(data, new byte[] {0x50, 0x4b, 0x03, 0x04}, 0);
+    putLeShort(data, local + 6, readLeShort(data, local + 6) | 0x800);
+    data[local + 30] = (byte) 0xff;
+    int cen = indexOf(data, new byte[] {0x50, 0x4b, 0x01, 0x02}, 0);
+    putLeShort(data, cen + 8, readLeShort(data, cen + 8) | 0x800);
+    data[cen + 46] = (byte) 0xff;
     Files.write(archive, data);
   }
 

@@ -88,6 +88,7 @@ final class ServiceLoaderDescriptorArchiveSource {
           "archive_spill_error", normalized.toString(), sanitized(error, config));
     } catch (InterruptedIOException error) {
       state.markInterrupted();
+      Thread.interrupted();
       state.diagnostic(
           "descriptor_scan_interrupted", normalized.toString(), sanitized(error, config));
     } catch (IOException error) {
@@ -108,28 +109,21 @@ final class ServiceLoaderDescriptorArchiveSource {
       Path archive,
       ServiceLoaderDescriptorSource.ScanState state,
       ServiceLoaderDescriptorArchiveConfig config) {
-    IOException failure = null;
     if (directory != null) {
       try {
         directory.close();
       } catch (IOException error) {
-        failure = error;
+        state.diagnostic(
+            "archive_read_error", archive.toString(), sanitized(error, config));
       }
     }
     if (spill != null) {
       try {
         spill.close();
       } catch (IOException error) {
-        if (failure == null) {
-          failure = error;
-        } else {
-          failure.addSuppressed(error);
-        }
+        state.diagnostic(
+            "archive_spill_error", archive.toString(), sanitized(error, config));
       }
-    }
-    if (failure != null) {
-      state.diagnostic(
-          "archive_spill_error", archive.toString(), sanitized(failure, config));
     }
   }
 
@@ -236,7 +230,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       List<ServiceLoaderDescriptorZipEntry> entries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) {
+      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
     int processed = 0;
     for (ServiceLoaderDescriptorZipEntry entry : entries) {
       if (!state.hasDecompressedBudget()) {
@@ -272,7 +266,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       String versionedModule,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) {
+      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
     if (module == null) {
       if (versionedModule != null) {
         state.diagnostic(
@@ -294,6 +288,8 @@ final class ServiceLoaderDescriptorArchiveSource {
       }
       return ServiceLoaderDescriptorSource.addModuleBytes(
           bytes, modulePath, descriptors, state);
+    } catch (InterruptedIOException error) {
+      throw error;
     } catch (IOException error) {
       state.diagnostic(
           "archive_entry_read_error", modulePath, sanitized(error, config));
@@ -307,7 +303,7 @@ final class ServiceLoaderDescriptorArchiveSource {
       ServiceLoaderDescriptorZipEntry entry,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) {
+      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
     String serviceType = entry.name().substring(
         ServiceLoaderDescriptorSource.SERVICES_DIRECTORY.length() + 1);
     if (!ServiceLoaderDescriptorAuthorization.isBinaryClassName(serviceType)) {
@@ -328,6 +324,8 @@ final class ServiceLoaderDescriptorArchiveSource {
           ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
           parsed.malformedEntries()));
+    } catch (InterruptedIOException error) {
+      throw error;
     } catch (IOException error) {
       state.diagnostic(
           "archive_entry_read_error", path, sanitized(error, config));
