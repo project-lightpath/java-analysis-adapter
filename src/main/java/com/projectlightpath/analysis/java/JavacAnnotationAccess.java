@@ -35,6 +35,7 @@ final class JavacAnnotationAccess {
     return JavacSourceSymbolIndex.of(context)
         .map(index -> index.members(typeName, memberName).stream()
             .filter(member -> member.kind().equals("method")
+                && !member.errorType()
                 && member.parameterTypes().size() == parameterCount)
             .toList())
         .filter(matches -> matches.size() == 1)

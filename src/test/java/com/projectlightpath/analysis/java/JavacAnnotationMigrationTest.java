@@ -2,7 +2,6 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -55,8 +54,9 @@ class JavacAnnotationMigrationTest {
     SourceMetadataScanner on = new SourceMetadataScanner(context);
     System.setProperty(FLAG, "true");
     try {
-      // Both scans answer the same question about the same file; the
-      // accessor is disabled flag-off and the stub is textual flag-on.
+      // Unrelated scan surfaces are unaffected by the flag (the accessor
+      // is call-site-local); the migrated seam's own flag-off parity is
+      // asserted exactly by the end-to-end proxy cell.
       assertEquals(off.routes(context.framework()).toString(),
           on.routes(context.framework()).toString());
     } finally {
@@ -230,8 +230,8 @@ class JavacAnnotationMigrationTest {
     System.setProperty(FLAG, "true");
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     JavacAnnotationAccess access = JavacAnnotationAccess.of(scanner);
-    // The index is disabled (no flag-driven build for a missing type):
-    // a nonexistent type falls back silently.
+    // A type the index never saw (the file is indexed; the type is not):
+    // the correlation falls back silently.
     assertTrue(access.member("demo.Missing", "run", 1).isEmpty());
   }
 
@@ -268,22 +268,42 @@ class JavacAnnotationMigrationTest {
             import java.lang.annotation.*;
             @Retention(RetentionPolicy.RUNTIME) @interface Ann { int value() default 0; }
             """,
-        "demo/Probe.java", """
+        "demo/Api.java", """
             package demo;
-            public class Probe {
-              public void annotated(@Ann(value = 1) String p) {}
+            public interface Api {
+              void call(@Ann(value = 1) String p);
+            }
+            """,
+        "demo/Main.java", """
+            package demo;
+            public class Main {
+              void run() {
+                Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Api.class},
+                    (proxyInstance, method, args) -> null);
+              }
             }
             """));
     SourceMetadataScanner warm = new SourceMetadataScanner(context);
     System.setProperty(FLAG, "true");
-    // A flag-on scan reads the same file through the same static cache.
-    warm.routes(context.framework());
+    // A flag-on scan reads the same files through the same static cache and
+    // actually exercises the migrated seam: the repaired descriptor proves
+    // the accessor ran on the warmed cache.
+    List<DynamicFeature> warmed = warm.dynamicFeatures();
+    assertTrue(warmed.stream().anyMatch(feature ->
+        feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().equals("(java.lang.String)")),
+        warmed.toString());
     System.clearProperty(FLAG);
-    // The flag-off scan must see byte-for-byte textual extracts.
+    // The flag-off scan must see byte-for-byte textual extracts of the same
+    // files the warmed scan read.
     SourceMetadataScanner cold = new SourceMetadataScanner(context);
     assertEquals(
-        warm.methods(file(context, "cache", "demo/Probe.java")).toString(),
-        cold.methods(file(context, "cache", "demo/Probe.java")).toString());
+        warm.methods(file(context, "cache", "demo/Api.java")).toString(),
+        cold.methods(file(context, "cache", "demo/Api.java")).toString());
+    assertEquals(
+        warm.methods(file(context, "cache", "demo/Main.java")).toString(),
+        cold.methods(file(context, "cache", "demo/Main.java")).toString());
   }
 
   @Test
@@ -321,6 +341,7 @@ class JavacAnnotationMigrationTest {
             """,
         "demo/Probe.java", """
             package demo;
+            import java.util.List;
             public class Probe {
               public void run(List<@Ann String> a, java.util.List<String> b) {}
             }
@@ -331,9 +352,11 @@ class JavacAnnotationMigrationTest {
     // Clean parameters are not repaired: the textual spelling survives.
     assertTrue(access.repairedParameterType(
         "List<@Ann String> a", "demo.Probe", "run", 2, 0).isEmpty());
-    // A triggered parameter in the same descriptor records the delta.
-    assertNotEquals("String", access.repairedParameterType(
-        "@Ann(value = 1) String a", "demo.Probe", "run", 2, 0).orElse("String"));
+    // A triggered parameter in the same descriptor records the delta: the
+    // repair returns the real parameter's canonical type, not a fabricated
+    // String spelling.
+    assertEquals("java.util.List", access.repairedParameterType(
+        "@Ann(value = 1) String a", "demo.Probe", "run", 2, 0).orElse(""));
   }
 
   @Test
@@ -368,7 +391,7 @@ class JavacAnnotationMigrationTest {
     // shape flag-off, and the javac repair records the canonical delta flag-on.
     assertTrue(off.stream().anyMatch(feature ->
             feature.target().startsWith("demo.Api#")
-            && feature.targetDescriptor().contains("value")),
+            && feature.targetDescriptor().equals("((value=1)String)")),
         off.toString());
     assertTrue(on.stream().anyMatch(feature ->
             feature.target().startsWith("demo.Api#")
