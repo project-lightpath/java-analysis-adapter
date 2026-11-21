@@ -175,7 +175,12 @@ erasure.
   `row()` and is a documented follow-up; dispositioned per the AGENTS
   weakness-disposition rule (all manifestations: `index_build_error`
   interpolation of `error.getMessage()` and javac
-  `Diagnostic.getMessage` rows).
+  `Diagnostic.getMessage` rows). Known safe-direction quirk: the
+  replacement has no separator guard, so on JVMs whose `java.io.tmpdir`
+  lacks a trailing separator a message path merely sharing the prefix
+  (`/tmpfoo`) is over-replaced to `<tmp>foo` — message mangling, never
+  a path leak; a separator-aware match is the follow-up if ever
+  actioned.
 - `javac_global_error` and the compile-triggered `index_build_error`
   path have no end-to-end cells: the source-less-error trigger needs a
   slow pathological unit and the build-error trigger is not reliably
