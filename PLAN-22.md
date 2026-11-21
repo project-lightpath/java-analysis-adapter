@@ -256,6 +256,20 @@ Unicode, qualified names — the D-series lesson):
     point 2 (the simple/canonical name-spelling contract it tested is
     part of the qualifier pipeline).
 
+## Pre-RED scratch probe results (run 2026-11-21, JDK 27)
+
+The trigger predicate against 16 parameter shapes: **triggered** —
+`@Ann(value = 1)`, `@pkg.Outer.Ann(value = 1)` (post-strip `(`
+residue), `@Mar$k`, `@Ωmega`, `@MaΩga`, `@pkg.Ωmega` (unconsumed
+tails); **not triggered** — plain, `final`, `@Deprecated`, `@Ann`,
+`@pkg.Outer.Ann` (clean strips), `String @Ann ... args`,
+`List<@Ann String>`, `List<String>`, `String[]`, `int`. Implementation
+lesson: clause 2 must be "the maximal ASCII match is followed by a
+character that `Character.isJavaIdentifierPart` accepts but ASCII
+`\w` does not" — `$` **passes** `isJavaIdentifierPart`, so a naive
+"non-identifier" check misses `@Mar$k` (found by the probe, not by
+inspection).
+
 ## TDD sequence
 
 - **RED_22**: the matrix above plus a behavior-neutral seam (the
