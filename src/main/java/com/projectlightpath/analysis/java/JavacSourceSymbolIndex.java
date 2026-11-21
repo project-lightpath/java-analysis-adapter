@@ -182,26 +182,27 @@ final class JavacSourceSymbolIndex {
   }
 
   // The RuntimeException catch below is deliberate and inventoried for manual
-  // review: the fail-visible contract routes ANY task or extraction failure
-  // into a present index with an index_build_error row, never a thrown
-  // exception out of of(), and the failure is cached like a success.
+  // review: the fail-visible contract routes ANY failure — input scan,
+  // supplier, task, or extraction pass — into a present index with an
+  // index_build_error row, never a thrown exception out of of(), and the
+  // failure is cached like a success.
   @SuppressWarnings("PMD.AvoidCatchingGenericException")
   private static JavacSourceSymbolIndex build(AnalysisContext context) {
     long startNano = System.nanoTime();
     long heapBefore = heapUsed();
     List<IndexDiagnostic> diagnostics = new ArrayList<>();
-    Inputs inputs = new Inputs(context, diagnostics);
-    List<Path> units = inputs.units();
-    if (units.isEmpty()) {
-      return failed(diagnostics, startNano, heapBefore);
-    }
-    JavaCompiler compiler = COMPILER.get().get();
-    if (compiler == null) {
-      diagnostics.add(IndexRenderer.row("javac_unavailable",
-          "javac is not available; the source-symbol index cannot be built", "", 0, 0));
-      return failed(diagnostics, startNano, heapBefore);
-    }
     try {
+      Inputs inputs = new Inputs(context, diagnostics);
+      List<Path> units = inputs.units();
+      if (units.isEmpty()) {
+        return failed(diagnostics, startNano, heapBefore);
+      }
+      JavaCompiler compiler = COMPILER.get().get();
+      if (compiler == null) {
+        diagnostics.add(IndexRenderer.row("javac_unavailable",
+            "javac is not available; the source-symbol index cannot be built", "", 0, 0));
+        return failed(diagnostics, startNano, heapBefore);
+      }
       return compile(context, compiler, inputs, units, diagnostics, startNano, heapBefore);
     } catch (IOException | RuntimeException error) {
       diagnostics.add(IndexRenderer.row("index_build_error",

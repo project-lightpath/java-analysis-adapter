@@ -120,6 +120,15 @@ were pushed by the coordinating session while this session's own review
 loop was in flight; the coordination protocol has since been corrected
 (the owner session or the user merges).
 
+Round-2b (coordinating-session read-only review, all three findings
+addressed): the guarded `try` in `build()` now covers the input scan and
+the compiler-supplier call, so the "never a thrown exception out of
+`of()`" comment is true for every path; a throwing-compiler cell pins
+the RuntimeException containment end-to-end (present index,
+`index_build_error` row, cached, no compilation, message sanitized
+through `row()`); the sanitization scope beyond `java.io.tmpdir` is
+recorded as a residual below.
+
 ## Pre-RED scratch probe results
 
 Recorded in `PLAN-21.md`: the D3 collision leaves both entries usable
@@ -137,6 +146,7 @@ erasure.
 | REFACTOR_21 | 366 | 0 findings | pass |
 | REVIEW_33_1/2 (coordinating session) | 368 = 366 + 2 review cells (floor left at 366 — the round-2 fix) | 0 findings | pass |
 | REVIEW round 2 (this PR) | 369 = 368 + 1 sanitizer cell (floor raised 366 → 369) | 0 findings (one inventoried suppression on `build`) | pass |
+| REVIEW round 2b (coordinating-session findings) | 370 = 369 + 1 throwing-compiler cell (floor raised 369 → 370) | 0 findings (same single inventoried suppression) | pass |
 
 ## Residuals
 
@@ -156,6 +166,16 @@ erasure.
   included. This diverges from `scanner.files()`, which excludes both.
 - `packageAnnotations` cannot distinguish a miss from an indexed
   `package-info` with zero annotations (both return empty).
+- `sanitizeMessage` strips only the `java.io.tmpdir` prefix. javac
+  diagnostic and option-echo text can still carry absolute paths
+  outside the temp directory (repository root, `~/.m2` classpath
+  entries, alternate `/private/var` spellings) in `message` fields —
+  never in the `path` field, which is rendered per-family. Full
+  message sanitization needs context-derived prefixes threaded into
+  `row()` and is a documented follow-up; dispositioned per the AGENTS
+  weakness-disposition rule (all manifestations: `index_build_error`
+  interpolation of `error.getMessage()` and javac
+  `Diagnostic.getMessage` rows).
 - `javac_global_error` and the compile-triggered `index_build_error`
   path have no end-to-end cells: the source-less-error trigger needs a
   slow pathological unit and the build-error trigger is not reliably
