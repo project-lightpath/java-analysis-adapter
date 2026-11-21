@@ -90,6 +90,36 @@ Three findings, all addressed:
    `IndexRenderer.declaredRootPath(root)`, matching the path-safety invariant.
 3. **LOW — no coverage receipt.** Recorded above.
 
+## Review round 2 (follow-up PR, post-merge of #33)
+
+Five findings against the merged HEAD, all addressed:
+
+1. **MAJOR — stale Makefile floor.** The merged floor said 366 while the
+   suite ran 368 (the two round-1 cells were never counted in); a future
+   removal of either cell would pass the gate silently. Floor raised to
+   **369** (368 + the new sanitizer cell).
+2. **MINOR — extraction-pass `RuntimeException` escaped `of()`.** The
+   plan's fail-visible contract routes any task or extraction failure
+   into a present index with an `index_build_error` row; the catch now
+   covers `RuntimeException` (the `@SuppressWarnings` on `build` is
+   deliberate, documented, and lands in the lint plugin's
+   manual-review suppression inventory).
+3. **MINOR — `index_build_error` messages could leak the absolute
+   process temp directory** via raw `error.getMessage()` (temp-dir
+   creation and `getTask` failures). `IndexRenderer.row` now routes
+   every message through `sanitizeMessage`, which strips the
+   `java.io.tmpdir` prefix to `<tmp>`; direct unit cell added.
+4. **MINOR — `duplicate_binary_name` named only the first colliding
+   file.** The message now lists every colliding file name; the
+   duplicate cell asserts both files appear.
+5. **INFO — O(units × errors) diagnostic lookup.**
+   `addCompilerDiagnostics` now receives a `Set<Path>` of unit files.
+
+Round-1 note: the round-1 commits (`REVIEW_33_1/2`) and the PR #33 merge
+were pushed by the coordinating session while this session's own review
+loop was in flight; the coordination protocol has since been corrected
+(the owner session or the user merges).
+
 ## Pre-RED scratch probe results
 
 Recorded in `PLAN-21.md`: the D3 collision leaves both entries usable
@@ -105,6 +135,8 @@ erasure.
 | RED_21 | 16/17 new cells fail as predicted (cell 1 only green); rest of suite 349 green | 0 findings (stub) | pass |
 | GREEN_21 | 366 = 349 + 17 (Makefile floor raised 338 → 366) | 0 findings (after splitting Extractor into ElementReader + AnnotationRenderer to clear two GodClass findings) | pass |
 | REFACTOR_21 | 366 | 0 findings | pass |
+| REVIEW_33_1/2 (coordinating session) | 368 = 366 + 2 review cells (floor left at 366 — the round-2 fix) | 0 findings | pass |
+| REVIEW round 2 (this PR) | 369 = 368 + 1 sanitizer cell (floor raised 366 → 369) | 0 findings (one inventoried suppression on `build`) | pass |
 
 ## Residuals
 

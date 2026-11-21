@@ -405,7 +405,7 @@ class JavacSourceSymbolIndexTest {
     Path first = root.resolve("r1");
     Path second = root.resolve("r2");
     writeFiles(first, Map.of("demo/Dup.java", "package demo; class Dup {}"));
-    writeFiles(second, Map.of("demo/Dup.java", "package demo; class Dup {}"));
+    writeFiles(second, Map.of("demo/Other.java", "package demo; class Dup {}"));
     AnalysisContext context = AnalysisContext.builder()
         .id("duplicate")
         .framework(AnalysisContext.Framework.QUARKUS)
@@ -428,9 +428,22 @@ class JavacSourceSymbolIndexTest {
     assertTrue(duplicates.stream().allMatch(
         type -> type.shape().duplicateBinaryName()), duplicates.toString());
     assertEquals(1, index.typesIn(first.resolve("demo/Dup.java")).size());
-    assertEquals(1, index.typesIn(second.resolve("demo/Dup.java")).size());
+    assertEquals(1, index.typesIn(second.resolve("demo/Other.java")).size());
+    // The row names every colliding file, not just the first.
     assertTrue(index.diagnostics().stream().anyMatch(
-        row -> row.code().equals("duplicate_binary_name")), index.diagnostics().toString());
+        row -> row.code().equals("duplicate_binary_name")
+            && row.message().contains("Dup.java") && row.message().contains("Other.java")),
+        index.diagnostics().toString());
+  }
+
+  @Test
+  void buildErrorMessagesNeverContainTheProcessTempDirectory() {
+    String tempPrefix = System.getProperty("java.io.tmpdir");
+    String message = JavacSourceSymbolIndex.sanitizeMessage(
+        "could not create " + tempPrefix + "/flpath-index-classes1234");
+    assertFalse(message.contains(tempPrefix), message);
+    assertTrue(message.contains("<tmp>"), message);
+    assertEquals("no paths here", JavacSourceSymbolIndex.sanitizeMessage("no paths here"));
   }
 
   @Test
