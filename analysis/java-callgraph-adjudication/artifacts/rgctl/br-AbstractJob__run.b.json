@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "dd660785-4a37-5f7f-bc0b-55875d7aa945",
+    "symbol": "AbstractJob::run",
+    "class_context": "AbstractJob",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/src/com/lightpath/fixture/AbstractJob.java",
+    "language": "java",
+    "signature": "public final void run() {",
+    "canonical_fqn": "AbstractJob::run"
+  },
+  "metrics": {
+    "score": 0.0,
+    "direct_callers_count": 0,
+    "impact_zone_size": 0
+  },
+  "topology": {
+    "scc_component_id": 157,
+    "direct_callers": [],
+    "impact_zone": []
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

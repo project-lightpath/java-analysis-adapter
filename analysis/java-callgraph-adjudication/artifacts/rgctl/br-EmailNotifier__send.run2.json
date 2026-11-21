@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "9078ccbd-2bc6-5902-8fd9-e0da0800de4c",
+    "symbol": "EmailNotifier::send",
+    "class_context": "EmailNotifier",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/EmailNotifier.java",
+    "language": "java",
+    "signature": "@Override",
+    "canonical_fqn": "EmailNotifier::send"
+  },
+  "metrics": {
+    "score": 0.0,
+    "direct_callers_count": 0,
+    "impact_zone_size": 0
+  },
+  "topology": {
+    "scc_component_id": 103,
+    "direct_callers": [],
+    "impact_zone": []
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

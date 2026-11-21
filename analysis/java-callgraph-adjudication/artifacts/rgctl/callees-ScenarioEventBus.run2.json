@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "callees": [
+    {
+      "name": "publish",
+      "qualified_name": "com.lightpath.fixture.EventBus.publish",
+      "signature": "public static void publish(String topic, String event) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/EventBus.java",
+      "line": 20,
+      "start_byte": 632,
+      "end_byte": 962,
+      "name_start_byte": 651,
+      "name_end_byte": 658,
+      "id": "452808b1-64a6-50b1-9511-ac6e381f1f08"
+    },
+    {
+      "name": "log",
+      "qualified_name": "com.lightpath.fixture.Trace.log",
+      "signature": "public static void log(String tag) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/Trace.java",
+      "line": 21,
+      "start_byte": 610,
+      "end_byte": 953,
+      "name_start_byte": 629,
+      "name_end_byte": 632,
+      "id": "ba5394bb-82c2-54e8-b2c6-081b0e827395"
+    },
+    {
+      "name": "register",
+      "qualified_name": "com.lightpath.fixture.AuditListener.register",
+      "signature": "public static void register() {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/AuditListener.java",
+      "line": 9,
+      "start_byte": 145,
+      "end_byte": 312,
+      "name_start_byte": 164,
+      "name_end_byte": 172,
+      "id": "fb406ac5-09da-5e2a-b444-d44ae8af67da"
+    },
+    {
+      "name": "onDeployFailed",
+      "qualified_name": "com.lightpath.fixture.AuditListener.onDeployFailed",
+      "signature": "private static void onDeployFailed(String event) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/AuditListener.java",
+      "line": 14,
+      "start_byte": 318,
+      "end_byte": 434,
+      "name_start_byte": 338,
+      "name_end_byte": 352,
+      "id": "a96417ba-c004-5299-be2d-6818d633947b"
+    },
+    {
+      "name": "subscribe",
+      "qualified_name": "com.lightpath.fixture.EventBus.subscribe",
+      "signature": "public static void subscribe(String topic, Consumer<String> listener) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/EventBus.java",
+      "line": 16,
+      "start_byte": 458,
+      "end_byte": 626,
+      "name_start_byte": 477,
+      "name_end_byte": 486,
+      "id": "af723abb-45df-5e64-a404-92c1d1e4e42a"
+    },
+    {
+      "name": "$lambda$0",
+      "qualified_name": "com.lightpath.fixture.EventBus.subscribe.$lambda$0",
+      "signature": "t -> new CopyOnWriteArrayList<>()",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/EventBus.java",
+      "line": 17,
+      "start_byte": 571,
+      "end_byte": 604,
+      "id": "5baf6c91-2a76-5525-aeab-9fc36c165156"
+    }
+  ],
+  "total": 6
+}

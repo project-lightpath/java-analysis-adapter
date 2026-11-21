@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "80223022-18fd-54be-8051-aff01ea8c603",
+    "symbol": "RealEcho::echo",
+    "class_context": "RealEcho",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/src/com/lightpath/fixture/RealEcho.java",
+    "language": "java",
+    "signature": "@Override",
+    "canonical_fqn": "RealEcho::echo"
+  },
+  "metrics": {
+    "score": 0.0,
+    "direct_callers_count": 0,
+    "impact_zone_size": 0
+  },
+  "topology": {
+    "scc_component_id": 147,
+    "direct_callers": [],
+    "impact_zone": []
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

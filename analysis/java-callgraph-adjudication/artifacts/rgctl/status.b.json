@@ -1,0 +1,38 @@
+{
+  "schema_version": 3,
+  "command": "status",
+  "status": "ok",
+  "repo": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1",
+  "snapshot": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/.rgctl/graph.snapshot.bin",
+  "digest": "878b6297377d6f7f35b13add8435d1aa903b37304d463fa3f3aaa79914dc4c92",
+  "nodes": 236,
+  "edges": 546,
+  "index_current": true,
+  "dirty_files": 0,
+  "files_added": 0,
+  "files_changed": 0,
+  "files_deleted": 0,
+  "watcher_alive": false,
+  "update_queue_pending": 0,
+  "capabilities": {
+    "structural_graph": {
+      "ready": true,
+      "path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/.rgctl/graph.snapshot.bin",
+      "unlock_command": "rgctl discover"
+    },
+    "cfg_cpg": {
+      "ready": false,
+      "cpg_overlay": false,
+      "ast_skeleton": false,
+      "unlock_command": "rgctl discover --with-cfg"
+    },
+    "semantic_index": {
+      "ready": false,
+      "unlock_command": "rgctl semantic index"
+    },
+    "agent_skills": {
+      "installed_hosts": [],
+      "unlock_command": "rgctl install --skill"
+    }
+  }
+}

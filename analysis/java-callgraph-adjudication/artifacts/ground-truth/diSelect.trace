@@ -1,0 +1,4 @@
+entry:App.main:diSelect
+diSelect:ScenarioDiSelect.run
+diSelect:AlertService.raise
+diSelect:EmailNotifier.send

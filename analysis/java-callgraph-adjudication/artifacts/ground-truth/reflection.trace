@@ -1,0 +1,3 @@
+entry:App.main:reflection
+reflection:ScenarioReflection.run
+reflection:SecretHandler.handle

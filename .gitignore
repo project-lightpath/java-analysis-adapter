@@ -16,6 +16,7 @@ spike/scripts/__pycache__/
 
 # Local files
 .DS_Store
+analysis/java-callgraph-adjudication/fixture/out/
 
 # Local tool caches (never commit)
 .serena/

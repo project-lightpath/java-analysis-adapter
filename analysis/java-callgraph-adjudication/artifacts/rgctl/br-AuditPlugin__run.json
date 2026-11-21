@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "cb337fac-5637-5067-9ae0-014cb54d4982",
+    "symbol": "AuditPlugin::run",
+    "class_context": "AuditPlugin",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/src/com/lightpath/fixture/AuditPlugin.java",
+    "language": "java",
+    "signature": "@Override",
+    "canonical_fqn": "AuditPlugin::run"
+  },
+  "metrics": {
+    "score": 0.0,
+    "direct_callers_count": 0,
+    "impact_zone_size": 0
+  },
+  "topology": {
+    "scc_component_id": 156,
+    "direct_callers": [],
+    "impact_zone": []
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

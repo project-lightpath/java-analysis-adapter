@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "7d04087d-47f4-579c-bfb9-130962e1905b",
+    "symbol": "SmsNotifier::send",
+    "class_context": "SmsNotifier",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/src/com/lightpath/fixture/SmsNotifier.java",
+    "language": "java",
+    "signature": "@Override",
+    "canonical_fqn": "SmsNotifier::send"
+  },
+  "metrics": {
+    "score": 0.0,
+    "direct_callers_count": 0,
+    "impact_zone_size": 0
+  },
+  "topology": {
+    "scc_component_id": 146,
+    "direct_callers": [],
+    "impact_zone": []
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

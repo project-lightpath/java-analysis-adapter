@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "f4831d96-c126-51aa-9615-b35a6b44d2fc",
+    "symbol": "SimpleGreeter::greet",
+    "class_context": "SimpleGreeter",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run1/src/com/lightpath/fixture/SimpleGreeter.java",
+    "language": "java",
+    "signature": "@Override",
+    "canonical_fqn": "SimpleGreeter::greet"
+  },
+  "metrics": {
+    "score": 0.0,
+    "direct_callers_count": 0,
+    "impact_zone_size": 0
+  },
+  "topology": {
+    "scc_component_id": 161,
+    "direct_callers": [],
+    "impact_zone": []
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

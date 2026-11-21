@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "target": {
+    "id": "a96417ba-c004-5299-be2d-6818d633947b",
+    "symbol": "AuditListener::onDeployFailed",
+    "class_context": "AuditListener",
+    "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/AuditListener.java",
+    "language": "java",
+    "signature": "private static void onDeployFailed(String event) {",
+    "canonical_fqn": "AuditListener::onDeployFailed"
+  },
+  "metrics": {
+    "score": 25.15,
+    "direct_callers_count": 1,
+    "impact_zone_size": 3
+  },
+  "topology": {
+    "scc_component_id": 78,
+    "direct_callers": [
+      {
+        "id": "fb406ac5-09da-5e2a-b444-d44ae8af67da",
+        "fqn": "com.lightpath.fixture.AuditListener.register",
+        "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/AuditListener.java"
+      }
+    ],
+    "impact_zone": [
+      {
+        "id": "fb406ac5-09da-5e2a-b444-d44ae8af67da",
+        "fqn": "com.lightpath.fixture.AuditListener.register",
+        "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/AuditListener.java"
+      },
+      {
+        "id": "b255b650-ebd0-5459-8154-3fcda872d0ab",
+        "fqn": "com.lightpath.fixture.ScenarioEventBus.run",
+        "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/ScenarioEventBus.java"
+      },
+      {
+        "id": "c7e0cb76-f58d-5d72-946e-85464a977f3f",
+        "fqn": "com.lightpath.fixture.App.main",
+        "file_path": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/App.java"
+      }
+    ]
+  },
+  "gatekeeping": {
+    "policy_status": "SKIPPED",
+    "violations": [],
+    "handoffs": []
+  }
+}

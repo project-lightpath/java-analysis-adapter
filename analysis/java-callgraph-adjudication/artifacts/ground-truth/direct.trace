@@ -1,0 +1,4 @@
+entry:App.main:direct
+direct:ScenarioDirect.run
+direct:StaticHelper.directCall
+direct:StaticHelper.helper

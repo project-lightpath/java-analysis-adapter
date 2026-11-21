@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "callees": [
+    {
+      "name": "resolve",
+      "qualified_name": "com.lightpath.fixture.MiniContainer.resolve",
+      "signature": "public static Notifier resolve(String qualifier) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/MiniContainer.java",
+      "line": 28,
+      "start_byte": 841,
+      "end_byte": 1267,
+      "name_start_byte": 864,
+      "name_end_byte": 871,
+      "id": "02b1e142-9f31-524d-b71c-97495fdaaa74"
+    },
+    {
+      "name": "raise",
+      "qualified_name": "com.lightpath.fixture.AlertService.raise",
+      "signature": "public void raise(String message) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/AlertService.java",
+      "line": 11,
+      "start_byte": 280,
+      "end_byte": 403,
+      "name_start_byte": 292,
+      "name_end_byte": 297,
+      "id": "062c2873-2343-5965-aa65-6b7926fdb55a"
+    },
+    {
+      "name": "log",
+      "qualified_name": "com.lightpath.fixture.Trace.log",
+      "signature": "public static void log(String tag) {",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/Trace.java",
+      "line": 21,
+      "start_byte": 610,
+      "end_byte": 953,
+      "name_start_byte": 629,
+      "name_end_byte": 632,
+      "id": "ba5394bb-82c2-54e8-b2c6-081b0e827395"
+    },
+    {
+      "name": "send",
+      "qualified_name": "com.lightpath.fixture.Notifier.send",
+      "signature": "void send(String message);",
+      "type": "function",
+      "file": "/private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/run2/src/com/lightpath/fixture/Notifier.java",
+      "line": 4,
+      "start_byte": 64,
+      "end_byte": 90,
+      "name_start_byte": 69,
+      "name_end_byte": 73,
+      "id": "248cdb0d-5952-504e-81c0-2a35bd123ef6"
+    }
+  ],
+  "total": 4
+}

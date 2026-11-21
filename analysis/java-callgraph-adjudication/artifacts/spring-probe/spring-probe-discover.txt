@@ -1,0 +1,19 @@
+[>] rgctl discover
+==> Analyzing: /private/var/folders/r7/gktmmltd1zq7wqhsjjslwsm80000gn/T/opencode/rgctl-adj/spring-probe
+graph build sub-phase timings [3mresolution_index_secs[0m[2m=[0m3.084e-6 [3mpass2_relation_resolution_secs[0m[2m=[0m0.000348916 [3mspill_and_columnar_secs[0m[2m=[0m0.001162083 [3mparked_save_secs[0m[2m=[0m0.000613709 [3mextract_read_cpu_secs[0m[2m=[0m5.9209e-5 [3mextract_parse_cpu_secs[0m[2m=[0m0.005255625 [3mextract_pass1_wall_secs[0m[2m=[0m0.000598625
+[✓] Indexed 1 files -> 26 nodes, 72 edges (0.0s)
+[✓] Analyzed 8 functions (avg complexity: 1.0, 0 high, 0 medium)
+[!] Community partition may be meaningless (flat call graph or near 1:1 clustering) [3mcommunities[0m[2m=[0m24 [3mnodes[0m[2m=[0m26 [3mcall_use_edges[0m[2m=[0m7 [3mflat_call_graph[0m[2m=[0mfalse [3mdegenerate[0m[2m=[0mtrue
+[!] Communities: 24 (modularity: 0.05) — warn: flat or degenerate clustering
+[*] Top hotspot: PaymentGateway (PageRank: 0.1230)
+[!] Found 1 circular dependencies
+[✓] Analysis complete
+[✓] Saved to .rgctl/ (0.0 MB total)
+[✓] Completed in 0.0s (peak 19 MB; ingest 17 MB, analysis 19 MB)
+
+[i] Next steps:
+   rgctl -f json find --type function --limit 20
+   rgctl -f json inventory --by type
+   rgctl -f json relations --edge calls --limit 20
+   rgctl slice <file> --line <N> --variable <VAR>
+[✓] rgctl discover finished in 48ms
