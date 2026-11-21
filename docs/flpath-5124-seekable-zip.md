@@ -167,6 +167,10 @@ under the large-archive execution at `-Xmx1g`.
   - shift the stream buffer after a partial bulk read;
   - try-with-resources for test sorts and no leaked `Files.list` streams;
   - remove per-archive/tape `deleteOnExit` registrations (crash residue R8).
+- A second `@coderabbitai full review` was requested after `REVIEW_2`; CodeRabbit
+  returned "Review rate limited" (next included review available in ~44
+  minutes). All 12 findings from the completed review are closed; the PR carries
+  the rate-limit note so the second pass can be run when the quota resets.
 
 ## Six production-integration preconditions
 
