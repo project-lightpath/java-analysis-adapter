@@ -80,7 +80,7 @@ promotion for the whole scan (`ServiceLoaderDescriptorScanner.isUnique`):
   test, 0 failures.
 - `make adapter-test` on Temurin 17.0.21.1+2: 371 default + 1 large-archive
   test, 0 failures.
-- `make java-lint`: PASS with the reviewed 20-entry maintainability baseline
+- `make java-lint`: PASS with the reviewed 21-entry maintainability baseline
   for the new parser/spill state machines; 0 CPD duplications; 0 suppressions.
 - `make evidence-validate`: PASS.
 
@@ -146,6 +146,27 @@ under the large-archive execution at `-Xmx1g`.
   `ZipEntry` 100%, aggregate 85.8% (483/563 changed/new lines). The POM carries
   an empty `jacoco.agent` property in both Surefire argLines; no coverage gate
   is added to `make`.
+
+## Review closure
+
+- Plan review: rounds 1-9, findings folded into PLAN-5124 §10.
+- Post-implementation review: 5 findings; closed in `REVIEW_1`
+  (payload-phase interrupt, flag clearing, descriptor/EFS/encryption tests,
+  coverage receipt, close-diagnostic mapping).
+- CodeRabbit (`@coderabbitai full review`): 12 actionable comments; closed in
+  `REVIEW_2`:
+  - own/close the channel before spill construction;
+  - close `selectedSort` if `rangeSort` construction fails;
+  - include directory entries in overlap validation;
+  - drop retained comments from selected entries;
+  - propagate raw-I/O and interrupt failures from payload reads;
+  - handle `DirectoryIteratorException` during spill cleanup;
+  - prefer a nonempty EOCD candidate and validate the CEN signature;
+  - only interpret a ZIP64 locator when a sentinel requires it;
+  - preserve ZIP64 descriptor width from the CEN sentinel;
+  - shift the stream buffer after a partial bulk read;
+  - try-with-resources for test sorts and no leaked `Files.list` streams;
+  - remove per-archive/tape `deleteOnExit` registrations (crash residue R8).
 
 ## Six production-integration preconditions
 
