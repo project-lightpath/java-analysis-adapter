@@ -305,6 +305,29 @@ class ServiceLoaderSeekableZipTest {
   }
 
   @Test
+  void sortCleanupFailureIsVisibleButKeepsDescriptors() throws IOException {
+    Path archive = temp.resolve("sort-cleanup.jar");
+    writeZip(archive, List.of(entry(SERVICE, "demo.Impl\n")));
+    Path spillRoot = Files.createDirectory(temp.resolve("sort-cleanup-spill"));
+    List<ServiceLoaderDescriptorScanner.Descriptor> descriptors = new ArrayList<>();
+    ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
+    ServiceLoaderDescriptorArchiveSource.scan(
+        archive, descriptors, state,
+        ServiceLoaderDescriptorArchiveConfig.defaults()
+            .withTempRoot(spillRoot)
+            .withCleanup(path -> {
+              if (path.getFileName().toString().startsWith("tape-")) {
+                throw new IOException("injected tape cleanup failure");
+              }
+              Files.deleteIfExists(path);
+            }));
+    assertEquals(1, descriptors.size(), state.diagnostics().toString());
+    assertTrue(state.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("archive_spill_error")),
+        state.diagnostics().toString());
+  }
+
+  @Test
   void retainedNameBudgetIsBoundedAndReleased() throws IOException {
     Path archive = temp.resolve("long-name.jar");
     String longName = "META-INF/services/demo." + "A".repeat(200);

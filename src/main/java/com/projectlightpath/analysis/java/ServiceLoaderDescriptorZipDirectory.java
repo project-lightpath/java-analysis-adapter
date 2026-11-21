@@ -81,9 +81,9 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     ByteBuffer buffer = ByteBuffer.wrap(bytes);
     long offset = position;
     while (buffer.hasRemaining()) {
-      channel.position(offset);
       int count;
       try {
+        channel.position(offset);
         count = channel.read(buffer);
       } catch (ClosedByInterruptException error) {
         InterruptedIOException interrupted =
@@ -135,16 +135,13 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
   }
 
   private String decode(byte[] bytes, boolean utf8) throws IOException {
-    if (!utf8) {
-      return new String(bytes, StandardCharsets.UTF_8);
-    }
     CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT);
     try {
       return decoder.decode(ByteBuffer.wrap(bytes)).toString();
     } catch (CharacterCodingException error) {
-      throw new ZipFormatException("invalid_utf8", error);
+      throw new ZipFormatException(utf8 ? "invalid_utf8" : "invalid_legacy_name", error);
     }
   }
 
@@ -180,7 +177,8 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
     require(u16(tail, eocd + 8) == expected, "eocd_count_mismatch");
     boolean sentinel = bytes == U32 || offset == U32;
     byte[] locator = end >= 20 ? read(end - 20, 20) : new byte[20];
-    if ((sentinel || expected == 65_535) && u32(locator, 0) == 0x07064b50L) {
+    if (u32(locator, 0) == 0x07064b50L) {
+      try {
       require(u32(locator, 4) == 0 && u32(locator, 16) == 1, "unsupported_multidisk");
       long zip64Position = u64(locator, 8);
       byte[] zip64 = read(zip64Position, 56);
@@ -202,6 +200,12 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
       bytes = zip64Bytes;
       offset = zip64Offset;
       endCen = zip64Position;
+      } catch (IOException error) {
+        if (sentinel || expected == 65_535) {
+          throw error;
+        }
+        // A classic directory may carry comment bytes that look like a locator.
+      }
     } else {
       require(!sentinel, "missing_zip64_locator");
     }
@@ -234,6 +238,9 @@ final class ServiceLoaderDescriptorZipDirectory implements AutoCloseable {
       if (blockLength > extra.length - position) {
         // JDK ZipFile tolerates opaque/trailing extra bytes; only the ZIP64
         // field is semantically interpreted by this reader.
+        if (tag == 1) {
+          throw new ZipFormatException("truncated_zip64_extra");
+        }
         break;
       }
       int cursor = position;

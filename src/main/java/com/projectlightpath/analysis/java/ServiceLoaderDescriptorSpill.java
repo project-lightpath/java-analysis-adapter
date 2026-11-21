@@ -63,13 +63,17 @@ final class ServiceLoaderDescriptorSpill implements AutoCloseable {
         : config.tempRoot();
     Path createdRoot;
     try {
-      createdRoot = Files.createTempDirectory(
-          parent,
-          "flpath-5124-spill-",
-          PosixFilePermissions.asFileAttribute(
-              PosixFilePermissions.fromString("rwx------")));
-    } catch (UnsupportedOperationException error) {
-      createdRoot = Files.createTempDirectory(parent, "flpath-5124-spill-");
+      try {
+        createdRoot = Files.createTempDirectory(
+            parent,
+            "flpath-5124-spill-",
+            PosixFilePermissions.asFileAttribute(
+                PosixFilePermissions.fromString("rwx------")));
+      } catch (UnsupportedOperationException error) {
+        createdRoot = Files.createTempDirectory(parent, "flpath-5124-spill-");
+      }
+    } catch (IOException error) {
+      throw new SpillException("spill root create failed", error);
     }
     root = createdRoot;
   }
@@ -108,7 +112,11 @@ final class ServiceLoaderDescriptorSpill implements AutoCloseable {
     private boolean tapeClosed;
 
     Tape() throws IOException {
-      path = Files.createTempFile(root, "tape-", ".bin");
+      try {
+        path = Files.createTempFile(root, "tape-", ".bin");
+      } catch (IOException error) {
+        throw new SpillException("spill tape create failed", error);
+      }
       files++;
       created++;
       peakFiles = Math.max(peakFiles, files);

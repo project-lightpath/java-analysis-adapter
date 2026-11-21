@@ -63,10 +63,18 @@ final class ServiceLoaderDescriptorArchiveSource {
     ServiceLoaderDescriptorSpill spill = null;
     try {
       SeekableByteChannel channel = config.channelOpener().open(normalized);
+      size = channel.size();
+      if (size > MAX_ARCHIVE_BYTES) {
+        channel.close();
+        state.diagnostic("archive_size_limit", normalized.toString(),
+            "archive is " + size + " bytes, above the " + MAX_ARCHIVE_BYTES
+                + " byte archive size limit");
+        return;
+      }
       directory = new ServiceLoaderDescriptorZipDirectory(
           channel, size, config, state);
       spill = new ServiceLoaderDescriptorSpill(config);
-      ArchiveEntries entries = enumerate(normalized, directory, spill, state);
+      ArchiveEntries entries = enumerate(normalized, directory, spill, state, config);
       if (!entries.complete()) {
         return;
       }
@@ -86,7 +94,7 @@ final class ServiceLoaderDescriptorArchiveSource {
     } catch (ServiceLoaderDescriptorSpill.SpillException error) {
       state.diagnostic(
           "archive_spill_error", normalized.toString(), sanitized(error, config));
-    } catch (InterruptedIOException error) {
+    } catch (InterruptedIOException | java.nio.channels.ClosedByInterruptException error) {
       state.markInterrupted();
       Thread.interrupted();
       state.diagnostic(
@@ -131,7 +139,8 @@ final class ServiceLoaderDescriptorArchiveSource {
       Path archive,
       ServiceLoaderDescriptorZipDirectory directory,
       ServiceLoaderDescriptorSpill spill,
-      ServiceLoaderDescriptorSource.ScanState state) throws IOException {
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
     Set<String> retainedNames = new HashSet<>();
     List<ServiceLoaderDescriptorZipEntry> selected = new ArrayList<>();
     ServiceLoaderDescriptorZipEntry[] module = new ServiceLoaderDescriptorZipEntry[1];
@@ -146,7 +155,7 @@ final class ServiceLoaderDescriptorArchiveSource {
           Comparator.comparingLong(ServiceLoaderDescriptorZipEntry::local)
               .thenComparingLong(ServiceLoaderDescriptorZipEntry::end));
     } catch (IOException error) {
-      closeSort(selectedSort);
+      closeSort(selectedSort, archive, state, config);
       throw error;
     }
     try {
@@ -220,16 +229,21 @@ final class ServiceLoaderDescriptorArchiveSource {
     } catch (StopWalk stop) {
       return new ArchiveEntries(List.of(), null, null, false);
     } finally {
-      closeSort(selectedSort);
-      closeSort(rangeSort);
+      closeSort(selectedSort, archive, state, config);
+      closeSort(rangeSort, archive, state, config);
     }
   }
 
-  private static void closeSort(ServiceLoaderDescriptorSpill.Sort sort) {
+  private static void closeSort(
+      ServiceLoaderDescriptorSpill.Sort sort,
+      Path archive,
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) {
     try {
       sort.close();
-    } catch (IOException ignored) {
-      // The spill root close reports cleanup failures once, with the archive path.
+    } catch (IOException error) {
+      state.diagnostic(
+          "archive_spill_error", archive.toString(), sanitized(error, config));
     }
   }
 
