@@ -17,17 +17,6 @@ abstract class SourceMetadataScannerTextLayer11 extends SourceMetadataScannerTex
 
 
 
-  /** Builds a stable overload discriminator without changing the public callee identity. */
-static String methodDescriptor(MethodInfo method) {
-    String parameters = method.parameters().trim();
-    if (parameters.isEmpty()) {
-      return "()";
-    }
-    return "(" + String.join(",", splitTopLevelArguments(parameters).stream()
-        .map(SourceMetadataScanner::parameterType)
-        .toList()) + ")";
-  }
-
   /** Extracts constructor bodies so dynamic sites retain an explicit initializer caller. */
 static List<MethodInfo> constructors(SourceFile file) {
     return SourceMetadataScannerFileExtracts.of(file).constructors(file);
