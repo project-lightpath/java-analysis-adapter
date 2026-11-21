@@ -23,17 +23,19 @@ actually hold the correlation inputs** (file, owning type, member name):
 | Site | Correlation inputs available | What changes flag-on |
 |---|---|---|
 | `TextLayer11.methodDescriptor` via `SourceMetadataScanner.proxyFeaturesForInterface` (interface file + resolved interface name in scope at the call site) | yes | parameter shapes for proxy target descriptors |
-| `JavacAnnotationAccess` read layer (helper-level; consumed by migration point 1, ready for #24's consumers) | n/a | annotation names, values, member correlation |
+| `JavacAnnotationAccess` read layer (helper-level; correlation consumed by migration point 1; the name/value surface has test-only consumers in #22 — production consumers arrive with #24/#37) | n/a | annotation names, values, member correlation |
 
-**Deferred to a follow-up (block-only statics with dozens of call
+**Deferred to #24/#37 (block-only statics with dozens of call
 sites, no owner context):** `TextLayer09.annotationOccurrences` /
 `hasAnnotation` / `annotationArguments` (the `@(...)?name\b` matcher
 with the same `$`/Unicode blindness, backing framework bean/injection
-layers), and `TextLayer18.qualifierNames` (a name-*capturing* regex the
-original inventory missed). These need the #24 member-model rework or
-an explicit signature sweep; the residual list records that textual
-name **matching** — not just `maskAnnotationArguments` — keeps its
-`$`/Unicode gaps until then.
+layers), `TextLayer18.qualifierNames` (a name-*capturing* regex the
+original inventory missed), and **`TextLayer19.parameters`' own
+`@[A-Za-z_]` strip copy** (the issue names TextLayer19; its live copy
+sits inside the per-parameter qualifier path handed to #24). These
+need the #24 member-model rework or an explicit signature sweep; the
+residual list records that textual name **matching** — not just
+`maskAnnotationArguments` — keeps its `$`/Unicode gaps until then.
 
 Out of scope (boundary, loop-1-confirmed):
 
@@ -70,12 +72,13 @@ Out of scope (boundary, loop-1-confirmed):
    flag-on scan followed by a flag-off scan in one JVM must not poison
    the cache (test cell). Flag-on consumers correlate **after** reading
    textual `MethodInfo` from the cache.
-3. **Name-spelling contract per consumer**: qualifier membership checks
-   (`NON_QUALIFIER_ANNOTATIONS`, `equals("Resource")`) and qualifier
-   output use the annotation's **simple** name; evidence recording uses
-   the canonical name. A flag-on `@Inject` injection point must emit no
-   new qualifier (matrix cell) — feeding canonical names into the
-   simple-name membership logic would fabricate facts.
+3. **Name-spelling contract**: `JavacAnnotationAccess` offers both the
+   annotation's **simple** name and its **canonical** name; consumers
+   pick per their membership logic (qualifier membership by simple
+   name, evidence by canonical). The flag-on leak-guard cell for
+   qualifier emission moved to #24 with the qualifier consumers (its
+   design is in the #24 comment); #22 pins only the accessor-level
+   dual-spelling rule.
 
 ### Correlation rule (the load-bearing decision)
 
@@ -169,10 +172,6 @@ lookup + fallback + spelling rules. The flag gate is always
 call-site-local, never inside a shared static helper that deferred
 consumers also call.
 
-A package-private `JavacAnnotationAccess` helper (holds the per-context
-index from `JavacSourceSymbolIndex.of(context)`) wraps the lookup +
-fallback + spelling rules so both consumers share one implementation.
-
 ### Flag and test isolation (loop-2/3 fix)
 
 Reuse `flpath.java.symbolindex`. This subissue adds the **first
@@ -200,9 +199,11 @@ Unicode, qualified names — the D-series lesson):
 
 1. Flag off: output identical to the textual path (scan equality on a
    fixture with annotated members).
-2. `@$Ann` on a parameter and on a **field injection point** (the two
-   member kinds the migrated consumers read): names and shapes resolve
-   (A18/A19: `java.lang.String[]`, `java.lang.String` flag-on).
+2. `@$Ann` on a parameter and on a **field** (helper-level through
+   `JavacAnnotationAccess` — no migrated field consumer post-triage;
+   the field arm asserts the canonical name, red at RED): names and
+   shapes resolve (A18/A19: `java.lang.String[]`, `java.lang.String`
+   flag-on).
    Plain `@Deprecated String p` is **identical under both flags**
    (clean-strip pin). Method-return and type-annotation **shape** questions have no
    migrated consumer in this scope; their cells exercise
@@ -260,19 +261,21 @@ Unicode, qualified names — the D-series lesson):
 - **RED_22**: the matrix above plus a behavior-neutral seam (the
   `JavacAnnotationAccess` helper returning textual values
   unconditionally), expected-red cells enumerated in the commit.
-  Expected-red at RED (loop-5 per-cell re-derivation from the stub's
+  Expected-red at RED (loop-5/6 per-cell re-derivation from the stub's
   actual behavior — the stub delegates to the textual helpers, so any
   cell whose flag-on assertion is satisfied by textual output passes at
-  RED): cells 2 (triggered arm), 3, 4 (helper-level canonical-name
+  RED): cells 2 (both arms: triggered parameter repair and the
+  helper-level field canonical name), 3, 4 (helper-level canonical-name
   arm), 5, 6, 14b, 15 (any cell requiring a flag-on index answer or a
-  delta). Expected-green at RED: cells 1, 2 (clean-parameter arm), 2b
-  (vacated), 7–13, 16 (vacated) — equality/fallback/determinism cells
-  the textual stub already satisfies; cell 12's literal-absence arm is
+  delta). Expected-green at RED: cells 1, 7–13 —
+  equality/fallback/determinism cells the textual stub already
+  satisfies; cell 12's literal-absence arm is
   green (the delegating stub carries no regex literal) while its
   routing arm is red at RED (the gated site is not wired until GREEN)
   and green at GREEN.
-- **GREEN_22**: implement the correlation and the two migration
-  points; targeted green; full gates; Makefile floor raised to the new
+- **GREEN_22**: implement the correlation and migration point 1 (the
+  read layer plus the `proxyFeaturesForInterface` repair); targeted
+  green; full gates; Makefile floor raised to the new
   strict total.
 - **REFACTOR_22**: under green.
 - **EVIDENCE_22**: `RESOLUTION-22.md` — parity deltas vs the pinned
@@ -410,18 +413,36 @@ but out-of-#22-scope items move to issues, not into this plan):
     (finding 6). The per-parameter annotation index API becomes its
     own issue (finding 4's dependency).
 
+Loop 6 findings folded back (all wording-level; the design verified
+sound):
+
+25. GREEN_22's stale "two migration points" fixed; the duplicated
+    `JavacAnnotationAccess` paragraph deleted; cell 2's field arm
+    re-marked helper-level with an explicit partition entry
+    (findings 1, 3, 4).
+26. The issue-closure claim reworded to a **re-chartering
+    statement** (#22 delivers the read layer plus the single
+    parameter-shape repair; TextLayer12/19/header copies re-chartered
+    on #24 and #37), `TextLayer19.parameters`' own strip copy added to
+    the deferred inventory, the read-layer inventory row honest about
+    its test-only consumers, invariant 3's leak-guard owner re-pointed
+    to #24, and the owner/annotation-evidence scope bullet
+    dispositioned to #24 (findings 2, 5, 6, 7).
+
 ## Residuals / risks
 
 - **Deferred consumers**: `TextLayer09.annotationOccurrences`/
-  `hasAnnotation`/`annotationArguments` and
-  `TextLayer18.qualifierNames` keep their `$`/Unicode/qualified-name
-  blindness in both flag states until the #24 member-model rework (or
-  an explicit signature-sweep follow-up); the issue's acceptance for
-  those sites is met by #24, recorded here per the AGENTS
-  open-cell rule. RESOLUTION-22 states the interpretation explicitly:
-  issue #22's acceptance is satisfied at the **consumer** level — the
-  `@[A-Za-z_]` copies are gone from the migrated call sites, the
-  static helpers stay until #26 parity green permits deletion.
+  `hasAnnotation`/`annotationArguments`, `TextLayer18.qualifierNames`,
+  and `TextLayer19.parameters`' strip copy keep their `$`/Unicode/
+  qualified-name blindness in both flag states until the #24
+  member-model rework (or an explicit signature-sweep follow-up).
+  RESOLUTION-22 states the interpretation explicitly: **#22 delivers
+  the javac annotation read layer plus the single parameter-shape
+  repair**; the issue's named `TextLayer12`/`TextLayer19`/
+  header-stripping copies are **re-chartered on #24** (design comment)
+  and **#37** — a re-chartering statement, not a consumer-level
+  acceptance claim. The static helpers stay until #26 parity green
+  permits deletion.
 - Per-parameter qualifiers on constructor/method injection stay textual
   (no per-parameter annotation API in the index; #24 scope).
 - `BoundedFrameworkModelCandidateMetadata.methodDescriptor` (JVM
@@ -455,6 +476,11 @@ but out-of-#22-scope items move to issues, not into this plan):
 - The index has **no per-parameter annotation API**; constructor and
   method injection qualifiers need one — tracked as its own issue so it
   can be tackled directly (index-API growth, consumed by #24).
+- The issue's "record owner/annotation evidence for each parsed
+  annotation" scope bullet is **#24** scope: adapter-level evidence
+  recording is inseparable from the qualifier/bean consumers; the
+  index already carries implicit ownership (`TypeInfo`/`MemberInfo`
+  own their `annotations`).
 - `JavacSourceSymbolIndexTest`'s wiring-invariant cell stays green by
   fixture content (no annotations/proxies/beans); its flag write is
   owned by the `@Isolated` fix.
