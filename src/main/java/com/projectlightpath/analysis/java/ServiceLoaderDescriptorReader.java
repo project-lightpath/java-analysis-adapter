@@ -48,6 +48,9 @@ final class ServiceLoaderDescriptorReader {
     ServiceLoaderDescriptorSource.scanClasspathEntry(
         context.applicationClasses(), descriptors, visited, state);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
+      if (state.interrupted()) {
+        break;
+      }
       Path parent = root.path().getParent();
       if (parent != null && ServiceLoaderDescriptorAuthorization.derivedDirectory(
           parent, "resources/" + SERVICES, state)) {
@@ -56,6 +59,9 @@ final class ServiceLoaderDescriptorReader {
       }
     }
     for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
+      if (state.interrupted()) {
+        break;
+      }
       if (metadata.status() == AnalysisContext.MetadataStatus.OBSERVED
           && "service_loader_descriptor".equals(metadata.kind())
           && metadata.declaredPath() != null) {
@@ -63,6 +69,9 @@ final class ServiceLoaderDescriptorReader {
       }
     }
     for (Path dependency : dependencyEntries) {
+      if (state.interrupted()) {
+        break;
+      }
       ServiceLoaderDescriptorSource.scanClasspathEntry(
           dependency, descriptors, visited, state, true);
     }

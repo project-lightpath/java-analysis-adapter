@@ -66,10 +66,16 @@ final class ServiceLoaderDescriptorBudget {
    */
   static long centralDirectoryBytes(ZipEntry entry) {
     byte[] extra = entry.getExtra();
+    return centralDirectoryBytes(
+        entry.getName(), extra == null ? 0 : extra.length, entry.getComment());
+  }
+
+  /** Same formula as the {@link ZipEntry} overload for a parsed central record. */
+  static long centralDirectoryBytes(String name, int extraLength, String comment) {
     long recordBytes = ENUMERATION_RECORD_OVERHEAD_BYTES
-        + utf8Length(entry.getName())
-        + (extra == null ? 0 : extra.length)
-        + utf8Length(entry.getComment());
+        + utf8Length(name)
+        + Math.max(0, extraLength)
+        + utf8Length(comment);
     return Math.max(MEASURED_RAW_BYTES_PER_ENTRY, recordBytes);
   }
 }

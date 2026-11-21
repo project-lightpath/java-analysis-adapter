@@ -1,28 +1,35 @@
 package com.projectlightpath.analysis.java;
 
-import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Enumeration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.NavigableMap;
-import java.util.TreeMap;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
-import java.util.zip.ZipFile;
+import java.util.Set;
 
 /** Reads root-level ServiceLoader metadata from a dependency archive. */
 final class ServiceLoaderDescriptorArchiveSource {
   /**
-   * Bounds the eager central-directory allocation performed by {@link ZipFile}
-   * construction. A mitigation, not the cure: the durable fix for eager-CEN
-   * indexing is FLPATH-5124 (see also FLPATH-5123).
+   * Bounds the archive size accepted by the adapter. The seekable reader bounds
+   * central-directory memory independently; this limit protects the rest of the
+   * analysis from unbounded archive inputs.
    */
   static final long MAX_ARCHIVE_BYTES = 512L * 1024 * 1024;
 
   private ServiceLoaderDescriptorArchiveSource() {}
+
+  static void scan(
+      Path archive,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ServiceLoaderDescriptorSource.ScanState state) {
+    scan(archive, descriptors, state, ServiceLoaderDescriptorArchiveConfig.defaults());
+  }
 
   /**
    * Scans one archive into {@code descriptors}, which must be mutable: a
@@ -31,115 +38,207 @@ final class ServiceLoaderDescriptorArchiveSource {
   static void scan(
       Path archive,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      ServiceLoaderDescriptorSource.ScanState state) {
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) {
     Path normalized = archive.toAbsolutePath().normalize();
+    long size;
     try {
-      long size = Files.size(normalized);
-      if (size > MAX_ARCHIVE_BYTES) {
-        state.diagnostic("archive_size_limit", normalized.toString(),
-            "archive is " + size + " bytes, above the " + MAX_ARCHIVE_BYTES
-                + " byte archive size limit");
-        return;
-      }
+      size = Files.size(normalized);
     } catch (IOException error) {
-      state.diagnostic("archive_read_error", normalized.toString(),
-          ServiceLoaderDescriptorSource.message(error));
+      state.diagnostic(
+          "archive_read_error", normalized.toString(), sanitized(error, config));
+      return;
+    }
+    if (size > MAX_ARCHIVE_BYTES) {
+      state.diagnostic("archive_size_limit", normalized.toString(),
+          "archive is " + size + " bytes, above the " + MAX_ARCHIVE_BYTES
+              + " byte archive size limit");
       return;
     }
     int descriptorStart = descriptors.size();
-    long retainedBefore = state.retainedBytes();
+    ServiceLoaderDescriptorSource.ScanState.RetentionSnapshot retained =
+        state.retentionSnapshot();
     boolean complete = false;
-    try (ZipFile zip = new ZipFile(normalized.toFile())) {
-      ArchiveEntries entries = enumerate(zip, normalized, state);
-      readDescriptors(zip, normalized, entries.descriptors(), descriptors, state);
+    ServiceLoaderDescriptorZipDirectory directory = null;
+    ServiceLoaderDescriptorSpill spill = null;
+    try {
+      SeekableByteChannel channel = config.channelOpener().open(normalized);
+      spill = new ServiceLoaderDescriptorSpill(config);
+      directory = new ServiceLoaderDescriptorZipDirectory(
+          channel, size, config, state);
+      ArchiveEntries entries = enumerate(normalized, directory, spill, state);
+      if (!entries.complete()) {
+        return;
+      }
+      readDescriptors(
+          directory, normalized, entries.descriptors(), descriptors, state, config);
       complete = readModule(
-          zip, normalized, entries.module(), entries.versionedModule(), descriptors, state);
-    } catch (ZipException error) {
-      state.diagnostic("invalid_archive", normalized.toString(),
-          ServiceLoaderDescriptorSource.message(error));
+          directory, normalized, entries.module(), entries.versionedModule(),
+          descriptors, state, config);
+    } catch (ServiceLoaderDescriptorZipDirectory.ZipFormatException error) {
+      state.diagnostic("invalid_archive", normalized.toString(), sanitized(error, config));
+    } catch (ServiceLoaderDescriptorZipDirectory.RawIoLimitException error) {
+      state.diagnostic(
+          "archive_raw_io_limit", normalized.toString(), sanitized(error, config));
+    } catch (ServiceLoaderDescriptorSpill.SpillLimitException error) {
+      state.diagnostic(
+          "archive_spill_limit", normalized.toString(), sanitized(error, config));
+    } catch (ServiceLoaderDescriptorSpill.SpillException error) {
+      state.diagnostic(
+          "archive_spill_error", normalized.toString(), sanitized(error, config));
+    } catch (InterruptedIOException error) {
+      state.markInterrupted();
+      state.diagnostic(
+          "descriptor_scan_interrupted", normalized.toString(), sanitized(error, config));
     } catch (IOException error) {
-      state.diagnostic("archive_read_error", normalized.toString(),
-          ServiceLoaderDescriptorSource.message(error));
+      state.diagnostic(
+          "archive_read_error", normalized.toString(), sanitized(error, config));
     } finally {
       if (!complete) {
         descriptors.subList(descriptorStart, descriptors.size()).clear();
-        state.restoreRetained(retainedBefore);
+        state.restoreRetention(retained);
       }
+      close(directory, spill, normalized, state, config);
+    }
+  }
+
+  private static void close(
+      ServiceLoaderDescriptorZipDirectory directory,
+      ServiceLoaderDescriptorSpill spill,
+      Path archive,
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) {
+    IOException failure = null;
+    if (directory != null) {
+      try {
+        directory.close();
+      } catch (IOException error) {
+        failure = error;
+      }
+    }
+    if (spill != null) {
+      try {
+        spill.close();
+      } catch (IOException error) {
+        if (failure == null) {
+          failure = error;
+        } else {
+          failure.addSuppressed(error);
+        }
+      }
+    }
+    if (failure != null) {
+      state.diagnostic(
+          "archive_spill_error", archive.toString(), sanitized(failure, config));
     }
   }
 
   private static ArchiveEntries enumerate(
-      ZipFile zip, Path archive, ServiceLoaderDescriptorSource.ScanState state) {
-    NavigableMap<String, ZipEntry> descriptors = new TreeMap<>();
-    ZipEntry module = null;
-    String versionedModule = null;
-    boolean complete = true;
-    long retainedBefore = state.retainedBytes();
-    Enumeration<? extends ZipEntry> entries = zip.entries();
-    while (entries.hasMoreElements()) {
-      ZipEntry entry = entries.nextElement();
-      String entryPath = archive + "!/" + entry.getName();
-      long entryBytes = ServiceLoaderDescriptorBudget.centralDirectoryBytes(entry);
-      if (!state.tryEnumerate(entryPath, entryBytes)) {
-        complete = false;
-        break;
+      Path archive,
+      ServiceLoaderDescriptorZipDirectory directory,
+      ServiceLoaderDescriptorSpill spill,
+      ServiceLoaderDescriptorSource.ScanState state) throws IOException {
+    Set<String> retainedNames = new HashSet<>();
+    List<ServiceLoaderDescriptorZipEntry> selected = new ArrayList<>();
+    ServiceLoaderDescriptorZipEntry[] module = new ServiceLoaderDescriptorZipEntry[1];
+    String[] versionedModule = new String[1];
+    boolean[] complete = {true};
+    ServiceLoaderDescriptorSpill.Sort selectedSort = spill.new Sort(
+        Comparator.comparing(ServiceLoaderDescriptorZipEntry::name)
+            .thenComparingLong(ServiceLoaderDescriptorZipEntry::local));
+    ServiceLoaderDescriptorSpill.Sort rangeSort = spill.new Sort(
+        Comparator.comparingLong(ServiceLoaderDescriptorZipEntry::local)
+            .thenComparingLong(ServiceLoaderDescriptorZipEntry::end));
+    try {
+      directory.walk(entry -> {
+        String entryPath = archive + "!/" + entry.name();
+        long entryBytes = ServiceLoaderDescriptorBudget.centralDirectoryBytes(
+            entry.name(), entry.extraLength(), entry.comment());
+        if (!state.tryEnumerate(entryPath, entryBytes)) {
+          complete[0] = false;
+          throw new StopWalk();
+        }
+        if (entry.directory()) {
+          return;
+        }
+        if (ServiceLoaderDescriptorNestedArchiveSource.isWar(archive)) {
+          ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
+              entry.name(), archive, state);
+        }
+        String prefix = ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/";
+        if (entry.name().startsWith(prefix)
+            && ServiceLoaderDescriptorAuthorization.isBinaryClassName(
+                entry.name().substring(prefix.length()))
+            && !retainedNames.contains(entry.name())) {
+          if (!state.tryRetain(entryPath)) {
+            complete[0] = false;
+            throw new StopWalk();
+          }
+          long nameBytes = ServiceLoaderDescriptorBudget.utf8Length(entry.name()) + 48;
+          if (!state.tryRetainName(entryPath, nameBytes)) {
+            state.releaseRetained();
+            complete[0] = false;
+            throw new StopWalk();
+          }
+          retainedNames.add(entry.name());
+          selectedSort.add(entry);
+        }
+        if (entry.name().equals(ServiceLoaderDescriptorSource.MODULE_INFO)
+            && module[0] == null) {
+          module[0] = entry;
+        }
+        if (versionedModule[0] == null
+            && ServiceLoaderDescriptorEntryNames.isVersionedModuleInfo(entry.name())) {
+          versionedModule[0] = entry.name();
+        }
+        rangeSort.add(entry);
+      });
+      if (!complete[0]) {
+        return new ArchiveEntries(List.of(), null, null, false);
       }
-      if (entry.isDirectory()) {
-        continue;
+      rangeSort.finish();
+      ServiceLoaderDescriptorZipEntry previous = null;
+      ServiceLoaderDescriptorZipEntry range;
+      while ((range = rangeSort.next()) != null) {
+        if (previous != null
+            && !(previous.local() == range.local() && previous.end() == range.end())
+            && previous.end() > range.local()) {
+          throw new ServiceLoaderDescriptorZipDirectory.ZipFormatException(
+              "referenced_entry_overlap");
+        }
+        previous = range;
       }
-      if (ServiceLoaderDescriptorNestedArchiveSource.isWar(archive)) {
-        ServiceLoaderDescriptorNestedArchiveSource.diagnoseSkippedEntry(
-            entry.getName(), archive, state);
+      selectedSort.finish();
+      ServiceLoaderDescriptorZipEntry entry;
+      while ((entry = selectedSort.next()) != null) {
+        selected.add(entry);
       }
-      if (!retainDescriptor(descriptors, entry, entryPath, state)) {
-        complete = false;
-        break;
-      }
-      if (entry.getName().equals(ServiceLoaderDescriptorSource.MODULE_INFO) && module == null) {
-        module = entry;
-      }
-      if (versionedModule == null && ServiceLoaderDescriptorEntryNames.isVersionedModuleInfo(
-          entry.getName())) {
-        versionedModule = entry.getName();
-      }
+      return new ArchiveEntries(List.copyOf(selected), module[0], versionedModule[0], true);
+    } catch (StopWalk stop) {
+      return new ArchiveEntries(List.of(), null, null, false);
+    } finally {
+      closeSort(selectedSort);
+      closeSort(rangeSort);
     }
-    if (!complete) {
-      state.restoreRetained(retainedBefore);
-      return new ArchiveEntries(List.of(), null, null);
-    }
-    return new ArchiveEntries(List.copyOf(descriptors.values()), module, versionedModule);
   }
 
-  private static boolean retainDescriptor(
-      NavigableMap<String, ZipEntry> descriptors,
-      ZipEntry entry,
-      String path,
-      ServiceLoaderDescriptorSource.ScanState state) {
-    String prefix = ServiceLoaderDescriptorSource.SERVICES_DIRECTORY + "/";
-    String name = entry.getName();
-    if (!name.startsWith(prefix)
-        || !ServiceLoaderDescriptorAuthorization.isBinaryClassName(
-            name.substring(prefix.length()))) {
-      return true;
+  private static void closeSort(ServiceLoaderDescriptorSpill.Sort sort) {
+    try {
+      sort.close();
+    } catch (IOException ignored) {
+      // The spill root close reports cleanup failures once, with the archive path.
     }
-    if (descriptors.containsKey(name)) {
-      return true;
-    }
-    if (!state.tryRetain(path)) {
-      return false;
-    }
-    descriptors.put(name, entry);
-    return true;
   }
 
   private static void readDescriptors(
-      ZipFile zip,
+      ServiceLoaderDescriptorZipDirectory directory,
       Path archive,
-      List<ZipEntry> entries,
+      List<ServiceLoaderDescriptorZipEntry> entries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      ServiceLoaderDescriptorSource.ScanState state) {
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) {
     int processed = 0;
-    for (ZipEntry entry : entries) {
+    for (ServiceLoaderDescriptorZipEntry entry : entries) {
       if (!state.hasDecompressedBudget()) {
         state.diagnostic(
             "archive_decompression_limit", archive.toString(),
@@ -147,61 +246,75 @@ final class ServiceLoaderDescriptorArchiveSource {
         break;
       }
       int descriptorStart = descriptors.size();
-      addDescriptor(zip, archive, entry, descriptors, state);
+      addDescriptor(directory, archive, entry, descriptors, state, config);
       if (descriptors.size() == descriptorStart) {
-        state.releaseRetained();
+        release(state, entry);
       }
       processed++;
     }
     for (int index = processed; index < entries.size(); index++) {
-      state.releaseRetained();
+      release(state, entries.get(index));
     }
   }
 
+  private static void release(
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorZipEntry entry) {
+    state.releaseRetained();
+    state.releaseRetainedName(
+        ServiceLoaderDescriptorBudget.utf8Length(entry.name()) + 48);
+  }
+
   private static boolean readModule(
-      ZipFile zip,
+      ServiceLoaderDescriptorZipDirectory directory,
       Path archive,
-      ZipEntry module,
+      ServiceLoaderDescriptorZipEntry module,
       String versionedModule,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      ServiceLoaderDescriptorSource.ScanState state) {
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) {
     if (module == null) {
       if (versionedModule != null) {
-        // Diagnostic-only variant: reading versioned descriptors with version
-        // selection is a recorded follow-up. One per archive, name check only.
         state.diagnostic(
             "versioned_module_info_unsupported", archive.toString(), versionedModule);
       }
       return true;
     }
-    String modulePath = archive + "!/" + module.getName();
+    String modulePath = archive + "!/" + module.name();
     if (!state.hasDecompressedBudget()) {
       state.diagnostic(
           "archive_decompression_limit", modulePath,
           "module-info.class could not be read after the archive decompression budget was exhausted");
       return true;
     }
-    byte[] bytes = readEntry(zip, module, state, modulePath);
-    if (bytes == null) {
+    try (InputStream input = directory.stream(module, state, modulePath)) {
+      byte[] bytes = readEntry(input, state, modulePath);
+      if (bytes == null) {
+        return true;
+      }
+      return ServiceLoaderDescriptorSource.addModuleBytes(
+          bytes, modulePath, descriptors, state);
+    } catch (IOException error) {
+      state.diagnostic(
+          "archive_entry_read_error", modulePath, sanitized(error, config));
       return true;
     }
-    return ServiceLoaderDescriptorSource.addModuleBytes(
-        bytes, modulePath, descriptors, state);
   }
 
   private static void addDescriptor(
-      ZipFile zip,
+      ServiceLoaderDescriptorZipDirectory directory,
       Path archive,
-      ZipEntry entry,
+      ServiceLoaderDescriptorZipEntry entry,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      ServiceLoaderDescriptorSource.ScanState state) {
-    String serviceType = entry.getName().substring(
+      ServiceLoaderDescriptorSource.ScanState state,
+      ServiceLoaderDescriptorArchiveConfig config) {
+    String serviceType = entry.name().substring(
         ServiceLoaderDescriptorSource.SERVICES_DIRECTORY.length() + 1);
     if (!ServiceLoaderDescriptorAuthorization.isBinaryClassName(serviceType)) {
       return;
     }
-    String path = archive + "!/" + entry.getName();
-    try (InputStream input = zip.getInputStream(entry)) {
+    String path = archive + "!/" + entry.name();
+    try (InputStream input = directory.stream(entry, state, path)) {
       byte[] bytes = readEntry(input, state, path);
       if (bytes == null) {
         return;
@@ -217,25 +330,7 @@ final class ServiceLoaderDescriptorArchiveSource {
           parsed.malformedEntries()));
     } catch (IOException error) {
       state.diagnostic(
-          "archive_entry_read_error", path, ServiceLoaderDescriptorSource.message(error));
-    }
-  }
-
-  private static byte[] readEntry(
-      ZipFile zip,
-      ZipEntry entry,
-      ServiceLoaderDescriptorSource.ScanState state,
-      String path) {
-    long remaining = state.remainingDecompressed();
-    if (remaining <= 0) {
-      return null;
-    }
-    try (InputStream input = zip.getInputStream(entry)) {
-      return readEntry(input, state, path);
-    } catch (IOException error) {
-      state.diagnostic(
-          "archive_entry_read_error", path, ServiceLoaderDescriptorSource.message(error));
-      return null;
+          "archive_entry_read_error", path, sanitized(error, config));
     }
   }
 
@@ -271,6 +366,38 @@ final class ServiceLoaderDescriptorArchiveSource {
     return output.toByteArray();
   }
 
-  private record ArchiveEntries(List<ZipEntry> descriptors, ZipEntry module, String versionedModule) {}
+  static String sanitized(Exception error, ServiceLoaderDescriptorArchiveConfig config) {
+    String message = error.getMessage();
+    if (message == null || message.isBlank()) {
+      message = error.getClass().getSimpleName();
+    }
+    Path root = config.tempRoot() == null
+        ? Path.of(System.getProperty("java.io.tmpdir"))
+        : config.tempRoot();
+    message = message.replace(root.toString(), "<temp>");
+    int marker = message.indexOf("flpath-5124-spill-");
+    while (marker >= 0) {
+      int end = marker;
+      while (end < message.length() && !Character.isWhitespace(message.charAt(end))) {
+        end++;
+      }
+      message = message.substring(0, marker) + "<temp>" + message.substring(end);
+      marker = message.indexOf("flpath-5124-spill-");
+    }
+    return error.getClass().getSimpleName() + ": " + message;
+  }
 
+  private record ArchiveEntries(
+      List<ServiceLoaderDescriptorZipEntry> descriptors,
+      ServiceLoaderDescriptorZipEntry module,
+      String versionedModule,
+      boolean complete) {}
+
+  private static final class StopWalk extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    StopWalk() {
+      super(null, null, false, false);
+    }
+  }
 }
