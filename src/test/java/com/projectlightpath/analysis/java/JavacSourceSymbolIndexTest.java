@@ -2,7 +2,6 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -576,10 +575,9 @@ class JavacSourceSymbolIndexTest {
   }
 
   private void assertSameEntries(JavacSourceSymbolIndex first, JavacSourceSymbolIndex second) {
-    // The stub has no state to compare; GREEN compares full entry sets. The
-    // identity check here only pins that repeated lookups reuse one index.
-    assertNotEquals(null, first);
-    assertNotEquals(null, second);
+    assertEquals(first.type("demo.App"), second.type("demo.App"));
+    assertEquals(first.members("demo.App", "run"), second.members("demo.App", "run"));
+    assertEquals(first.diagnostics(), second.diagnostics());
   }
 
   private static void writeFiles(Path sourceRoot, Map<String, String> files)

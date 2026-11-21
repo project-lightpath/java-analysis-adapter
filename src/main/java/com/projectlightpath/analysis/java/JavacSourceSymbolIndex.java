@@ -303,12 +303,12 @@ final class JavacSourceSymbolIndex {
     }
 
     List<Path> units() {
+      diagnoseClasspath();
       if (roots().isEmpty()) {
         diagnostics.add(IndexRenderer.row("missing_source",
             "no source roots are included in the analysis scope", "", 0, 0));
         return List.of();
       }
-      diagnoseClasspath();
       Map<Path, AnalysisContext.SourceRoot> discovered = new LinkedHashMap<>();
       for (AnalysisContext.SourceRoot root : AnalysisContext.rootsBySpecificity(roots())) {
         collectRoot(root, discovered);
@@ -522,7 +522,7 @@ final class JavacSourceSymbolIndex {
       PackageElement pkg = reader.packageElement(packageName);
       if (file != null && pkg != null && !pkg.getAnnotationMirrors().isEmpty()) {
         packageAnnotationsByFile.put(file, pkg.getAnnotationMirrors().stream()
-            .map(ElementReader::annotationInfo).toList());
+            .map(AnnotationRenderer::info).toList());
       }
     }
 
@@ -630,7 +630,7 @@ final class JavacSourceSymbolIndex {
           element.getNestingKind().toString(),
           file,
           element.getAnnotationMirrors().stream()
-              .map(ElementReader::annotationInfo).toList(),
+              .map(AnnotationRenderer::info).toList(),
           element.getEnclosedElements().stream()
               .filter(ElementReader::isMember)
               .map(this::memberInfo)
@@ -645,7 +645,7 @@ final class JavacSourceSymbolIndex {
           memberName(element),
           memberKind(element),
           element.getAnnotationMirrors().stream()
-              .map(ElementReader::annotationInfo).toList(),
+              .map(AnnotationRenderer::info).toList(),
           executable
               ? ((ExecutableElement) element).getParameters().stream()
                   .map(variable -> canonicalType(variable.asType()))
@@ -729,12 +729,7 @@ final class JavacSourceSymbolIndex {
       }
       return erased.toString();
     }
-
-    private static AnnotationInfo annotationInfo(AnnotationMirror mirror) {
-      return AnnotationRenderer.info(mirror);
-    }
   }
-
   /** Annotation mirrors rendered to canonical names and stable value strings. */
   private static final class AnnotationRenderer {
     private AnnotationRenderer() {}
