@@ -76,10 +76,10 @@ promotion for the whole scan (`ServiceLoaderDescriptorScanner.isUnique`):
 
 ## Test gate
 
-- `make adapter-test` on the default JDK 27: 364 default + 1 large-archive
+- `make adapter-test` on the default JDK 27: 371 default + 1 large-archive
   test, 0 failures.
-- `make adapter-test` on Temurin 17.0.21.1+2: 364 default + 1 large-archive
-  test, 0 failures (4 environment-skipped tests on that runtime).
+- `make adapter-test` on Temurin 17.0.21.1+2: 371 default + 1 large-archive
+  test, 0 failures.
 - `make java-lint`: PASS with the reviewed 20-entry maintainability baseline
   for the new parser/spill state machines; 0 CPD duplications; 0 suppressions.
 - `make evidence-validate`: PASS.
@@ -87,11 +87,13 @@ promotion for the whole scan (`ServiceLoaderDescriptorScanner.isUnique`):
 New tests:
 
 - `ServiceLoaderSeekableZipTest` — EOCD count mismatch, prefixed classic,
-  EFS-clear decoding, differential parity against `ZipFile`, exceptional
-  DEFLATE accounting, interrupt rollback/cleanup, spill quota, successful
-  cleanup, long-name budget, mutating channel.
-- `ServiceLoaderDescriptorSpillTest` — external sort order, quota, interruption,
-  cleanup.
+  EFS-clear decoding and malformed-EFS rejection, data descriptors with and
+  without signature, encrypted-entry rejection, differential parity against
+  `ZipFile`, exceptional DEFLATE accounting, walk- and payload-phase interrupt
+  rollback/cleanup (with the flag cleared), spill quota, successful cleanup,
+  long-name budget, mutating channel.
+- `ServiceLoaderDescriptorSpillTest` — external sort order, multi-run merge,
+  quota, interruption, tape/root cleanup failures, cleanup.
 - `ServiceLoaderDescriptorRetentionSeamTest` — exact name budget, snapshot
   restore, release symmetry.
 
@@ -138,8 +140,12 @@ under the large-archive execution at `-Xmx1g`.
 - R9: no tenant/analysis aggregate spill quota; scans are sequential per
   analysis, so at most one spill root is live per analysis. Concurrent
   analyses are bounded by the caller's concurrency.
-- R10: changed-line JaCoCo coverage was not collected for this diff; the test
-  suite and targeted regressions are the coverage evidence.
+- R10: changed-line coverage is evidenced, not gated. JaCoCo 0.8.13 on
+  Temurin 17, instrumented `ServiceLoader*`/`JavaAnalysisAdapterTest` subset:
+  `ZipDirectory` 88.5%, `Spill` 83.9%, `Config` 92.6%, `ArchiveSource` 83.0%,
+  `ZipEntry` 100%, aggregate 85.8% (483/563 changed/new lines). The POM carries
+  an empty `jacoco.agent` property in both Surefire argLines; no coverage gate
+  is added to `make`.
 
 ## Six production-integration preconditions
 
