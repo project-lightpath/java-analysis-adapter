@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+/** Selects the bounded framework model for a supported framework. */
 final class FrameworkModels {
   private FrameworkModels() {}
 

@@ -19,15 +19,40 @@ uniquely identified remains unresolved/abstained.
 Run the adapter checks with:
 
 ```sh
-make test
+make adapter-test
 make package
 ```
 
-The `Adapter tests` CI lane runs `make adapter-test` and `make spike-validate`
-on pull requests and pushes to `main`.
+`make adapter-test` runs the suite in one JVM and lets JUnit schedule the test
+methods in parallel. The target sizes the pool from the host (CPU count and
+memory, capped at 8; about 3 GB of heap per slot) and you can override it with
+`ADAPTER_TEST_PARALLELISM=N`. On a memory-constrained host, force a serial run
+through the same target:
+
+```sh
+JAVA_TOOL_OPTIONS=-Djunit.jupiter.execution.parallel.enabled=false make adapter-test
+```
+
+The `Adapter tests` CI lane runs `make adapter-test` and `make evidence-validate`
+on pull requests and pushes to `main`. The separate `Java lint` CI lane runs
+the enforced production-quality gate with `make java-lint` and uploads the
+PMD/CPD reports as workflow artifacts, including when the gate fails.
 
 See [`docs/flpath-5002-java-adapter.md`](docs/flpath-5002-java-adapter.md) for
-the implementation boundary.
+the implementation boundary and pre-release Java API versioning policy.
+
+Run the enforced Java quality gate with:
+
+```sh
+make java-lint
+```
+
+It runs the pinned PMD/CPD configuration against production Java sources,
+requires zero normalized PMD/CPD findings, and fails on findings, changed lint
+configuration, or partial PMD/CPD reports. The retired baseline is not
+vendored. For exploratory reports without enforcement, use
+`make java-lint-report`. See [`docs/java-lint.md`](docs/java-lint.md) for the
+rule rationale, limitations, and review process.
 
 ## FLPATH-5000 spike and findings
 
@@ -37,10 +62,10 @@ matrices, contracts, analyzer probes, scripts, and portable normalized results.
 The readiness report is in
 [`docs/flpath-5000-java-readiness.md`](docs/flpath-5000-java-readiness.md).
 
-Validate the checked-in spike evidence with:
+Validate the checked-in evidence contracts with:
 
 ```sh
-make spike-validate
+make evidence-validate
 ```
 
 The Spring Boot baseline remains external and is not vendored. The ignored

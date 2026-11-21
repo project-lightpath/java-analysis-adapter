@@ -1,0 +1,1520 @@
+{
+ "schema": "javac-symbol-resolver-textual-baseline.v1",
+ "cells": {
+  "N1": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 3,
+     "column": 0,
+     "offset": 64,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N2": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N3": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 3,
+     "column": 0,
+     "offset": 76,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N4": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N5": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N6": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N7": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N8": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N9": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N10": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N11": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N12": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N13": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N14": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N15": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N16": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N17": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 3,
+     "column": 0,
+     "offset": 64,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N18": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 79,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N19": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N20": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 11,
+     "column": 0,
+     "offset": 257,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N21": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 11,
+     "column": 0,
+     "offset": 273,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N22": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 9,
+     "column": 0,
+     "offset": 199,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N23": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 11,
+     "column": 0,
+     "offset": 242,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N24a": {
+   "selectedPath": "",
+   "selectedTopLevel": "",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N24b": {
+   "selectedPath": "",
+   "selectedTopLevel": "",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N25": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N26": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N27": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N28": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N29": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N30": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N31": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 85,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N32": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N33": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N34": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 66,
+     "serviceType": "int",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "N35": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "N36": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 6,
+     "column": 0,
+     "offset": 90,
+     "serviceType": "demo.Bridge$1Local",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A1": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A2": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A3": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A4": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A5": {
+   "selectedPath": "a/Bridge.java",
+   "selectedTopLevel": "a.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A6": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A7": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A8": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "A9": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A10": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A11": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A12": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A13": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A14": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A15": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A16": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A16b": {
+   "selectedPath": "a/Bridge.java",
+   "selectedTopLevel": "a.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "a/Bridge.java",
+     "topLevel": "a.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 86,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A17": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A20": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 1,
+    "unexpectedFact": 1,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "A21": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "D1": {
+   "selectedPath": "demo/Cash.java",
+   "selectedTopLevel": "demo.Cash",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "D2": {
+   "selectedPath": "demo/Outer.java",
+   "selectedTopLevel": "demo.Outer",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Outer.java",
+     "topLevel": "demo.Outer",
+     "line": 4,
+     "column": 0,
+     "offset": 86,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "D3": {
+   "selectedPath": "demo/Outer.java",
+   "selectedTopLevel": "demo.Outer",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "D4": {
+   "selectedPath": "a.java",
+   "selectedTopLevel": "a",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "D5": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 5,
+     "column": 0,
+     "offset": 98,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "D6": {
+   "selectedPath": "",
+   "selectedTopLevel": "",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "D7": {
+   "selectedPath": "demo/Cash.java",
+   "selectedTopLevel": "demo.Cash",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "D8": {
+   "selectedPath": "",
+   "selectedTopLevel": "",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "D9": {
+   "selectedPath": "a.java",
+   "selectedTopLevel": "a",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 1,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "I1": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 3,
+     "column": 0,
+     "offset": 64,
+     "serviceType": "Missing",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "I2": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 84,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "I3": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 87,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  },
+  "I4": {
+   "selectedPath": "",
+   "selectedTopLevel": "",
+   "metrics": {
+    "wrongDefinite": 0,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 0
+   },
+   "facts": [],
+   "abstentions": []
+  },
+  "I5": {
+   "selectedPath": "demo/Bridge.java",
+   "selectedTopLevel": "demo.Bridge",
+   "metrics": {
+    "wrongDefinite": 1,
+    "wrongServiceType": 0,
+    "lost": 0,
+    "downgraded": 0,
+    "added": 0,
+    "unexpectedFact": 0,
+    "abstentionMismatch": 1
+   },
+   "facts": [
+    {
+     "path": "demo/Bridge.java",
+     "topLevel": "demo.Bridge",
+     "line": 4,
+     "column": 0,
+     "offset": 89,
+     "serviceType": "java.lang.Object",
+     "owner": "java.util.ServiceLoader",
+     "member": "load",
+     "accessibility": "TEXTUAL_SITE",
+     "certainty": "DEFINITE",
+     "promotion": "",
+     "diagnostics": []
+    }
+   ],
+   "abstentions": []
+  }
+ }
+}

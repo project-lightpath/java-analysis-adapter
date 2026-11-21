@@ -4,19 +4,49 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import javax.tools.JavaCompiler;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class JavaAnalysisAdapterTest {
   @TempDir Path temp;
+
+  /** Skips package and module descriptors that do not declare source types. */
+  @Test
+  void sourceScannerSkipsPackageAndModuleDescriptors() throws IOException {
+    Path sourceRoot = temp.resolve("descriptor-sources/src/main/java");
+    write(sourceRoot, "package-info.java", "@Deprecated package demo;\n");
+    write(sourceRoot, "module-info.java", "module demo { }\n");
+    write(sourceRoot, "demo/Application.java", "package demo; public class Application { }\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    assertEquals(List.of("demo.Application"), new SourceMetadataScanner(context).files().stream()
+        .map(SourceMetadataScannerState.SourceFile::typeName)
+        .toList());
+  }
 
   /** Keeps provider routes separate from unresolved dynamic proxy evidence. */
   @Test
@@ -139,6 +169,8 @@ class JavaAnalysisAdapterTest {
 
     SemanticCallFacts.Fact generated = fact(facts.frameworkFacts(), "quarkus-generated-mapper-binding");
     assertEquals(SemanticCallFacts.Certainty.DEFINITE, generated.certainty());
+    assertEquals("generated-src/main/java", generated.evidence().get(0).attributes().get("sourceRoot"));
+    assertEquals("generated-root-fingerprint", generated.evidence().get(0).attributes().get("sourceRootFingerprint"));
 
     SemanticCallFacts.Fact unresolvedProxy = fact(facts.frameworkFacts(), "quarkus-unbounded-proxy-abstention");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, unresolvedProxy.certainty());
@@ -165,6 +197,135 @@ class JavaAnalysisAdapterTest {
     assertEquals("3.0.1", facts.runMetadata().providerVersion());
     assertEquals("quarkus-production", facts.runMetadata().contextId());
     assertEquals("(Ljava/lang/String;)Z", facts.providerFacts().get(0).evidence().get(0).attributes().get("callerSignature"));
+  }
+
+  /** Deduplicates files in overlapping roots and keeps the most-specific generated provenance. */
+  @Test
+  void overlappingGeneratedRootsAreScannedOnceWithSpecificProvenance() throws IOException {
+    Path sourceRoot = temp.resolve("overlapping/src/main/java");
+    Path generatedRoot = sourceRoot.resolve("generated-src/main/java");
+    write(generatedRoot, "demo/generated/GeneratedTransferMapper.java", """
+        package demo.generated;
+        public class GeneratedTransferMapper {
+          public String toResponse(String value) { return value; }
+        }
+        """);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .generatedSourceRoot(
+            "generated-src/main/java",
+            generatedRoot,
+            AnalysisContext.Scope.PRODUCTION,
+            true,
+            true,
+            "generated-root-fingerprint")
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "quarkus-generated-source-root",
+            "generated_source_root",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "generated-src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+
+    List<SemanticCallFacts.Fact> generatedFacts = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("generated_implementation"))
+        .toList();
+    assertEquals(1, generatedFacts.size());
+    assertEquals("generated-src/main/java",
+        generatedFacts.get(0).evidence().get(0).attributes().get("sourceRoot"));
+    assertEquals("generated-root-fingerprint",
+        generatedFacts.get(0).evidence().get(0).attributes().get("sourceRootFingerprint"));
+  }
+
+  /** Keeps excluded and wrong-scope nested roots out of generated provenance. */
+  @Test
+  void generatedProvenanceUsesOnlyIncludedActiveScopeNestedRoots() throws IOException {
+    Path sourceRoot = temp.resolve("generated-scope/src/main/java");
+    Path generatedRoot = temp.resolve("generated-scope/generated-src/main/java");
+    Path excludedNestedRoot = generatedRoot.resolve("excluded");
+    Path testNestedRoot = generatedRoot.resolve("test");
+    write(excludedNestedRoot, "demo/generated/ExcludedMapper.java", """
+        package demo.generated;
+        public class ExcludedMapper {
+          public String map(String value) { return value; }
+        }
+        """);
+    write(testNestedRoot, "demo/generated/TestMapper.java", """
+        package demo.generated;
+        public class TestMapper {
+          public String map(String value) { return value; }
+        }
+        """);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("quarkus-production")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .generatedSourceRoot(
+            "generated-src/main/java",
+            generatedRoot,
+            AnalysisContext.Scope.PRODUCTION,
+            true,
+            true,
+            "included-fingerprint")
+        .generatedSourceRoot(
+            "generated-src/excluded",
+            excludedNestedRoot,
+            AnalysisContext.Scope.PRODUCTION,
+            false,
+            false,
+            "excluded-fingerprint")
+        .generatedSourceRoot(
+            "generated-src/test",
+            testNestedRoot,
+            AnalysisContext.Scope.TEST,
+            true,
+            false,
+            "test-fingerprint")
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "quarkus-generated-source-root",
+            "generated_source_root",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "generated-src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> generatedFacts = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty())
+        .frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("generated_implementation"))
+        .toList();
+
+    assertEquals(2, generatedFacts.size());
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRoot").equals("generated-src/main/java")));
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRootIncluded").equals("true")));
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRootScope").equals("production")));
+    assertTrue(generatedFacts.stream().allMatch(item ->
+        item.evidence().get(0).attributes().get("sourceRootFingerprint").equals("included-fingerprint")));
   }
 
   /** Covers Spring MVC, injection, proxy, repository, and lifecycle facts. */
@@ -194,7 +355,8 @@ class JavaAnalysisAdapterTest {
     write(sourceRoot, "demo/AccountRepository.java", """
         package demo;
         import org.springframework.data.jpa.repository.JpaRepository;
-        public interface AccountRepository extends JpaRepository<Account, Long> { }
+        import org.springframework.stereotype.Repository;
+        @Repository public interface AccountRepository extends JpaRepository<Account, Long> { }
         """);
     write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
     write(sourceRoot, "demo/SecurityConfig.java", """
@@ -239,8 +401,496 @@ class JavaAnalysisAdapterTest {
         && item.certainty() == SemanticCallFacts.Certainty.POSSIBLE));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-data-generated-account-repository")
         || item.relationshipType().equals("dependency_injection")));
+    SemanticCallFacts.Fact repository = fact(facts.frameworkFacts(), "spring-data-generated-account-repository");
+    assertTrue(repository.evidence().get(0).symbols().contains("findById"));
+    assertEquals("JpaRepository", repository.evidence().get(0).attributes().get("repositoryContract"));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-bean-factory-to-security-config")));
     assertTrue(facts.frameworkFacts().stream().anyMatch(item -> item.id().equals("spring-boot-to-data-seeder")));
+  }
+
+  /** Ignores unregistered runner lookalikes and preserves exact lifecycle source evidence. */
+  @Test
+  void springLifecycleFactsRequireBeanEvidenceAndRunnerSignature() throws IOException {
+    Path sourceRoot = temp.resolve("spring-lifecycle/src/main/java");
+    write(sourceRoot, "demo/RegisteredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        import org.springframework.stereotype.Component;
+        @Component public class RegisteredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+          public void run(String value) { }
+          static class NestedRunner implements CommandLineRunner {
+            public void run(String... args) { }
+          }
+        }
+        """);
+    write(sourceRoot, "demo/UnregisteredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class UnregisteredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/UnregisteredFactory.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        public class UnregisteredFactory {
+          @Bean public Object ignoredBean() { return new Object(); }
+        }
+        """);
+    write(sourceRoot, "demo/BeanFactory.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.stereotype.Component;
+        @Component public class BeanFactory {
+          @Bean public Object suppliedBean() { return new Object(); }
+          static class NestedFactory {
+            @Bean public NestedUnregisteredRunner nestedRunner() {
+              return new NestedUnregisteredRunner();
+            }
+          }
+        }
+        """);
+    write(sourceRoot, "demo/NestedUnregisteredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class NestedUnregisteredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/NestedConfiguredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class NestedConfiguredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/NestedConfigurationOwner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        public class NestedConfigurationOwner {
+          @Configuration
+          @SuppressWarnings({"unused"})
+          static class RegisteredNestedConfiguration {
+            @Bean public NestedConfiguredRunner nestedConfiguredRunner() {
+              return new NestedConfiguredRunner();
+            }
+            @Bean public NestedRunner nestedRunner() {
+              return new NestedRunner();
+            }
+            static class NestedRunner implements CommandLineRunner {
+              @Override public void run(String... args) { }
+            }
+          }
+        }
+        """);
+    write(sourceRoot, "demo/ConfiguredRunner.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        public class ConfiguredRunner implements CommandLineRunner {
+          @Override public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/RunnerConfiguration.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration @demo.Configuration public class RunnerConfiguration {
+          static class NestedConfiguration { }
+          @Bean @demo.Bean public ConfiguredRunner configuredRunner() {
+            return new ConfiguredRunner();
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Bean.java", "package demo; public @interface Bean {}\n");
+    write(sourceRoot, "demo/CustomBeanFactory.java", """
+        package demo;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration public class CustomBeanFactory {
+          @demo.Bean public Object customBean() { return new Object(); }
+        }
+        """);
+    write(sourceRoot, "demo/Lookalike.java", """
+        package demo;
+        public class Lookalike {
+          String text = "@Configuration @Bean implements CommandLineRunner";
+          // @Configuration class Fake { @Bean Object fake() { return null; } }
+        }
+        """);
+    write(sourceRoot, "demo/CommandLineRunner.java", """
+        package demo;
+        public interface CommandLineRunner { }
+        """);
+    write(sourceRoot, "demo/LookalikeRunner.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class LookalikeRunner implements CommandLineRunner {
+          public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "wildcard/WildcardRunner.java", """
+        package wildcard;
+        import org.springframework.boot.*;
+        import org.springframework.stereotype.Component;
+        @Component public class WildcardRunner implements CommandLineRunner {
+          public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/Component.java", "package demo; public @interface Component {}\n");
+    write(sourceRoot, "demo/Configuration.java", "package demo; public @interface Configuration {}\n");
+    write(sourceRoot, "demo/FakeComponent.java", """
+        package demo;
+        import org.springframework.boot.CommandLineRunner;
+        @demo.Component public class FakeComponent implements CommandLineRunner {
+          public void run(String... args) { }
+        }
+        """);
+    write(sourceRoot, "demo/FakeConfiguration.java", """
+        package demo;
+        @demo.Configuration public class FakeConfiguration {
+          @org.springframework.context.annotation.Bean public Object fakeBean() { return null; }
+        }
+        """);
+
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations",
+            "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+
+    List<SemanticCallFacts.Fact> lifecycleFacts = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("lifecycle_callback"))
+        .toList();
+    assertEquals(8, lifecycleFacts.size());
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.RegisteredRunner#run")
+        && item.evidence().get(0).symbols().contains("@Component")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.BeanFactory#suppliedBean")
+        && item.evidence().get(0).symbols().contains("@Bean suppliedBean")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.RunnerConfiguration#configuredRunner")
+        && item.evidence().get(0).symbols().contains("@Configuration")
+        && item.evidence().get(0).symbols().contains("@Bean configuredRunner")));
+    SemanticCallFacts.Fact configuredRunnerFactory = lifecycleFacts.stream()
+        .filter(item -> item.callee().equals("demo.RunnerConfiguration#configuredRunner"))
+        .findFirst()
+        .orElseThrow();
+    assertFalse(configuredRunnerFactory.evidence().get(0).symbols().contains("@demo.Configuration"));
+    assertFalse(configuredRunnerFactory.evidence().get(0).symbols().contains("@demo.Bean"));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals("demo.ConfiguredRunner#run")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfiguredRunner#run")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfigurationOwner$RegisteredNestedConfiguration#nestedConfiguredRunner")
+        && item.evidence().get(0).symbols().contains("@Configuration")
+        && item.evidence().get(0).symbols().contains("@Bean nestedConfiguredRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfigurationOwner$RegisteredNestedConfiguration#nestedRunner")
+        && item.evidence().get(0).symbols().contains("@Bean nestedRunner")));
+    assertTrue(lifecycleFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.NestedConfigurationOwner$RegisteredNestedConfiguration$NestedRunner#run")
+        && item.evidence().get(0).symbols().contains("implements CommandLineRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("UnregisteredFactory")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("NestedUnregisteredRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("Lookalike")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("WildcardRunner")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("FakeComponent")));
+    assertFalse(lifecycleFacts.stream().anyMatch(item -> item.callee().contains("FakeConfiguration")));
+    assertFalse(facts.frameworkFacts().stream().anyMatch(item -> item.caller().contains("FakeComponent")
+        || item.caller().contains("FakeConfiguration")
+        || item.callee().contains("FakeComponent")
+        || item.callee().contains("FakeConfiguration")));
+    assertTrue(lifecycleFacts.stream().allMatch(item -> item.factSet() == SemanticCallFacts.FactSet.FRAMEWORK));
+    assertTrue(facts.providerFacts().isEmpty());
+  }
+
+  /** Rejects Spring route and advisor lookalikes while retaining canonical resolution. */
+  @Test
+  void springRoutesAndProxiesRequireCanonicalAnnotationResolution() throws IOException {
+    Path sourceRoot = temp.resolve("spring-annotation-resolution/src/main/java");
+    write(sourceRoot, "demo/FakeRestController.java", """
+        package demo;
+        import org.springframework.web.bind.annotation.GetMapping;
+        @demo.RestController public class FakeRestController {
+          @GetMapping("/ignored-controller") public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/FakeGetMapping.java", """
+        package demo;
+        import org.springframework.web.bind.annotation.RestController;
+        @RestController public class FakeGetMapping {
+          @demo.GetMapping("/ignored-method") public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/FakeTransactional.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class FakeTransactional {
+          @demo.Transactional public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/LiteralRouteController.java", String.join("\n",
+        "package demo;",
+        "import org.springframework.web.bind.annotation.GetMapping;",
+        "import org.springframework.web.bind.annotation.RestController;",
+        "@RestController public class LiteralRouteController {",
+        "  @Marker(\"@GetMapping\") public String stringIgnored() { return \"ignored\"; }",
+        "  @Marker(\"\"\"",
+        "      @GetMapping",
+        "      \"\"\") public String textBlockIgnored() { return \"ignored\"; }",
+        "}",
+        ""));
+    write(sourceRoot, "demo/LiteralProxy.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        @Service public class LiteralProxy {
+          @Marker("@Transactional") public String ignored() { return "ignored"; }
+        }
+        """);
+    write(sourceRoot, "demo/Marker.java", "package demo; public @interface Marker { String value(); }\n");
+    write(sourceRoot, "demo/RestController.java", "package demo; public @interface RestController {}\n");
+    write(sourceRoot, "demo/GetMapping.java", "package demo; public @interface GetMapping {}\n");
+    write(sourceRoot, "demo/Transactional.java", "package demo; public @interface Transactional {}\n");
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            sourceRoot,
+            null,
+            List.of(
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-web-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-bean-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-aop-advisor-metadata",
+                    "runtime_or_build_metadata",
+                    AnalysisContext.MetadataStatus.NOT_CAPTURED,
+                    null))),
+        AnalysisGraph.empty());
+
+    assertFalse(facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("framework_entrypoint"))
+        .anyMatch(item -> item.callee().contains("FakeRestController")
+            || item.callee().contains("FakeGetMapping")
+            || item.callee().contains("LiteralRouteController")));
+    assertFalse(facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .anyMatch(item -> item.callee().equals("demo.FakeTransactional#ignored")
+            || item.callee().equals("demo.LiteralProxy#ignored")));
+  }
+
+  /** Excludes same-named Spring annotation lookalikes from bean metadata and bindings. */
+  @Test
+  void springBeanCandidatesRequireCanonicalAnnotationMetadata() throws IOException {
+    Path sourceRoot = temp.resolve("spring-bean-annotation-resolution/src/main/java");
+    write(sourceRoot, "api/Service.java", "package api; public interface Service { }\n");
+    write(sourceRoot, "demo/Service.java", """
+        package demo;
+        public @interface Service { String value(); }
+        """);
+    write(sourceRoot, "demo/ShadowedService.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component @Service("shadow") public class ShadowedService implements api.Service { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(@Qualifier("shadow") api.Service service) { }
+        }
+        """);
+
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations",
+            "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.BeanCandidate candidate = scanner.beanCandidates(
+            AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(item -> item.candidateType().equals("demo.ShadowedService"))
+        .findFirst()
+        .orElseThrow();
+
+    assertEquals("Component", candidate.kind());
+    assertFalse(candidate.qualifiers().contains("BeanName:shadow"));
+    assertEquals(List.of("@Component"), scanner.sourceAnnotations(
+        candidate, AnalysisContext.Framework.SPRING_BOOT));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    List<SemanticCallFacts.Fact> injections = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertTrue(injections.stream().anyMatch(item -> item.callee().equals("api.Service#<unresolved-bean>")));
+    assertFalse(injections.stream().anyMatch(item -> item.callee().equals("demo.ShadowedService#<init>")));
+  }
+
+  /** Requires canonical Spring Data contracts and does not invent marker or paging methods. */
+  @Test
+  void springRepositoryFactsRequireCanonicalContractsAndKnownMethods() throws IOException {
+    Path sourceRoot = temp.resolve("spring-repositories/src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/Repository.java", "package demo; public interface Repository<T> {}\n");
+    write(sourceRoot, "demo/LookalikeRepository.java", """
+        package demo;
+        import org.springframework.stereotype.Repository;
+        @Repository public interface LookalikeRepository extends Repository<Account> {
+          String findByEmail(String email);
+        }
+        """);
+    write(sourceRoot, "demo/MarkerRepository.java", """
+        package demo;
+        public interface MarkerRepository
+            extends org.springframework.data.repository.Repository<Account, Long> { }
+        """);
+    write(sourceRoot, "demo/PagingRepository.java", """
+        package demo;
+        public interface PagingRepository extends
+            org.springframework.data.repository.PagingAndSortingRepository<Account, Long> { }
+        """);
+    write(sourceRoot, "demo/CustomRepository.java", """
+        package demo;
+        public interface CustomRepository
+            extends org.springframework.data.repository.Repository<Account, Long> {
+          static class Helper { }
+          /** Returns the default account lookup. */
+          String findByEmail(String email);
+          default String delegated(String email) { return findByEmail(email); }
+        }
+        """);
+    write(sourceRoot, "demo/OverloadedRepository.java", """
+        package demo;
+        public interface OverloadedRepository
+        extends org.springframework.data.repository.Repository<Account, Long> {
+          String findByEmail(String email);
+          String findByEmail(int email);
+          Account findById(Long id);
+          Account findById(String id);
+          default String helper() { return "default"; }
+          static String staticHelper() { return "static"; }
+          private String privateHelper() { return "private"; }
+        }
+        """);
+    write(sourceRoot, "wildcard/WildcardRepository.java", """
+        package wildcard;
+        import org.springframework.data.repository.*;
+        public interface WildcardRepository extends Repository<Account, Long> { }
+        """);
+    write(sourceRoot, "demo/GenericRepository.java", """
+        package demo;
+        public interface GenericRepository<T, ID>
+            extends org.springframework.data.repository.CrudRepository<T, ID> {
+          T findById(ID id);
+          T findById(String id);
+        }
+        """);
+    write(sourceRoot, "demo/CombinedRepository.java", """
+        package demo;
+        public interface CombinedRepository extends
+            org.springframework.data.repository.PagingAndSortingRepository<Account, Long>,
+            org.springframework.data.repository.CrudRepository<Account, Long> { }
+        """);
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            sourceRoot,
+            null,
+            List.of(
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-bean-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-data-repository-contract",
+                    "source_interface_metadata",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"))),
+        AnalysisGraph.empty());
+
+    List<SemanticCallFacts.Fact> repositoryFacts = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("generated_implementation"))
+        .toList();
+    assertEquals(9, repositoryFacts.size());
+    SemanticCallFacts.Fact custom = repositoryFacts.stream()
+        .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.CustomRepository#findByEmail(String)", custom.callee());
+    assertTrue(custom.evidence().get(0).symbols().contains("declared findByEmail(String)"));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals("demo.PagingRepository#findById")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findByEmail(String)")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findByEmail(int)")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findById(String)")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.OverloadedRepository#findById(Long)")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.CustomRepository#findByEmail()")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#delegated")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#helper")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#staticHelper")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#privateHelper")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("LookalikeRepository")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("MarkerRepository")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("WildcardRepository")));
+    assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.GenericRepository#findById(String)")));
+    assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
+        "demo.GenericRepository#findById(ID)")));
+
+    SemanticCallFacts springBoot3Facts = new JavaAnalysisAdapter().analyze(
+        context(
+            AnalysisContext.Framework.SPRING_BOOT,
+            sourceRoot,
+            null,
+            List.of(
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-bean-annotations",
+                    "source_annotations",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java"),
+                new AnalysisContext.FrameworkMetadata(
+                    "spring-data-repository-contract",
+                    "source_interface_metadata",
+                    AnalysisContext.MetadataStatus.OBSERVED,
+                    "src/main/java")),
+            "3.2.0"),
+        AnalysisGraph.empty());
+    assertFalse(springBoot3Facts.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("demo.PagingRepository#findById")));
+    assertTrue(springBoot3Facts.frameworkFacts().stream()
+        .anyMatch(item -> item.callee().equals("demo.CombinedRepository#findById")));
   }
 
   /** Keeps fixture IDs stable only when their complete source identity is unique. */
@@ -298,6 +948,25 @@ class JavaAnalysisAdapterTest {
           }
         }
         """);
+    write(quarkusSource, "one/EmptyAuthCallback.java", """
+        package one;
+        public interface EmptyAuthCallback {
+          static void helper() { }
+          private void hidden() { }
+        }
+        """);
+    write(quarkusSource, "one/EmptyAuthProxyFactory.java", """
+        package one;
+        import java.lang.reflect.Proxy;
+        public class EmptyAuthProxyFactory {
+          EmptyAuthCallback create() {
+            return (EmptyAuthCallback) Proxy.newProxyInstance(
+                EmptyAuthCallback.class.getClassLoader(),
+                new Class<?>[] {EmptyAuthCallback.class},
+                (proxy, method, args) -> null);
+          }
+        }
+        """);
 
     SemanticCallFacts quarkusFacts = new JavaAnalysisAdapter().analyze(
         context(
@@ -320,8 +989,10 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> dynamicProxyFacts = quarkusFacts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .toList();
-    assertEquals(3, dynamicProxyFacts.size());
-    assertEquals(3, dynamicProxyFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertEquals(4, dynamicProxyFacts.size());
+    assertEquals(4, dynamicProxyFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(dynamicProxyFacts.stream()
+        .anyMatch(item -> item.callee().equals("one.EmptyAuthCallback#unknown")));
     assertFalse(dynamicProxyFacts.stream().anyMatch(item -> item.id().equals("quarkus-unbounded-proxy-abstention")));
 
     Path springSource = temp.resolve("id-collisions/spring/src/main/java");
@@ -532,6 +1203,1008 @@ class JavaAnalysisAdapterTest {
         .noneMatch(item -> item.id().equals("quarkus-resource-to-cdi-bean")));
   }
 
+  /** Resolves qualified nested ServiceLoader types to their binary service identity. */
+  @Test
+  void nestedServiceTypesResolveAtCallSite() throws IOException {
+    Path sourceRoot = temp.resolve("nested-service-loader/src/main/java");
+    Path resources = temp.resolve("nested-service-loader/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge {
+          void audit() {
+            ServiceLoader.load(Outer.Service.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Outer.java", """
+        package demo;
+        interface Outer {
+          interface Service { void record(); }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Outer$Service", "demo.Provider\n");
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("nested-service-loader")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(21)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("nested-service-loader/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "nested-service-loader/resources/META-INF/services"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "lambda$audit$0", "()V"),
+        new MethodSymbol("demo.Provider", "record", "()V"),
+        6,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.POSSIBLE,
+        "service_loader");
+
+    SemanticCallFacts.Fact serviceFact = new JavaAnalysisAdapter().analyze(context,
+        new AnalysisGraph(List.of(edge), List.of(), Set.of("demo.Bridge", "demo.Provider"),
+            "SootUp", "3.0.1", 2, 1))
+        .providerFacts().stream()
+        .filter(item -> item.caller().equals("demo.Bridge#lambda$audit$0"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, serviceFact.certainty());
+    SemanticCallFacts.Evidence descriptor = serviceFact.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.Outer$Service", descriptor.attributes().get("serviceType"));
+    assertEquals("demo.Provider", descriptor.attributes().get("providers"));
+  }
+
+  /** Does not attach a ServiceLoader relationship to an unrelated same-statement invocation. */
+  @Test
+  void rejectsUnrelatedInvocationAfterLoadCondition() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-unrelated/src/main/java");
+    Path classes = temp.resolve("service-loader-unrelated/target/classes");
+    Path resources = temp.resolve("service-loader-unrelated/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static String audit(OtherImpl other) {
+            return ServiceLoader.load(AuditProvider.class).findFirst()
+                .map(value -> value.record())
+                .orElseGet(() -> other.record());
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { String record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public String record() { return "provider"; }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          String record() { return "other"; }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-unrelated")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-unrelated/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultAuditProvider#record")), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
+  /** Does not attribute an invocation owned by a nested lambda to the provider lambda. */
+  @Test
+  void rejectsNestedLambdaInvocationAsServiceLoaderProvider() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-nested-lambda/src/main/java");
+    Path classes = temp.resolve("service-loader-nested-lambda/target/classes");
+    Path resources = temp.resolve("service-loader-nested-lambda/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.List;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static void audit(OtherImpl other) {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> List.of(other)
+                    .forEach(otherValue -> otherValue.record()));
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          void record() { }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-nested-lambda")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-nested-lambda/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
+  /** Does not treat a qualified field receiver as the provider lambda parameter. */
+  @Test
+  void rejectsQualifiedFieldInvocationAsServiceLoaderProvider() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-qualified-field/src/main/java");
+    Path classes = temp.resolve("service-loader-qualified-field/target/classes");
+    Path resources = temp.resolve("service-loader-qualified-field/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          private final OtherImpl provider = new OtherImpl();
+          public void audit() {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(provider -> this.provider.record());
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          void record() { }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-qualified-field")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-qualified-field/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
+  /** Does not treat a same-package custom ServiceLoader lookalike as java.util.ServiceLoader. */
+  @Test
+  void rejectsCustomServiceLoaderLookalike() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-lookalike/src/main/java");
+    Path classes = temp.resolve("service-loader-lookalike/target/classes");
+    write(sourceRoot, "demo/ServiceLoader.java", """
+        package demo;
+        import java.util.Optional;
+        import java.util.function.Consumer;
+        public final class ServiceLoader<T> {
+          public static <S> ServiceLoader<S> load(Class<S> type) {
+            return new ServiceLoader<>();
+          }
+          public Optional<T> findFirst() { return Optional.empty(); }
+          public void ifPresent(Consumer<T> consumer) { findFirst().ifPresent(consumer); }
+        }
+        """);
+    write(sourceRoot, "demo/Provider.java", """
+        package demo;
+        public interface Provider { void record(); }
+        """);
+    Path appSource = sourceRoot.resolve("consumer/App.java");
+    write(sourceRoot, "consumer/App.java", """
+        package consumer;
+        import demo.Provider;
+        import demo.ServiceLoader;
+        public final class App {
+          public static void audit() {
+            ServiceLoader.load(Provider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-lookalike")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    assertTrue(facts.providerFacts().stream().noneMatch(item ->
+        item.relationshipType().equals("service_loader")), facts.providerFacts().toString());
+  }
+
+  /** Does not treat a same-package type as java.util.ServiceLoader through a wildcard import. */
+  @Test
+  void rejectsSamePackageServiceLoaderShadowedByWildcardImport() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-wildcard-lookalike/src/main/java");
+    Path classes = temp.resolve("service-loader-wildcard-lookalike/target/classes");
+    Path resources = temp.resolve("service-loader-wildcard-lookalike/resources");
+    write(sourceRoot, "demo/ServiceLoader.java", """
+        package demo;
+        import java.util.Optional;
+        import java.util.function.Consumer;
+        public final class ServiceLoader<T> {
+          public static <S> ServiceLoader<S> load(Class<S> type) {
+            return new ServiceLoader<>();
+          }
+          public Optional<T> findFirst() { return Optional.empty(); }
+          public void ifPresent(Consumer<T> consumer) { findFirst().ifPresent(consumer); }
+        }
+        """);
+    write(sourceRoot, "demo/Provider.java", """
+        package demo;
+        public interface Provider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultProvider.java", """
+        package demo;
+        public final class DefaultProvider implements Provider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/App.java", """
+        package demo;
+        import java.util.*;
+        public final class App {
+          public static void audit() {
+            ServiceLoader.load(Provider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-wildcard-lookalike")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-wildcard-lookalike/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    assertTrue(facts.providerFacts().stream().noneMatch(item ->
+        item.relationshipType().equals("service_loader")), facts.providerFacts().toString());
+  }
+
+  /** Recognizes java.util.* ServiceLoader when the selected package has no shadowing type. */
+  @Test
+  void recognizesValidWildcardServiceLoaderWithoutSamePackageShadow() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-valid-wildcard/src/main/java");
+    Path classes = temp.resolve("service-loader-valid-wildcard/target/classes");
+    Path resources = temp.resolve("service-loader-valid-wildcard/resources");
+    write(sourceRoot, "demo/Provider.java", """
+        package demo;
+        public interface Provider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultProvider.java", """
+        package demo;
+        public final class DefaultProvider implements Provider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/App.java", """
+        package demo;
+        import java.util.*;
+        public final class App {
+          public static void audit() {
+            ServiceLoader.load(Provider.class).findFirst()
+                .ifPresent(provider -> provider.record());
+          }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Provider", "demo.DefaultProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-valid-wildcard")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-valid-wildcard/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultProvider#record")), serviceFacts.toString());
+  }
+
+  /** Keeps a block-lambda callback after an inner statement, but not after the outer boundary. */
+  @Test
+  void recognizesBlockLambdaCallback() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-block/src/main/java");
+    Path classes = temp.resolve("service-loader-block/target/classes");
+    Path resources = temp.resolve("service-loader-block/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static String audit(OtherImpl other) {
+            ServiceLoader.load(AuditProvider.class).findFirst()
+                .ifPresent(value -> {
+                  int marker = 1;
+                  value.record();
+                });
+            return other.record();
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          String record() { return "other"; }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-block")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-block/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultAuditProvider#record")), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
+  /** Keeps nested custom-loader sites possible without borrowing a sibling descriptor. */
+  @Test
+  void nestedLoadsRemainAmbiguousWithCustomLoader() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-nested-custom/src/main/java");
+    Path classes = temp.resolve("service-loader-nested-custom/target/classes");
+    Path resources = temp.resolve("service-loader-nested-custom/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static String audit(ClassLoader loader) {
+            return ServiceLoader.load(Outer.Provider.class, loader).findFirst()
+                .map(value -> value.record())
+                .orElseGet(() -> ServiceLoader.load(Inner.Provider.class, loader).findFirst()
+                    .map(value -> value.record()).orElse("missing"));
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Outer.java", """
+        package demo;
+        final class Outer {
+          interface Provider { String record(); }
+        }
+        """);
+    write(sourceRoot, "demo/Inner.java", """
+        package demo;
+        final class Inner {
+          interface Provider { String record(); }
+        }
+        """);
+    write(sourceRoot, "demo/OuterDefault.java", """
+        package demo;
+        final class OuterDefault implements Outer.Provider {
+          public String record() { return "outer"; }
+        }
+        """);
+    write(sourceRoot, "demo/InnerDefault.java", """
+        package demo;
+        final class InnerDefault implements Inner.Provider {
+          public String record() { return "inner"; }
+        }
+        """);
+    write(resources, "META-INF/services/demo.Outer$Provider", "demo.OuterDefault\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-nested-custom")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-nested-custom/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> innerFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.callee().equals("demo.InnerDefault#record"))
+        .toList();
+
+    assertEquals(1, innerFacts.size(), innerFacts.toString());
+    SemanticCallFacts.Fact inner = innerFacts.get(0);
+    assertEquals("service_loader", inner.relationshipType());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, inner.certainty());
+    assertTrue(inner.limitation().toLowerCase().contains("classloader"), inner.toString());
+    assertTrue(inner.evidence().stream().noneMatch(item ->
+        item.kind().equals("service_loader_descriptor")), inner.toString());
+  }
+
+  /** Accepts a closing brace after a load expression, but rejects a second statement on its line. */
+  @Test
+  void acceptsClosingBraceAfterLoadExpression() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-closing/src/main/java");
+    Path classes = temp.resolve("service-loader-closing/target/classes");
+    Path resources = temp.resolve("service-loader-closing/resources");
+    write(sourceRoot, "demo/Bridge.java", """
+        package demo;
+        import java.util.ServiceLoader;
+        public final class Bridge {
+          public static void valid() {
+            ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(value -> { value.record(); });
+          }
+          public static void invalid(OtherImpl other) {
+            ServiceLoader.load(AuditProvider.class).findFirst().ifPresent(value -> { value.record(); }); other.record();
+          }
+        }
+        """);
+    write(sourceRoot, "demo/AuditProvider.java", """
+        package demo;
+        interface AuditProvider { void record(); }
+        """);
+    write(sourceRoot, "demo/DefaultAuditProvider.java", """
+        package demo;
+        final class DefaultAuditProvider implements AuditProvider {
+          public void record() { }
+        }
+        """);
+    write(sourceRoot, "demo/OtherImpl.java", """
+        package demo;
+        final class OtherImpl {
+          void record() { }
+        }
+        """);
+    write(resources, "META-INF/services/demo.AuditProvider", "demo.DefaultAuditProvider\n");
+    compileFixture(sourceRoot, classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-closing")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-resources",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-closing/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    List<SemanticCallFacts.Fact> serviceFacts = new JavaAnalysisAdapter().analyze(context)
+        .providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+
+    assertTrue(serviceFacts.stream().anyMatch(item ->
+        item.callee().equals("demo.DefaultAuditProvider#record")
+            && item.caller().contains("#lambda$valid")), serviceFacts.toString());
+    assertTrue(serviceFacts.stream().noneMatch(item ->
+        item.caller().contains("#lambda$invalid")
+            || item.callee().equals("demo.OtherImpl#record")), serviceFacts.toString());
+  }
+
+  /** Reports a skipped module entry when archive decompression budget is exhausted. */
+  @Test
+  void moduleBudgetExhaustionIsDiagnosed() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-budget/src/main/java");
+    Path classes = temp.resolve("service-loader-budget/target/classes");
+    Path archive = temp.resolve("service-loader-budget/provider.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    Files.createDirectories(classes);
+    byte[] descriptor = new byte[16 * 1024 * 1024 + 1];
+    byte[] provider = "demo.DefaultProvider\n".getBytes(StandardCharsets.UTF_8);
+    System.arraycopy(provider, 0, descriptor, 0, provider.length);
+    Arrays.fill(descriptor, provider.length, descriptor.length, (byte) '#');
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("META-INF/services/demo.Provider"));
+      output.write(descriptor);
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(new byte[] {0, 0, 0, 61});
+      output.closeEntry();
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-budget")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(archive))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    assertTrue(scan.diagnostics().stream().anyMatch(item ->
+        item.code().equals("archive_decompression_limit")), scan.diagnostics().toString());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertNotEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
+    assertTrue(resolution.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
+  }
+
+  /** Keeps the file-wide sole-site fallback unbound for lineless edges. */
+  @Test
+  void linelessEdgeDoesNotBindFileWideFallback() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-lineless/src/main/java");
+    Path classes = temp.resolve("service-loader-lineless/target/classes");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { }\n"
+        + "  void other(Class<?> type) { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    Files.createDirectories(classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-lineless")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "other", "(Ljava/lang/Class;)V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        0,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderCallSiteReader.ServiceLoadHints hints = ServiceLoaderCallSiteReader.read(
+        context, edge, ServiceLoaderDescriptorScanner.scan(context),
+        new SourceMetadataScanner(context));
+    assertFalse(hints.serviceTypes().isEmpty(),
+        "the sole parsed site's service types must stay available for POSSIBLE resolution");
+    assertFalse(hints.callSiteBound(),
+        "a lineless edge must not bind a site parsed in a different method");
+  }
+
+  /** Blocks definite promotion when a selected dependency entry vanishes before the scan. */
+  @Test
+  void vanishedSelectedDependencyBlocksDefinitePromotion() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-vanished/src/main/java");
+    Path classes = temp.resolve("service-loader-vanished/target/classes");
+    Path archive = temp.resolve("service-loader-vanished/provider.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    Files.createDirectories(classes);
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-vanished")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(archive))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(
+        context,
+        new SootUpInputLocationFactory.DependencyResolution(List.of(archive), List.of()));
+    assertTrue(scan.diagnostics().stream().anyMatch(item ->
+        item.code().equals("descriptor_entry_unavailable")), scan.diagnostics().toString());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertNotEquals(SemanticCallFacts.Certainty.DEFINITE, resolution.certainty());
+    assertTrue(resolution.evidence().stream().anyMatch(evidence ->
+        evidence.kind().equals("service_loader_scan_diagnostic")), resolution.evidence().toString());
+  }
+
+  /** Keeps module-info provider evidence possible when module visibility is not proven. */
+  @Test
+  void moduleInfoProviderIsPossibleWithoutModuleVisibility() throws IOException {
+    Path sourceRoot = temp.resolve("service-loader-module/src/main/java");
+    Path classes = temp.resolve("service-loader-module/target/classes");
+    Path moduleSourceRoot = temp.resolve("service-loader-module/module-src");
+    Path moduleClasses = temp.resolve("service-loader-module/module-classes");
+    Path archive = temp.resolve("service-loader-module/provider.jar");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    write(moduleSourceRoot, "module-info.java", "module demo.provider {"
+        + " provides demo.Provider with demo.DefaultProvider; }\n");
+    write(moduleSourceRoot, "demo/Provider.java", "package demo;\n"
+        + "public interface Provider { void record(); }\n");
+    write(moduleSourceRoot, "demo/DefaultProvider.java", "package demo;\n"
+        + "public final class DefaultProvider implements Provider {"
+        + " public void record() {} }\n");
+    Files.createDirectories(moduleClasses);
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    assertNotNull(compiler, "a JDK compiler is required for module metadata");
+    try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> moduleSources = Files.walk(moduleSourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = fileManager.getJavaFileObjectsFromFiles(
+          moduleSources.stream().map(Path::toFile).toList());
+      assertTrue(compiler.getTask(
+          null,
+          fileManager,
+          null,
+          List.of("--release", "17", "-d", moduleClasses.toString()),
+          null,
+          units).call(), "module metadata fixture compilation failed");
+    }
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("module-info.class"));
+      output.write(Files.readAllBytes(moduleClasses.resolve("module-info.class")));
+      output.closeEntry();
+    }
+
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-module")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(archive))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    ServiceLoaderDescriptorScanner.Descriptor moduleDescriptor = scan.descriptors().stream()
+        .filter(item -> item.kind().equals("module_info"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scan.descriptors().toString()));
+    assertEquals("demo.Provider", moduleDescriptor.serviceType());
+    assertEquals(List.of("demo.DefaultProvider"), moduleDescriptor.providers());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    SemanticCallFacts.Evidence descriptorEvidence = resolution.evidence().stream()
+        .filter(item -> item.kind().equals("service_loader_descriptor"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(resolution.evidence().toString()));
+    assertEquals("not_proven", descriptorEvidence.attributes().get("moduleVisibility"));
+    assertTrue(resolution.limitation().toLowerCase().contains("module"), resolution.toString());
+  }
+
+  /** Keeps a BOM-prefixed provider malformed and explains the resulting possible fact. */
+  @Test
+  void bomPrefixedProviderIsMalformed() throws IOException {
+    Path fixture = temp.resolve("service-loader-bom");
+    Path sourceRoot = fixture.resolve("src/main/java");
+    Path resources = fixture.resolve("resources");
+    write(sourceRoot, "demo/App.java", "package demo;\n"
+        + "import java.util.ServiceLoader;\n"
+        + "class App {\n"
+        + "  void audit() { ServiceLoader.load(Provider.class).findFirst()"
+        + ".ifPresent(value -> value.record()); }\n"
+        + "}\n");
+    write(sourceRoot, "demo/Provider.java", "package demo;\n"
+        + "interface Provider { void record(); }\n");
+    write(resources, "META-INF/services/demo.Provider", "\uFEFFdemo.DefaultProvider\n");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("service-loader-bom")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(fixture.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "service-loader-bom", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "service-loader-bom/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+    ServiceLoaderDescriptorScanner.Descriptor descriptor = scan.descriptors().stream()
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scan.descriptors().toString()));
+    assertTrue(descriptor.providers().isEmpty(), descriptor.toString());
+    assertEquals(List.of("\uFEFFdemo.DefaultProvider"), descriptor.malformedEntries());
+
+    CallEdge edge = new CallEdge(
+        new MethodSymbol("demo.App", "audit", "()V"),
+        new MethodSymbol("demo.DefaultProvider", "record", "()V"),
+        4,
+        "src/main/java/demo/App.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
+    ServiceLoaderDescriptorScanner.Resolution resolution = ServiceLoaderDescriptorScanner.resolve(
+        context, edge, scan, new SourceMetadataScanner(context));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, resolution.certainty());
+    assertTrue(resolution.limitation().toLowerCase().contains("malformed"), resolution.toString());
+  }
+
+  /** Keeps a bounded descriptor ordered and deduplicated without quadratic normalization work. */
+  @Test
+  void smallProviderDescriptorIsOrderedAndDeduplicated() throws IOException {
+    Path fixture = temp.resolve("provider-order");
+    Path sourceRoot = fixture.resolve("src/main/java");
+    Path descriptor = fixture.resolve("resources/META-INF/services/demo.Provider");
+    write(sourceRoot, "demo/App.java", "package demo; class App {}\n");
+    Files.createDirectories(descriptor.getParent());
+    StringBuilder contents = new StringBuilder();
+    for (int index = 0; index < 100_000; index++) {
+      contents.append("p.P").append(index).append('\n');
+    }
+    contents.append("p.P0\n");
+    Files.writeString(descriptor, contents.toString());
+    AnalysisContext context = AnalysisContext.builder()
+        .id("provider-order")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("java21-quarkus")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(fixture.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "provider-order", "service_loader_descriptor", AnalysisContext.MetadataStatus.OBSERVED,
+            "provider-order/resources/META-INF/services"))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = assertTimeoutPreemptively(
+        Duration.ofSeconds(5), () -> ServiceLoaderDescriptorReader.scan(context));
+    assertEquals(1, scan.descriptors().size());
+    List<String> providers = scan.descriptors().get(0).providers();
+    assertEquals(100_000, providers.size());
+    assertEquals("p.P0", providers.get(0));
+    assertEquals("p.P99999", providers.get(providers.size() - 1));
+  }
+
   /** Includes nested injection owners and source offsets in fallback fact IDs. */
   @Test
   void nestedInjectionSitesReceiveDistinctFactIds() throws IOException {
@@ -575,6 +2248,21 @@ class JavaAnalysisAdapterTest {
     assertEquals(2, injections.stream().map(SemanticCallFacts.Fact::id).distinct().count());
     assertTrue(injections.stream().anyMatch(item -> item.caller().contains("demo.TransferResource$First")));
     assertTrue(injections.stream().anyMatch(item -> item.caller().contains("demo.TransferResource$Second")));
+  }
+
+  /** Rejects conflicting resolved-binding qualifiers while preserving empty-list wildcards. */
+  @Test
+  void resolvedBindingQualifiersRejectConflicts() {
+    assertTrue(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of(), List.of("Qualifier:fast")));
+    assertTrue(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of("Qualifier:fast", "Tier:silver"), List.of("Qualifier:fast")));
+    assertFalse(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of("Region:west", "Tier:silver"),
+        List.of("Region:west", "Tier:gold")));
+    assertFalse(BoundedFrameworkModelMetadataMatching.resolvedQualifiersCompatible(
+        List.of("Qualifier:fast"),
+        List.of("Qualifier:slow")));
   }
 
   /** Matches resolved binding metadata against nested injection owners. */
@@ -756,6 +2444,10 @@ class JavaAnalysisAdapterTest {
           @Path("/submit")
           @POST @Consumes("text/plain") @Produces("application/xml")
           public String submit(String request) { return request; }
+          static class NestedResource {
+            @Path("/nested") @GET public String nested() { return "nested"; }
+          }
+          @Path("/after") @GET public String after() { return "after"; }
         }
         """);
     write(sourceRoot, "routes/MethodOnlyResource.java", """
@@ -787,7 +2479,7 @@ class JavaAnalysisAdapterTest {
         .filter(item -> item.relationshipType().equals("framework_entrypoint"))
         .toList();
 
-    assertEquals(4, routes.size());
+    assertEquals(5, routes.size());
     SemanticCallFacts.Fact readOne = routes.stream()
         .filter(item -> item.callee().equals("routes.MultiResource#read"))
         .filter(item -> item.selectionCriteria().pathTemplate().equals("/api/one"))
@@ -805,12 +2497,25 @@ class JavaAnalysisAdapterTest {
     assertEquals("/api/submit", submit.selectionCriteria().pathTemplate());
     assertEquals(List.of("text/plain"), submit.selectionCriteria().consumes());
     assertEquals(List.of("application/xml"), submit.selectionCriteria().produces());
+    assertTrue(routes.stream().anyMatch(item -> item.callee().equals("routes.MultiResource#after")
+        && item.selectionCriteria().pathTemplate().equals("/api/after")));
+    assertFalse(routes.stream().anyMatch(item -> item.callee().equals("routes.MultiResource$NestedResource#nested")));
 
     SemanticCallFacts.Fact methodOnly = route(facts, "routes.MethodOnlyResource#only");
     assertEquals("/root/only", methodOnly.selectionCriteria().pathTemplate());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, methodOnly.certainty());
     assertFalse(facts.frameworkFacts().stream()
         .anyMatch(item -> item.callee().startsWith("routes.UnregisteredMethodResource#")));
+  }
+
+  /** Keeps a quote inside a character literal from swallowing the next field declarator. */
+  @Test
+  void balancedFieldSplitRecognizesDoubleQuotesInsideCharacterLiterals() {
+    String source = "first = pick('\"'), second = Target.class";
+
+    assertEquals(
+        List.of("first = pick('\"')", "second = Target.class"),
+        JavaSourceText.splitBalanced(source, ',', true));
   }
 
   /** Enumerates Spring mappings, conditions, and collision-safe route IDs. */
@@ -1281,6 +2986,7 @@ class JavaAnalysisAdapterTest {
         import org.springframework.transaction.annotation.Transactional;
         @Service public class AService implements Service {
           @Transactional public void run() { }
+          synchronized void run(String value) { }
         }
         """);
     write(sourceRoot, "demo/BService.java", """
@@ -1434,6 +3140,11 @@ class JavaAnalysisAdapterTest {
         @Component public class ResourceConsumer {
           @Resource Service service;
           @Resource(name = "missing") OtherService missing;
+          @Resource(name = "fastPaymentService") PaymentService suppressedDefault;
+          @Resource(name = "qualifier-only") QualifierOnlyService qualifierOnly;
+          @Resource(name = "unnamedNamedService") OtherService unnamedNamed;
+          @Resource(name = "factoryClock") FactoryClock factoryClock;
+          @Resource void setURL(UrlService service) { }
         }
         """);
     write(sourceRoot, "demo/PaymentService.java", "package demo; public interface PaymentService { }\n");
@@ -1458,6 +3169,38 @@ class JavaAnalysisAdapterTest {
         package demo;
         import org.springframework.stereotype.Service;
         @Service public class OtherServiceImpl implements OtherService { }
+        """);
+    write(sourceRoot, "demo/QualifierOnlyService.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Service;
+        @Service @Qualifier("qualifier-only")
+        public class QualifierOnlyService implements OtherService { }
+        """);
+    write(sourceRoot, "demo/UnnamedNamedService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @Named public class UnnamedNamedService implements OtherService { }
+        """);
+    write(sourceRoot, "demo/FactoryClock.java", "package demo; public class FactoryClock { }\n");
+    write(sourceRoot, "demo/FactoryConfiguration.java", """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        @Configuration("factory") public class FactoryConfiguration {
+          @Bean public FactoryClock factoryClock() { return new FactoryClock(); }
+        }
+        """);
+    write(sourceRoot, "demo/UrlService.java", "package demo; public interface UrlService { }\n");
+    write(sourceRoot, "demo/UpperUrlService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("URL") public class UpperUrlService implements UrlService { }
+        """);
+    write(sourceRoot, "demo/LowerUrlService.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service("uRL") public class LowerUrlService implements UrlService { }
         """);
     AnalysisContext context = context(
         AnalysisContext.Framework.SPRING_BOOT,
@@ -1487,6 +3230,156 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, namedResource.certainty());
     assertTrue(namedResource.callee().contains("OtherService#<unresolved-bean>"));
+    SemanticCallFacts.Fact suppressedDefault = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#suppressedDefault(PaymentService)"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, suppressedDefault.certainty());
+    SemanticCallFacts.Fact qualifierOnlyName = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#qualifierOnly(QualifierOnlyService)"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, qualifierOnlyName.certainty());
+    SemanticCallFacts.Fact unnamedNamed = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#unnamedNamed(OtherService)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.UnnamedNamedService#<init>", unnamedNamed.callee());
+    SemanticCallFacts.Fact factoryClock = facts.stream()
+        .filter(item -> item.caller().equals(
+            "spring:injection:demo.ResourceConsumer#factoryClock(FactoryClock)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.FactoryConfiguration#factoryClock", factoryClock.callee());
+    SemanticCallFacts.Fact acronymSetter = facts.stream()
+        .filter(item -> item.caller().equals("spring:injection:demo.ResourceConsumer#setURL(UrlService)"))
+        .findFirst().orElseThrow();
+    assertEquals("demo.UpperUrlService#<init>", acronymSetter.callee());
+  }
+
+  /** Parses an optional constructor throws clause without losing the injection point. */
+  @Test
+  void springConstructorInjectionParsesThrowsClause() throws IOException {
+    Path sourceRoot = temp.resolve("spring-constructor-throws/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Service service) throws java.io.IOException { }
+        }
+        """);
+    write(sourceRoot, "demo/SingleConsumer.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class SingleConsumer {
+          public SingleConsumer(Service service) throws java.io.IOException { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/ServiceImpl.java", """
+        package demo;
+        import org.springframework.stereotype.Service;
+        @Service public class ServiceImpl implements Service { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+
+    assertEquals(2, injections.size());
+    assertTrue(injections.stream()
+        .allMatch(item -> item.callee().equals("demo.ServiceImpl#<init>")));
+  }
+
+  /** Excludes qualifier lookalikes and annotation-shaped text from injection parameters. */
+  @Test
+  void springInjectionParametersRequireCanonicalQualifiers() throws IOException {
+    Path sourceRoot = temp.resolve("spring-parameter-qualifiers/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Qualifier;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(
+              @Qualifier("fast")
+              @demo.Qualifier("custom")
+              @org.springframework.beans.factory.annotation.Value("@Qualifier(literal)")
+              Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Qualifier.java", "package demo; public @interface Qualifier { String value(); }\n");
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SourceMetadataScannerState.InjectionPoint injection = new SourceMetadataScanner(context)
+        .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(item -> item.file().typeName().equals("demo.Consumer"))
+        .findFirst()
+        .orElseThrow();
+
+    SourceMetadataScannerState.Parameter parameter = injection.parameters().get(0);
+    assertEquals("Service", parameter.type());
+    assertEquals("service", parameter.name());
+    assertEquals(List.of("Qualifier:fast"), parameter.qualifiers());
+  }
+
+  /** Preserves CDI parameter qualifiers without Spring annotation resolution. */
+  @Test
+  void quarkusInjectionParametersPreserveNamedQualifier() throws IOException {
+    Path sourceRoot = temp.resolve("quarkus-parameter-qualifiers/src/main/java");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import jakarta.inject.*;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject public Consumer(@Named("fast") Service service) { }
+        }
+        """);
+    write(sourceRoot, "demo/Service.java", "package demo; public interface Service { }\n");
+    write(sourceRoot, "demo/FastService.java", """
+        package demo;
+        import jakarta.inject.Named;
+        @jakarta.enterprise.context.ApplicationScoped @Named("fast")
+        public class FastService implements Service { }
+        """);
+    write(sourceRoot, "demo/OtherService.java", """
+        package demo;
+        @jakarta.enterprise.context.ApplicationScoped public class OtherService implements Service { }
+        """);
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "quarkus-cdi-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+
+    SourceMetadataScannerState.InjectionPoint injection = new SourceMetadataScanner(context)
+        .injectionPoints(AnalysisContext.Framework.QUARKUS).stream()
+        .findFirst()
+        .orElseThrow();
+    assertEquals(List.of("Named:fast"), injection.parameters().get(0).qualifiers());
+
+    SemanticCallFacts.Fact fact = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .findFirst()
+        .orElseThrow();
+    assertEquals("demo.FastService#<init>", fact.callee());
   }
 
   /** Requires active alternative metadata and normal-scope proxy eligibility. */
@@ -1568,6 +3461,96 @@ class JavaAnalysisAdapterTest {
         .toList();
     assertEquals(1, dependentProxies.size());
     assertEquals(SemanticCallFacts.Certainty.DEFINITE, dependentProxies.get(0).certainty());
+  }
+
+  /** Keeps generic contract arguments distinct during source binding matching. */
+  @Test
+  void genericContractsMatchTheirArguments() throws IOException {
+    Path sourceRoot = temp.resolve("generic-contracts/src/main/java");
+    write(sourceRoot, "api/Port.java", "package api; public interface Port<T> { }\n");
+    write(sourceRoot, "demo/StringPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class StringPort implements Port<String> { }
+        """);
+    write(sourceRoot, "demo/IntegerPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class IntegerPort implements Port<Integer> { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Port<Integer> port) { }
+        }
+        """);
+    write(sourceRoot, "demo/ArrayPort.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayPort implements Port<java.util.List<String>[]> { }
+        """);
+    write(sourceRoot, "demo/ArrayConsumer.java", """
+        package demo;
+        import api.Port;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayConsumer {
+          @Autowired public ArrayConsumer(Port<java.util.List<String>[]> port) { }
+        }
+        """);
+    AnalysisContext.FrameworkBindingMetadata metadata = new AnalysisContext.FrameworkBindingMetadata(
+        "0.1.0",
+        List.of(
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.StringPort", "demo.StringPort", List.of("api.Port<String>"), List.of(),
+                "Service", true, false, false),
+            new AnalysisContext.BindingCandidateMetadata(
+                "demo.IntegerPort", "demo.IntegerPort", List.of("api.Port<Integer>"), List.of(),
+                "Service", true, false, false)),
+        List.of(new AnalysisContext.ResolvedBindingMetadata(
+            "wrong-generic-binding", "demo.Consumer", "<init>", "Port<String>", 0,
+            List.of(), "demo.StringPort", true, true, "wrong generic argument", null, null)),
+        List.of());
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")),
+        metadata);
+
+    AnalysisContext sourceOnlyContext = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    List<SemanticCallFacts.Fact> sourceOnlyInjections = new JavaAnalysisAdapter()
+        .analyze(sourceOnlyContext, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .toList();
+    assertEquals(2, sourceOnlyInjections.size());
+    assertTrue(sourceOnlyInjections.stream().anyMatch(item ->
+        item.caller().contains("demo.Consumer") && item.callee().equals("demo.IntegerPort#<init>")));
+    assertTrue(sourceOnlyInjections.stream().anyMatch(item -> item.caller().contains("demo.ArrayConsumer")
+        && item.callee().equals("demo.ArrayPort#<init>")));
+
+    List<SemanticCallFacts.Fact> injections = new JavaAnalysisAdapter()
+        .analyze(context, AnalysisGraph.empty()).frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.caller().contains("spring:injection:demo.Consumer"))
+        .toList();
+
+    assertEquals(1, injections.size());
+    assertEquals("demo.IntegerPort#<init>", injections.get(0).callee());
   }
 
   /** Resolves proxy descriptors and erased generic producer types. */
@@ -2108,6 +4091,25 @@ class JavaAnalysisAdapterTest {
         .findFirst().orElseThrow();
     assertEquals("demo.ChildService#<init>", injection.callee());
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, injection.certainty());
+  }
+
+  /** Rejects body statements even when the bounded method scan retains a leading delimiter. */
+  @Test
+  void springProxyMethodRejectsLeadingBodyDelimiter() throws IOException {
+    Path sourceRoot = temp.resolve("spring-proxy-delimiter/src/main/java");
+    write(sourceRoot, "demo/Proxy.java", "package demo; public class Proxy { }\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.SPRING_BOOT,
+        sourceRoot,
+        null,
+        List.of(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations", AnalysisContext.MetadataStatus.OBSERVED,
+            "src/main/java")));
+    SourceMetadataScannerState.SourceFile file = new SourceMetadataScanner(context).files().get(0);
+    SourceMetadataScannerState.MethodInfo method = new SourceMetadataScannerState.MethodInfo(
+        "bodyStatement", "", "} return target();", 0, 0, 1);
+
+    assertFalse(SourceMetadataScannerTextLayer13.springProxyMethod(file, method));
   }
 
   /** Excludes Spring methods that proxy infrastructure cannot intercept. */
@@ -5177,11 +7179,101 @@ class JavaAnalysisAdapterTest {
         .collect(java.util.stream.Collectors.toMap(
             fact -> fact.evidence().get(0).path(), SemanticCallFacts.Fact::id));
     assertEquals(idsByPath, reversedIdsByPath);
+    assertEquals(
+        "sootup-call-88a10203-afba60f10fc1e513906fc938a01324c403094e2e0cbae4df7e5d44009531b8e8",
+        idsByPath.get("src/main/java/demo/First.java"));
+    assertEquals(
+        "sootup-call-88a10203-cca4a53a4171b2d7c08f66caec27d67f17d14db4caa8d8b2a71a744edd30459b",
+        idsByPath.get("src/main/java/demo/Second.java"));
+  }
+
+  /** Keeps an application legacy ID stable when a dependency edge shares its old base. */
+  @Test
+  void dependencyEdgesDoNotStealApplicationLegacyIds() throws IOException {
+    Path sourceRoot = temp.resolve("dependency-identities/src/main/java");
+    write(sourceRoot, "demo/DependencyIdentities.java", "package demo; class DependencyIdentities {}\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of());
+    MethodSymbol caller = new MethodSymbol("demo.DependencyIdentities", "run", "()V");
+    MethodSymbol callee = new MethodSymbol("demo.Target", "call", "()V");
+    CallEdge application = new CallEdge(
+        caller, callee, 4, "src/main/java/demo/Application.java",
+        SemanticCallFacts.Certainty.DEFINITE, "invokes");
+    CallEdge dependency = new CallEdge(
+        caller, callee, 4, "src/main/java/demo/Application.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "invokes",
+        new CallEdge.TargetContext(
+            CallEdge.TargetOrigin.DEPENDENCY,
+            temp.resolve("vulnerable-dependency-1.0.jar").toAbsolutePath().normalize().toString(),
+            "vulnerable/demo/Target.class",
+            ""));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(application, dependency), List.of(), Set.of(), "SootUp", "3.0.1", 1, 2));
+    SemanticCallFacts reversedFacts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(dependency, application), List.of(), Set.of(), "SootUp", "3.0.1", 1, 2));
+    String legacyId = "sootup-call-" + Integer.toHexString(
+        (caller.descriptor() + "->" + callee.descriptor() + "@4").hashCode());
+
+    Map<String, String> idsByOrigin = facts.providerFacts().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            fact -> fact.evidence().get(0).attributes().getOrDefault("targetOrigin", "application"),
+            SemanticCallFacts.Fact::id));
+    Map<String, String> reversedIdsByOrigin = reversedFacts.providerFacts().stream()
+        .collect(java.util.stream.Collectors.toMap(
+            fact -> fact.evidence().get(0).attributes().getOrDefault("targetOrigin", "application"),
+            SemanticCallFacts.Fact::id));
+    assertEquals(legacyId, idsByOrigin.get("application"));
+    assertNotEquals(idsByOrigin.get("application"), idsByOrigin.get("dependency"));
+    assertEquals(idsByOrigin, reversedIdsByOrigin);
+    assertEquals(
+        temp.resolve("vulnerable-dependency-1.0.jar").toAbsolutePath().normalize().toString(),
+        facts.providerFacts().stream()
+            .filter(fact -> fact.evidence().get(0).attributes().containsKey("targetOrigin"))
+            .findFirst()
+            .orElseThrow()
+            .evidence().get(0).attributes().get("dependencyClasspathEntry"));
+  }
+
+  /** Keeps open-world dynamic certainty abstained for dependency-origin graph edges. */
+  @Test
+  void dependencyDynamicEdgesRemainUnresolvedAndAbstained() throws IOException {
+    Path sourceRoot = temp.resolve("dependency-dynamic/src/main/java");
+    write(sourceRoot, "demo/DependencyDynamic.java", "package demo; class DependencyDynamic {}\n");
+    AnalysisContext context = context(
+        AnalysisContext.Framework.QUARKUS,
+        sourceRoot,
+        null,
+        List.of());
+    CallEdge dynamicDependency = new CallEdge(
+        new MethodSymbol("demo.DependencyDynamic", "invoke", "()V"),
+        new MethodSymbol("dependency.Target", "run", "()V"),
+        7,
+        "src/main/java/demo/DependencyDynamic.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "proxy_dispatch",
+        new CallEdge.TargetContext(
+            CallEdge.TargetOrigin.DEPENDENCY,
+            temp.resolve("dependency.jar").toAbsolutePath().normalize().toString(),
+            "dependency/Target.class",
+            ""));
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, new AnalysisGraph(
+        List.of(dynamicDependency), List.of(), Set.of(), "SootUp", "3.0.1", 1, 1));
+
+    SemanticCallFacts.Fact fact = facts.providerFacts().get(0);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, fact.certainty());
+    assertEquals(SemanticCallFacts.Status.ABSTAINED, fact.status());
+    assertEquals("dependency", fact.evidence().get(0).attributes().get("targetOrigin"));
   }
 
   /** Preserves selected build context and generated roots in the serialized run metadata. */
   @Test
-  void runMetadataPreservesProfileScopeRootsFingerprintsAndLimitations() throws IOException {
+  void runMetadataFactoryPreservesProfileScopeRootsFingerprintsAndLimitations() throws IOException {
     Path sourceRoot = temp.resolve("metadata/src/test/java");
     Path generatedRoot = temp.resolve("metadata/target/generated-test-sources");
     Files.createDirectories(sourceRoot);
@@ -5196,7 +7288,12 @@ class JavaAnalysisAdapterTest {
         .applicationClasses(temp.resolve("metadata/classes"))
         .selectedProfile("test")
         .analysisScope(AnalysisContext.Scope.TEST)
-        .sourceRoot("src/test/java", sourceRoot, AnalysisContext.Scope.TEST, true)
+        .sourceRoot(
+            "src/test/java",
+            sourceRoot,
+            AnalysisContext.Scope.TEST,
+            true,
+            "source-root-fingerprint")
         .generatedSourceRoot(
             "target/generated-test-sources",
             generatedRoot,
@@ -5231,16 +7328,26 @@ class JavaAnalysisAdapterTest {
             List.of("dynamic behavior remains unresolved")))
         .build();
 
-    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    AnalysisGraph graph = new AnalysisGraph(
+        List.of(), List.of(), Set.of(), "SootUp", "3.0.1", 42, 17);
+    SemanticCallFacts.RunMetadata factoryMetadata = SemanticCallFacts.RunMetadata.from(context, graph);
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, graph);
     SemanticCallFacts.RunMetadata metadata = facts.runMetadata();
+    assertEquals(factoryMetadata, metadata);
     assertEquals("test", metadata.selectedProfile());
     assertEquals("test", metadata.analysisScope());
+    assertEquals("SootUp", metadata.providerName());
+    assertEquals(42, metadata.graphMethodCount());
+    assertEquals(17, metadata.graphCallCount());
     assertEquals(List.of(generatedRoot.toAbsolutePath().normalize()), metadata.generatedSourceRoots().stream()
         .map(AnalysisContext.SourceRoot::path)
         .toList());
+    assertEquals("source-root-fingerprint", metadata.sourceRoots().get(0).fingerprint());
     assertEquals("generated-fingerprint", metadata.provenance().generatedSourceFingerprint());
     assertEquals("profile-digest", metadata.provenance().profileDigest());
     assertEquals(List.of("dynamic behavior remains unresolved"), metadata.handoff().limitations());
+    assertThrows(UnsupportedOperationException.class, () -> factoryMetadata.sourceRoots().clear());
+    assertThrows(UnsupportedOperationException.class, () -> factoryMetadata.generatedSourceRoots().clear());
 
     Path output = temp.resolve("metadata/semantic-call-facts.json");
     SemanticCallFactsJsonWriter.write(facts, output);
@@ -5249,6 +7356,8 @@ class JavaAnalysisAdapterTest {
     assertTrue(json.contains("\"analysisScope\" : \"test\""));
     assertTrue(json.contains("\"generatedSourceRoots\""));
     assertTrue(json.contains(generatedRoot.toAbsolutePath().normalize().toString()));
+    assertTrue(json.contains("\"sourceRoots\""));
+    assertTrue(json.contains("\"source-root-fingerprint\""));
     assertTrue(json.contains("\"generatedSourceFingerprint\" : \"generated-fingerprint\""));
     assertTrue(json.contains("dynamic behavior remains unresolved"));
   }
@@ -5263,6 +7372,17 @@ class JavaAnalysisAdapterTest {
         AnalysisContext.FrameworkBindingMetadata.empty());
   }
 
+  /** Builds a production context with an explicit framework version. */
+  private AnalysisContext context(
+      AnalysisContext.Framework framework,
+      Path sourceRoot,
+      Path generatedRoot,
+      List<AnalysisContext.FrameworkMetadata> metadata,
+      String frameworkVersion) {
+    return context(framework, sourceRoot, generatedRoot, metadata,
+        AnalysisContext.FrameworkBindingMetadata.empty(), frameworkVersion);
+  }
+
   /** Builds a production context with optional binding metadata. */
   private AnalysisContext context(
       AnalysisContext.Framework framework,
@@ -5270,10 +7390,22 @@ class JavaAnalysisAdapterTest {
       Path generatedRoot,
       List<AnalysisContext.FrameworkMetadata> metadata,
       AnalysisContext.FrameworkBindingMetadata bindingMetadata) {
+    return context(framework, sourceRoot, generatedRoot, metadata, bindingMetadata,
+        framework == AnalysisContext.Framework.QUARKUS ? "3.40.1" : "2.7.18");
+  }
+
+  /** Builds a production context with optional binding metadata and framework version. */
+  private AnalysisContext context(
+      AnalysisContext.Framework framework,
+      Path sourceRoot,
+      Path generatedRoot,
+      List<AnalysisContext.FrameworkMetadata> metadata,
+      AnalysisContext.FrameworkBindingMetadata bindingMetadata,
+      String frameworkVersion) {
     AnalysisContext.Builder builder = AnalysisContext.builder()
         .id(framework == AnalysisContext.Framework.QUARKUS ? "quarkus-production" : "spring-boot-production")
         .framework(framework)
-        .frameworkVersion(framework == AnalysisContext.Framework.QUARKUS ? "3.40.1" : "2.7.18")
+        .frameworkVersion(frameworkVersion)
         .fixtureId(framework == AnalysisContext.Framework.QUARKUS ? "java21-quarkus" : "fsi-spring-boot")
         .javaRelease(framework == AnalysisContext.Framework.QUARKUS ? 21 : 17)
         .repositoryRoot(temp)
@@ -5286,7 +7418,12 @@ class JavaAnalysisAdapterTest {
         .provenance(AnalysisContext.Provenance.forTesting());
     if (generatedRoot != null) {
       builder.generatedSourceRoot(
-          "generated-src/main/java", generatedRoot, AnalysisContext.Scope.PRODUCTION, true, true);
+          "generated-src/main/java",
+          generatedRoot,
+          AnalysisContext.Scope.PRODUCTION,
+          true,
+          true,
+          "generated-root-fingerprint");
     }
     metadata.forEach(builder::frameworkMetadata);
     return builder.build();
@@ -5311,5 +7448,30 @@ class JavaAnalysisAdapterTest {
     Path path = root.resolve(relative);
     Files.createDirectories(path.getParent());
     Files.writeString(path, source);
+  }
+
+  /** Compiles one source fixture for a provider-boundary regression. */
+  private static void compileFixture(Path sourceRoot, Path classes) throws IOException {
+    Files.createDirectories(classes);
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    if (compiler == null) {
+      throw new IllegalStateException("a JDK compiler is required for the ServiceLoader fixture");
+    }
+    try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+      List<Path> sources = Files.walk(sourceRoot)
+          .filter(path -> path.toString().endsWith(".java"))
+          .sorted()
+          .toList();
+      var units = fileManager.getJavaFileObjectsFromFiles(
+          sources.stream().map(Path::toFile).toList());
+      boolean compiled = compiler.getTask(
+          null,
+          fileManager,
+          null,
+          List.of("--release", "17", "-d", classes.toString()),
+          null,
+          units).call();
+      assertTrue(compiled, "ServiceLoader fixture compilation failed");
+    }
   }
 }

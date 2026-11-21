@@ -1,5 +1,6 @@
 # Java/Maven build output
 /target/
+tools/java-lint-maven-plugin/target/
 
 # FLPATH-5000 disposable analysis output
 spike/runs/
@@ -16,3 +17,7 @@ spike/scripts/__pycache__/
 # Local files
 .DS_Store
 analysis/java-callgraph-adjudication/fixture/out/
+
+# Local tool caches (never commit)
+.serena/
+.zvec-grep/

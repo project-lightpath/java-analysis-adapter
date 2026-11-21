@@ -1,6 +1,7 @@
 package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -12,6 +13,21 @@ import org.junit.jupiter.api.io.TempDir;
 
 class AnalysisContextLoaderTest {
   @TempDir Path temp;
+
+  /** Rejects an excluded ordinary source root because the builder includes it unconditionally. */
+  @Test
+  void rejectsExcludedOrdinarySourceRoot() throws IOException {
+    Path sourceRoot = temp.resolve("src/optional/java");
+    Files.createDirectories(sourceRoot);
+    AnalysisContext.Builder builder = AnalysisContext.builder();
+
+    assertThrows(IllegalArgumentException.class, () -> AnalysisContextLoaderLayer05.addRoot(
+        builder,
+        new AnalysisContextLoaderSupport.ResolvedRootDocument(
+            "src/optional/java", sourceRoot.toString(), "production", false, false, false, null),
+        false,
+        temp));
+  }
 
   /** Loads the VPE handoff and preserves build and provenance metadata. */
   @Test

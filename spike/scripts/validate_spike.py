@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
@@ -41,6 +42,7 @@ def main() -> None:
     sootup_fsi = load("spike/results/sootup-3.0.1-fsi-spring-observation.json")
     codeql_quarkus = load("spike/results/codeql-2.27.4-java21-quarkus-observation.json")
     codeql_fsi = load("spike/results/codeql-2.27.4-fsi-spring-observation.json")
+    javac_resolver = load("spike/results/javac-symbol-resolver-observation.json")
 
     require(matrix["adr"] == "ADR-001", "matrix must cite ADR-001")
     require(matrix["jiraIssue"] == "FLPATH-5000", "matrix must cite FLPATH-5000")
@@ -330,6 +332,90 @@ def main() -> None:
     for candidate_id in ("sootup", "codeql"):
         candidate = next(item for item in candidates["candidateSet"] if item["id"] == candidate_id)
         require("unverified" not in candidate["acceptance"].values(), f"{candidate_id} still has an unverified acceptance result after its evidence run")
+
+    require(javac_resolver["schema"] == "javac-symbol-resolver-observation.v1", "javac resolver observation schema mismatch")
+    require(javac_resolver["deterministic"], "javac resolver observation must record determinism")
+    javac_totals = javac_resolver["javacTotals"]
+    for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):
+        require(javac_totals[metric] == 0, f"javac resolver GO metric {metric} must be zero")
+    javac_cells = {cell["id"] for cell in javac_resolver["cells"]}
+    required_javac_cells = set((
+        "N1 N2 N3 N4 N5 N6 N7 N8 N9 N10 N11 N12 N13 N14 N15 N16 N17 N18 N19 "
+        "N20 N21 N22 N23 N24a N24b N25 N26 N27 N28 N29 N30 N31 N32 N33 N34 N35 N36 "
+        "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A16b A17 A20 A21 "
+        "D1 D2 D3 D4 D5 D6 D7 D8 D9 I1 I2 I3 I4 I5").split())
+    require(javac_cells == required_javac_cells, "javac resolver observation cell set is incomplete or has drifted")
+    require(len(javac_resolver["cells"]) == 71, "javac resolver observation must have 71 cells")
+    for cell in javac_resolver["cells"]:
+        if cell["blocked"]:
+            require(cell["id"] in {"N22", "N23"}, f"unexpected blocked javac resolver cell {cell['id']}")
+        for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):
+            require(cell["javac"]["metrics"][metric] == 0, f"javac resolver cell {cell['id']} metric {metric} must be zero")
+        for fact in cell["javac"]["facts"]:
+            require(fact["owner"] == "java.util.ServiceLoader", f"javac fact {cell['id']} owner mismatch")
+            require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
+            require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
+        if not cell["blocked"]:
+            require(cell["expected"], f"{cell['id']} has no expected sites")
+            require(all(expected["offset"] >= 0 for expected in cell["expected"]), f"{cell['id']} has an unaligned expected site")
+            facts_by_offset = {fact["offset"]: fact for fact in cell["javac"]["facts"]}
+            abstentions_by_offset = {item["offset"]: item for item in cell["javac"]["abstentions"]}
+            require(len(facts_by_offset) == len(cell["javac"]["facts"]), f"{cell['id']} has duplicate fact offsets")
+            require(len(abstentions_by_offset) == len(cell["javac"]["abstentions"]), f"{cell['id']} has duplicate abstention offsets")
+            expected_offsets = {expected["offset"] for expected in cell["expected"]}
+            require(set(facts_by_offset).issubset(expected_offsets), f"{cell['id']} has a fact outside its expected sites")
+            require(set(abstentions_by_offset).issubset(expected_offsets), f"{cell['id']} has an abstention outside its expected sites")
+            for expected in cell["expected"]:
+                offset = expected["offset"]
+                expectation = expected["expectation"]
+                fact = facts_by_offset.get(offset)
+                abstention = abstentions_by_offset.get(offset)
+                missing_codes = ("doesnt.exist", "cant.resolve", "duplicate.class", "not.def.public")
+                if expectation == "DEFINITE":
+                    require(fact is not None and fact["certainty"] == "DEFINITE", f"{cell['id']} missing DEFINITE at {offset}")
+                    require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                elif expectation == "POSSIBLE":
+                    require(fact is not None and fact["certainty"] == "POSSIBLE", f"{cell['id']} missing POSSIBLE at {offset}")
+                    require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                elif expectation == "MISSING_INPUT":
+                    require(fact is not None and fact["certainty"] == "POSSIBLE", f"{cell['id']} missing POSSIBLE at {offset}")
+                    require(fact["serviceType"] == expected["serviceType"], f"{cell['id']} service type mismatch at {offset}")
+                    require(any(code in diagnostic["code"] for diagnostic in fact["diagnostics"] for code in missing_codes),
+                            f"{cell['id']} missing-input diagnostic missing at {offset}")
+                elif expectation == "AMBIGUOUS":
+                    require(fact is None, f"{cell['id']} has a fact at an ambiguous site {offset}")
+                    require(abstention is not None, f"{cell['id']} missing ambiguity abstention at {offset}")
+                    require(any("ambiguous" in diagnostic["message"].lower() or "ambiguous" in diagnostic["code"]
+                                for diagnostic in abstention["diagnostics"]), f"{cell['id']} ambiguity evidence missing at {offset}")
+                elif expectation == "SHADOWED":
+                    require(fact is None, f"{cell['id']} has a fact at a shadowed site {offset}")
+                    require(abstention is not None and abstention["reason"] == "SHADOWED", f"{cell['id']} shadow evidence missing at {offset}")
+                elif expectation == "NO_FACT":
+                    require(fact is None, f"{cell['id']} unexpected fact at {offset}")
+                    require(abstention is not None and abstention["reason"] == "NO_CLASS_LITERAL", f"{cell['id']} missing NO_CLASS_LITERAL at {offset}")
+    recomputed = {metric: 0 for metric in javac_totals}
+    for cell in javac_resolver["cells"]:
+        for metric in recomputed:
+            recomputed[metric] += cell["javac"]["metrics"][metric]
+    require(recomputed == javac_totals, "javac resolver totals must equal the per-cell sum")
+
+    def javac_contains_host_path(value: object) -> bool:
+        """Recursively reject machine-specific paths in the javac observation."""
+        if isinstance(value, str):
+            return (value.startswith("/")
+                    or value.startswith("\\\\")
+                    or re.match(r"^[A-Za-z]:[\\\\/]", value) is not None
+                    or "/Users/" in value
+                    or "/private/var/" in value
+                    or "/tmp/" in value
+                    or "\\\\Users\\\\" in value)
+        if isinstance(value, list):
+            return any(javac_contains_host_path(item) for item in value)
+        if isinstance(value, dict):
+            return any(javac_contains_host_path(item) for item in value.values())
+        return False
+
+    require(not javac_contains_host_path(javac_resolver), "javac resolver observation contains a host path")
 
     print(f"validated {len(criteria_ids)} acceptance criteria, {len(candidate_ids)} candidates, {len(cases)} capability cases, {len(all_relationships)} expected relationships, and {len(observed_ids)} observed results")
 

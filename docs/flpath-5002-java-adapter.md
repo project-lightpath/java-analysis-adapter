@@ -35,6 +35,93 @@ a unique non-abstained provider target identity. Links use
 `enriches_without_replacing`, preserving separate provider and framework fact
 sets.
 
+## Dependency Maven coordinate handoff
+
+`AnalysisContext` optionally accepts a versioned
+`dependencyCoordinateManifest`. The adapter consumes this upstream-owned
+metadata; it never derives coordinates from a filename, local Maven repository
+path, archive contents, or `META-INF/pom.properties`.
+
+The supported `0.1.0` shape is:
+
+```json
+{
+  "dependencyCoordinateManifest": {
+    "schemaVersion": "0.1.0",
+    "owner": "vulnerability-prioritization-engine/analysiscontext.Coordinator.Prepare",
+    "fingerprint": "same-value-as-provenance.dependencyCoordinateFingerprint",
+    "entries": [
+      {
+        "classpathEntry": "/absolute/normalized/dependency.jar",
+        "fingerprint": "optional-entry-fingerprint",
+        "groupId": "com.example",
+        "artifactId": "dependency",
+        "version": "1.2.3",
+        "classifier": "tests"
+      }
+    ]
+  }
+}
+```
+
+The manifest is optional for backward compatibility. When present with entries,
+its fingerprint must equal `provenance.dependencyCoordinateFingerprint`, every entry path
+is normalized and must match exactly one distinct normalized
+`dependencyClasspath` path, and duplicate paths or missing coordinate values
+are rejected. `classifier` and entry `fingerprint` may be absent. A
+dependency fact keeps the existing exact `dependencyClasspathEntry` and adds
+only supplied values as `dependencyGroupId`, `dependencyArtifactId`,
+`dependencyVersion`, `dependencyClassifier`, and
+`dependencyClasspathEntryFingerprint`; absent metadata produces no coordinate
+attributes.
+
+When the manifest is present, including a present-but-empty manifest, the same
+context must also include Maven replay metadata in `build`:
+
+```json
+{
+  "build": {
+    "tool": "maven",
+    "command": ["mvn", "package"],
+    "artifact": "target/application.jar",
+    "fingerprint": "build-fingerprint",
+    "activeMavenProfiles": [],
+    "mavenProfileActivationSources": {},
+    "mavenInvocationFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "effectivePomFingerprint": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  }
+}
+```
+
+`activeMavenProfiles` must be sorted and unique. The activation-source object
+must cover exactly those profiles, and every value must be `"explicit"`.
+`mavenInvocationFingerprint` and `effectivePomFingerprint` must each be a
+lowercase 64-character hexadecimal SHA-256 fingerprint. These fields are
+required even when `activeMavenProfiles` is empty.
+
+## Java API versioning
+
+The Maven module is currently `0.1.0-SNAPSHOT` and has no production release.
+The public Java API, including `SemanticCallFacts`, `Fact.FrameworkInput`, and
+`RunMetadata`, is therefore pre-release and has no source or binary backwards-
+compatibility guarantee. Breaking API changes are allowed before the first
+production release when the adapter tests and handoff evidence are updated in
+the same change.
+
+This policy covers the intentional FLPATH-5076 API change:
+
+- positional `Fact.framework(...)` arguments were replaced by the named
+  `Fact.FrameworkInput` value;
+- public positional `RunMetadata` constructors were replaced by
+  `RunMetadata.from(AnalysisContext, AnalysisGraph)`; and
+- run metadata now derives immutable source-root information from the analysis
+  context and provider graph.
+
+No japicmp or Revapi comparison is configured because there is no released
+artifact to use as a compatibility baseline. Before the first production
+release, publish a stable version and add a dedicated compatibility policy and
+check if downstream Java consumers require source or binary compatibility.
+
 Route scanning expands literal class/method path arrays, HTTP method arrays, and
 Spring header/parameter/media conditions. Quarkus routes require a class-level
 `@Path`; method-level `@Path` narrows that root and an unregistered method-only

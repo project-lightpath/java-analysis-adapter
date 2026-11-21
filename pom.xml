@@ -15,6 +15,8 @@
     <sootup.version>3.0.1</sootup.version>
     <jackson.version>2.17.2</jackson.version>
     <junit.version>5.11.0</junit.version>
+    <test.heap>-Xmx10g</test.heap>
+    <pmd.version>7.17.0</pmd.version>
   </properties>
 
   <dependencies>
@@ -59,6 +61,51 @@
         <version>3.5.0</version>
         <configuration>
           <useModulePath>false</useModulePath>
+          <!-- Parallel JUnit execution builds several SootUp scenes at once.
+               make adapter-test sizes this from the host via -Dtest.heap. -->
+          <argLine>${test.heap}</argLine>
+        </configuration>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <configuration>
+              <excludedGroups>large-archive</excludedGroups>
+            </configuration>
+          </execution>
+          <execution>
+            <id>large-archive-test</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <groups>large-archive</groups>
+              <argLine>-Xmx1g</argLine>
+              <reportsDirectory>${project.build.directory}/surefire-reports-large</reportsDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <version>3.28.0</version>
+        <configuration>
+          <rulesets>
+            <ruleset>${project.basedir}/config/pmd-production.xml</ruleset>
+          </rulesets>
+          <includeTests>false</includeTests>
+          <failOnViolation>false</failOnViolation>
+          <skipPmdError>false</skipPmdError>
+          <format>xml</format>
+          <outputDirectory>${project.build.directory}/java-lint</outputDirectory>
+          <pmdVersion>${pmd.version}</pmdVersion>
+          <targetJdk>${maven.compiler.release}</targetJdk>
+          <typeResolution>false</typeResolution>
+          <minimumPriority>3</minimumPriority>
+          <linkXRef>false</linkXRef>
+          <skipEmptyReport>false</skipEmptyReport>
+          <minimumTokens>100</minimumTokens>
+          <ignoreAnnotations>true</ignoreAnnotations>
         </configuration>
       </plugin>
     </plugins>
