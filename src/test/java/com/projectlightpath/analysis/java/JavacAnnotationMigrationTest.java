@@ -336,6 +336,46 @@ class JavacAnnotationMigrationTest {
         "@Ann(value = 1) String a", "demo.Probe", "run", 2, 0).orElse("String"));
   }
 
+  @Test
+  void proxyDescriptorRepairsTriggeredParametersEndToEnd() throws IOException {
+    AnalysisContext context = context("proxy", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            import java.lang.annotation.*;
+            @Retention(RetentionPolicy.RUNTIME) @interface Ann { int value() default 0; }
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              void call(@Ann(value = 1) String p);
+            }
+            """,
+        "demo/Main.java", """
+            package demo;
+            public class Main {
+              void run() {
+                Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Api.class},
+                    (proxyInstance, method, args) -> null);
+              }
+            }
+            """));
+    System.clearProperty(FLAG);
+    List<DynamicFeature> off = new SourceMetadataScanner(context).dynamicFeatures();
+    System.setProperty(FLAG, "true");
+    List<DynamicFeature> on = new SourceMetadataScanner(context).dynamicFeatures();
+    // Migration point 1, end to end: the textual descriptor keeps the broken
+    // shape flag-off, and the javac repair records the canonical delta flag-on.
+    assertTrue(off.stream().anyMatch(feature ->
+            feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().contains("value")),
+        off.toString());
+    assertTrue(on.stream().anyMatch(feature ->
+            feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().equals("(java.lang.String)")),
+        on.toString());
+  }
+
   private <T> T withFlag(java.util.function.Supplier<T> action) {
     System.setProperty(FLAG, "true");
     try {
