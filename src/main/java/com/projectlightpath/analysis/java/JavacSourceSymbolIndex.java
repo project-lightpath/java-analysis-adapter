@@ -339,7 +339,7 @@ final class JavacSourceSymbolIndex {
                 path.toAbsolutePath().normalize(), root));
       } catch (IOException error) {
         throw new IllegalStateException(
-            "cannot scan source root " + root.declaredPath(), error);
+            "cannot scan source root " + IndexRenderer.declaredRootPath(root), error);
       }
     }
 
@@ -375,7 +375,7 @@ final class JavacSourceSymbolIndex {
   }
 
   /** Diagnostic-path rendering: never absolute, per-family rules. */
-  private static final class IndexRenderer {
+  static final class IndexRenderer {
     private IndexRenderer() {}
 
     static IndexDiagnostic row(
@@ -393,6 +393,7 @@ final class JavacSourceSymbolIndex {
     static String firstUnmappableName(List<Diagnostic<? extends JavaFileObject>> captured) {
       return captured.stream()
           .filter(item -> item.getKind() == Diagnostic.Kind.ERROR)
+          .filter(item -> item.getSource() != null && sourcePath(item.getSource()) == null)
           .map(item -> sourceName(item.getSource()))
           .filter(Objects::nonNull)
           .findFirst()

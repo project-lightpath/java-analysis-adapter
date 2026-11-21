@@ -12,7 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import javax.tools.Diagnostic;
 import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -39,6 +41,15 @@ class JavacSourceSymbolIndexTest {
   void restoreSeams() {
     System.clearProperty(FLAG);
     JavacSourceSymbolIndex.COMPILER.set(REAL_COMPILER);
+  }
+
+  @Test
+  void unmappableNameIgnoresMappableErrorsThatComeFirst() {
+    JavaFileObject unit = new javax.tools.SimpleJavaFileObject(
+        java.net.URI.create("file:/tmp/A.java"), JavaFileObject.Kind.SOURCE) {};
+
+    assertEquals("<external>/Foo.class", JavacSourceSymbolIndex.IndexRenderer.firstUnmappableName(
+        List.of(error(unit), error(jarEntry()))));
   }
 
   @Test
@@ -533,6 +544,70 @@ class JavacSourceSymbolIndexTest {
     assertTrue(second.isPresent());
     assertSameEntries(first.get(), second.get());
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+  }
+
+  private static JavaFileObject jarEntry() {
+    return new javax.tools.SimpleJavaFileObject(
+        java.net.URI.create("file:/tmp/Foo.class"), JavaFileObject.Kind.CLASS) {
+      @Override
+      public java.net.URI toUri() {
+        return java.net.URI.create("jar:file:/libs/foo.jar!/demo/Foo.class");
+      }
+
+      @Override
+      public String getName() {
+        return "demo/Foo.class";
+      }
+    };
+  }
+
+  private static Diagnostic<JavaFileObject> error(JavaFileObject source) {
+    return new Diagnostic<>() {
+      @Override
+      public Kind getKind() {
+        return Kind.ERROR;
+      }
+
+      @Override
+      public JavaFileObject getSource() {
+        return source;
+      }
+
+      @Override
+      public long getPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getStartPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getEndPosition() {
+        return 0;
+      }
+
+      @Override
+      public long getLineNumber() {
+        return 0;
+      }
+
+      @Override
+      public long getColumnNumber() {
+        return 0;
+      }
+
+      @Override
+      public String getCode() {
+        return "compiler.err.test";
+      }
+
+      @Override
+      public String getMessage(java.util.Locale locale) {
+        return "test error";
+      }
+    };
   }
 
   private interface ContextCustomizer {

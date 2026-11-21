@@ -69,6 +69,22 @@ flag wiring invariant; absolute-path-free diagnostics (including the
 absolute-`declaredPath` fallback); `javac_unavailable` via an injected
 null-supplier with failure caching.
 
+JaCoCo 0.8.13 focused unit run: **359/411 = 87.35% line**, **142/184 =
+77.17% branch**; weakest `IndexRenderer` 30/53 lines before review round 1.
+
+## Review round 1 (PR #33)
+
+Three findings, all addressed:
+
+1. **MEDIUM — demotion named the wrong file.** `firstUnmappableName` took the
+   first ERROR with any non-null source, so a unit-file error ahead of a
+   classpath error could be named. It now filters to unmappable sources, with a
+   direct two-diagnostic regression cell.
+2. **MEDIUM — absolute path in `index_build_error`.** The `Files.walk` catch
+   interpolated `root.declaredPath()`; it now uses
+   `IndexRenderer.declaredRootPath(root)`, matching the path-safety invariant.
+3. **LOW — no coverage receipt.** Recorded above.
+
 ## Pre-RED scratch probe results
 
 Recorded in `PLAN-21.md`: the D3 collision leaves both entries usable
