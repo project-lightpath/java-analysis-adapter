@@ -58,7 +58,7 @@ as residual R3.
 | Local/CEN name/flags/method/size/CRC mismatch | reject |
 | Overlapping referenced ranges | reject (duplicate CEN records pointing at one local range are allowed) |
 | Duplicate selected name | first CEN occurrence wins, no diagnostic (TreeMap parity) |
-| Name/comment encoding | EFS set: strict UTF-8; EFS clear: lenient UTF-8 replacement (JDK-compatible) |
+| Name/comment encoding | strict UTF-8 for both EFS states; an EFS-clear non-UTF-8 legacy name is rejected as `invalid_legacy_name` instead of being silently dropped after replacement |
 | Malformed non-ZIP64 extra bytes | tolerated (JDK `ZipFile` parity); ZIP64 tag is strict |
 | Selected payload CRC | verified at EOF |
 | Archive > 512 MiB | `archive_size_limit` before open |
@@ -76,11 +76,11 @@ promotion for the whole scan (`ServiceLoaderDescriptorScanner.isUnique`):
 
 ## Test gate
 
-- `make adapter-test` on the default JDK 27: 371 default + 1 large-archive
+- `make adapter-test` on the default JDK 27: 372 default + 1 large-archive
   test, 0 failures.
-- `make adapter-test` on Temurin 17.0.21.1+2: 371 default + 1 large-archive
+- `make adapter-test` on Temurin 17.0.21.1+2: 372 default + 1 large-archive
   test, 0 failures.
-- `make java-lint`: PASS with the reviewed 21-entry maintainability baseline
+- `make java-lint`: PASS with the reviewed 22-entry maintainability baseline
   for the new parser/spill state machines; 0 CPD duplications; 0 suppressions.
 - `make evidence-validate`: PASS.
 
@@ -167,10 +167,17 @@ under the large-archive execution at `-Xmx1g`.
   - shift the stream buffer after a partial bulk read;
   - try-with-resources for test sorts and no leaked `Files.list` streams;
   - remove per-archive/tape `deleteOnExit` registrations (crash residue R8).
-- A second `@coderabbitai full review` was requested after `REVIEW_2`; CodeRabbit
-  returned "Review rate limited" (next included review available in ~44
-  minutes). All 12 findings from the completed review are closed; the PR carries
-  the rate-limit note so the second pass can be run when the quota resets.
+- A second `@coderabbitai full review` after the quota reset posted 7 findings;
+  closed in `REVIEW_3`:
+  - surface `sort.close()` failures instead of swallowing them;
+  - wrap spill root/tape creation failures in `SpillException`;
+  - use the opened channel's size (and re-apply the size limit);
+  - translate interruption during the channel seek;
+  - reject undecodable EFS-clear legacy names instead of silently dropping
+    them after replacement (`invalid_legacy_name`);
+  - validate a ZIP64 locator even when classic fields fit, with a classic
+    fallback when it is not required;
+  - reject a truncated ZIP64 extra block before the opaque-extra fallback.
 
 ## Six production-integration preconditions
 
