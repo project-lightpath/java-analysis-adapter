@@ -90,6 +90,53 @@ Three findings, all addressed:
    `IndexRenderer.declaredRootPath(root)`, matching the path-safety invariant.
 3. **LOW — no coverage receipt.** Recorded above.
 
+## Review round 2 (follow-up PR, post-merge of #33)
+
+Five findings against the merged HEAD, all addressed:
+
+1. **MAJOR — stale Makefile floor.** The merged floor said 366 while the
+   suite ran 368 (the two round-1 cells were never counted in); a future
+   removal of either cell would pass the gate silently. Floor raised to
+   **369** (368 + the new sanitizer cell).
+2. **MINOR — extraction-pass `RuntimeException` escaped `of()`.** The
+   plan's fail-visible contract routes any task or extraction failure
+   into a present index with an `index_build_error` row; the catch now
+   covers `RuntimeException` (the `@SuppressWarnings` on `build` is
+   deliberate, documented, and lands in the lint plugin's
+   manual-review suppression inventory).
+3. **MINOR — `index_build_error` messages could leak the absolute
+   process temp directory** via raw `error.getMessage()` (temp-dir
+   creation and `getTask` failures). `IndexRenderer.row` now routes
+   every message through `sanitizeMessage`, which strips the
+   `java.io.tmpdir` prefix to `<tmp>`; direct unit cell added.
+4. **MINOR — `duplicate_binary_name` named only the first colliding
+   file.** The message now lists every colliding file name; the
+   duplicate cell asserts both files appear.
+5. **INFO — O(units × errors) diagnostic lookup.**
+   `addCompilerDiagnostics` now receives a `Set<Path>` of unit files.
+
+Round-1 note: the round-1 commits (`REVIEW_33_1/2`) and the PR #33 merge
+were pushed by the coordinating session while this session's own review
+loop was in flight; the coordination protocol has since been corrected
+(the owner session or the user merges).
+
+Round-2b (coordinating-session read-only review, all three findings
+addressed): the guarded `try` in `build()` now covers the input scan and
+the compiler-supplier call, so the "never a thrown exception out of
+`of()`" comment is true for every path; a throwing-compiler cell pins
+the RuntimeException containment end-to-end (present index,
+`index_build_error` row, cached, no compilation, message sanitized
+through `row()`); the sanitization scope beyond `java.io.tmpdir` is
+recorded as a residual below.
+
+Round-2d (coordinating-session re-review, both findings addressed):
+`throwingSupplierIsContainedAsIndexBuildError` injects a supplier that
+throws — red before the guard move (the supplier call escaped `of()` at
+`3ad8cd1`), green after — and every failure-cached cell
+(throwing-compiler, throwing-supplier, `javac_unavailable`) now asserts
+`assertSame` on the two `of()` results, proving the WeakHashMap returns
+the same failed instance rather than rebuilding it.
+
 ## Pre-RED scratch probe results
 
 Recorded in `PLAN-21.md`: the D3 collision leaves both entries usable
@@ -105,6 +152,10 @@ erasure.
 | RED_21 | 16/17 new cells fail as predicted (cell 1 only green); rest of suite 349 green | 0 findings (stub) | pass |
 | GREEN_21 | 366 = 349 + 17 (Makefile floor raised 338 → 366) | 0 findings (after splitting Extractor into ElementReader + AnnotationRenderer to clear two GodClass findings) | pass |
 | REFACTOR_21 | 366 | 0 findings | pass |
+| REVIEW_33_1/2 (coordinating session) | 368 = 366 + 2 review cells (floor left at 366 — the round-2 fix) | 0 findings | pass |
+| REVIEW round 2 (this PR) | 369 = 368 + 1 sanitizer cell (floor raised 366 → 369) | 0 findings (one inventoried suppression on `build`) | pass |
+| REVIEW round 2b (coordinating-session findings) | 370 = 369 + 1 throwing-compiler cell (floor raised 369 → 370) | 0 findings (same single inventoried suppression) | pass |
+| REVIEW round 2d (re-review findings) | 371 = 370 + 1 throwing-supplier cell (floor raised 370 → 371) | 0 findings (same single inventoried suppression) | pass |
 
 ## Residuals
 
@@ -124,6 +175,26 @@ erasure.
   included. This diverges from `scanner.files()`, which excludes both.
 - `packageAnnotations` cannot distinguish a miss from an indexed
   `package-info` with zero annotations (both return empty).
+- `sanitizeMessage` strips only the `java.io.tmpdir` prefix. javac
+  diagnostic and option-echo text can still carry absolute paths
+  outside the temp directory (repository root, `~/.m2` classpath
+  entries, alternate `/private/var` spellings) in `message` fields —
+  never in the `path` field, which is rendered per-family. Full
+  message sanitization needs context-derived prefixes threaded into
+  `row()` and is a documented follow-up; dispositioned per the AGENTS
+  weakness-disposition rule (all manifestations: `index_build_error`
+  interpolation of `error.getMessage()` and javac
+  `Diagnostic.getMessage` rows). Known safe-direction quirk: the
+  replacement has no separator guard, so on JVMs whose `java.io.tmpdir`
+  lacks a trailing separator a message path merely sharing the prefix
+  (`/tmpfoo`) is over-replaced to `<tmp>foo` — message mangling, never
+  a path leak; a separator-aware match is the follow-up if ever
+  actioned.
+- Errors other than a parser `StackOverflowError` (e.g.
+  `OutOfMemoryError`) escape `of()` by design: the fail-visible guard
+  covers `IOException`, `RuntimeException`, and parser stack exhaustion
+  only, because catching `Throwable` would mask JVM-level failure. The
+  failure is then not cached (a retry re-attempts the build).
 - `javac_global_error` and the compile-triggered `index_build_error`
   path have no end-to-end cells: the source-less-error trigger needs a
   slow pathological unit and the build-error trigger is not reliably

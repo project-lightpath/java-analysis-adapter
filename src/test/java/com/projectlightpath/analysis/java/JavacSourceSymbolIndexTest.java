@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -9,12 +10,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import javax.tools.Diagnostic;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
+import javax.tools.StandardJavaFileManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -405,7 +408,7 @@ class JavacSourceSymbolIndexTest {
     Path first = root.resolve("r1");
     Path second = root.resolve("r2");
     writeFiles(first, Map.of("demo/Dup.java", "package demo; class Dup {}"));
-    writeFiles(second, Map.of("demo/Dup.java", "package demo; class Dup {}"));
+    writeFiles(second, Map.of("demo/Other.java", "package demo; class Dup {}"));
     AnalysisContext context = AnalysisContext.builder()
         .id("duplicate")
         .framework(AnalysisContext.Framework.QUARKUS)
@@ -428,9 +431,110 @@ class JavacSourceSymbolIndexTest {
     assertTrue(duplicates.stream().allMatch(
         type -> type.shape().duplicateBinaryName()), duplicates.toString());
     assertEquals(1, index.typesIn(first.resolve("demo/Dup.java")).size());
-    assertEquals(1, index.typesIn(second.resolve("demo/Dup.java")).size());
+    assertEquals(1, index.typesIn(second.resolve("demo/Other.java")).size());
+    // The row names every colliding file, not just the first.
     assertTrue(index.diagnostics().stream().anyMatch(
-        row -> row.code().equals("duplicate_binary_name")), index.diagnostics().toString());
+        row -> row.code().equals("duplicate_binary_name")
+            && row.message().contains("Dup.java") && row.message().contains("Other.java")),
+        index.diagnostics().toString());
+  }
+
+  @Test
+  void buildErrorMessagesNeverContainTheProcessTempDirectory() {
+    String tempPrefix = System.getProperty("java.io.tmpdir");
+    String message = JavacSourceSymbolIndex.sanitizeMessage(
+        "could not create " + tempPrefix + "/flpath-index-classes1234");
+    assertFalse(message.contains(tempPrefix), message);
+    assertTrue(message.contains("<tmp>"), message);
+    assertEquals("no paths here", JavacSourceSymbolIndex.sanitizeMessage("no paths here"));
+  }
+
+  @Test
+  void throwingCompilerIsContainedAsIndexBuildError() throws IOException {
+    long before = JavacSourceSymbolIndex.COMPILATIONS.get();
+    String tempPrefix = System.getProperty("java.io.tmpdir");
+    JavacSourceSymbolIndex.COMPILER.set(
+        () -> throwingCompiler("cannot start javac in " + tempPrefix));
+    AnalysisContext context = context("throwing-compiler", Map.of("demo/App.java",
+        "package demo; public class App {}"));
+    System.setProperty(FLAG, "true");
+    Optional<JavacSourceSymbolIndex> first = JavacSourceSymbolIndex.of(context);
+    assertTrue(first.isPresent());
+    // The row exists, the failure is cached without a compilation, and the
+    // message was sanitized through row() — not just sanitizeMessage.
+    assertTrue(first.get().diagnostics().stream().anyMatch(
+        row -> row.code().equals("index_build_error")
+            && row.message().contains("<tmp>")
+            && !row.message().contains(tempPrefix)),
+        first.get().diagnostics().toString());
+    assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+    JavacSourceSymbolIndex second = JavacSourceSymbolIndex.of(context).orElseThrow();
+    // The same failed instance is returned from the cache, not rebuilt.
+    assertSame(first.get(), second);
+    assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+  }
+
+  @Test
+  void throwingSupplierIsContainedAsIndexBuildError() throws IOException {
+    long before = JavacSourceSymbolIndex.COMPILATIONS.get();
+    String tempPrefix = System.getProperty("java.io.tmpdir");
+    JavacSourceSymbolIndex.COMPILER.set(() -> {
+      throw new IllegalStateException("supplier failed in " + tempPrefix);
+    });
+    AnalysisContext context = context("throwing-supplier", Map.of("demo/App.java",
+        "package demo; public class App {}"));
+    System.setProperty(FLAG, "true");
+    // The supplier call is inside build()'s guard: a throwing supplier returns
+    // a present index with an index_build_error row instead of escaping of().
+    Optional<JavacSourceSymbolIndex> first = JavacSourceSymbolIndex.of(context);
+    assertTrue(first.isPresent());
+    assertTrue(first.get().diagnostics().stream().anyMatch(
+        row -> row.code().equals("index_build_error")
+            && row.message().contains("<tmp>")
+            && !row.message().contains(tempPrefix)),
+        first.get().diagnostics().toString());
+    assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+    JavacSourceSymbolIndex second = JavacSourceSymbolIndex.of(context).orElseThrow();
+    assertSame(first.get(), second);
+    assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
+  }
+
+  private static JavaCompiler throwingCompiler(String failure) {
+    return new JavaCompiler() {
+      @Override
+      public JavaCompiler.CompilationTask getTask(
+          java.io.Writer out,
+          javax.tools.JavaFileManager fileManager,
+          javax.tools.DiagnosticListener<? super JavaFileObject> diagnosticListener,
+          Iterable<String> options,
+          Iterable<String> classes,
+          Iterable<? extends JavaFileObject> compilationUnits) {
+        throw new IllegalStateException(failure);
+      }
+
+      @Override
+      public StandardJavaFileManager getStandardFileManager(
+          javax.tools.DiagnosticListener<? super JavaFileObject> diagnosticListener,
+          Locale locale, java.nio.charset.Charset charset) {
+        throw new IllegalStateException(failure);
+      }
+
+      @Override
+      public int run(java.io.InputStream in, java.io.OutputStream out,
+          java.io.OutputStream err, String... arguments) {
+        return 1;
+      }
+
+      @Override
+      public java.util.Set<javax.lang.model.SourceVersion> getSourceVersions() {
+        return java.util.Set.of();
+      }
+
+      @Override
+      public int isSupportedOption(String option) {
+        return -1;
+      }
+    };
   }
 
   @Test
@@ -570,7 +674,7 @@ class JavacSourceSymbolIndexTest {
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
     Optional<JavacSourceSymbolIndex> second = JavacSourceSymbolIndex.of(context);
     assertTrue(second.isPresent());
-    assertSameEntries(first.get(), second.get());
+    assertSame(first.get(), second.get());
     assertEquals(0, JavacSourceSymbolIndex.COMPILATIONS.get() - before);
   }
 

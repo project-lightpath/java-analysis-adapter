@@ -169,24 +169,43 @@ final class JavacSourceSymbolIndex {
     return peakHeapBytes;
   }
 
+  /** Strips the process temp-directory prefix so messages never leak host paths. */
+  static String sanitizeMessage(String message) {
+    if (message == null) {
+      return "";
+    }
+    String prefix = System.getProperty("java.io.tmpdir");
+    if (prefix == null || prefix.isEmpty()) {
+      return message;
+    }
+    return message.replace(prefix, "<tmp>");
+  }
+
+  // The RuntimeException catch below is deliberate and inventoried for manual
+  // review: the fail-visible contract routes any IOException or
+  // RuntimeException — input scan, supplier, task, or extraction pass — and a
+  // parser StackOverflowError into a present index with an index_build_error
+  // row, cached like a success. Other Errors (OutOfMemoryError and kin) escape
+  // of() by design: catching them would mask JVM-level failure.
+  @SuppressWarnings("PMD.AvoidCatchingGenericException")
   private static JavacSourceSymbolIndex build(AnalysisContext context) {
     long startNano = System.nanoTime();
     long heapBefore = heapUsed();
     List<IndexDiagnostic> diagnostics = new ArrayList<>();
-    Inputs inputs = new Inputs(context, diagnostics);
-    List<Path> units = inputs.units();
-    if (units.isEmpty()) {
-      return failed(diagnostics, startNano, heapBefore);
-    }
-    JavaCompiler compiler = COMPILER.get().get();
-    if (compiler == null) {
-      diagnostics.add(IndexRenderer.row("javac_unavailable",
-          "javac is not available; the source-symbol index cannot be built", "", 0, 0));
-      return failed(diagnostics, startNano, heapBefore);
-    }
     try {
+      Inputs inputs = new Inputs(context, diagnostics);
+      List<Path> units = inputs.units();
+      if (units.isEmpty()) {
+        return failed(diagnostics, startNano, heapBefore);
+      }
+      JavaCompiler compiler = COMPILER.get().get();
+      if (compiler == null) {
+        diagnostics.add(IndexRenderer.row("javac_unavailable",
+            "javac is not available; the source-symbol index cannot be built", "", 0, 0));
+        return failed(diagnostics, startNano, heapBefore);
+      }
       return compile(context, compiler, inputs, units, diagnostics, startNano, heapBefore);
-    } catch (IOException | IllegalArgumentException | IllegalStateException error) {
+    } catch (IOException | RuntimeException error) {
       diagnostics.add(IndexRenderer.row("index_build_error",
           "the source-symbol index could not be built: " + error.getMessage(), "", 0, 0));
       return failed(diagnostics, startNano, heapBefore);
@@ -227,7 +246,7 @@ final class JavacSourceSymbolIndex {
         return failed(diagnostics, startNano, heapBefore);
       }
       IndexRenderer.addCompilerDiagnostics(
-          context, inputs.roots(), unitFiles, captured, diagnostics);
+          context, inputs.roots(), java.util.Set.copyOf(unitFiles), captured, diagnostics);
       Extractor extractor = new Extractor(
           Trees.instance(task), task.getElements(), task.getTypes());
       for (CompilationUnitTree unit : parsed) {
@@ -380,7 +399,7 @@ final class JavacSourceSymbolIndex {
 
     static IndexDiagnostic row(
         String code, String message, String path, long line, long column) {
-      return new IndexDiagnostic(code, message, path, line, column);
+      return new IndexDiagnostic(code, sanitizeMessage(message), path, line, column);
     }
 
     static boolean hasUnmappableSource(List<Diagnostic<? extends JavaFileObject>> captured) {
@@ -403,7 +422,7 @@ final class JavacSourceSymbolIndex {
     static void addCompilerDiagnostics(
         AnalysisContext context,
         List<AnalysisContext.SourceRoot> roots,
-        List<Path> unitFiles,
+        java.util.Set<Path> unitFiles,
         List<Diagnostic<? extends JavaFileObject>> captured,
         List<IndexDiagnostic> diagnostics) {
       for (Diagnostic<? extends JavaFileObject> item : captured) {
@@ -557,7 +576,10 @@ final class JavacSourceSymbolIndex {
         if (duplicate) {
           diagnostics.add(IndexRenderer.row("duplicate_binary_name",
               "binary name " + group.getKey() + " is declared in "
-                  + group.getValue().size() + " files",
+                  + group.getValue().size() + " files: "
+                  + group.getValue().stream()
+                      .map(entry -> entry.file().getFileName().toString())
+                      .collect(java.util.stream.Collectors.joining(", ")),
               group.getValue().get(0).file().getFileName().toString(), 0, 0));
         }
         for (TypeInfo entry : group.getValue()) {
