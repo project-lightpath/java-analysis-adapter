@@ -67,10 +67,13 @@ class SourceArchiveInputModeTest {
 
   @Test
   void sourceArchiveModeRequiresAnArchive() throws IOException {
-    AnalysisContext.Builder builder = sourceTreeBuilder()
+    AnalysisContext.Builder builder = baseBuilder()
         .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE);
 
-    assertThrows(IllegalArgumentException.class, builder::build);
+    IllegalArgumentException error = assertThrows(
+        IllegalArgumentException.class, builder::build);
+    assertTrue(error.getMessage().contains("at least one source archive"),
+        error.getMessage());
   }
 
   @Test
@@ -168,7 +171,25 @@ class SourceArchiveInputModeTest {
         .dependencyClasspathRequired(false)
         .sourceArchive(existingArchive());
 
-    assertThrows(IllegalArgumentException.class, builder::build);
+    IllegalArgumentException error = assertThrows(
+        IllegalArgumentException.class, builder::build);
+    assertTrue(error.getMessage().contains("production analysis scope"),
+        error.getMessage());
+  }
+
+  @Test
+  void sourceArchiveModeRejectsArchivesNamedResources() throws IOException {
+    Path archive = temp.resolve("resources");
+    Files.writeString(archive, "zip bytes");
+    AnalysisContext.Builder builder = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(archive);
+
+    IllegalArgumentException error = assertThrows(
+        IllegalArgumentException.class, builder::build);
+    assertTrue(error.getMessage().contains("must not be named resources"),
+        error.getMessage());
   }
 
   // --- BINARY_ARCHIVE invariants ------------------------------------------
@@ -268,21 +289,28 @@ class SourceArchiveInputModeTest {
   @Test
   void loaderRejectsMissingSourceArchiveFile() throws IOException {
     Path contextFile = writeContext(root -> {
+      root.remove("sourceRoots");
       root.put("inputMode", "SOURCE_ARCHIVE");
       root.putArray("sourceArchives").add(temp.resolve("missing-sources.jar").toString());
     });
 
-    assertThrows(IllegalArgumentException.class, () -> AnalysisContextLoader.load(contextFile));
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> AnalysisContextLoader.load(contextFile));
+    assertTrue(error.getMessage().contains("source archive"),
+        error.getMessage());
   }
 
   @Test
   void loaderRejectsWildcardSourceArchive() throws IOException {
     Path contextFile = writeContext(root -> {
+      root.remove("sourceRoots");
       root.put("inputMode", "SOURCE_ARCHIVE");
       root.putArray("sourceArchives").add(temp.resolve("lib/*").toString());
     });
 
-    assertThrows(IllegalArgumentException.class, () -> AnalysisContextLoader.load(contextFile));
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> AnalysisContextLoader.load(contextFile));
+    assertTrue(error.getMessage().contains("wildcard"), error.getMessage());
   }
 
   @Test
@@ -291,11 +319,15 @@ class SourceArchiveInputModeTest {
     Path link = temp.resolve("linked-sources.jar");
     Files.createSymbolicLink(link, real.getFileName());
     Path contextFile = writeContext(root -> {
+      root.remove("sourceRoots");
       root.put("inputMode", "SOURCE_ARCHIVE");
       root.putArray("sourceArchives").add(link.toString());
     });
 
-    assertThrows(IllegalArgumentException.class, () -> AnalysisContextLoader.load(contextFile));
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> AnalysisContextLoader.load(contextFile));
+    assertTrue(error.getMessage().contains("regular file")
+        || error.getMessage().contains("symlink"), error.getMessage());
   }
 
   @Test

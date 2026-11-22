@@ -454,16 +454,76 @@ class SourceArchiveExtractorTest {
     Path first = zip("same-name.jar", output ->
         put(output, "demo/A.java", "package demo; class A {}\n"));
     Path directory = Files.createDirectories(temp.resolve("duplicates"));
-    Path second = zip("same-name.jar", output ->
+    Path second = zip("other-name.jar", output ->
         put(output, "demo/B.java", "package demo; class B {}\n"));
     Files.move(second, directory.resolve("same-name.jar"));
 
-    assertThrows(IllegalArgumentException.class, () -> ServiceArchiveExtractor.extract(
-        List.of(first, directory.resolve("same-name.jar")),
-        ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
-    try (var paths = Files.walk(temp)) {
-      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).count() <= 2);
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(first, directory.resolve("same-name.jar")),
+            ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    assertTrue(error.getMessage().contains("duplicate source archive file name"),
+        error.getMessage());
+    assertTrue(Files.exists(first), "the first archive must still exist");
+  }
+
+  @Test
+  void objectBudgetBoundsCreatedFilesAndDirectories() throws IOException {
+    // Two directory entries plus three files = five filesystem objects.
+    Path archive = zip("objects-sources.jar", output -> {
+      output.putNextEntry(new ZipEntry("a/"));
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry("b/"));
+      output.closeEntry();
+      put(output, "a/F1.java", "package a; class F1 {}\n");
+      put(output, "a/F2.java", "package a; class F2 {}\n");
+      put(output, "b/F3.java", "package b; class F3 {}\n");
+    });
+
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 5L, temp)) {
+      assertTrue(Files.isRegularFile(
+          extraction.archiveRoots().get(0).resolve("b/F3.java")));
     }
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 4L, temp));
+    assertTrue(error.getMessage().contains("filesystem objects"), error.getMessage());
+    try (var paths = Files.list(temp)) {
+      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
+    }
+  }
+
+  @Test
+  void objectBudgetCountsImplicitParentDirectories() throws IOException {
+    // One deeply nested empty file charges every implicit directory plus
+    // the file itself: x/y/z/F.java = 4 objects.
+    Path archive = zip("nested-sources.jar", output ->
+        put(output, "x/y/z/F.java", "package x.y.z; class F {}\n"));
+
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 4L, temp)) {
+      assertTrue(Files.isRegularFile(
+          extraction.archiveRoots().get(0).resolve("x/y/z/F.java")));
+    }
+    assertThrows(IllegalArgumentException.class, () -> ServiceArchiveExtractor.extract(
+        List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 3L, temp));
+  }
+
+  @Test
+  void rejectsDirectoryEntriesDeclaringData() throws IOException {
+    Path archive = zip("dir-data-sources.jar", output -> {
+      output.putNextEntry(new ZipEntry("demo/"));
+      output.write("payload where no payload may be".getBytes(
+          java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    });
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    assertTrue(error.getMessage().contains("directory entry declares data"),
+        error.getMessage());
   }
 
   @Test

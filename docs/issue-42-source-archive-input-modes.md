@@ -25,11 +25,12 @@ longer produce a complete-looking descriptor scan with zero descriptors.
   `sourceArchives` (list of archive paths) are optional fields of the
   serialized AnalysisContext handoff. Unknown mode values, wildcard paths,
   symlinks, and missing files are rejected at load time.
-- Build-time invariants: `SOURCE_ARCHIVE` requires ≥1 source archive and
-  forbids declared source roots and literal dependency-classpath overlap;
-  `SOURCE_TREE` and `BINARY_ARCHIVE` forbid source archives;
-  `BINARY_ARCHIVE` also forbids source roots and requires ≥1 dependency
-  classpath entry.
+- Build-time invariants: `SOURCE_ARCHIVE` requires ≥1 source archive, the
+  **production** analysis scope, no archive named `resources` (it would
+  alias the extracted-root resources convention), and forbids declared
+  source roots and literal dependency-classpath overlap; `SOURCE_TREE`
+  and `BINARY_ARCHIVE` forbid source archives; `BINARY_ARCHIVE` also
+  forbids source roots and requires ≥1 dependency classpath entry.
 - A `SOURCE_ARCHIVE` run still requires `applicationClasses` (the compiled
   application from the build) and an existing `repositoryRoot` (the
   natural choice is the directory holding the provisioned archives);
@@ -70,10 +71,15 @@ nothing, byte-identical to previous behavior.
 ## Mixed mode
 
 When both source inputs and SBOM-resolved binaries exist, binaries are
-authoritative for descriptor/module truth: the existing
-`classpathBacked` merge preference selects the binary descriptor, and the
-`meta_inf_services` vs `source_meta_inf_services` descriptor kinds record
-which side each descriptor came from.
+authoritative for descriptor/module truth **when the descriptors match**
+(share a merge key: same service type, providers, and fingerprint): the
+existing `classpathBacked` merge preference selects the binary descriptor,
+and the `meta_inf_services` vs `source_meta_inf_services` descriptor kinds
+record which side each descriptor came from. When a checked-in descriptor
+and a binary descriptor disagree (for example, different provider lists
+for one service), both are kept, the resolution is ambiguous, and the
+fact stays POSSIBLE — the binary descriptor does not override the
+conflicting checked-in one.
 
 ## Extraction safety
 
@@ -85,9 +91,17 @@ which side each descriptor came from.
   file/directory conflict (including case-insensitive filesystem
   collisions, which surface as sanitized rejections).
 - Bounds: 512 MiB total decompressed bytes per run (new policy), the 512
-  MiB compressed archive-size gate re-applied before open, per-entry
-  written length verified against the central directory, CRC verified by
-  the seekable stream.
+  MiB compressed archive-size gate re-applied before open and re-checked
+  on the opened channel, a run-wide cap of 262,144 created files and
+  directories including implicit parents (empty files and directory
+  entries consume no byte budget), per-entry written length verified
+  against the central directory, CRC verified by the seekable stream, and
+  directory entries that declare data rejected outright.
+- A source archive is excluded from the descriptor scan by **file
+  identity**, not just path equality: hard links and case-variant
+  spellings of a declared archive are diagnosed
+  (`source_archive_on_dependency_classpath`) rather than scanned as
+  verified binary evidence.
 - The extractor only creates directories and files inside its fresh
   owner-only root and never follows links it did not create. Symlink-mode
   central-directory entries have no representation in the #34 entry record
@@ -117,10 +131,15 @@ itself (`applicationClasses` required); R4 post-analysis cleanup failure
 is best-effort and unreported; R5 no per-tenant extraction quota; R6 no
 new provenance channel (existing descriptor kinds only); R7 source
 archives are not freshness-fingerprinted; R8 repo-layout archives'
-resources are not scanned; R9 sources that do not compile cleanly keep
-runs at POSSIBLE through the existing `javac_source_error` diagnostics;
-R10 a symlinked provisioning directory holding a source archive is
-undetected (the final component is checked; read-only impact).
+resources are not scanned (an archive named `resources` is rejected
+outright); R9 sources that do not compile cleanly keep runs at POSSIBLE
+through the existing `javac_source_error` diagnostics; R10 a symlinked
+provisioning directory holding a source archive is undetected (the final
+component is checked; read-only impact); R11 the non-POSIX temp-root
+fallback inherits the parent directory's ACL (parity with the #34 spill
+root; no Windows CI target); R12 non-IOException runtime failures during
+extraction (for example Windows `InvalidPathException` on `:` in entry
+names) propagate unsanitized but still fail closed with cleanup.
 
 ## Review closure
 

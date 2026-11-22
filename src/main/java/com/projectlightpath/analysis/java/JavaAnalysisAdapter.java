@@ -55,7 +55,17 @@ public final class JavaAnalysisAdapter {
       AnalysisContext derived = withExtractedSourceRoots(context, extraction);
       SootUpInputLocationFactory.DependencyResolution dependencies =
           SootUpInputLocationFactory.dependencyResolution(derived);
-      AnalysisGraph graph = baseGraphProvider.analyze(derived, dependencies);
+      // An optional classpath that resolves to nothing (e.g. an empty
+      // deps/* wildcard) must still reach enrichment so the scan emits
+      // descriptor_metadata_unavailable_for_source_archive instead of the
+      // graph provider's "no valid entries" rejection (PR #47 review CR-3).
+      AnalysisContext graphContext = derived;
+      if (dependencies.entries().isEmpty()
+          && !derived.dependencyClasspathRequired()
+          && !derived.dependencyClasspath().isEmpty()) {
+        graphContext = withDependencyClasspath(derived, List.of());
+      }
+      AnalysisGraph graph = baseGraphProvider.analyze(graphContext, dependencies);
       SemanticCallFacts facts = enrich(derived, graph, () -> dependencies);
       return new SemanticCallFacts(
           context,
@@ -69,6 +79,33 @@ public final class JavaAnalysisAdapter {
   /** Copies the context with the extracted trees as its required source roots. */
   private static AnalysisContext withExtractedSourceRoots(
       AnalysisContext context, ServiceArchiveExtractor.Extraction extraction) {
+    List<AnalysisContext.SourceRoot> roots = new ArrayList<>();
+    for (int index = 0; index < extraction.archiveRoots().size(); index++) {
+      roots.add(AnalysisContext.SourceRoot.source(
+          extraction.declaredPaths().get(index),
+          extraction.archiveRoots().get(index),
+          AnalysisContext.Scope.PRODUCTION,
+          true,
+          null));
+    }
+    return copyContext(context, context.dependencyClasspath(), roots);
+  }
+
+  /** Copies the context with a replaced dependency classpath. */
+  private static AnalysisContext withDependencyClasspath(
+      AnalysisContext context, List<java.nio.file.Path> classpath) {
+    return copyContext(context, classpath, context.sourceRoots());
+  }
+
+  /**
+   * One context copy: the caller names the dependency classpath and the
+   * source roots to install (the extracted trees for a SOURCE_ARCHIVE run,
+   * or the original roots when only the classpath changes).
+   */
+  private static AnalysisContext copyContext(
+      AnalysisContext context,
+      List<java.nio.file.Path> dependencyClasspath,
+      List<AnalysisContext.SourceRoot> sourceRoots) {
     AnalysisContext.Builder builder = AnalysisContext.builder()
         .id(context.id())
         .framework(context.framework())
@@ -83,7 +120,7 @@ public final class JavaAnalysisAdapter {
         .sourceArchives(context.sourceArchives())
         .extractedSourceRoots()
         .dependencyClasspathRequired(context.dependencyClasspathRequired())
-        .dependencyClasspath(context.dependencyClasspath())
+        .dependencyClasspath(dependencyClasspath)
         .dependencyCoordinateManifest(context.dependencyCoordinateManifest())
         .frameworkBindingMetadata(context.frameworkBindingMetadata())
         .provenance(context.provenance())
@@ -91,12 +128,13 @@ public final class JavaAnalysisAdapter {
     for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
       builder.frameworkMetadata(metadata);
     }
-    for (int index = 0; index < extraction.archiveRoots().size(); index++) {
-      builder.sourceRoot(
-          extraction.declaredPaths().get(index),
-          extraction.archiveRoots().get(index),
-          AnalysisContext.Scope.PRODUCTION,
-          true);
+    for (AnalysisContext.SourceRoot root : context.generatedSourceRoots()) {
+      builder.generatedSourceRoot(root.declaredPath(), root.path(), root.scope(),
+          root.included(), root.required(), root.fingerprint());
+    }
+    for (AnalysisContext.SourceRoot root : sourceRoots) {
+      builder.sourceRoot(root.declaredPath(), root.path(), root.scope(), root.required(),
+          root.fingerprint());
     }
     return builder.build();
   }

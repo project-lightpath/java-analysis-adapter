@@ -228,14 +228,14 @@ final class ServiceLoaderDescriptorScanner {
       return "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
           .map(Diagnostic::code).distinct().sorted().collect(Collectors.joining(", ")) + ".";
     }
-    if (!scan.limitations().isEmpty()) {
-      return scan.limitations().stream().collect(Collectors.joining(" ")) + ".";
-    }
     if (descriptors.stream().anyMatch(Descriptor::malformed)) {
       return "Selected ServiceLoader descriptor contains malformed provider metadata; runtime selection is not proven unique.";
     }
     if (!moduleVisibilityProven) {
       return "module-info provides evidence is possible; selected loader module visibility is not explicit.";
+    }
+    if (!scan.limitations().isEmpty()) {
+      return scan.limitations().stream().collect(Collectors.joining(" ")) + ".";
     }
     return "ServiceLoader registration or runtime classloader selection is not unique.";
   }

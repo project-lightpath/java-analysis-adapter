@@ -234,6 +234,33 @@ class SourceArchiveRoutingTest {
   }
 
   @Test
+  void hardLinkToASourceArchiveIsDiagnosedByIdentity() throws IOException {
+    // A hard link under a different name must not be scanned as verified
+    // binary evidence (AGENTS.md: a false DEFINITE is the primary bug class).
+    Path archive = temp.resolve("identity-sources.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("META-INF/services/demo.Linked"));
+      output.write("demo.LinkedProvider\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
+    Path libraryDirectory = Files.createDirectories(temp.resolve("identity-lib"));
+    Path link = libraryDirectory.resolve("identity-1.0.0.jar");
+    Files.createLink(link, archive);
+    AnalysisContext context = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(archive)
+        .addDependencyClasspath(link)
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+
+    assertTrue(scan.descriptors().isEmpty());
+    assertTrue(scan.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("source_archive_on_dependency_classpath")));
+  }
+
+  @Test
   void binaryArchiveWithCheckedInServicesKeepsSourceProvenance() throws IOException {
     // Mixed mode: checked-in source-tree descriptors plus binary truth.
     Path resources = temp.resolve("src/main/resources/META-INF/services");

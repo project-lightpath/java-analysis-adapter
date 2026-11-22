@@ -53,7 +53,19 @@ final class AnalysisContextInputModeValidator {
       throw new IllegalArgumentException(
           "inputMode SOURCE_ARCHIVE must not declare source roots");
     }
+    validateSourceArchiveProvisioning(context);
+  }
+
+  private static void validateSourceArchiveProvisioning(AnalysisContext context) {
     for (Path archive : context.sourceArchives()) {
+      Path fileName = archive.getFileName();
+      if (fileName != null && "resources".equalsIgnoreCase(fileName.toString())) {
+        // An archive named "resources" would alias the extracted-root
+        // resources convention and be discovered through it (PR #47
+        // review B2); fail closed instead.
+        throw new IllegalArgumentException(
+            "source archive must not be named resources: " + archive);
+      }
       if (context.dependencyClasspath().contains(archive)) {
         throw new IllegalArgumentException(
             "source archive must not also appear on the dependency classpath: " + archive);

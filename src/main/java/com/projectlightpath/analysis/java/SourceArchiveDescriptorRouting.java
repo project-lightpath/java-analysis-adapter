@@ -26,7 +26,7 @@ final class SourceArchiveDescriptorRouting {
     }
     List<Path> routed = new ArrayList<>();
     for (Path entry : dependencyResolution.entries()) {
-      if (context.sourceArchives().contains(entry)) {
+      if (isSourceArchive(context, entry)) {
         state.diagnostic(
             "source_archive_on_dependency_classpath", entry.toString(),
             "a source archive was resolved as a dependency classpath entry and was not scanned");
@@ -45,6 +45,29 @@ final class SourceArchiveDescriptorRouting {
   }
 
   /**
+   * Compares by file identity, not just path equality: a hard link or a
+   * case-variant spelling of a declared source archive must not be scanned
+   * as verified binary evidence (AGENTS.md: a false DEFINITE is the primary
+   * bug class). When identity cannot be established, the entry is treated
+   * as a conflict and diagnosed rather than trusted.
+   */
+  private static boolean isSourceArchive(AnalysisContext context, Path entry) {
+    for (Path archive : context.sourceArchives()) {
+      if (archive.equals(entry)) {
+        return true;
+      }
+      try {
+        if (java.nio.file.Files.isSameFile(archive, entry)) {
+          return true;
+        }
+      } catch (java.io.IOException unresolvedIdentity) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Records the SOURCE_TREE limitation when the caller explicitly selected
    * that mode and no dependency binaries were resolved. Limitations never
    * block DEFINITE promotion; the default mode stays silent for parity.
@@ -55,8 +78,9 @@ final class SourceArchiveDescriptorRouting {
     if (context.explicitInputMode() == AnalysisContext.InputMode.SOURCE_TREE
         && dependencyResolution.entries().isEmpty()) {
       return List.of(
-          "dependency binaries are unavailable for this source tree; checked-in "
-              + "META-INF/services descriptors are the only descriptor source");
+          "no dependency binaries resolved for this source tree; descriptor metadata from "
+              + "checked-in resources, application classes, and observed selections was not "
+              + "corroborated by binary evidence");
     }
     return List.of();
   }

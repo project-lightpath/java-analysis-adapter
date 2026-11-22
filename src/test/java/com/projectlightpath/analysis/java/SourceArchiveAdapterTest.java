@@ -149,6 +149,28 @@ class SourceArchiveAdapterTest {
   }
 
   /**
+   * Waits briefly for foreign extraction roots (another process running the
+   * suite) to disappear before comparing snapshots; cross-process cleanup
+   * is transient, so a bounded retry keeps the assertion attributional
+   * (PR #47 review CR-13).
+   */
+  private void assertNoNewLingeringExtractionRoots(Set<String> before) throws IOException {
+    for (int attempt = 0; attempt < 20; attempt++) {
+      Set<String> after = lingeringExtractionRoots();
+      if (before.containsAll(after)) {
+        return;
+      }
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException expected) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+    }
+    assertEquals(before, lingeringExtractionRoots());
+  }
+
+  /**
    * Serializes the residue assertions in this class: the adapter extracts
    * into the shared java.io.tmpdir, and JUnit runs these methods in
    * parallel, so a sibling method's live root would break a snapshot diff.
@@ -179,7 +201,7 @@ class SourceArchiveAdapterTest {
     assertNotNull(fact.limitation());
     assertTrue(fact.limitation().contains("descriptor_metadata_unavailable_for_source_archive"),
         fact.limitation());
-    assertEquals(before, lingeringExtractionRoots());
+    assertNoNewLingeringExtractionRoots(before);
     }
   }
 
@@ -231,7 +253,44 @@ class SourceArchiveAdapterTest {
 
     assertThrows(IllegalArgumentException.class,
         () -> new JavaAnalysisAdapter().analyze(brokenContext));
-    assertEquals(before, lingeringExtractionRoots());
+    assertNoNewLingeringExtractionRoots(before);
+    }
+  }
+
+  @Test
+  void optionalEmptyWildcardClasspathStillReachesTheScanDiagnostic() throws IOException {
+    synchronized (EXTRACTION_LOCK) {
+    Fixture fixture = fixture("optional-sources.jar");
+    // deps/* resolves to no JARs; the classpath is optional, so the run
+    // must reach enrichment and emit the source-archive diagnostic rather
+    // than the graph provider's "no valid entries" rejection (review CR-3).
+    Path emptyDependencies = Files.createDirectories(temp.resolve("empty-deps"));
+    AnalysisContext context = AnalysisContext.builder()
+        .id("source-archive-adapter-optional")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("source-archive-adapter")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(fixture.classes())
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(fixture.sourcesJar())
+        .addDependencyClasspath(emptyDependencies.resolve("*"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+
+    List<SemanticCallFacts.Fact> serviceFacts = serviceLoaderFacts(facts);
+    assertEquals(1, serviceFacts.size(), facts.providerFacts().toString());
+    assertTrue(serviceFacts.get(0).evidence().stream().anyMatch(item ->
+            item.kind().equals("service_loader_scan_diagnostic")
+                && "descriptor_metadata_unavailable_for_source_archive"
+                    .equals(item.attributes().get("diagnosticCode"))),
+        serviceFacts.get(0).evidence().toString());
     }
   }
 

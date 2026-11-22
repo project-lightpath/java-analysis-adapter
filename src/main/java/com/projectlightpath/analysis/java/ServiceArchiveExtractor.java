@@ -5,13 +5,14 @@ import java.io.InputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -30,6 +31,14 @@ import java.util.Set;
 final class ServiceArchiveExtractor {
   /** Total decompressed bytes an extraction may write (new policy, issue #42). */
   static final long MAX_EXTRACTED_BYTES = 512L * 1024 * 1024;
+
+  /**
+   * Run-wide cap on created files and directories (including implicit
+   * parents). Empty files and directory entries consume no byte budget, so
+   * without this cap a bounded archive could exhaust the temporary
+   * filesystem's object slots (PR #47 review CR-5).
+   */
+  static final long MAX_EXTRACTED_OBJECTS = 262_144L;
 
   /** One rejection cause; translated once, at the run boundary. */
   static final class ExtractionFailure extends RuntimeException {
@@ -83,15 +92,24 @@ final class ServiceArchiveExtractor {
 
   /** Test seam: an injectable total-byte budget and temp-root parent. */
   static Extraction extract(List<Path> archives, long maxExtractedBytes, Path tempRootParent) {
+    return extract(archives, maxExtractedBytes, MAX_EXTRACTED_OBJECTS, tempRootParent);
+  }
+
+  /** Test seam: injectable byte and filesystem-object budgets and temp-root parent. */
+  static Extraction extract(
+      List<Path> archives, long maxExtractedBytes, long maxObjects, Path tempRootParent) {
     Objects.requireNonNull(archives, "archives");
     if (maxExtractedBytes <= 0) {
       throw new IllegalArgumentException("maximum extracted bytes must be positive");
+    }
+    if (maxObjects <= 0) {
+      throw new IllegalArgumentException("maximum extracted objects must be positive");
     }
     Path root = null;
     boolean success = false;
     try {
       root = createRoot(tempRootParent);
-      Extraction extraction = extractArchives(archives, root, maxExtractedBytes);
+      Extraction extraction = extractArchives(archives, root, maxExtractedBytes, maxObjects);
       success = true;
       return extraction;
     } catch (IOException | ExtractionFailure error) {
@@ -112,10 +130,12 @@ final class ServiceArchiveExtractor {
   }
 
   private static Extraction extractArchives(
-      List<Path> archives, Path root, long maxExtractedBytes) throws IOException {
+      List<Path> archives, Path root, long maxExtractedBytes, long maxObjects)
+      throws IOException {
     List<Path> roots = new ArrayList<>();
     List<String> declared = new ArrayList<>();
     long[] extractedBytes = {0};
+    long[] objects = {0};
     for (Path archive : archives) {
       Path normalized = archive.toAbsolutePath().normalize();
       String fileName = archiveFileName(normalized);
@@ -123,8 +143,8 @@ final class ServiceArchiveExtractor {
       if (Files.exists(archiveRoot, LinkOption.NOFOLLOW_LINKS)) {
         throw new ExtractionFailure("duplicate source archive file name: " + fileName);
       }
-      extractedBytes[0] = new ArchiveRun(normalized, archiveRoot, maxExtractedBytes)
-          .extract(extractedBytes[0]);
+      extractedBytes[0] = new ArchiveRun(normalized, archiveRoot, maxExtractedBytes, maxObjects,
+          objects).extract(extractedBytes[0]);
       roots.add(archiveRoot);
       declared.add(fileName);
     }
@@ -136,12 +156,19 @@ final class ServiceArchiveExtractor {
     private final Path archive;
     private final Path archiveRoot;
     private final long maxExtractedBytes;
+    private final long maxObjects;
+    private final long[] objects;
     private final Set<String> written = new HashSet<>();
+    private final Set<Path> seenPaths = new HashSet<>();
 
-    ArchiveRun(Path archive, Path archiveRoot, long maxExtractedBytes) {
+    ArchiveRun(
+        Path archive, Path archiveRoot, long maxExtractedBytes, long maxObjects,
+        long[] objects) {
       this.archive = archive;
       this.archiveRoot = archiveRoot;
       this.maxExtractedBytes = maxExtractedBytes;
+      this.maxObjects = maxObjects;
+      this.objects = objects;
     }
 
     long extract(long extractedBytes) throws IOException {
@@ -155,6 +182,12 @@ final class ServiceArchiveExtractor {
           new ServiceLoaderDescriptorSource.ScanState(maxExtractedBytes);
       long[] total = {extractedBytes};
       try (SeekableByteChannel channel = config.channelOpener().open(archive)) {
+        // Re-check on the opened channel: the file may have been replaced
+        // between the probe and the open (PR #47 review CR-4).
+        if (channel.size() > ServiceLoaderDescriptorArchiveSource.MAX_ARCHIVE_BYTES) {
+          throw new ExtractionFailure(
+              "source archive exceeds the archive size limit: " + archive);
+        }
         ServiceLoaderDescriptorZipDirectory directory =
             new ServiceLoaderDescriptorZipDirectory(channel, channel.size(), config, state);
         directory.walk(entry -> {
@@ -192,7 +225,16 @@ final class ServiceArchiveExtractor {
         ServiceLoaderDescriptorSource.ScanState state,
         long extractedBytes) throws IOException {
       Path target = validatedTarget(entry);
+      chargeObjects(target, entry.directory(), entry.name());
       if (entry.directory()) {
+        if (entry.length() != 0) {
+          // Directory entries carry no payload; declared data would never
+          // be stream-verified, so it is rejected instead (PR #47 review).
+          // (An empty DEFLATE stream still reports compressed > 0, so the
+          // declared uncompressed length is the authoritative signal.)
+          throw new ExtractionFailure(
+              "source archive directory entry declares data: " + entry.name());
+        }
         createEntryDirectories(target, entry.name());
         return 0;
       }
@@ -209,6 +251,30 @@ final class ServiceArchiveExtractor {
             "source archive entry name collides with another entry: " + entry.name());
       }
       return copy(entry, target, directory, state);
+    }
+
+    /**
+     * Charges the run-wide filesystem-object budget for one entry and its
+     * not-yet-created parent directories before anything is created.
+     */
+    private void chargeObjects(Path target, boolean directory, String name) {
+      Path relative = archiveRoot.relativize(target);
+      List<Path> created = new ArrayList<>();
+      Path accumulated = archiveRoot;
+      int directorySegments = relative.getNameCount() - (directory ? 0 : 1);
+      for (int index = 0; index < directorySegments; index++) {
+        accumulated = accumulated.resolve(relative.getName(index));
+        if (seenPaths.add(accumulated)) {
+          created.add(accumulated);
+        }
+      }
+      long newObjects = created.size() + (directory ? 0 : 1);
+      if (objects[0] + newObjects > maxObjects) {
+        throw new ExtractionFailure(
+            "source archive extraction exceeds " + maxObjects + " filesystem objects: "
+                + archive);
+      }
+      objects[0] += newObjects;
     }
 
     /** Validates one entry name and returns its resolved target path. */
@@ -315,6 +381,12 @@ final class ServiceArchiveExtractor {
     }
   }
 
+  /**
+   * Translates one failure into the caller-visible rejection. The original
+   * cause is deliberately not attached: filesystem exceptions carry the
+   * temporary root in their messages and stack traces, and the rejection
+   * contract is a sanitized message (PR #47 review CR-8).
+   */
   private static IllegalArgumentException rejection(Exception error, Path root) {
     String message = error.getMessage() == null || error.getMessage().isBlank()
         ? error.getClass().getSimpleName() : error.getMessage();
@@ -322,20 +394,45 @@ final class ServiceArchiveExtractor {
       message = message.replace(root.toString(), "<temp>");
     }
     return new IllegalArgumentException(
-        "source archive extraction failed: " + message, error);
+        "source archive extraction failed: " + message
+            + " (" + error.getClass().getSimpleName() + ")");
   }
 
+  /**
+   * Best-effort post-order delete. {@code walkFileTree} reports traversal
+   * failures as {@code IOException} instead of the stream-laziness
+   * {@code UncheckedIOException} of {@code Files.walk}, so cleanup can
+   * never override the run outcome (PR #47 review CR-9); residue is an ops
+   * residual (R2).
+   */
   private static void deleteRecursively(Path root) {
     try {
-      try (var paths = Files.walk(root)) {
-        paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+      Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
           try {
-            Files.deleteIfExists(path);
+            Files.deleteIfExists(file);
           } catch (IOException | DirectoryIteratorException ignored) {
             // Best-effort cleanup; residue is an ops residual (R2).
           }
-        });
-      }
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path directory, IOException error) {
+          try {
+            Files.deleteIfExists(directory);
+          } catch (IOException | DirectoryIteratorException ignored) {
+            // Best-effort cleanup; residue is an ops residual (R2).
+          }
+          return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException error) {
+          return FileVisitResult.CONTINUE;
+        }
+      });
     } catch (IOException | DirectoryIteratorException ignored) {
       // Best-effort cleanup; residue is an ops residual (R2).
     }
