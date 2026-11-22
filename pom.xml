@@ -17,6 +17,8 @@
     <junit.version>5.11.0</junit.version>
     <test.heap>-Xmx10g</test.heap>
     <pmd.version>7.17.0</pmd.version>
+    <!-- Empty by default; coverage runs inject -javaagent here. -->
+    <jacoco.agent></jacoco.agent>
   </properties>
 
   <dependencies>
@@ -63,7 +65,7 @@
           <useModulePath>false</useModulePath>
           <!-- Parallel JUnit execution builds several SootUp scenes at once.
                make adapter-test sizes this from the host via -Dtest.heap. -->
-          <argLine>${test.heap}</argLine>
+          <argLine>${test.heap} ${jacoco.agent}</argLine>
         </configuration>
         <executions>
           <execution>
@@ -79,7 +81,7 @@
             </goals>
             <configuration>
               <groups>large-archive</groups>
-              <argLine>-Xmx1g</argLine>
+              <argLine>-Xmx1g ${jacoco.agent}</argLine>
               <reportsDirectory>${project.build.directory}/surefire-reports-large</reportsDirectory>
             </configuration>
           </execution>

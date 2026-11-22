@@ -26,6 +26,7 @@ final class ServiceLoaderDescriptorSource {
   static final String WAR_LIB_DIRECTORY = "WEB-INF/lib/";
   static final String MODULE_INFO = "module-info.class";
   static final long MAX_ARCHIVE_DECOMPRESSED_BYTES = 16L * 1024 * 1024;
+  static final long MAX_RETAINED_NAME_BYTES = 4L * 1024 * 1024;
 
   private ServiceLoaderDescriptorSource() {}
 
@@ -90,7 +91,14 @@ final class ServiceLoaderDescriptorSource {
     if (!visited.add("services:" + normalized)) {
       return Optional.empty();
     }
-    NavigableSet<Path> candidates = new TreeSet<>();
+    // File-name order is stable across JDK Path implementations; Path natural
+    // order differs between supported runtimes for non-ASCII names (Java 17
+    // gate). This preserves the existing smallest-first selection contract.
+    NavigableSet<Path> candidates = new TreeSet<>(
+        java.util.Comparator
+            .comparing((Path path) -> path.getFileName() == null
+                ? "" : path.getFileName().toString())
+            .thenComparing(Path::toString));
     long retainedBefore = state.retainedBytes();
     try (DirectoryStream<Path> paths = Files.newDirectoryStream(normalized)) {
       for (Path path : paths) {
@@ -278,7 +286,10 @@ final class ServiceLoaderDescriptorSource {
 
     private final long maxEnumeratedBytes;
     private final long maxRetainedBytes;
+    private final long maxRetainedNameBytes;
     private long retainedBytes;
+    private long retainedNameBytes;
+    private boolean interrupted;
 
     ScanState() {
       this(MAX_ARCHIVE_DECOMPRESSED_BYTES);
@@ -287,11 +298,15 @@ final class ServiceLoaderDescriptorSource {
     ScanState(long maxDecompressedBytes) {
       this(maxDecompressedBytes,
           ServiceLoaderDescriptorBudget.MAX_ENUMERATION_BYTES,
-          ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+          ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES,
+          MAX_RETAINED_NAME_BYTES);
     }
 
     private ScanState(
-        long maxDecompressedBytes, long maxEnumeratedBytes, long maxRetainedBytes) {
+        long maxDecompressedBytes,
+        long maxEnumeratedBytes,
+        long maxRetainedBytes,
+        long maxRetainedNameBytes) {
       if (maxDecompressedBytes <= 0) {
         throw new IllegalArgumentException("maximum decompressed bytes must be positive");
       }
@@ -301,20 +316,42 @@ final class ServiceLoaderDescriptorSource {
       if (maxRetainedBytes <= 0) {
         throw new IllegalArgumentException("maximum retained bytes must be positive");
       }
+      if (maxRetainedNameBytes <= 0) {
+        throw new IllegalArgumentException(
+            "maximum retained name bytes must be positive");
+      }
       this.maxDecompressedBytes = maxDecompressedBytes;
       this.maxEnumeratedBytes = maxEnumeratedBytes;
       this.maxRetainedBytes = maxRetainedBytes;
+      this.maxRetainedNameBytes = maxRetainedNameBytes;
     }
 
     static ScanState withBudgets(
         long maxDecompressedBytes, long maxEnumeratedBytes, long maxRetainedBytes) {
-      return new ScanState(maxDecompressedBytes, maxEnumeratedBytes, maxRetainedBytes);
+      return withBudgets(
+          maxDecompressedBytes,
+          maxEnumeratedBytes,
+          maxRetainedBytes,
+          MAX_RETAINED_NAME_BYTES);
+    }
+
+    static ScanState withBudgets(
+        long maxDecompressedBytes,
+        long maxEnumeratedBytes,
+        long maxRetainedBytes,
+        long maxRetainedNameBytes) {
+      return new ScanState(
+          maxDecompressedBytes,
+          maxEnumeratedBytes,
+          maxRetainedBytes,
+          maxRetainedNameBytes);
     }
 
     static ScanState withEnumerationBudget(long maxEnumeratedBytes) {
       return new ScanState(
           MAX_ARCHIVE_DECOMPRESSED_BYTES, maxEnumeratedBytes,
-          ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES);
+          ServiceLoaderDescriptorBudget.MAX_RETAINED_DESCRIPTOR_BYTES,
+          MAX_RETAINED_NAME_BYTES);
     }
 
     void diagnostic(String code, String path, String detail) {
@@ -365,6 +402,17 @@ final class ServiceLoaderDescriptorSource {
       retainedBytes = value;
     }
 
+    record RetentionSnapshot(long slots, long names) {}
+
+    RetentionSnapshot retentionSnapshot() {
+      return new RetentionSnapshot(retainedBytes, retainedNameBytes);
+    }
+
+    void restoreRetention(RetentionSnapshot snapshot) {
+      retainedBytes = snapshot.slots();
+      retainedNameBytes = snapshot.names();
+    }
+
     /** Releases one retained candidate slot whose descriptor was not added. */
     void releaseRetained() {
       retainedBytes = Math.max(
@@ -373,6 +421,34 @@ final class ServiceLoaderDescriptorSource {
 
     long remainingRetained() {
       return maxRetainedBytes - retainedBytes;
+    }
+
+    long retainedNameBytes() {
+      return retainedNameBytes;
+    }
+
+    boolean tryRetainName(String path, long bytes) {
+      if (bytes < 0 || bytes > maxRetainedNameBytes - retainedNameBytes) {
+        diagnostic(
+            "descriptor_retention_limit", path,
+            "retained descriptor name storage exceeds "
+                + maxRetainedNameBytes + " bytes");
+        return false;
+      }
+      retainedNameBytes += bytes;
+      return true;
+    }
+
+    void releaseRetainedName(long bytes) {
+      retainedNameBytes = Math.max(0L, retainedNameBytes - Math.max(0L, bytes));
+    }
+
+    boolean interrupted() {
+      return interrupted;
+    }
+
+    void markInterrupted() {
+      interrupted = true;
     }
 
     boolean tryEnumerate(String path, long bytes) {
