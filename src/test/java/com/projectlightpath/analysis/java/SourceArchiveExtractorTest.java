@@ -617,6 +617,67 @@ class SourceArchiveExtractorTest {
   }
 
   @Test
+  void rejectsEntryNamesBeyondTheDepthAndLengthBounds() throws IOException {
+    // 1,025 segments: over the depth bound before any Path prefix is built.
+    StringBuilder deep = new StringBuilder("a");
+    for (int index = 0; index < ServiceArchiveExtractor.MAX_ENTRY_NAME_SEGMENTS; index++) {
+      deep.append("/a");
+    }
+    Path deepArchive = zip("deep-sources.jar", output ->
+        put(output, deep.toString(), "package a; class A {}\n"));
+
+    IllegalArgumentException deepError = assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(deepArchive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    assertTrue(deepError.getMessage().contains("unsafe source archive entry name"),
+        deepError.getMessage());
+
+    // One segment of 4,097 characters: over the name-length bound.
+    StringBuilder longName = new StringBuilder("L");
+    for (int index = 0; index < ServiceArchiveExtractor.MAX_ENTRY_NAME_CHARS; index++) {
+      longName.append('l');
+    }
+    Path longArchive = zip("long-name-sources.jar", output ->
+        put(output, longName.toString(), "package a; class A {}\n"));
+
+    IllegalArgumentException longError = assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(longArchive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    assertTrue(longError.getMessage().contains("unsafe source archive entry name"),
+        longError.getMessage());
+  }
+
+  @Test
+  void acceptsEntryNamesAtTheDepthAndLengthBounds() throws IOException {
+    // Exactly 128 two-character segments (255 total chars): at the depth
+    // bound, inside the length bound and the filesystem's own limits.
+    StringBuilder deep = new StringBuilder();
+    for (int index = 0; index < ServiceArchiveExtractor.MAX_ENTRY_NAME_SEGMENTS; index++) {
+      if (index > 0) {
+        deep.append('/');
+      }
+      deep.append('s').append(index % 10);
+    }
+    Path deepArchive = zip("deep-boundary-sources.jar", output ->
+        put(output, deep.toString(), "package a; class A {}\n"));
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(deepArchive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
+      assertTrue(Files.exists(extraction.archiveRoots().get(0).resolve(deep.toString())));
+    }
+
+    // Two components of 255 characters each: 511 characters at the length
+    // bound, each component within NAME_MAX.
+    StringBuilder longName = new StringBuilder("L".repeat(255));
+    longName.append('/').append("B".repeat(255));
+    Path longArchive = zip("long-boundary-sources.jar", output ->
+        put(output, longName.toString(), "package a; class A {}\n"));
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(longArchive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
+      assertTrue(Files.exists(extraction.archiveRoots().get(0).resolve(longName.toString())));
+    }
+  }
+
+  @Test
   void rejectsDirectoryEntriesDeclaringData() throws IOException {
     Path archive = zip("dir-data-sources.jar", output -> {
       output.putNextEntry(new ZipEntry("demo/"));
