@@ -515,6 +515,27 @@ class JavacAnnotationMigrationTest {
         features.toString());
   }
 
+  @Test
+  void unresolvedSameArityOverloadPreventsFalseUniqueness() throws IOException {
+    AnalysisContext context = context("error-overload", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              public void call(String p) {}
+              public void call(Missing p) {}
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    JavacAnnotationAccess access = JavacAnnotationAccess.of(scanner);
+    // One resolved and one unresolved same-arity overload: the unresolved
+    // one must still count toward ambiguity, so the resolved overload is
+    // not falsely unique and the repair falls back to textual.
+    assertTrue(access.member("demo.Probe", "call", 1).isEmpty());
+    assertTrue(access.repairedParameterType(
+        "@Ann(value = 1) String p", "demo.Probe", "call", 1, 0).isEmpty());
+  }
+
   private <T> T withFlag(java.util.function.Supplier<T> action) {
     System.setProperty(FLAG, "true");
     try {

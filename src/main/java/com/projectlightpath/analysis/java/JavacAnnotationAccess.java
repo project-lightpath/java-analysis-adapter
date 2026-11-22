@@ -35,11 +35,15 @@ final class JavacAnnotationAccess {
     return JavacSourceSymbolIndex.of(context)
         .map(index -> index.members(typeName, memberName).stream()
             .filter(member -> member.kind().equals("method")
-                && !member.errorType()
                 && member.parameterTypes().size() == parameterCount)
             .toList())
+        // Count ALL same-arity overloads before rejecting error types:
+        // filtering first would create false uniqueness when an unresolved
+        // overload shadows a resolved one (name+arity cannot tell which
+        // textual declaration is which).
         .filter(matches -> matches.size() == 1)
-        .map(matches -> matches.get(0));
+        .map(matches -> matches.get(0))
+        .filter(found -> !found.errorType());
   }
 
   /**
