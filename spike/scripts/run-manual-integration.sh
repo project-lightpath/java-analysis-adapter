@@ -18,7 +18,7 @@ FACTS="${RUN_DIR}/semantic-call-facts.json"
 EVIDENCE="${RUN_DIR}/capability-evidence.json"
 
 echo "[1/4] prepare immutable source, Maven build, and AnalysisContext"
-(
+if ! (
   cd "${VPE_ROOT}"
   go run ./cmd/analysis-context \
     -mode prepare-manual \
@@ -29,7 +29,12 @@ echo "[1/4] prepare immutable source, Maven build, and AnalysisContext"
     -java-bin "${JAVA_BIN}" \
     -output "${CONTEXT}" \
     -report "${REPORT}"
-)
+); then
+  echo "preparation failed; diagnostics:" >&2
+  python3 "${ROOT}/spike/scripts/print_preparation_diagnostics.py" "${REPORT}" >&2 || true
+  echo "run directory: ${RUN_DIR}" >&2
+  exit 1
+fi
 
 echo "[2/4] run Java adapter and emit SemanticCallFacts"
 (
