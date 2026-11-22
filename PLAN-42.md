@@ -1,6 +1,7 @@
 # PLAN-42 — Source-archive input modes and routing
 
-Status: amended after adversarial plan review (17 findings folded in).
+Status: implemented; all gates green on the default JDK 27 and Temurin
+17.0.21.1+2 (see §10).
 Issue: project-lightpath/java-analysis-adapter#42.
 Branch: `feature/issue-42-source-archive`, based on `origin/main` `487a14b` (merge of PR #34).
 Confidence: **87%** post-amendment (see §9).
@@ -229,3 +230,24 @@ condition) are folded into §1 with concrete mechanisms. Remaining risks:
 (b) the exact shape of the `Scan` limitations surfacing once
 `ServiceLoaderDescriptorScanner.resolve` is touched, (c) RunMetadata JSON
 shape changes needing careful default-mode parity checks.
+
+## 10. Implementation record (EVIDENCE)
+
+- RED_01/GREEN_01 (`8ff4c66`/`99ba013`): input-mode contract — 18 tests,
+  mode invariants, loader wiring. PMD split `validateInputMode`.
+- RED_02/GREEN_02 (`8052159`+`f2b2ba1`/`16d2ebe`): extraction safety —
+  18 tests, `ServiceArchiveExtractor` with `ArchiveRun` split for PMD.
+- RED_03/GREEN_03 (`6dc6d94`/`254f9fe`): scan routing — 7 tests,
+  `SourceArchiveDescriptorRouting`, two scan-global diagnostics, Scan
+  limitations, mode-aware display paths.
+- RED_04/GREEN_04 (`165b639`/`08e1260`): adapter routing — 4 end-to-end
+  tests, extraction into required source roots, original-context re-wrap
+  so RunMetadata never leaks the temp root, fail-closed extraction.
+- Gate receipts (after GREEN_04, docs in WI-5):
+  - default JDK 27 (`openjdk 27.0.1.0.3`): `make adapter-test` 442 tests
+    (default=337 large=1 sootup=104, baseline 371), 0 failures;
+    `make java-lint` exit 0, no new findings; `make evidence-validate`
+    PASS (10 criteria, 21 relationships).
+  - Temurin 17.0.21.1+2: `make adapter-test` 442 tests, 0 failures.
+- Deviations: none beyond PMD-forced helper placement (documented in the
+  GREEN commit messages). Zero edits to existing tests.
