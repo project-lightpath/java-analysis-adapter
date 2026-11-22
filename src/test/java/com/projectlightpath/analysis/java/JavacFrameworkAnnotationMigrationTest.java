@@ -403,6 +403,14 @@ class JavacFrameworkAnnotationMigrationTest {
         "org/springframework/web/bind/annotation/RequestMethod.java",
         "package org.springframework.web.bind.annotation;"
             + " public enum RequestMethod { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }",
+        "org/springframework/web/bind/annotation/RequestMapping.java",
+        """
+            package org.springframework.web.bind.annotation;
+            public @interface RequestMapping {
+              String[] value() default {};
+              RequestMethod[] method() default {};
+            }
+            """,
         "demo/StaticEnum.java", """
             package demo;
             import static org.springframework.web.bind.annotation.RequestMethod.GET;
@@ -437,6 +445,11 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void foldedStringConcatenationPathIsResolvedFlagOn() throws IOException {
     Map<String, String> files = Map.of(
+        "org/springframework/web/bind/annotation/GetMapping.java",
+        """
+            package org.springframework.web.bind.annotation;
+            public @interface GetMapping { String[] value() default {}; }
+            """,
         "demo/Folded.java", """
             package demo;
             import org.springframework.web.bind.annotation.GetMapping;
@@ -457,7 +470,7 @@ class JavacFrameworkAnnotationMigrationTest {
     assertTrue(off.stream().noneMatch(route -> route.method().name().equals("folded")),
         off.toString());
     assertTrue(on.stream().anyMatch(route ->
-        route.method().name().equals("folded") && route.path().equals("ab")),
+        route.method().name().equals("folded") && route.path().equals("/ab")),
         on.toString());
   }
 
@@ -514,11 +527,15 @@ class JavacFrameworkAnnotationMigrationTest {
         .toList();
   }
 
-  /** Bean facts without file identity, so different roots compare equal. */
+  /**
+   * Bean facts without file identity or conditions, so different roots
+   * compare equal; the condition spelling is the intended flag-on delta
+   * and is asserted separately.
+   */
   private List<String> beanProjection(SourceMetadataScanner scanner, AnalysisContext.Framework fw) {
     return scanner.beanCandidates(fw).stream()
         .map(bean -> bean.candidateId() + "|" + bean.kind() + "|" + bean.qualifiers()
-            + "|" + bean.profiles() + "|" + bean.conditions() + "|" + bean.primary()
+            + "|" + bean.profiles() + "|" + bean.primary()
             + "|" + bean.producerMethod())
         .toList();
   }
@@ -545,17 +562,72 @@ class JavacFrameworkAnnotationMigrationTest {
   }
 
   private AnalysisContext springFixture(String id) throws IOException {
-    return springContext(id, Map.of(
-        "org/springframework/web/bind/annotation/RequestMethod.java",
-        "package org.springframework.web.bind.annotation;"
-            + " public enum RequestMethod { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }",
-        "org/springframework/boot/autoconfigure/condition/ConditionalOnProperty.java",
-        "package org.springframework.boot.autoconfigure.condition;"
-            + " public @interface ConditionalOnProperty { String name() default \"\"; }",
-        "demo/Api.java", """
+    return springContext(id, Map.ofEntries(
+        Map.entry("org/springframework/web/bind/annotation/RequestMethod.java",
+            "package org.springframework.web.bind.annotation;"
+                + " public enum RequestMethod { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }"),
+        Map.entry("org/springframework/web/bind/annotation/RestController.java",
+            "package org.springframework.web.bind.annotation; public @interface RestController {}"),
+        Map.entry("org/springframework/web/bind/annotation/RequestMapping.java",
+            """
+            package org.springframework.web.bind.annotation;
+            public @interface RequestMapping {
+              String[] value() default {};
+              String[] path() default {};
+              RequestMethod[] method() default {};
+              String[] consumes() default {};
+              String[] produces() default {};
+              String[] headers() default {};
+              String[] params() default {};
+            }
+            """),
+        Map.entry("org/springframework/web/bind/annotation/GetMapping.java",
+            """
+            package org.springframework.web.bind.annotation;
+            public @interface GetMapping {
+              String[] value() default {};
+              String[] path() default {};
+              String[] consumes() default {};
+              String[] produces() default {};
+              String[] headers() default {};
+              String[] params() default {};
+            }
+            """),
+        Map.entry("org/springframework/web/bind/annotation/PostMapping.java",
+            """
+            package org.springframework.web.bind.annotation;
+            public @interface PostMapping {
+              String[] value() default {};
+              String[] path() default {};
+              String[] consumes() default {};
+              String[] produces() default {};
+              String[] headers() default {};
+              String[] params() default {};
+            }
+            """),
+        Map.entry("org/springframework/stereotype/Service.java",
+            "package org.springframework.stereotype;"
+                + " public @interface Service { String value() default \"\"; }"),
+        Map.entry("org/springframework/context/annotation/Configuration.java",
+            "package org.springframework.context.annotation; public @interface Configuration {}"),
+        Map.entry("org/springframework/context/annotation/Bean.java",
+            "package org.springframework.context.annotation; public @interface Bean {}"),
+        Map.entry("org/springframework/context/annotation/Profile.java",
+            "package org.springframework.context.annotation;"
+                + " public @interface Profile { String[] value() default {}; }"),
+        Map.entry("org/springframework/beans/factory/annotation/Autowired.java",
+            "package org.springframework.beans.factory.annotation; public @interface Autowired {}"),
+        Map.entry("org/springframework/beans/factory/annotation/Qualifier.java",
+            "package org.springframework.beans.factory.annotation;"
+                + " public @interface Qualifier { String value() default \"\"; }"),
+        Map.entry("org/springframework/boot/autoconfigure/condition/ConditionalOnProperty.java",
+            "package org.springframework.boot.autoconfigure.condition;"
+                + " public @interface ConditionalOnProperty { String name() default \"\"; }"),
+        Map.entry("demo/Api.java", """
             package demo;
             import org.springframework.web.bind.annotation.RestController;
             import org.springframework.web.bind.annotation.RequestMapping;
+            import org.springframework.web.bind.annotation.RequestMethod;
             import org.springframework.web.bind.annotation.GetMapping;
             import org.springframework.web.bind.annotation.PostMapping;
             @RestController @RequestMapping(value = "/api", headers = "X-Class=1")
@@ -566,8 +638,8 @@ class JavacFrameworkAnnotationMigrationTest {
               public String create(String body) { return ""; }
               @RequestMapping(method = RequestMethod.GET) public String plain() { return ""; }
             }
-            """,
-        "demo/QualifiedService.java", """
+            """),
+        Map.entry("demo/QualifiedService.java", """
             package demo;
             import org.springframework.stereotype.Service;
             import org.springframework.beans.factory.annotation.Qualifier;
@@ -581,8 +653,8 @@ class JavacFrameworkAnnotationMigrationTest {
               @Autowired public void setHelper(@Qualifier("h") Object helper) {}
               public QualifiedService(@Qualifier("c") Object dep) {}
             }
-            """,
-        "demo/Config.java", """
+            """),
+        Map.entry("demo/Config.java", """
             package demo;
             import org.springframework.context.annotation.Bean;
             import org.springframework.context.annotation.Configuration;
@@ -590,7 +662,7 @@ class JavacFrameworkAnnotationMigrationTest {
             @Configuration public class Config {
               @Bean @Qualifier("produced") public Object thing() { return new Object(); }
             }
-            """));
+            """)));
   }
 
   private AnalysisContext quarkusFixture(String id) throws IOException {
@@ -600,6 +672,12 @@ class JavacFrameworkAnnotationMigrationTest {
         "package jakarta.inject; public @interface Named { String value() default \"\"; }",
         "jakarta/annotation/Resource.java",
         "package jakarta.annotation; public @interface Resource { String name() default \"\"; }",
+        "jakarta/ws/rs/Path.java",
+        "package jakarta.ws.rs; public @interface Path { String value() default \"\"; }",
+        "jakarta/ws/rs/Consumes.java",
+        "package jakarta.ws.rs; public @interface Consumes { String[] value() default {}; }",
+        "jakarta/ws/rs/Produces.java",
+        "package jakarta.ws.rs; public @interface Produces { String[] value() default {}; }",
         "demo/GreetingResource.java", """
             package demo;
             import jakarta.ws.rs.Path;
