@@ -753,18 +753,19 @@ public final class AnalysisContext extends AnalysisContextAccessors {
       return;
     }
     if (inputMode == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
-      validateSourceArchiveMode();
+      validateSourceArchiveMode(builder);
       return;
     }
     validateBinaryArchiveMode();
   }
 
-  private void validateSourceArchiveMode() {
+  private void validateSourceArchiveMode(Builder builder) {
     if (sourceArchives.isEmpty()) {
       throw new IllegalArgumentException(
           "inputMode SOURCE_ARCHIVE requires at least one source archive");
     }
-    if (!sourceRoots.isEmpty() || !generatedSourceRoots.isEmpty()) {
+    if (!builder.extractedSourceRoots
+        && (!sourceRoots.isEmpty() || !generatedSourceRoots.isEmpty())) {
       throw new IllegalArgumentException(
           "inputMode SOURCE_ARCHIVE must not declare source roots");
     }
@@ -872,6 +873,7 @@ public final class AnalysisContext extends AnalysisContextAccessors {
     boolean dependencyClasspathRequired = true;
     AnalysisContext.InputMode inputMode;
     final List<Path> sourceArchives = new ArrayList<>();
+    boolean extractedSourceRoots;
     DependencyCoordinateManifest dependencyCoordinateManifest =
         DependencyCoordinateManifest.absent();
     final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
@@ -975,6 +977,12 @@ public final class AnalysisContext extends AnalysisContextAccessors {
     /** Sets the explicit caller-selected input mode. */
     public Builder inputMode(AnalysisContext.InputMode value) {
       inputMode = java.util.Objects.requireNonNull(value, "input mode");
+      return this;
+    }
+
+    /** Marks the source roots as adapter-extracted archive roots (internal). */
+    Builder extractedSourceRoots() {
+      extractedSourceRoots = true;
       return this;
     }
 

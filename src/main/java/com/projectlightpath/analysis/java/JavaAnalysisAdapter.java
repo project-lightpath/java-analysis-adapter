@@ -32,10 +32,73 @@ public final class JavaAnalysisAdapter {
   /** Builds the provider graph before applying framework enrichment. */
   public SemanticCallFacts analyze(AnalysisContext context) {
     Objects.requireNonNull(context, "analysis context");
+    if (context.inputMode() == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
+      return analyzeSourceArchive(context);
+    }
     SootUpInputLocationFactory.DependencyResolution dependencies =
         SootUpInputLocationFactory.dependencyResolution(context);
     AnalysisGraph graph = baseGraphProvider.analyze(context, dependencies);
     return enrich(context, graph, () -> dependencies);
+  }
+
+  /**
+   * SOURCE_ARCHIVE routing (issue #42): the archives are extracted to one
+   * owner-only temp root, the extracted trees become the run's source roots
+   * for the existing source/javac analysis path, and the descriptor scan
+   * follows the mode routing (no binary scan of the archives themselves).
+   * The final facts carry the caller's original context so the random
+   * extraction root never reaches RunMetadata.
+   */
+  private SemanticCallFacts analyzeSourceArchive(AnalysisContext context) {
+    try (ServiceArchiveExtractor.Extraction extraction =
+        ServiceArchiveExtractor.extract(context.sourceArchives())) {
+      AnalysisContext derived = withExtractedSourceRoots(context, extraction);
+      SootUpInputLocationFactory.DependencyResolution dependencies =
+          SootUpInputLocationFactory.dependencyResolution(derived);
+      AnalysisGraph graph = baseGraphProvider.analyze(derived, dependencies);
+      SemanticCallFacts facts = enrich(derived, graph, () -> dependencies);
+      return new SemanticCallFacts(
+          context,
+          graph,
+          facts.providerFacts(),
+          facts.frameworkFacts(),
+          facts.links());
+    }
+  }
+
+  /** Copies the context with the extracted trees as its required source roots. */
+  private static AnalysisContext withExtractedSourceRoots(
+      AnalysisContext context, ServiceArchiveExtractor.Extraction extraction) {
+    AnalysisContext.Builder builder = AnalysisContext.builder()
+        .id(context.id())
+        .framework(context.framework())
+        .frameworkVersion(context.frameworkVersion())
+        .fixtureId(context.fixtureId())
+        .javaRelease(context.javaRelease())
+        .repositoryRoot(context.repositoryRoot())
+        .applicationClasses(context.applicationClasses())
+        .selectedProfile(context.selectedProfile())
+        .analysisScope(context.analysisScope())
+        .inputMode(context.inputMode())
+        .sourceArchives(context.sourceArchives())
+        .extractedSourceRoots()
+        .dependencyClasspathRequired(context.dependencyClasspathRequired())
+        .dependencyClasspath(context.dependencyClasspath())
+        .dependencyCoordinateManifest(context.dependencyCoordinateManifest())
+        .frameworkBindingMetadata(context.frameworkBindingMetadata())
+        .provenance(context.provenance())
+        .handoff(context.handoff());
+    for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
+      builder.frameworkMetadata(metadata);
+    }
+    for (int index = 0; index < extraction.archiveRoots().size(); index++) {
+      builder.sourceRoot(
+          extraction.declaredPaths().get(index),
+          extraction.archiveRoots().get(index),
+          AnalysisContext.Scope.PRODUCTION,
+          true);
+    }
+    return builder.build();
   }
 
   /** Caller owns graph/input consistency; enrichment uses fresh, lazily resolved inputs. */

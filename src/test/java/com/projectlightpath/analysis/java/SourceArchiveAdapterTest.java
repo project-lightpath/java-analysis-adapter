@@ -47,10 +47,11 @@ class SourceArchiveAdapterTest {
       """;
   private static final String APP = """
       package demo;
-      import java.util.ServiceLoader;
-      public class App {
-        public String run() {
-          return ServiceLoader.load(demo.Provider.class).iterator().next().record();
+      import java.util.*;
+      public final class App {
+        public static void audit() {
+          ServiceLoader.load(Provider.class).findFirst()
+              .ifPresent(provider -> provider.record());
         }
       }
       """;
@@ -147,8 +148,16 @@ class SourceArchiveAdapterTest {
     }
   }
 
+  /**
+   * Serializes the residue assertions in this class: the adapter extracts
+   * into the shared java.io.tmpdir, and JUnit runs these methods in
+   * parallel, so a sibling method's live root would break a snapshot diff.
+   */
+  private static final Object EXTRACTION_LOCK = new Object();
+
   @Test
   void sourceOnlyArchiveRunStaysPossibleWithTheScanDiagnostic() throws IOException {
+    synchronized (EXTRACTION_LOCK) {
     Fixture fixture = fixture("app-sources.jar");
     Set<String> before = lingeringExtractionRoots();
 
@@ -171,10 +180,12 @@ class SourceArchiveAdapterTest {
     assertTrue(fact.limitation().contains("descriptor_metadata_unavailable_for_source_archive"),
         fact.limitation());
     assertEquals(before, lingeringExtractionRoots());
+    }
   }
 
   @Test
   void mixedArchiveRunWithBinariesPromotesDefiniteFromBinaryTruth() throws IOException {
+    synchronized (EXTRACTION_LOCK) {
     Fixture fixture = fixture("mixed-sources.jar");
     Path binary = binaryDescriptorJar("mixed-application-1.0.0.jar");
 
@@ -192,10 +203,12 @@ class SourceArchiveAdapterTest {
     assertTrue(fact.evidence().stream().noneMatch(item ->
             item.kind().equals("service_loader_scan_diagnostic")),
         fact.evidence().toString());
+    }
   }
 
   @Test
   void extractionFailureFailsClosedWithoutResidue() throws IOException {
+    synchronized (EXTRACTION_LOCK) {
     Path broken = temp.resolve("broken-sources.jar");
     Files.writeString(broken, "not a zip");
     AnalysisContext brokenContext = AnalysisContext.builder()
@@ -219,11 +232,13 @@ class SourceArchiveAdapterTest {
     assertThrows(IllegalArgumentException.class,
         () -> new JavaAnalysisAdapter().analyze(brokenContext));
     assertEquals(before, lingeringExtractionRoots());
+    }
   }
 
   @Test
   void repeatedRunsProduceIdenticalJsonWithoutLeakingTheExtractionRoot()
       throws IOException {
+    synchronized (EXTRACTION_LOCK) {
     Fixture fixture = fixture("stable-sources.jar");
     Path binary = binaryDescriptorJar("stable-application-1.0.0.jar");
 
@@ -237,5 +252,6 @@ class SourceArchiveAdapterTest {
     assertEquals(Files.readString(firstOutput), Files.readString(secondOutput));
     assertTrue(!Files.readString(firstOutput).contains("flpath-42-sources-"),
         "the extraction root leaked into the output");
+    }
   }
 }

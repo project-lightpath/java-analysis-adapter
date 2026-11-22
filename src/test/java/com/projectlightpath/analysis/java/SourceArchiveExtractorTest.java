@@ -56,7 +56,8 @@ class SourceArchiveExtractorTest {
     });
 
     try (ServiceArchiveExtractor.Extraction extraction =
-        ServiceArchiveExtractor.extract(List.of(archive))) {
+        ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
       Path root = extraction.root();
       assertEquals(1, extraction.archiveRoots().size());
       Path sources = extraction.archiveRoots().get(0);
@@ -76,7 +77,8 @@ class SourceArchiveExtractorTest {
 
     Path root;
     try (ServiceArchiveExtractor.Extraction extraction =
-        ServiceArchiveExtractor.extract(List.of(archive))) {
+        ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
       root = extraction.root();
       assertTrue(Files.isDirectory(root));
     }
@@ -89,7 +91,8 @@ class SourceArchiveExtractorTest {
         put(output, "demo/App.java", "package demo; class App {}\n"));
 
     try (ServiceArchiveExtractor.Extraction extraction =
-        ServiceArchiveExtractor.extract(List.of(archive))) {
+        ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
       try {
         String permissions = PosixFilePermissions.toString(
             Files.getPosixFilePermissions(extraction.root()));
@@ -106,9 +109,11 @@ class SourceArchiveExtractorTest {
         put(output, "demo/App.java", "package demo; class App {}\n"));
 
     try (ServiceArchiveExtractor.Extraction one =
-        ServiceArchiveExtractor.extract(List.of(archive));
+        ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp);
         ServiceArchiveExtractor.Extraction two =
-        ServiceArchiveExtractor.extract(List.of(archive))) {
+        ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
       assertEquals(List.of("stable-sources.jar"), one.declaredPaths());
       assertEquals(List.of("stable-sources.jar"), two.declaredPaths());
       assertEquals(
@@ -127,7 +132,8 @@ class SourceArchiveExtractorTest {
     });
 
     IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
     assertNotNull(error.getMessage());
     assertFalse(Files.exists(temp.resolve("evil.txt")));
     try (var paths = Files.list(temp)) {
@@ -141,7 +147,8 @@ class SourceArchiveExtractorTest {
         put(output, "demo/../../evil.txt", "escaped"));
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
     assertFalse(Files.exists(temp.getParent().resolve("evil.txt")));
   }
 
@@ -151,7 +158,8 @@ class SourceArchiveExtractorTest {
         put(output, "/etc/evil.txt", "absolute"));
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   @Test
@@ -160,7 +168,8 @@ class SourceArchiveExtractorTest {
         put(output, "demo\\App.java", "package demo; class App {}\n"));
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   @Test
@@ -169,7 +178,8 @@ class SourceArchiveExtractorTest {
         put(output, "demo/./App.java", "package demo; class App {}\n"));
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   @Test
@@ -180,7 +190,8 @@ class SourceArchiveExtractorTest {
     });
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   @Test
@@ -188,7 +199,8 @@ class SourceArchiveExtractorTest {
     Path archive = rawDuplicateEntryZip();
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   /**
@@ -275,7 +287,8 @@ class SourceArchiveExtractorTest {
     });
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   // --- archive-level rejection --------------------------------------------
@@ -292,7 +305,8 @@ class SourceArchiveExtractorTest {
     Files.writeString(archive, "not a zip");
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
   }
 
   @Test
@@ -336,7 +350,8 @@ class SourceArchiveExtractorTest {
     Thread.currentThread().interrupt();
     try {
       assertThrows(IllegalArgumentException.class,
-          () -> ServiceArchiveExtractor.extract(List.of(archive)));
+          () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
       assertFalse(Thread.interrupted());
     } finally {
       Thread.interrupted();
@@ -354,7 +369,8 @@ class SourceArchiveExtractorTest {
     });
 
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive)));
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
     try (var paths = Files.list(temp)) {
       assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
     }
