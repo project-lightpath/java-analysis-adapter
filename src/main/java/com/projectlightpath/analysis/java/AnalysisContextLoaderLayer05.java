@@ -146,4 +146,34 @@ abstract class AnalysisContextLoaderLayer05 extends AnalysisContextLoaderLayer04
     addRoots(builder, nonNull(document.sourceRoots()), false, repositoryRoot);
     addRoots(builder, nonNull(document.generatedSourceRoots()), true, repositoryRoot);
   }
+
+  /** Applies the explicit input mode and source archives from the handoff. */
+  static void addInputMode(
+      AnalysisContext.Builder builder, ContextDocument document, Path repositoryRoot) {
+    if (document.inputMode() != null) {
+      builder.inputMode(parseInputMode(document.inputMode()));
+    }
+    for (String value : nonNull(document.sourceArchives())) {
+      builder.sourceArchive(sourceArchivePath(value, repositoryRoot));
+    }
+  }
+
+  /** Parses the caller-selected input mode; never guesses from contents. */
+  static AnalysisContext.InputMode parseInputMode(String value) {
+    try {
+      return AnalysisContext.InputMode.valueOf(value);
+    } catch (IllegalArgumentException error) {
+      throw new IllegalArgumentException("unsupported inputMode: " + value, error);
+    }
+  }
+
+  /** Resolves one source archive path; wildcards and symlinks are rejected. */
+  static Path sourceArchivePath(String value, Path repositoryRoot) {
+    Path path = normalizedPath(value, "source archive", repositoryRoot, true, false);
+    if (Files.isSymbolicLink(path)
+        || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+      throw new IllegalArgumentException("source archive is not a regular file: " + value);
+    }
+    return path;
+  }
 }

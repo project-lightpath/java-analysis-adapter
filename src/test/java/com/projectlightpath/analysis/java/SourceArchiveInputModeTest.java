@@ -192,6 +192,7 @@ class SourceArchiveInputModeTest {
   void loaderParsesInputModeAndSourceArchives() throws IOException {
     Path archive = existingArchive();
     Path contextFile = writeContext(root -> {
+      root.remove("sourceRoots");
       root.put("inputMode", "SOURCE_ARCHIVE");
       root.putArray("sourceArchives").add(archive.toString());
     });
@@ -206,12 +207,13 @@ class SourceArchiveInputModeTest {
   @Test
   void loaderDefaultsToSourceTreeWithoutInputMode() throws IOException {
     Path contextFile = writeContext(root -> {
-      root.remove("sourceRoots");
+      root.putArray("sourceArchives");
     });
 
     AnalysisContext context = AnalysisContextLoader.load(contextFile);
 
     assertEquals(AnalysisContext.InputMode.SOURCE_TREE, context.inputMode());
+    assertTrue(context.sourceArchives().isEmpty());
   }
 
   @Test
@@ -302,8 +304,13 @@ class SourceArchiveInputModeTest {
     provenance.put("sourceFingerprint", "source-fingerprint");
     provenance.put("generatedSourceFingerprint", "generated-fingerprint");
     provenance.put("dependencyFingerprint", "dependency-fingerprint");
+    provenance.put("buildFingerprint", "build-fingerprint");
+    provenance.put("toolchainFingerprint", "toolchain-fingerprint");
+    provenance.put("analyzerFingerprint", "analyzer-fingerprint");
     provenance.put("gitRevision", "test-revision");
     provenance.put("providerRuntime", "test-runtime");
+    provenance.put("profileDigest", "profile-digest");
+    provenance.put("preparedAt", "2026-01-01T00:00:00Z");
     root.putArray("limitations");
 
     mutation.accept(root);
