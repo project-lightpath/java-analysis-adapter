@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     status = report.get("status", "unknown")
     profile = report.get("profileId")
     header = f"preparation report: {report_path} (status: {status}"
-    if profile:
+    if profile is not None:
         header += f", profile: {profile}"
     header += ")"
     print(header, file=sys.stderr)

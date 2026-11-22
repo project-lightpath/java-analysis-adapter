@@ -241,6 +241,23 @@ class PreparationDiagnosticsPrinterTest(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("failed", stderr)
             self.assertIn("no diagnostics", stderr)
+            empty = Path(directory) / "empty-diagnostics.json"
+            empty.write_text(
+                json.dumps({"status": "failed", "diagnostics": []}),
+                encoding="utf-8")
+            code, _, stderr = self.run_printer(empty)
+            self.assertEqual(0, code)
+            self.assertIn("no diagnostics", stderr)
+
+    def test_falsy_profile_id_is_still_shown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text(
+                json.dumps({"status": "failed", "profileId": ""}),
+                encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("profile:", stderr)
 
     def test_argv_misuse_prints_usage_and_exits_zero(self):
         module = self.load_printer()
