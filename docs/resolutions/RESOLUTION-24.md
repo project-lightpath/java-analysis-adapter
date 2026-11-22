@@ -115,12 +115,55 @@ declared in the fixtures (test sources under the real package names) so
 the index resolves them; the value-less-mirror decline keeps
 unresolved-import fixtures (the real-world case) on the textual path.
 
+## Review round 1 (post-implementation, CodeRabbit-style subagent)
+
+CHANGES-REQUESTED with two real divergences and hardening; all folded
+back in the same change (REVIEW_24_1) per the AGENTS same-change rule:
+
+1. **MEDIUM — values-path occurrence-count parity**: the textual
+   consumers union over EVERY occurrence (a nested `@Name` inside another
+   annotation's arguments counts), while the index path answered from the
+   one declaration mirror — `@Wrapper(@Profile("inner")) @Profile("prod")`
+   would drop the inner profile flag-on. Fixed:
+   `JavacFrameworkAnnotationValues.arguments` declines unless the textual
+   occurrence count is exactly one; cell
+   `nestedSameSimpleNameAnnotationArgumentFallsBackOnValues`.
+2. **MEDIUM — phantom constructor correlation**: the unanchored
+   constructor regex matches void methods spelled like the class.
+   Empirically the phantom's annotations group is always empty (the
+   return type separates the annotations from the name), so it is never
+   selected as an injection point — but its match still inflates the
+   textual site count. Fixed with a count-parity decline
+   (`JavacFrameworkAnnotations.memberCount`): when the textual
+   constructor-site count disagrees with the index constructor count, the
+   whole file keeps the textual answer; cell
+   `methodSpelledLikeTheClassFallsBackToTextual` pins both the
+   non-selection and the decline.
+3. **MINOR — dead `orElse(true)` default** in `mappingPaths` (silently
+   route-suppressing if ever live): replaced with the already-extracted
+   arguments' explicit-path check.
+4. **MINOR — matrix gaps**: added cells for the values-path nested case
+   (1), the phantom constructor (2), FQCN-spelled annotations, QUARKUS ×
+   local-class owners, and QUARKUS user-defined `@Named` (the unguarded
+   simple-name-semantics pin from the #24 design comment).
+5. **INFO — duplicated unquoted-scan logic** unified in
+   `JavacFrameworkAnnotations.renderIsUsable`.
+
+Empirical correction from the FQCN cell: the textual pipeline NORMALIZES
+dotted captures to simple names (`@org.springframework...Service("fq")`
+emits `BeanName:fq`), so the occurrence-parity guard now accepts a
+package-qualified capture for its simple-name mirror — FQCN-spelled
+qualifier sites migrate instead of falling back, and
+`fqcnSpelledAnnotationsMatchSimpleNameMirrors` pins the both-state
+agreement. The residual list's FQCN bullet is withdrawn accordingly.
+
 ## Gate receipts
 
 | Commit | adapter-test | java-lint | evidence-validate |
 |---|---|---|---|
-| RED_24 | 5 of 18 cells fail exactly as partitioned (the five delta cells); 13 parity/fallback cells green; rest of suite green | pending (stub) | pass |
-| GREEN_24 | see PR checks (full count; Makefile floor tightened to the exact new total — main had drifted to 399 vs 423 actual) | see PR checks | see PR checks |
+| RED_24 | 5 of 18 cells fail exactly as partitioned (the five delta cells); 13 parity/fallback cells green; rest of suite green | pass (stub, 0 new) | pass |
+| GREEN_24 + EVIDENCE_24 | 441/441 green locally (Makefile floor tightened 399 → 441; main ran 423 before these 18 cells) | 0 new findings, 0 CPD (GodClass split into three classes and record-parameter collapses are lint-driven, behavior-identical) | pass (10 criteria) |
+| REVIEW_24_1 | 446/446 green locally (floor 441 → 446, the five review cells); CI re-runs the full suite | 0 new findings, 0 CPD | pass |
 
 ## Residuals
 
@@ -132,9 +175,12 @@ unresolved-import fixtures (the real-world case) on the textual path.
   annotations still cannot make a field discoverable as an injection
   point (the injection-annotation set is fixed ASCII); a Unicode
   qualifier on a discovered field IS corrected.
-- FQCN-spelled annotations (`@org.springframework...Service`) fall back
-  (occurrence parity): the textual path emits dotted names for them, a
-  shape the simple-name mirrors cannot reproduce.
+- FQCN-spelled qualifier annotations: MIGRATED (review round 1 — the
+  textual pipeline normalizes dotted captures to simple names, and the
+  parity guard accepts package-qualified captures for their simple-name
+  mirrors); the `fqcnSpelledAnnotationsMatchSimpleNameMirrors` cell pins
+  the both-state agreement. Dotted captures whose mirror is nested or
+  ambiguous still fall back by the unique-mirror rule.
 - Unresolved annotation types (framework jar absent from the index
   classpath) keep the textual answer via the value-less-mirror decline;
   the index path engages when the types resolve (classpath present or

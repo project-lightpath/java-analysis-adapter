@@ -1,7 +1,6 @@
 package com.projectlightpath.analysis.java;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -93,17 +92,7 @@ final class JavacFrameworkQualifierFamilies {
 
   /** Reports whether a rendered argument string is unusable (index fails). */
   private static boolean hasUnusableRender(String rendered) {
-    boolean quoted = false;
-    for (int index = 0; index < rendered.length(); index++) {
-      char character = rendered.charAt(index);
-      if (character == '"') {
-        quoted = !quoted;
-      } else if (!quoted && (character == '@'
-          || rendered.startsWith("<error>", index))) {
-        return true;
-      }
-    }
-    return false;
+    return !JavacFrameworkAnnotations.renderIsUsable(rendered);
   }
 
   /**
@@ -123,8 +112,13 @@ final class JavacFrameworkQualifierFamilies {
   /**
    * Reports whether the textual ASCII-visible annotation occurrences in a
    * block multiset-match the index mirrors. A divergence (type-use
-   * spellings, nested annotation arguments, dotted names the mirrors would
-   * re-spell) means the site falls back to the textual answer.
+   * spellings, nested annotation arguments, spellings the mirrors would
+   * re-spell differently) means the site falls back to the textual answer.
+   * A capture matches its mirror when it is the simple name, a
+   * package-qualified spelling of it (the textual pipeline normalizes
+   * dotted captures to simple names), or the ASCII prefix of a
+   * {@code $}/Unicode name; mirrors with no possible capture
+   * (Unicode-initial names) may stay unmatched as index bonuses.
    */
   private static boolean occurrenceParity(
       String block, List<JavacSourceSymbolIndex.AnnotationInfo> mirrors) {
@@ -135,16 +129,34 @@ final class JavacFrameworkQualifierFamilies {
     while (matcher.find()) {
       textual.add(matcher.group(1));
     }
-    List<String> expected = new ArrayList<>();
-    for (JavacSourceSymbolIndex.AnnotationInfo mirror : mirrors) {
-      String prefix = asciiPrefix(JavacFrameworkAnnotations.simpleName(mirror));
-      if (!prefix.isEmpty()) {
-        expected.add(prefix);
+    List<String> remaining = mirrors.stream()
+        .map(JavacFrameworkAnnotations::simpleName)
+        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    for (String capture : textual) {
+      int found = -1;
+      for (int index = 0; index < remaining.size(); index++) {
+        if (captureMatches(capture, remaining.get(index))) {
+          found = index;
+          break;
+        }
       }
+      if (found < 0) {
+        return false;
+      }
+      remaining.remove(found);
     }
-    Collections.sort(textual);
-    Collections.sort(expected);
-    return textual.equals(expected);
+    // Every mirror that could have produced a textual capture must have
+    // been consumed; only capture-proof (Unicode-initial) mirrors remain.
+    return remaining.stream().allMatch(name -> asciiPrefix(name).isEmpty());
+  }
+
+  /** Reports whether one textual capture can denote one mirror name. */
+  private static boolean captureMatches(String capture, String mirrorName) {
+    if (mirrorName.equals(capture) || capture.endsWith("." + mirrorName)) {
+      return true;
+    }
+    String prefix = asciiPrefix(mirrorName);
+    return !prefix.isEmpty() && !prefix.equals(mirrorName) && prefix.equals(capture);
   }
 
   /** Returns the maximal ASCII prefix the textual pattern could capture. */

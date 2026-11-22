@@ -549,6 +549,192 @@ class JavacFrameworkAnnotationMigrationTest {
         .toList();
   }
 
+  @Test
+  void nestedSameSimpleNameAnnotationArgumentFallsBackOnValues() throws IOException {
+    Map<String, String> files = Map.of(
+        "org/springframework/context/annotation/Profile.java",
+        "package org.springframework.context.annotation;"
+            + " public @interface Profile { String[] value() default {}; }",
+        "org/springframework/stereotype/Service.java",
+        "package org.springframework.stereotype;"
+            + " public @interface Service { String value() default \"\"; }",
+        "demo/Wrapper.java", """
+            package demo;
+            import org.springframework.context.annotation.Profile;
+            public @interface Wrapper { Profile value(); }
+            """,
+        "demo/Wrapped.java", """
+            package demo;
+            import org.springframework.stereotype.Service;
+            import org.springframework.context.annotation.Profile;
+            @Service @Wrapper(@Profile("inner")) @Profile("prod")
+            public class Wrapped {}
+            """);
+    AnalysisContext context = springContext("nested-values", files);
+    System.clearProperty(FLAG);
+    List<String> off = profilesOf(new SourceMetadataScanner(context), "demo.Wrapped");
+    System.setProperty(FLAG, "true");
+    List<String> on = profilesOf(new SourceMetadataScanner(context), "demo.Wrapped");
+    // The textual consumers union over every occurrence, including the one
+    // nested inside @Wrapper's arguments; the index path answers from the
+    // single declaration mirror, so it must decline, not drop the inner
+    // value.
+    assertEquals(off, on);
+    assertEquals(List.of("inner", "prod"), on);
+  }
+
+  @Test
+  void methodSpelledLikeTheClassFallsBackToTextual() throws IOException {
+    Map<String, String> files = Map.of(
+        "org/springframework/stereotype/Component.java",
+        "package org.springframework.stereotype; public @interface Component {}",
+        "org/springframework/beans/factory/annotation/Autowired.java",
+        "package org.springframework.beans.factory.annotation; public @interface Autowired {}",
+        "org/springframework/beans/factory/annotation/Qualifier.java",
+        "package org.springframework.beans.factory.annotation;"
+            + " public @interface Qualifier { String value() default \"\"; }",
+        "demo/Phantom.java", """
+            package demo;
+            import org.springframework.stereotype.Component;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.beans.factory.annotation.Qualifier;
+            @Component public class Phantom {
+              @Autowired public Phantom(@Qualifier("c") Object real) {}
+              @Autowired public void Phantom(@Qualifier("m") int phantom) {}
+            }
+            """);
+    AnalysisContext context = springContext("phantom", files);
+    for (boolean flag : new boolean[] {false, true}) {
+      if (flag) {
+        System.setProperty(FLAG, "true");
+      } else {
+        System.clearProperty(FLAG);
+      }
+      List<SourceMetadataScannerState.InjectionPoint> points =
+          new SourceMetadataScanner(context)
+              .injectionPoints(AnalysisContext.Framework.SPRING_BOOT);
+      // The unanchored constructor regex also matches the void method
+      // spelled like the class, but with an EMPTY annotations group, so it
+      // is never selected (the real constructor makes the selection
+      // explicit); the index constructor count (1) still disagrees with
+      // the textual site count (2), so the whole file declines and the
+      // real constructor keeps its textual parameter qualifier.
+      assertEquals(1, points.size(), points.toString());
+      assertTrue(points.get(0).parameters().get(0).qualifiers()
+          .equals(List.of("Qualifier:c")), points.toString());
+    }
+  }
+
+  @Test
+  void fqcnSpelledAnnotationsMatchSimpleNameMirrors() throws IOException {
+    Map<String, String> files = Map.of(
+        "org/springframework/stereotype/Service.java",
+        "package org.springframework.stereotype;"
+            + " public @interface Service { String value() default \"\"; }",
+        "demo/FullyQualified.java", """
+            package demo;
+            @org.springframework.stereotype.Service("fq")
+            public class FullyQualified {}
+            """);
+    AnalysisContext context = springContext("fqcn", files);
+    System.clearProperty(FLAG);
+    List<String> off = qualifierListOf(
+        new SourceMetadataScanner(context), "demo.FullyQualified");
+    System.setProperty(FLAG, "true");
+    List<String> on = qualifierListOf(
+        new SourceMetadataScanner(context), "demo.FullyQualified");
+    // The textual pipeline normalizes the dotted capture to the simple
+    // name (BeanName:fq), and the parity guard accepts a package-qualified
+    // capture for its simple-name mirror, so the site migrates and both
+    // flag states agree.
+    assertEquals(off, on);
+    assertEquals(List.of("BeanName:fq"), on);
+  }
+
+  @Test
+  void quarkusLocalClassOwnersFallBackToTextual() throws IOException {
+    Map<String, String> files = Map.of(
+        "jakarta/inject/Inject.java", "package jakarta.inject; public @interface Inject {}",
+        "jakarta/inject/Named.java",
+        "package jakarta.inject; public @interface Named { String value() default \"\"; }",
+        "jakarta/enterprise/context/ApplicationScoped.java",
+        "package jakarta.enterprise.context;"
+            + " public @interface ApplicationScoped {}",
+        "demo/LocalOwner.java", """
+            package demo;
+            import jakarta.enterprise.context.ApplicationScoped;
+            import jakarta.inject.Inject;
+            import jakarta.inject.Named;
+            @ApplicationScoped public class LocalOwner {
+              private void method(boolean flag) {
+                if (flag) {
+                  class Local {
+                    @Inject @Named("first") private String first;
+                  }
+                } else {
+                  Object anonymous = new Object() {};
+                  class Local {
+                    @Inject @Named("second") private String second;
+                  }
+                }
+              }
+            }
+            """);
+    AnalysisContext context = context(
+        "quarkus-local", AnalysisContext.Framework.QUARKUS, files);
+    System.clearProperty(FLAG);
+    String off = new SourceMetadataScanner(context)
+        .injectionPoints(AnalysisContext.Framework.QUARKUS).toString();
+    System.setProperty(FLAG, "true");
+    String on = new SourceMetadataScanner(context)
+        .injectionPoints(AnalysisContext.Framework.QUARKUS).toString();
+    assertEquals(off, on);
+    assertTrue(off.contains("Named:first"), off);
+    assertTrue(off.contains("Named:second"), off);
+  }
+
+  @Test
+  void quarkusUserDefinedNamedStillEmitsUnguarded() throws IOException {
+    Map<String, String> files = Map.of(
+        "jakarta/inject/Inject.java", "package jakarta.inject; public @interface Inject {}",
+        "demo/Named.java",
+        "package demo; public @interface Named { String value() default \"\"; }",
+        "jakarta/enterprise/context/ApplicationScoped.java",
+        "package jakarta.enterprise.context;"
+            + " public @interface ApplicationScoped {}",
+        "demo/UserNamed.java", """
+            package demo;
+            import jakarta.enterprise.context.ApplicationScoped;
+            import jakarta.inject.Inject;
+            import demo.Named;
+            @ApplicationScoped public class UserNamed {
+              @Inject @Named("custom") private String value;
+            }
+            """);
+    AnalysisContext context = context(
+        "quarkus-user-named", AnalysisContext.Framework.QUARKUS, files);
+    System.clearProperty(FLAG);
+    List<String> off = quarkusFieldQualifiers(new SourceMetadataScanner(context), "value");
+    System.setProperty(FLAG, "true");
+    List<String> on = quarkusFieldQualifiers(new SourceMetadataScanner(context), "value");
+    // The unguarded arm reproduces simple-name semantics: a user-defined
+    // @Named still emits its qualifier in both flag states.
+    assertEquals(off, on);
+    assertEquals(List.of("Named:custom"), on);
+  }
+
+  private List<String> profilesOf(SourceMetadataScanner scanner, String id) {
+    return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(bean -> bean.candidateId().equals(id))
+        .findFirst().orElseThrow().profiles();
+  }
+
+  private List<String> quarkusFieldQualifiers(SourceMetadataScanner scanner, String field) {
+    return scanner.injectionPoints(AnalysisContext.Framework.QUARKUS).stream()
+        .filter(point -> point.kind().equals("field") && point.member().equals(field))
+        .findFirst().orElseThrow().qualifiers();
+  }
+
   private List<String> qualifierListOf(SourceMetadataScanner scanner, String id) {
     return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(bean -> bean.candidateId().equals(id))

@@ -79,6 +79,23 @@ final class JavacFrameworkAnnotations {
         .map(JavacSourceSymbolIndex.MemberInfo::parameterAnnotations);
   }
 
+  /**
+   * Returns the index member count for one owner, name, and kind, or -1
+   * when the owner does not resolve. Callers compare it with the textual
+   * occurrence count: a textual regex can match more sites than the index
+   * knows members (e.g. a void method spelled like the class matches the
+   * constructor regex), and correlating such a site would attribute the
+   * wrong member's mirrors to it.
+   */
+  long memberCount(String owner, String name, String kind) {
+    return resolvedType(owner)
+        .map(type -> type.members().stream()
+            .filter(candidate -> candidate.name().equals(name))
+            .filter(candidate -> candidate.kind().equals(kind))
+            .count())
+        .orElse(-1L);
+  }
+
   /** Returns the pre-drop parameter count, or -1 when comments hide it. */
   static int parameterArity(String parameters) {
     if (parameters == null) {
@@ -92,6 +109,26 @@ final class JavacFrameworkAnnotations {
       return -1;
     }
     return SourceMetadataScanner.splitArguments(text).size();
+  }
+
+  /**
+   * Reports whether a rendered argument string is usable outside quotes: a
+   * nested annotation value ({@code @}), or an unresolved value
+   * ({@code <error>}, e.g. an enum constant whose type the index could not
+   * resolve), means the mirror cannot stand in for the textual answer.
+   */
+  static boolean renderIsUsable(String rendered) {
+    boolean quoted = false;
+    for (int index = 0; index < rendered.length(); index++) {
+      char character = rendered.charAt(index);
+      if (character == '"') {
+        quoted = !quoted;
+      } else if (!quoted && (character == '@'
+          || rendered.startsWith("<error>", index))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Returns the annotation's simple name (last canonical segment). */

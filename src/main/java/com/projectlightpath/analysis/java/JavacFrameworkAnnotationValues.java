@@ -56,9 +56,11 @@ final class JavacFrameworkAnnotationValues {
       if (!result.isEmpty()) {
         return List.copyOf(result);
       }
-      return hasExplicitMappingPath(mirrors, file, block, annotation).orElse(true)
-          ? List.of()
-          : List.of("");
+      // F8 cardinality: no value/path attribute means the annotation is
+      // present with no explicit path (List.of("")), never a drop.
+      boolean explicit = SourceMetadataScanner.attributeValue(args, "value") != null
+          || SourceMetadataScanner.attributeValue(args, "path") != null;
+      return explicit ? List.of() : List.of("");
     });
   }
 
@@ -105,7 +107,7 @@ final class JavacFrameworkAnnotationValues {
     return uniqueMirror(mirrors, annotation, false)
         .filter(mirror -> mirrorCovers(mirror, textual))
         .map(JavacFrameworkAnnotations::renderedArguments)
-        .filter(JavacFrameworkAnnotationValues::renderIsUsable)
+        .filter(JavacFrameworkAnnotations::renderIsUsable)
         .map(args -> SourceMetadataScanner.literalPathValues(
             SourceMetadataScanner.selectedValue(args, "value")))
         .filter(Optional::isPresent)
@@ -151,7 +153,7 @@ final class JavacFrameworkAnnotationValues {
         return Optional.empty();
       }
       String args = JavacFrameworkAnnotations.renderedArguments(mirror.orElseThrow());
-      if (!renderIsUsable(args)) {
+      if (!JavacFrameworkAnnotations.renderIsUsable(args)) {
         return Optional.empty();
       }
       result.add(args.isEmpty()
@@ -171,13 +173,17 @@ final class JavacFrameworkAnnotationValues {
     List<String> textual = canonical
         ? SourceMetadataScanner.annotationArguments(file, block, annotation)
         : SourceMetadataScanner.annotationArguments(block, annotation);
-    if (textual.isEmpty()) {
+    // Occurrence-count parity: the textual consumers union over EVERY
+    // occurrence (a nested @Name inside another annotation's arguments
+    // counts), while the index path answers from the one declaration
+    // mirror — any count other than exactly one declines.
+    if (textual.size() != 1) {
       return Optional.empty();
     }
     return uniqueMirror(mirrors, annotation, canonical)
         .filter(mirror -> mirrorCovers(mirror, textual))
         .map(JavacFrameworkAnnotations::renderedArguments)
-        .filter(JavacFrameworkAnnotationValues::renderIsUsable);
+        .filter(JavacFrameworkAnnotations::renderIsUsable);
   }
 
   /** Returns the unique mirror for one gate-accepted annotation name. */
@@ -204,26 +210,4 @@ final class JavacFrameworkAnnotationValues {
         || textualArguments.stream().noneMatch(args -> !args.isBlank());
   }
 
-  /**
-   * Reports whether a rendered argument string is usable outside quotes: a
-   * nested annotation value ({@code @}), or an unresolved value
-   * ({@code <error>}, e.g. an enum constant whose type the index could not
-   * resolve), means the mirror cannot stand in for the textual answer.
-   */
-  private static boolean renderIsUsable(String rendered) {
-    return !containsUnquoted(rendered, "@") && !containsUnquoted(rendered, "<error>");
-  }
-
-  private static boolean containsUnquoted(String rendered, String token) {
-    boolean quoted = false;
-    for (int index = 0; index < rendered.length(); index++) {
-      char character = rendered.charAt(index);
-      if (character == '"') {
-        quoted = !quoted;
-      } else if (!quoted && rendered.startsWith(token, index)) {
-        return true;
-      }
-    }
-    return false;
-  }
 }

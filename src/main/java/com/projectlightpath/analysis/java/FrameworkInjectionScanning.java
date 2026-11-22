@@ -73,9 +73,16 @@ final class FrameworkInjectionScanning {
           continue;
         }
         String owner = scanner.typeContaining(file, constructorInfo.start());
+        // The unanchored constructor regex also matches void methods spelled
+        // like the class: when the textual site count exceeds the index's
+        // constructor count, correlating would attribute the wrong member's
+        // mirrors to the phantom site — decline for the whole file.
+        boolean countsMatch = javac.memberCount(owner, file.simpleTypeName(), "constructor")
+            == constructors.size();
+        InjectionSite site = new InjectionSite(
+            file, owner, file.simpleTypeName(), "constructor");
         List<Parameter> parameters = injectionParameters(
-            scanner, javac, framework, file, owner, file.simpleTypeName(),
-            "constructor", constructorInfo.parameters());
+            scanner, javac, framework, site, constructorInfo.parameters(), countsMatch);
         if (!parameters.isEmpty()) {
           result.add(new InjectionPoint(
               file,
@@ -87,10 +94,12 @@ final class FrameworkInjectionScanning {
               "constructor",
               JavacFrameworkQualifierFamilies.qualifiers(
                   file, constructorInfo.annotations(),
-                  javac.memberAnnotations(
-                      owner, file.simpleTypeName(), "constructor",
-                      JavacFrameworkAnnotations.parameterArity(constructorInfo.parameters()))
-                      .orElse(List.of()),
+                  countsMatch
+                      ? javac.memberAnnotations(
+                          site.owner(), site.memberName(), site.kind(),
+                          JavacFrameworkAnnotations.parameterArity(constructorInfo.parameters()))
+                          .orElse(List.of())
+                      : List.of(),
                   false)
                   .orElseGet(() -> scanner.qualifierNames(constructorInfo.annotations()))));
         }
@@ -148,9 +157,9 @@ final class FrameworkInjectionScanning {
           continue;
         }
         String owner = scanner.typeContaining(file, method.start());
+        InjectionSite site = new InjectionSite(file, owner, method.name(), "method");
         List<Parameter> parameters = injectionParameters(
-            scanner, javac, framework, file, owner, method.name(),
-            "method", method.parameters());
+            scanner, javac, framework, site, method.parameters(), true);
         if (!parameters.isEmpty()) {
           result.add(new InjectionPoint(
               file,
@@ -175,25 +184,28 @@ final class FrameworkInjectionScanning {
       return result;
     }
 
+    /** One injection member site for index correlation. */
+    private record InjectionSite(
+        SourceFile file, String owner, String memberName, String kind) {}
+
     /** Parses injection parameters, repairing qualifiers from the index. */
     private static List<Parameter> injectionParameters(
         SourceMetadataScanner scanner,
         JavacFrameworkAnnotations javac,
         AnalysisContext.Framework framework,
-        SourceFile file,
-        String owner,
-        String memberName,
-        String kind,
-        String rawParameters) {
-      List<Parameter> textual = scanner.parameters(framework, file, rawParameters);
-      if (textual.isEmpty()) {
+        InjectionSite site,
+        String rawParameters,
+        boolean allowIndex) {
+      List<Parameter> textual =
+          scanner.parameters(framework, site.file(), rawParameters);
+      if (textual.isEmpty() || !allowIndex) {
         return textual;
       }
       boolean spring = framework == AnalysisContext.Framework.SPRING_BOOT;
       List<String> raws = SourceMetadataScanner.splitArguments(rawParameters.trim());
       Optional<List<List<JavacSourceSymbolIndex.AnnotationInfo>>> perParameter =
           javac.parameterAnnotations(
-              owner, memberName, kind,
+              site.owner(), site.memberName(), site.kind(),
               JavacFrameworkAnnotations.parameterArity(rawParameters), textual.size());
       if (perParameter.isEmpty() || raws.size() != textual.size()) {
         return textual;
@@ -203,9 +215,9 @@ final class FrameworkInjectionScanning {
         Parameter parameter = textual.get(index);
         String raw = raws.get(index);
         List<String> qualifiers = JavacFrameworkQualifierFamilies.qualifiers(
-            file, raw, perParameter.orElseThrow().get(index), spring)
+            site.file(), raw, perParameter.orElseThrow().get(index), spring)
             .orElseGet(() -> spring
-                ? scanner.qualifierNames(file, raw)
+                ? scanner.qualifierNames(site.file(), raw)
                 : scanner.qualifierNames(raw));
         result.add(new Parameter(parameter.type(), parameter.name(), qualifiers));
       }
