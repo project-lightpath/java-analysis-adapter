@@ -26,13 +26,17 @@ def main() -> int:
     minimum = int(sys.argv[1]) if len(sys.argv) > 1 else 302
     default = count(Path("target/surefire-reports"))
     large = count(Path("target/surefire-reports-large"))
-    total = default + large
+    sootup = count(Path("target/surefire-reports-sootup"))
+    total = default + large + sootup
     print(
-        f"surefire tests: default={default} large={large} "
+        f"surefire tests: default={default} large={large} sootup={sootup} "
         f"total={total} (recorded baseline {minimum})"
     )
     if large < 1:
         print("ERROR: large-archive execution ran no tests", file=sys.stderr)
+        return 1
+    if sootup < 1:
+        print("ERROR: sootup execution ran no tests", file=sys.stderr)
         return 1
     if total < minimum:
         print("ERROR: test count decreased below the recorded baseline", file=sys.stderr)

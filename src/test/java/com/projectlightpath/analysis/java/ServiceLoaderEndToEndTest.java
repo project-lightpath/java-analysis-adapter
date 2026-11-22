@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,8 +26,10 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>The lane runs with {@code flpath.java.resolver=javac} and asserts the
  * externally visible service_loader facts, so a regression in site discovery,
  * source correlation, or descriptor promotion fails here before it reaches
- * callers.
+ * callers. SootUp scene lane: bounded heap and reduced parallelism in its
+ * own surefire execution.
  */
+@Tag("sootup")
 class ServiceLoaderEndToEndTest {
   private static final String EXPECTED_PROVIDER = "demo.DefaultProvider#record";
 
