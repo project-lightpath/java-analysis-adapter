@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#22 (parent #20)
 Branch: `feature/flpath-5142-javac-annotation-names` (from `origin/main` @ `1077c09`)
-Plan: `PLAN-22.md` (7 adversarial review loops, 26 folded findings, one
+Plan: `docs/plans/PLAN-22.md` (7 adversarial review loops, 26 folded findings, one
 user-directed scope triage handing the qualifier-consumer migration to
 #24 and the per-parameter annotation index API to #37)
 Commits: PLAN_22 (029d035 + revisions), `RED_22` (bb01a6b), `GREEN_22`
@@ -56,7 +56,7 @@ unchanged.
 
 ## Pre-RED scratch probe
 
-Recorded in `PLAN-22.md`: 16 parameter shapes pinned the trigger.
+Recorded in `docs/plans/PLAN-22.md`: 16 parameter shapes pinned the trigger.
 Key find: `$` passes `Character.isJavaIdentifierPart`, so the
 unconsumed-tail check is `isJavaIdentifierPart && !isAsciiWord` — a
 naive check misses `@Mar$k`. Triggered: annotation-with-args (ASCII
@@ -83,7 +83,7 @@ Both recorded for #24/#26.
 
 ## Residuals
 
-See `PLAN-22.md`'s residual list; headline items: same-arity overload
+See `docs/plans/PLAN-22.md`'s residual list; headline items: same-arity overload
 ambiguity falls back to textual (positions are the follow-up),
 repaired parameters emit canonical spellings until a source-spelling
 renderer is worth its cost (#26 owns that decision), and all
