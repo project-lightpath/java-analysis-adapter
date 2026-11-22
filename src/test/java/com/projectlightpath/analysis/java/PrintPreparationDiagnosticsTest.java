@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,8 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -19,24 +18,13 @@ import org.junit.jupiter.api.io.TempDir;
  * Regression cells for the fail-visible preparation-diagnostics printer (#40).
  *
  * <p>Each cell pins the rendered message for one report shape so a regression in the
- * fail-visible handling of missing, malformed, or diagnostic-free reports is caught.
+ * fail-visible handling of missing, malformed, or diagnostic-free reports is caught. The
+ * suite runs test methods in parallel, so no test captures the shared System.err: main
+ * delegates to injectable pieces (render, usageLines, printLines) that are pinned
+ * directly.
  */
 class PrintPreparationDiagnosticsTest {
   @TempDir Path temp;
-
-  private final PrintStream originalErr = System.err;
-  private ByteArrayOutputStream capturedErr;
-
-  @BeforeEach
-  void captureStderr() {
-    capturedErr = new ByteArrayOutputStream();
-    System.setErr(new PrintStream(capturedErr, true, StandardCharsets.UTF_8));
-  }
-
-  @AfterEach
-  void restoreStderr() {
-    System.setErr(originalErr);
-  }
 
   private Path report(String content) throws IOException {
     Path file = temp.resolve("preparation-report.json");
@@ -162,23 +150,29 @@ class PrintPreparationDiagnosticsTest {
     assertTrue(invalid.contains("unreadable"));
   }
 
-  /** Main prints usage for argv misuse and exits without throwing. */
+  /** Usage lines cover argv misuse, and main itself never throws for any argv shape. */
   @Test
-  void mainPrintsUsageForArgvMisuse() throws IOException {
-    PrintPreparationDiagnostics.main(new String[0]);
-    assertTrue(capturedErr.toString(StandardCharsets.UTF_8).contains("usage:"));
+  void usageCoversArgvMisuseAndMainNeverThrows() throws IOException {
+    assertTrue(joined(PrintPreparationDiagnostics.usageLines()).contains("usage:"));
 
-    PrintPreparationDiagnostics.main(new String[] {"a", "b"});
-    assertTrue(capturedErr.toString(StandardCharsets.UTF_8).contains("usage:"));
+    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[0]));
+    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[] {"a", "b"}));
+    String reportPath =
+        report("{\"status\": \"failed\", \"diagnostics\": []}").toString();
+    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[] {reportPath}));
   }
 
-  /** Main prints the rendered diagnostics for a report path and never throws. */
+  /** PrintLines writes one line per rendered line to the target stream. */
   @Test
-  void mainPrintsDiagnosticsForReportPath() throws IOException {
-    PrintPreparationDiagnostics.main(new String[] {
-        report("{\"status\": \"failed\", \"diagnostics\": []}").toString()});
-    String stderr = capturedErr.toString(StandardCharsets.UTF_8);
-    assertTrue(stderr.contains("status: failed"));
-    assertTrue(stderr.contains("no diagnostics were recorded"));
+  void printLinesWritesRenderedLinesToTargetStream() throws IOException {
+    Path file = report("{\"status\": \"failed\", \"diagnostics\": []}");
+    ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+    PrintPreparationDiagnostics.printLines(
+        PrintPreparationDiagnostics.render(file), new PrintStream(sink, true));
+
+    String printed = sink.toString(StandardCharsets.UTF_8);
+    assertTrue(printed.contains("status: failed"));
+    assertTrue(printed.contains("no diagnostics were recorded"));
   }
 }
