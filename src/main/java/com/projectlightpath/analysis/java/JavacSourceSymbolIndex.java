@@ -679,7 +679,8 @@ final class JavacSourceSymbolIndex {
               .map(variable -> canonicalType(variable.asType()))
               .toList(),
           parameters.stream()
-              .map(variable -> List.<AnnotationInfo>of())
+              .map(variable -> variable.getAnnotationMirrors().stream()
+                  .map(AnnotationRenderer::info).toList())
               .toList(),
           memberReturnType(element),
           memberHasErrorType(element, executable));
