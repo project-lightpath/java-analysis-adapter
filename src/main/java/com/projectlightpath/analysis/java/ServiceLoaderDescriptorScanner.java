@@ -237,14 +237,20 @@ final class ServiceLoaderDescriptorScanner {
     return "ServiceLoader registration or runtime classloader selection is not unique.";
   }
 
-  record Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics) {
+  record Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics,
+      List<String> limitations) {
     Scan {
       descriptors = List.copyOf(descriptors);
       diagnostics = List.copyOf(diagnostics == null ? List.of() : diagnostics);
+      limitations = List.copyOf(limitations == null ? List.of() : limitations);
+    }
+
+    Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics) {
+      this(descriptors, diagnostics, List.of());
     }
 
     Scan(List<Descriptor> descriptors) {
-      this(descriptors, List.of());
+      this(descriptors, List.of(), List.of());
     }
   }
 
