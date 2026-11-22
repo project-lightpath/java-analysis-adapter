@@ -225,7 +225,13 @@ class PreparationDiagnosticsPrinterTest(unittest.TestCase):
         code, _, stderr = self.run_printer(Path("does-not-exist-report.json"))
         self.assertEqual(0, code)
         self.assertIn("does-not-exist-report.json", stderr)
-        self.assertIn("no preparation report", stderr)
+        self.assertIn("not found or not a file", stderr)
+
+    def test_directory_at_report_path_is_actionable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            code, _, stderr = self.run_printer(Path(directory))
+            self.assertEqual(0, code)
+            self.assertIn("not found or not a file", stderr)
 
     def test_report_without_diagnostics_says_so(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -243,6 +249,12 @@ class PreparationDiagnosticsPrinterTest(unittest.TestCase):
             with patch.object(sys, "argv", argv):
                 with contextlib.redirect_stderr(io.StringIO()) as stderr:
                     code = module.main()
+            self.assertEqual(0, code)
+            self.assertIn("usage:", stderr.getvalue())
+        # Pin the explicit-argv usage branch as well, not just the sys.argv default.
+        for direct in ([], ["a", "b"]):
+            with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                code = module.main(argv=direct)
             self.assertEqual(0, code)
             self.assertIn("usage:", stderr.getvalue())
 

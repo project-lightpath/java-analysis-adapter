@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     report_path = Path(arguments[0])
     if not report_path.is_file():
         print(
-            f"no preparation report was written: {report_path}",
+            f"preparation report not found or not a file: {report_path}",
             file=sys.stderr,
         )
         return 0
