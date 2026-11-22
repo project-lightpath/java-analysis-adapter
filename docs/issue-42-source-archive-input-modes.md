@@ -55,7 +55,9 @@ conjunct), not just the archive that caused them:
   zero-descriptor "complete" scan.
 - `source_archive_on_dependency_classpath` — a wildcard dependency-classpath
   expansion resolved a declared source archive. The entry is excluded from
-  the descriptor scan and the scan is marked incomplete.
+  the descriptor scan and the scan is marked incomplete. (The archive may
+  still enter the SootUp graph classpath through the wildcard; it carries
+  no `.class` files, so it produces no facts.)
 
 ## Limitations (not diagnostics)
 

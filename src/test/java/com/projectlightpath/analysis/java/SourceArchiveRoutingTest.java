@@ -206,6 +206,34 @@ class SourceArchiveRoutingTest {
   }
 
   @Test
+  void sourceArchiveDisplayPathsFallBackToRepositoryRelative() throws IOException {
+    // Observed descriptor metadata explicitly selected by the handoff
+    // (inside the repository root but outside every scanned input) must
+    // keep the repository-relative display form in SOURCE_ARCHIVE runs
+    // instead of regressing to machine-absolute paths.
+    Path observed = Files.createDirectories(temp.resolve("observed-services"));
+    Files.writeString(observed.resolve("demo.ObservedService"), "demo.ObservedProvider\n");
+    Path archive = sourcesArchive("display-sources.jar");
+    AnalysisContext context = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(archive)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "observed-descriptor",
+            "service_loader_descriptor",
+            AnalysisContext.MetadataStatus.OBSERVED,
+            "observed-services/demo.ObservedService"))
+        .build();
+
+    ServiceLoaderDescriptorScanner.Scan scan = ServiceLoaderDescriptorScanner.scan(context);
+
+    assertTrue(scan.descriptors().stream().anyMatch(item ->
+            item.serviceType().equals("demo.ObservedService")
+                && "observed-services/demo.ObservedService".equals(item.path())),
+        scan.descriptors().toString());
+  }
+
+  @Test
   void binaryArchiveWithCheckedInServicesKeepsSourceProvenance() throws IOException {
     // Mixed mode: checked-in source-tree descriptors plus binary truth.
     Path resources = temp.resolve("src/main/resources/META-INF/services");

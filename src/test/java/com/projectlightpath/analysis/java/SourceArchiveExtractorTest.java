@@ -386,6 +386,22 @@ class SourceArchiveExtractorTest {
   }
 
   @Test
+  void rejectsNulByteInEntryName() throws IOException {
+    // Empirical probe: the #34 parser decodes the name bytes strictly as
+    // UTF-8 (a 0x00 byte is valid UTF-8), so a NUL passes through to the
+    // extractor's entry-name validation and must be rejected there.
+    Path archive = zip("nul-sources.jar", output ->
+        put(output, "demo/A\0pp.java", "package demo; class App {}\n"));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    try (var paths = Files.list(temp)) {
+      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
+    }
+  }
+
+  @Test
   void rejectsWildcardInEntryName() throws IOException {
     Path archive = zip("wildcard-sources.jar", output ->
         put(output, "demo/*.java", "wildcard entry"));
