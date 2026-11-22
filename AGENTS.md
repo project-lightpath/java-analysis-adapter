@@ -77,7 +77,9 @@ green in isolation do not prove their composition.
   must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
   `make adapter-test` is the only test target: JUnit schedules the test methods
   in parallel (`src/test/resources/junit-platform.properties`) and the target
-  derives the pool from CPU count (capped at 8, 512 MB heap per slot;
+  derives the pool from CPU count (capped at 8, 1 GB heap per slot — the
+  lane runs in-JVM javac compilations, and 512 MB per slot OOMs under
+  four parallel initializations;
   `ADAPTER_TEST_PARALLELISM=N` overrides). SootUp scene tests are tagged
   `sootup` and run in their own surefire execution with a fixed 6 GB heap and
   parallelism 2 (one scene needs ~3 GB of ASM-materialized classpath;
