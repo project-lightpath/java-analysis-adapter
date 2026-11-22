@@ -668,7 +668,7 @@ final class JavacSourceSymbolIndex {
     private MemberInfo memberInfo(Element element) {
       boolean executable = element.getKind() == ElementKind.METHOD
           || element.getKind() == ElementKind.CONSTRUCTOR;
-      List<? extends javax.lang.model.element.VariableElement> parameters =
+      List<? extends VariableElement> parameters =
           executable ? ((ExecutableElement) element).getParameters() : List.of();
       return new MemberInfo(
           memberName(element),
