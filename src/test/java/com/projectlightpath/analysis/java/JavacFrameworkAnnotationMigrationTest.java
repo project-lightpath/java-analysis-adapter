@@ -211,14 +211,12 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void dollarAndUnicodeQualifiersAreCorrectedAtBeanSiteFlagOn() throws IOException {
     Map<String, String> files = Map.of(
-        "demo/Mar$k.java", "package demo; public @interface Mar$k {}",
-        "demo/Omega.java", "package demo; public @interface Ωmega {}",
         "demo/Weird.java", """
             package demo;
             import org.springframework.stereotype.Service;
-            import demo.Mar$k;
-            import demo.Omega;
             @Service @Mar$k @Ωmega public class Weird {}
+            @interface Mar$k {}
+            @interface Ωmega {}
             """);
     AnalysisContext context = springContext("dollar-bean", files);
     System.clearProperty(FLAG);
@@ -234,15 +232,14 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void dollarNamedFieldQualifierIsCorrectedFlagOn() throws IOException {
     Map<String, String> files = Map.of(
-        "demo/Mar$k.java", "package demo; public @interface Mar$k {}",
         "demo/Holder.java", """
             package demo;
             import org.springframework.stereotype.Component;
             import org.springframework.beans.factory.annotation.Autowired;
-            import demo.Mar$k;
             @Component public class Holder {
               @Autowired @Mar$k private String value;
             }
+            @interface Mar$k {}
             """);
     AnalysisContext context = springContext("dollar-field", files);
     System.clearProperty(FLAG);
