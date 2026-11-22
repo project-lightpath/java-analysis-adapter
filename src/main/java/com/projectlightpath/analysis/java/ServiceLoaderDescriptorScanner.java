@@ -46,7 +46,7 @@ final class ServiceLoaderDescriptorScanner {
         new Diagnostic(item.code(), "selected-sources", item.detail())));
     errors.forEach((path, detail) -> diagnostics.add(new Diagnostic(
         "javac_source_error", diagnosticPath(scanner, path), detail)));
-    return new Scan(scan.descriptors(), diagnostics);
+    return new Scan(scan.descriptors(), diagnostics, scan.limitations());
   }
 
   static String diagnosticPath(SourceMetadataScanner scanner, Path path) {
@@ -227,6 +227,9 @@ final class ServiceLoaderDescriptorScanner {
     if (!scan.diagnostics().isEmpty()) {
       return "Selected ServiceLoader metadata scan reported: " + scan.diagnostics().stream()
           .map(Diagnostic::code).distinct().sorted().collect(Collectors.joining(", ")) + ".";
+    }
+    if (!scan.limitations().isEmpty()) {
+      return scan.limitations().stream().collect(Collectors.joining(" ")) + ".";
     }
     if (descriptors.stream().anyMatch(Descriptor::malformed)) {
       return "Selected ServiceLoader descriptor contains malformed provider metadata; runtime selection is not proven unique.";

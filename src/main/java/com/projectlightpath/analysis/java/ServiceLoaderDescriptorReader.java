@@ -44,7 +44,10 @@ final class ServiceLoaderDescriptorReader {
         : dependencyResolution.skipped()) {
       state.diagnostic(skip.code(), skip.path().toString(), skip.detail());
     }
-    List<Path> dependencyEntries = dependencyResolution.entries();
+    List<Path> dependencyEntries = SourceArchiveDescriptorRouting.routedDependencyEntries(
+        context, dependencyResolution, state);
+    List<String> limitations = SourceArchiveDescriptorRouting.modeLimitations(
+        context, dependencyResolution);
     ServiceLoaderDescriptorSource.scanClasspathEntry(
         context.applicationClasses(), descriptors, visited, state);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
@@ -77,8 +80,9 @@ final class ServiceLoaderDescriptorReader {
     }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path)
         .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::serviceType));
-    return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics());
+    return new ServiceLoaderDescriptorScanner.Scan(descriptors, state.diagnostics(), limitations);
   }
+
 
   /** Handles one observed metadata selection: one file, or one directory tree. */
   private static void scanObservedMetadata(
@@ -247,10 +251,7 @@ final class ServiceLoaderDescriptorReader {
   }
 
   private static String displayPath(AnalysisContext context, Path path) {
-    Path root = context.repositoryRoot().toAbsolutePath().normalize();
-    return path.startsWith(root)
-        ? root.relativize(path).toString().replace(path.getFileSystem().getSeparator(), "/")
-        : path.toString();
+    return SourceArchiveDescriptorRouting.displayPath(context, path);
   }
 
 }
