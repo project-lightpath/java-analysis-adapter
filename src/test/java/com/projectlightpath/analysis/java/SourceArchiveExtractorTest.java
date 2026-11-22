@@ -55,7 +55,7 @@ class SourceArchiveExtractorTest {
       put(output, "demo/util/Helper.java", "package demo.util; class Helper {}\n");
     });
 
-    try (SourceArchiveExtractor.Extraction extraction =
+    try (ServiceArchiveExtractor.Extraction extraction =
         ServiceArchiveExtractor.extract(List.of(archive))) {
       Path root = extraction.root();
       assertEquals(1, extraction.archiveRoots().size());
@@ -185,13 +185,86 @@ class SourceArchiveExtractorTest {
 
   @Test
   void rejectsDuplicateFileEntries() throws IOException {
-    Path archive = zip("duplicate-sources.jar", output -> {
-      put(output, "demo/App.java", "package demo; class First {}\n");
-      put(output, "demo/App.java", "package demo; class Second {}\n");
-    });
+    Path archive = rawDuplicateEntryZip();
 
     assertThrows(IllegalArgumentException.class,
         () -> ServiceArchiveExtractor.extract(List.of(archive)));
+  }
+
+  /**
+   * Builds a stored-entry ZIP with two central-directory records for one
+   * name (ZipOutputStream refuses duplicates, so the bytes are assembled
+   * directly; local and CEN fields agree, so the #34 parser accepts it).
+   */
+  private Path rawDuplicateEntryZip() throws IOException {
+    byte[] data = "package demo; class First {}\n"
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+    crc.update(data);
+    int crcValue = (int) crc.getValue();
+    byte[] name = "demo/Dup.java".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    long[] locals = new long[2];
+    for (int index = 0; index < 2; index++) {
+      locals[index] = out.size();
+      out.writeBytes(new byte[] {0x50, 0x4b, 0x03, 0x04});
+      short_(out, 20);
+      short_(out, 0);
+      short_(out, 0);
+      short_(out, 0);
+      short_(out, 0);
+      int_(out, crcValue);
+      int_(out, data.length);
+      int_(out, data.length);
+      short_(out, name.length);
+      short_(out, 0);
+      out.writeBytes(name);
+      out.writeBytes(data);
+    }
+    long cenStart = out.size();
+    for (int index = 0; index < 2; index++) {
+      out.writeBytes(new byte[] {0x50, 0x4b, 0x01, 0x02});
+      short_(out, 20);
+      short_(out, 20);
+      short_(out, 0);
+      short_(out, 0);
+      short_(out, 0);
+      short_(out, 0);
+      int_(out, crcValue);
+      int_(out, data.length);
+      int_(out, data.length);
+      short_(out, name.length);
+      short_(out, 0);
+      short_(out, 0);
+      short_(out, 0);
+      short_(out, 0);
+      int_(out, 0);
+      int_(out, (int) locals[index]);
+      out.writeBytes(name);
+    }
+    int cenSize = out.size() - (int) cenStart;
+    out.writeBytes(new byte[] {0x50, 0x4b, 0x05, 0x06});
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 2);
+    short_(out, 2);
+    int_(out, cenSize);
+    int_(out, (int) cenStart);
+    short_(out, 0);
+    Path archive = temp.resolve("duplicate-sources.jar");
+    Files.write(archive, out.toByteArray());
+    return archive;
+  }
+
+  private static void short_(java.io.ByteArrayOutputStream out, int value) {
+    out.write(value & 0xff);
+    out.write((value >>> 8) & 0xff);
+  }
+
+  private static void int_(java.io.ByteArrayOutputStream out, int value) {
+    for (int shift = 0; shift < 32; shift += 8) {
+      out.write((value >>> shift) & 0xff);
+    }
   }
 
   @Test
