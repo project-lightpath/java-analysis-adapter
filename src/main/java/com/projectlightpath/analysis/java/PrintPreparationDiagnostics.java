@@ -3,7 +3,7 @@ package com.projectlightpath.analysis.java;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -88,7 +88,18 @@ public final class PrintPreparationDiagnostics {
    * @param args exactly one argument: the preparation report path
    */
   public static void main(String[] args) {
-    printLines(args.length == 1 ? render(Path.of(args[0])) : usageLines(), System.err);
+    printLines(mainLines(args), System.err);
+  }
+
+  /**
+   * Lines main prints for the given arguments: usage on argv misuse, otherwise the
+   * rendered report diagnostics.
+   *
+   * @param args command-line arguments
+   * @return message lines, in print order
+   */
+  static List<String> mainLines(String[] args) {
+    return args.length == 1 ? render(Path.of(args[0])) : usageLines();
   }
 
   /** Usage lines printed when the argument count is wrong. */
@@ -97,7 +108,7 @@ public final class PrintPreparationDiagnostics {
   }
 
   /** Prints the lines to the stream, one per line. */
-  static void printLines(List<String> lines, java.io.PrintStream stream) {
+  static void printLines(List<String> lines, PrintStream stream) {
     for (String line : lines) {
       stream.println(line);
     }

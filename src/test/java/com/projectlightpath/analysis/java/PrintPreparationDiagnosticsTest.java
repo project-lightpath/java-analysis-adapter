@@ -1,6 +1,7 @@
 package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -150,29 +151,43 @@ class PrintPreparationDiagnosticsTest {
     assertTrue(invalid.contains("unreadable"));
   }
 
-  /** Usage lines cover argv misuse, and main itself never throws for any argv shape. */
+  /** MainLines pins argv misuse and report-path content; main never throws. */
   @Test
-  void usageCoversArgvMisuseAndMainNeverThrows() throws IOException {
-    assertTrue(joined(PrintPreparationDiagnostics.usageLines()).contains("usage:"));
+  void mainLinesPinArgvMisuseAndReportContent() throws IOException {
+    assertTrue(joined(PrintPreparationDiagnostics.mainLines(new String[0]))
+        .contains("usage:"));
+    assertTrue(joined(PrintPreparationDiagnostics.mainLines(new String[] {"a", "b"}))
+        .contains("usage:"));
 
-    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[0]));
-    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[] {"a", "b"}));
     String reportPath =
         report("{\"status\": \"failed\", \"diagnostics\": []}").toString();
-    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[] {reportPath}));
+    String rendered = joined(
+        PrintPreparationDiagnostics.mainLines(new String[] {reportPath}));
+    assertTrue(rendered.contains("status: failed"));
+    assertTrue(rendered.contains("no diagnostics were recorded"));
+
+    assertDoesNotThrow(() -> PrintPreparationDiagnostics.main(new String[0]));
+    assertDoesNotThrow(
+        () -> PrintPreparationDiagnostics.main(new String[] {reportPath}));
   }
 
-  /** PrintLines writes one line per rendered line to the target stream. */
+  /** PrintLines writes exactly one line per rendered line to the target stream. */
   @Test
   void printLinesWritesRenderedLinesToTargetStream() throws IOException {
     Path file = report("{\"status\": \"failed\", \"diagnostics\": []}");
     ByteArrayOutputStream sink = new ByteArrayOutputStream();
 
-    PrintPreparationDiagnostics.printLines(
-        PrintPreparationDiagnostics.render(file), new PrintStream(sink, true));
+    List<String> rendered = PrintPreparationDiagnostics.render(file);
+    PrintPreparationDiagnostics.printLines(rendered, new PrintStream(sink, true));
 
     String printed = sink.toString(StandardCharsets.UTF_8);
     assertTrue(printed.contains("status: failed"));
     assertTrue(printed.contains("no diagnostics were recorded"));
+    String[] printedLines = printed.split("\n", -1);
+    assertEquals(rendered.size(), printedLines.length - 1);
+    for (int i = 0; i < rendered.size(); i++) {
+      assertEquals(rendered.get(i), printedLines[i]);
+    }
+    assertTrue(printed.endsWith("\n"));
   }
 }
