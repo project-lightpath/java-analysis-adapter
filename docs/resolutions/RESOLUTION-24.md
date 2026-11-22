@@ -188,6 +188,15 @@ agreement. The residual list's FQCN bullet is withdrawn accordingly.
 - Same-arity overload ambiguity, local/anonymous owners, comment-hidden
   arity, error types, duplicate binary names: silent textual fallback
   (measured by #26's parity harness).
+- The constructor count-parity guard compares the per-owner index
+  constructor count with the file-wide textual site count; a phantom
+  regex match (+1 textual) could in theory balance against a real
+  constructor the regex fails to capture (an unmasked `)` in a parameter
+  list), leaving the counts equal while a phantom exists. No compilable
+  counterexample was constructible (maskAnnotationArguments covers the
+  annotation-argument paren case, and the phantom's empty annotations
+  group keeps it unselected unless it is the only site), so this is
+  documentation-grade; the #26 parity harness owns the measurement.
 - Renderer quote-escaping (`AnnotationRenderer` does not re-escape `"`
   in string values) is #21 code: filed as a follow-up issue rather than
   grown here (scope-creep rule).

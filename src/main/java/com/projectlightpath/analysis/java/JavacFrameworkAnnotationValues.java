@@ -101,7 +101,9 @@ final class JavacFrameworkAnnotationValues {
       String block,
       String annotation) {
     List<String> textual = SourceMetadataScanner.annotationArguments(block, annotation);
-    if (textual.isEmpty()) {
+    // Occurrence-count parity, as in arguments(): the textual consumers
+    // union over every occurrence; the index answers from one mirror.
+    if (textual.size() != 1) {
       return Optional.empty();
     }
     return uniqueMirror(mirrors, annotation, false)
@@ -149,7 +151,9 @@ final class JavacFrameworkAnnotationValues {
       List<String> textual = canonical
           ? SourceMetadataScanner.annotationArguments(file, block, name)
           : SourceMetadataScanner.annotationArguments(block, name);
-      if (!mirrorCovers(mirror.orElseThrow(), textual)) {
+      // Occurrence-count parity, as in arguments(): the textual consumers
+      // union over every occurrence; the index answers from one mirror.
+      if (textual.size() != 1 || !mirrorCovers(mirror.orElseThrow(), textual)) {
         return Optional.empty();
       }
       String args = JavacFrameworkAnnotations.renderedArguments(mirror.orElseThrow());
@@ -209,5 +213,4 @@ final class JavacFrameworkAnnotationValues {
     return !mirror.values().isEmpty()
         || textualArguments.stream().noneMatch(args -> !args.isBlank());
   }
-
 }

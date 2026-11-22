@@ -723,6 +723,70 @@ class JavacFrameworkAnnotationMigrationTest {
     assertEquals(List.of("Named:custom"), on);
   }
 
+  @Test
+  void nestedArgumentsFallBackOnConditionsAndPaths() throws IOException {
+    AnalysisContext spring = springContext("nested-conditions", Map.of(
+        "org/springframework/stereotype/Service.java",
+        "package org.springframework.stereotype;"
+            + " public @interface Service { String value() default \"\"; }",
+        "org/springframework/boot/autoconfigure/condition/ConditionalOnProperty.java",
+        "package org.springframework.boot.autoconfigure.condition;"
+            + " public @interface ConditionalOnProperty { String name() default \"\"; }",
+        "demo/ConditionWrapper.java", """
+            package demo;
+            import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+            public @interface ConditionWrapper { ConditionalOnProperty value(); }
+            """,
+        "demo/WrappedConditions.java", """
+            package demo;
+            import org.springframework.stereotype.Service;
+            import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+            @Service @ConditionWrapper(@ConditionalOnProperty(name = "inner"))
+            @ConditionalOnProperty(name = "real")
+            public class WrappedConditions {}
+            """));
+    AnalysisContext quarkus = context(
+        "nested-paths", AnalysisContext.Framework.QUARKUS, Map.of(
+            "jakarta/ws/rs/Path.java",
+            "package jakarta.ws.rs; public @interface Path { String value() default \"\"; }",
+            "demo/PathWrapper.java",
+            "package demo; public @interface PathWrapper { jakarta.ws.rs.Path value(); }",
+            "demo/WrappedPath.java", """
+                package demo;
+                import jakarta.ws.rs.Path;
+                @PathWrapper(@Path("/inner")) @Path("/real")
+                public class WrappedPath {
+                  @POST public String hello() { return ""; }
+                }
+                """));
+    System.clearProperty(FLAG);
+    List<String> offConditions = conditionsOf(
+        new SourceMetadataScanner(spring), "demo.WrappedConditions");
+    List<String> offPaths = pathsOf(new SourceMetadataScanner(quarkus));
+    System.setProperty(FLAG, "true");
+    // The textual consumers union over the nested occurrence; the index
+    // path must decline rather than drop it.
+    assertEquals(offConditions, conditionsOf(
+        new SourceMetadataScanner(spring), "demo.WrappedConditions"));
+    assertEquals(offPaths, pathsOf(new SourceMetadataScanner(quarkus)));
+    assertEquals(2, offConditions.size(), offConditions.toString());
+    assertTrue(offPaths.contains("/real") && offPaths.contains("/inner"),
+        offPaths.toString());
+  }
+
+  private List<String> conditionsOf(SourceMetadataScanner scanner, String id) {
+    return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(bean -> bean.candidateId().equals(id))
+        .findFirst().orElseThrow().conditions();
+  }
+
+  private List<String> pathsOf(SourceMetadataScanner scanner) {
+    return scanner.routes(AnalysisContext.Framework.QUARKUS).stream()
+        .map(SourceMetadataScannerState.Route::path)
+        .distinct()
+        .toList();
+  }
+
   private List<String> profilesOf(SourceMetadataScanner scanner, String id) {
     return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(bean -> bean.candidateId().equals(id))
