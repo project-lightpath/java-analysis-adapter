@@ -97,3 +97,14 @@ Post `@coderabbitai full review` on the pull request after pushing, and
 verify the findings are dispositioned before merging. Front-load review
 findings (plan -> adversarial plan review -> implement -> independent change
 review) instead of paying one public review cycle per batch.
+
+## Document hygiene
+
+- Implementation plans live in `docs/plans/PLAN-<issue>.md` and resolution
+  records in `docs/resolutions/RESOLUTION-<issue>.md`. Commit them there
+  from the start; the repository root is for permanent files only (README,
+  AGENTS, build config).
+- Documents worth keeping — plans, resolutions, evidence receipts — are
+  committed under `docs/`. Ephemeral working documents (scratch probes,
+  drafts, throwaway notes) are not captured in git: keep them outside the
+  tree or in an ignored directory, never at the root.
