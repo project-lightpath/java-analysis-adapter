@@ -475,6 +475,46 @@ class JavacAnnotationMigrationTest {
         on.toString());
   }
 
+  @Test
+  void commentTextInParameterListsSkipsIndexedRepair() throws IOException {
+    AnalysisContext context = context("comment-arity", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            import java.lang.annotation.*;
+            @Retention(RetentionPolicy.RUNTIME) @interface Mar$k {}
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              void call(String p);
+              void call(@Mar$k int a /* ( */, int b);
+            }
+            """,
+        "demo/Main.java", """
+            package demo;
+            public class Main {
+              void run() {
+                Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Api.class},
+                    (proxyInstance, method, args) -> null);
+              }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    List<DynamicFeature> features = new SourceMetadataScanner(context).dynamicFeatures();
+    // The comment's '(' hides the separator from the split, so the derived
+    // arity (1) would select the wrong overload: the repair is skipped and
+    // the descriptor stays textual.
+    assertTrue(features.stream().noneMatch(feature ->
+        feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().equals("(java.lang.String)")),
+        features.toString());
+    assertTrue(features.stream().anyMatch(feature ->
+        feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().contains("int")),
+        features.toString());
+  }
+
   private <T> T withFlag(java.util.function.Supplier<T> action) {
     System.setProperty(FLAG, "true");
     try {

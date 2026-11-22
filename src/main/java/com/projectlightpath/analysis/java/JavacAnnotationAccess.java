@@ -99,7 +99,7 @@ final class JavacAnnotationAccess {
     if (parameters.isEmpty()) {
       return "()";
     }
-    if (!singleTypeFile(file)) {
+    if (!singleTypeFile(file) || hasCommentText(parameters)) {
       return textualDescriptor(parameters);
     }
     List<String> split = SourceMetadataScannerTextLayer06.splitTopLevelArguments(parameters);
@@ -112,6 +112,16 @@ final class JavacAnnotationAccess {
           split.get(index), ownerType, method.name(), split.size(), index));
     }
     return descriptor.append(')').toString();
+  }
+
+  /**
+   * Reports whether the raw parameter text contains comment markers. A
+   * comment's parentheses distort {@code splitTopLevelArguments} (the split
+   * is not comment-aware), so the derived arity cannot be trusted for
+   * overload selection — such methods keep the textual spelling.
+   */
+  private static boolean hasCommentText(String parameters) {
+    return parameters.contains("/*") || parameters.contains("//");
   }
 
   /** Returns the fully textual descriptor for files the repair cannot own. */
