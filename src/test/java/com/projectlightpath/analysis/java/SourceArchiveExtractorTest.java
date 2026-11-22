@@ -511,6 +511,112 @@ class SourceArchiveExtractorTest {
   }
 
   @Test
+  void objectBudgetAccumulatesAcrossArchives() throws IOException {
+    String content = "package demo; class App {}\n";
+    Path first = zip("objects-first.jar", output ->
+        put(output, "demo/App.java", content));
+    Path second = zip("objects-second.jar", output ->
+        put(output, "demo/App.java", content));
+
+    // Each archive charges one directory (demo) plus one file.
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(first, second), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 4L, temp)) {
+      assertEquals(2, extraction.archiveRoots().size());
+    }
+    assertThrows(IllegalArgumentException.class, () -> ServiceArchiveExtractor.extract(
+        List.of(first, second), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 3L, temp));
+    try (var paths = Files.list(temp)) {
+      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
+    }
+  }
+
+  @Test
+  void duplicateDirectoryEntriesAreIdempotentAndChargeNothing() throws IOException {
+    // ZipOutputStream refuses duplicate names, so the two identical
+    // directory records are assembled directly (stored, no data).
+    Path archive = assembleDuplicateDirWithFile(temp.resolve("duplicate-dir-file.jar"));
+
+    // demo/ twice + one file = exactly two charged objects.
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, 2L, temp)) {
+      assertTrue(Files.isRegularFile(
+          extraction.archiveRoots().get(0).resolve("demo/App.java")));
+    }
+  }
+
+  /** Raw ZIP: the demo/ directory record twice, then one stored file. */
+  private Path assembleDuplicateDirWithFile(Path archive) throws IOException {
+    byte[] dirName = "demo/".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] fileName = "demo/App.java".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] data = "package demo; class App {}\n"
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+    crc.update(data);
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+
+    long dirLocal = out.size();
+    writeStoredLocalHeader(out, dirName, 0, 0);
+    long fileLocal = out.size();
+    writeStoredLocalHeader(out, fileName, (int) crc.getValue(), data.length);
+    out.writeBytes(data);
+
+    long cenStart = out.size();
+    writeCenRecord(out, dirName, 0, 0, dirLocal);
+    writeCenRecord(out, dirName, 0, 0, dirLocal);
+    writeCenRecord(out, fileName, (int) crc.getValue(), data.length, fileLocal);
+
+    int cenSize = out.size() - (int) cenStart;
+    out.writeBytes(new byte[] {0x50, 0x4b, 0x05, 0x06});
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 3);
+    short_(out, 3);
+    int_(out, cenSize);
+    int_(out, (int) cenStart);
+    short_(out, 0);
+    Files.write(archive, out.toByteArray());
+    return archive;
+  }
+
+  private static void writeStoredLocalHeader(
+      java.io.ByteArrayOutputStream out, byte[] name, int crcValue, int length) {
+    out.writeBytes(new byte[] {0x50, 0x4b, 0x03, 0x04});
+    short_(out, 20);
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 0);
+    int_(out, crcValue);
+    int_(out, length);
+    int_(out, length);
+    short_(out, name.length);
+    short_(out, 0);
+    out.writeBytes(name);
+  }
+
+  private static void writeCenRecord(
+      java.io.ByteArrayOutputStream out, byte[] name, int crcValue, int length, long local) {
+    out.writeBytes(new byte[] {0x50, 0x4b, 0x01, 0x02});
+    short_(out, 20);
+    short_(out, 20);
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 0);
+    int_(out, crcValue);
+    int_(out, length);
+    int_(out, length);
+    short_(out, name.length);
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 0);
+    int_(out, 0);
+    int_(out, (int) local);
+    out.writeBytes(name);
+  }
+
+  @Test
   void rejectsDirectoryEntriesDeclaringData() throws IOException {
     Path archive = zip("dir-data-sources.jar", output -> {
       output.putNextEntry(new ZipEntry("demo/"));

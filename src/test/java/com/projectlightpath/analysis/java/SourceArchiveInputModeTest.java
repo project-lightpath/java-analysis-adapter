@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -190,6 +192,41 @@ class SourceArchiveInputModeTest {
         IllegalArgumentException.class, builder::build);
     assertTrue(error.getMessage().contains("must not be named resources"),
         error.getMessage());
+  }
+
+  @Test
+  void sourceArchiveModeRejectsCaseVariantResourcesNames() throws IOException {
+    Path archive = temp.resolve("Resources");
+    Files.writeString(archive, "zip bytes");
+    AnalysisContext.Builder builder = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(archive);
+
+    assertThrows(IllegalArgumentException.class, builder::build);
+  }
+
+  @Test
+  void sourceArchiveModeAcceptsResourcesAsNonFinalComponent() throws IOException {
+    Path directory = Files.createDirectories(temp.resolve("provisioned/resources"));
+    Path archive = zipBytes(directory.resolve("inner-sources.jar"));
+    AnalysisContext context = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(archive)
+        .build();
+
+    assertEquals(1, context.sourceArchives().size());
+  }
+
+  private Path zipBytes(Path archive) throws IOException {
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("demo/App.java"));
+      output.write("package demo; class App {}\n"
+          .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
+    return archive;
   }
 
   // --- BINARY_ARCHIVE invariants ------------------------------------------
