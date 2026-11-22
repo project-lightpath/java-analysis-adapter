@@ -736,7 +736,13 @@ final class JavacSourceSymbolIndex {
     }
 
     private static boolean isError(TypeMirror mirror) {
-      return mirror.getKind() == TypeKind.ERROR;
+      if (mirror.getKind() == TypeKind.ERROR) {
+        return true;
+      }
+      // An array of an unresolved component (Missing[]) is ARRAY-kinded, not
+      // ERROR-kinded; the component must be checked recursively.
+      return mirror.getKind() == TypeKind.ARRAY
+          && isError(((ArrayType) mirror).getComponentType());
     }
 
     private String canonicalType(TypeMirror mirror) {
