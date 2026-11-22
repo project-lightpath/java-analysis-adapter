@@ -262,7 +262,7 @@ class JavacAnnotationMigrationTest {
 
   @Test
   void flagOnScanDoesNotPoisonTheTextualCache() throws IOException {
-    AnalysisContext context = context("cache", Map.of(
+    Map<String, String> files = Map.of(
         "demo/Ann.java", """
             package demo;
             import java.lang.annotation.*;
@@ -283,27 +283,103 @@ class JavacAnnotationMigrationTest {
                     (proxyInstance, method, args) -> null);
               }
             }
-            """));
+            """);
+    AnalysisContext context = context("cache", files);
+    // An independent textual baseline: identical sources at a different
+    // root use a different static-cache key, so its extracts are filled
+    // purely textually and cannot share the warmed entry.
+    AnalysisContext baseline = context("cache-baseline", files);
+    System.clearProperty(FLAG);
+    List<SourceMetadataScannerState.MethodInfo> textualApi =
+        new SourceMetadataScanner(baseline)
+            .methods(file(baseline, "cache-baseline", "demo/Api.java"));
     SourceMetadataScanner warm = new SourceMetadataScanner(context);
     System.setProperty(FLAG, "true");
-    // A flag-on scan reads the same files through the same static cache and
-    // actually exercises the migrated seam: the repaired descriptor proves
-    // the accessor ran on the warmed cache.
+    // The flag-on scan fills the static cache for this root through the
+    // migrated seam; the repaired descriptor proves the accessor ran.
     List<DynamicFeature> warmed = warm.dynamicFeatures();
     assertTrue(warmed.stream().anyMatch(feature ->
         feature.target().startsWith("demo.Api#")
             && feature.targetDescriptor().equals("(java.lang.String)")),
         warmed.toString());
     System.clearProperty(FLAG);
-    // The flag-off scan must see byte-for-byte textual extracts of the same
-    // files the warmed scan read.
-    SourceMetadataScanner cold = new SourceMetadataScanner(context);
-    assertEquals(
-        warm.methods(file(context, "cache", "demo/Api.java")).toString(),
-        cold.methods(file(context, "cache", "demo/Api.java")).toString());
-    assertEquals(
-        warm.methods(file(context, "cache", "demo/Main.java")).toString(),
-        cold.methods(file(context, "cache", "demo/Main.java")).toString());
+    // A flag-off re-read of the warmed root must equal the independent
+    // textual baseline — the cache was not poisoned by index values.
+    assertEquals(textualApi.toString(),
+        warm.methods(file(context, "cache", "demo/Api.java")).toString());
+  }
+
+  @Test
+  void supplementaryLetterTailsTriggerRepair() throws IOException {
+    AnalysisContext context = context("surrogate", Map.of(
+        "demo/App.java", "package demo; public class App {}"));
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    JavacAnnotationAccess access = JavacAnnotationAccess.of(scanner);
+    // U+10400 reads as a surrogate pair via charAt; the code-point-aware
+    // tail check still detects the unconsumed annotation name.
+    assertTrue(access.repairTriggered("@A𐐀 String p"));
+    assertTrue(access.repairTriggered("@𐐀mega String p"));
+    assertFalse(access.repairTriggered("@Ann String p"));
+  }
+
+  @Test
+  void unresolvedArrayComponentsFallBackToTextual() throws IOException {
+    AnalysisContext context = context("array-error", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            import java.lang.annotation.*;
+            @Retention(RetentionPolicy.RUNTIME) @interface Ann { int value() default 0; }
+            """,
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              public void call(@Ann(value = 1) Missing[] p) {}
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    JavacAnnotationAccess access = JavacAnnotationAccess.of(scanner);
+    // The array is ARRAY-kinded but its component is unresolved: the member
+    // is error-typed, so the repair falls back to the textual spelling.
+    assertTrue(access.repairedParameterType(
+        "@Ann(value = 1) Missing[] p", "demo.Probe", "call", 1, 0).isEmpty());
+  }
+
+  @Test
+  void nestedTypeMethodsInInterfaceFilesFallBackToTextual() throws IOException {
+    AnalysisContext context = context("nested-owner", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            import java.lang.annotation.*;
+            @Retention(RetentionPolicy.RUNTIME) @interface Ann { int value() default 0; }
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              void call(@Ann(value = 1) String p);
+              class Nested {
+                public void call(@Ann(value = 1) String p) {}
+              }
+            }
+            """,
+        "demo/Main.java", """
+            package demo;
+            public class Main {
+              void run() {
+                Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Api.class},
+                    (proxyInstance, method, args) -> null);
+              }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    List<DynamicFeature> features = new SourceMetadataScanner(context).dynamicFeatures();
+    // The interface file declares a nested type, so the owner of each
+    // textual method cannot be proven: no descriptor is repaired.
+    assertTrue(features.stream().noneMatch(feature ->
+        feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().equals("(java.lang.String)")),
+        features.toString());
   }
 
   @Test

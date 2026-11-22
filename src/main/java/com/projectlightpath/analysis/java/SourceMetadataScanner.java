@@ -204,7 +204,7 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
               caller,
               qualified + "#" + method.name(),
               JavacAnnotationAccess.of(SourceMetadataScanner.this)
-                  .methodDescriptor(method, qualified),
+                  .methodDescriptor(method, qualified, interfaceFile.get()),
               proxyOffset))
           .toList();
     }

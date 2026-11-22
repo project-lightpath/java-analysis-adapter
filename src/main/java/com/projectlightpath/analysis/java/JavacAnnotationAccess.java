@@ -60,8 +60,10 @@ final class JavacAnnotationAccess {
       if (end < 0) {
         return true; // '@' not followed by [A-Za-z_]: Unicode or $ name
       }
-      char after = end < rawParameter.length() ? rawParameter.charAt(end) : ' ';
-      if (Character.isJavaIdentifierPart(after) && !isAsciiWord(after)) {
+      // Code-point aware: a supplementary letter (e.g. U+10400) reads as a
+      // surrogate pair via charAt and would escape the identifier check.
+      int afterPoint = end < rawParameter.length() ? rawParameter.codePointAt(end) : ' ';
+      if (Character.isJavaIdentifierPart(afterPoint) && !isAsciiWord(afterPoint)) {
         return true; // unconsumed tail: $ or non-ASCII identifier part
       }
       search = end;
@@ -84,12 +86,21 @@ final class JavacAnnotationAccess {
 
   /**
    * Builds a proxy method descriptor, repairing triggered parameters from
-   * the index and keeping the textual spelling for everything else.
+   * the index and keeping the textual spelling for everything else. The
+   * repair only runs when the interface file declares exactly one type:
+   * {@code methods(file)} returns methods of nested and sibling types too,
+   * and a name+arity correlation cannot prove which declaration a textual
+   * method belongs to — ambiguous files fall back to fully textual.
    */
-  String methodDescriptor(SourceMetadataScannerState.MethodInfo method, String ownerType) {
+  String methodDescriptor(
+      SourceMetadataScannerState.MethodInfo method, String ownerType,
+      SourceMetadataScannerState.SourceFile file) {
     String parameters = method.parameters().trim();
     if (parameters.isEmpty()) {
       return "()";
+    }
+    if (!singleTypeFile(file)) {
+      return textualDescriptor(parameters);
     }
     List<String> split = SourceMetadataScannerTextLayer06.splitTopLevelArguments(parameters);
     StringBuilder descriptor = new StringBuilder("(");
@@ -101,6 +112,21 @@ final class JavacAnnotationAccess {
           split.get(index), ownerType, method.name(), split.size(), index));
     }
     return descriptor.append(')').toString();
+  }
+
+  /** Returns the fully textual descriptor for files the repair cannot own. */
+  private static String textualDescriptor(String parameters) {
+    return "(" + String.join(",", SourceMetadataScannerTextLayer06
+        .splitTopLevelArguments(parameters).stream()
+        .map(SourceMetadataScanner::parameterType)
+        .toList()) + ")";
+  }
+
+  /** Reports whether the file declares exactly one indexed type (owner provable). */
+  private boolean singleTypeFile(SourceMetadataScannerState.SourceFile file) {
+    return JavacSourceSymbolIndex.of(context)
+        .map(index -> index.typesIn(file.path()).size() == 1)
+        .orElse(true);
   }
 
   /** Returns the repaired spelling when triggered and unambiguous, else the textual one. */
@@ -130,9 +156,9 @@ final class JavacAnnotationAccess {
     return end;
   }
 
-  private static boolean isAsciiWord(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-        || (c >= '0' && c <= '9') || c == '_';
+  private static boolean isAsciiWord(int codePoint) {
+    return (codePoint >= 'a' && codePoint <= 'z') || (codePoint >= 'A' && codePoint <= 'Z')
+        || (codePoint >= '0' && codePoint <= '9') || codePoint == '_';
   }
 
   /** Returns the annotation's simple name (last canonical segment). */
