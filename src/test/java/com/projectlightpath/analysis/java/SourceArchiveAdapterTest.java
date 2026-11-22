@@ -236,6 +236,14 @@ class SourceArchiveAdapterTest {
   }
 
   @Test
+  void prebuiltGraphOverloadFailsClosedForSourceArchive() throws IOException {
+    Fixture fixture = fixture("prebuilt-sources.jar");
+
+    assertThrows(IllegalArgumentException.class,
+        () -> new JavaAnalysisAdapter().analyze(context(fixture, null), AnalysisGraph.empty()));
+  }
+
+  @Test
   void repeatedRunsProduceIdenticalJsonWithoutLeakingTheExtractionRoot()
       throws IOException {
     synchronized (EXTRACTION_LOCK) {

@@ -147,6 +147,30 @@ class SourceArchiveInputModeTest {
     assertThrows(IllegalArgumentException.class, builder::build);
   }
 
+  @Test
+  void binaryArchiveModeRejectsSourceArchives() throws IOException {
+    Path binary = temp.resolve("application-1.0.0.jar");
+    Files.writeString(binary, "binary jar bytes");
+    AnalysisContext.Builder builder = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.BINARY_ARCHIVE)
+        .dependencyClasspathRequired(false)
+        .addDependencyClasspath(binary)
+        .sourceArchive(existingArchive());
+
+    assertThrows(IllegalArgumentException.class, builder::build);
+  }
+
+  @Test
+  void sourceArchiveModeRequiresTheProductionAnalysisScope() throws IOException {
+    AnalysisContext.Builder builder = baseBuilder()
+        .inputMode(AnalysisContext.InputMode.SOURCE_ARCHIVE)
+        .analysisScope(AnalysisContext.Scope.TEST)
+        .dependencyClasspathRequired(false)
+        .sourceArchive(existingArchive());
+
+    assertThrows(IllegalArgumentException.class, builder::build);
+  }
+
   // --- BINARY_ARCHIVE invariants ------------------------------------------
 
   @Test
@@ -214,6 +238,22 @@ class SourceArchiveInputModeTest {
 
     assertEquals(AnalysisContext.InputMode.SOURCE_TREE, context.inputMode());
     assertTrue(context.sourceArchives().isEmpty());
+  }
+
+  @Test
+  void loaderParsesBinaryArchiveMode() throws IOException {
+    Path binary = temp.resolve("loader-binary-1.0.0.jar");
+    Files.writeString(binary, "binary jar bytes");
+    Path contextFile = writeContext(root -> {
+      root.remove("sourceRoots");
+      root.put("inputMode", "BINARY_ARCHIVE");
+      root.putArray("dependencyClasspath").add(binary.toString());
+    });
+
+    AnalysisContext context = AnalysisContextLoader.load(contextFile);
+
+    assertEquals(AnalysisContext.InputMode.BINARY_ARCHIVE, context.inputMode());
+    assertTrue(context.sourceRoots().isEmpty());
   }
 
   @Test

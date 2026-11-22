@@ -735,69 +735,8 @@ public final class AnalysisContext extends AnalysisContextAccessors {
   private AnalysisContext(Builder builder) {
     super(builder);
 
-    validateInputMode(builder);
+    AnalysisContextInputModeValidator.validate(this, builder);
     DependencyCoordinateManifestValidator.validate(this);
-  }
-
-  /**
-   * Enforces the explicit input-mode contract (issue #42): mode selection is
-   * caller state, never guessed, and ambiguous provisioning fails closed.
-   */
-  private void validateInputMode(Builder builder) {
-    if (inputMode == null || inputMode == AnalysisContext.InputMode.SOURCE_TREE) {
-      requireRequiredSourceRoot(builder);
-      if (!sourceArchives.isEmpty()) {
-        throw new IllegalArgumentException(
-            "source archives require inputMode SOURCE_ARCHIVE");
-      }
-      return;
-    }
-    if (inputMode == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
-      validateSourceArchiveMode(builder);
-      return;
-    }
-    validateBinaryArchiveMode();
-  }
-
-  private void validateSourceArchiveMode(Builder builder) {
-    if (sourceArchives.isEmpty()) {
-      throw new IllegalArgumentException(
-          "inputMode SOURCE_ARCHIVE requires at least one source archive");
-    }
-    if (!builder.extractedSourceRoots
-        && (!sourceRoots.isEmpty() || !generatedSourceRoots.isEmpty())) {
-      throw new IllegalArgumentException(
-          "inputMode SOURCE_ARCHIVE must not declare source roots");
-    }
-    for (Path archive : sourceArchives) {
-      if (dependencyClasspath.contains(archive)) {
-        throw new IllegalArgumentException(
-            "source archive must not also appear on the dependency classpath: " + archive);
-      }
-    }
-  }
-
-  private void validateBinaryArchiveMode() {
-    // BINARY_ARCHIVE: descriptor/module metadata comes from the dependency
-    // classpath alone; the required-root check is satisfied by its entries.
-    if (!sourceArchives.isEmpty()) {
-      throw new IllegalArgumentException(
-          "source archives require inputMode SOURCE_ARCHIVE");
-    }
-    if (!sourceRoots.isEmpty() || !generatedSourceRoots.isEmpty()) {
-      throw new IllegalArgumentException(
-          "inputMode BINARY_ARCHIVE must not declare source roots");
-    }
-    if (dependencyClasspath.isEmpty()) {
-      throw new IllegalArgumentException(
-          "inputMode BINARY_ARCHIVE requires at least one dependency classpath entry");
-    }
-  }
-
-  private void requireRequiredSourceRoot(Builder builder) {
-    if (sourceRoots.stream().noneMatch(root -> !root.generated() && root.required())) {
-      throw new IllegalArgumentException("at least one required production/source root is required");
-    }
   }
 
   public static Builder builder() {

@@ -111,8 +111,20 @@ class SourceArchiveRoutingTest {
   }
 
   @Test
-  void wildcardExpansionContainingASourceArchiveIsDiagnosed() throws IOException {
-    Path archive = sourcesArchive("conflicted-sources.jar");
+  void wildcardExpansionContainingASourceArchiveIsDiagnosedAndExcluded() throws IOException {
+    // The archive also carries a META-INF/services entry: if it were scanned
+    // as a binary, a descriptor would appear, so exclusion is observable.
+    Path archive = temp.resolve("conflicted-sources.jar");
+    try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new ZipEntry("demo/App.java"));
+      output.write("package demo; class App {}\n"
+          .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+      output.putNextEntry(new ZipEntry("META-INF/services/demo.Conflicted"));
+      output.write("demo.ConflictedProvider\n"
+          .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
     Path libraryDirectory = Files.createDirectories(temp.resolve("lib"));
     Files.move(archive, libraryDirectory.resolve("conflicted-sources.jar"));
     AnalysisContext context = baseBuilder()

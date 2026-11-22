@@ -315,8 +315,7 @@ class SourceArchiveExtractorTest {
         put(output, "demo/App.java", "package demo; class App {}\n"));
 
     IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(
-            List.of(archive), 4L, null));
+        () -> ServiceArchiveExtractor.extract(List.of(archive), 4L, temp));
     assertNotNull(error.getMessage());
     try (var paths = Files.list(temp)) {
       assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
@@ -331,12 +330,12 @@ class SourceArchiveExtractorTest {
     long contentBytes = content.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
 
     try (ServiceArchiveExtractor.Extraction extraction =
-        ServiceArchiveExtractor.extract(List.of(archive), contentBytes, null)) {
+        ServiceArchiveExtractor.extract(List.of(archive), contentBytes, temp)) {
       assertTrue(Files.isRegularFile(
           extraction.archiveRoots().get(0).resolve("demo/App.java")));
     }
     assertThrows(IllegalArgumentException.class,
-        () -> ServiceArchiveExtractor.extract(List.of(archive), contentBytes - 1, null));
+        () -> ServiceArchiveExtractor.extract(List.of(archive), contentBytes - 1, temp));
     try (var paths = Files.list(temp)) {
       assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
     }
@@ -373,6 +372,118 @@ class SourceArchiveExtractorTest {
             List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
     try (var paths = Files.list(temp)) {
       assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
+    }
+  }
+
+  @Test
+  void rejectsEmptyMiddleSegment() throws IOException {
+    Path archive = zip("empty-segment-sources.jar", output ->
+        put(output, "demo//App.java", "package demo; class App {}\n"));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+  }
+
+  @Test
+  void rejectsWildcardInEntryName() throws IOException {
+    Path archive = zip("wildcard-sources.jar", output ->
+        put(output, "demo/*.java", "wildcard entry"));
+
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+  }
+
+  @Test
+  void caseVariantNamesAreHandledSafely() throws IOException {
+    Path archive = zip("case-sources.jar", output -> {
+      put(output, "demo/Foo.java", "package demo; class Foo {}\n");
+      put(output, "demo/foo.java", "package demo; class foo {}\n");
+    });
+
+    // Case-insensitive filesystems collide (sanitized rejection); sensitive
+    // ones extract both. Either outcome must be safe and leave no residue.
+    try {
+      ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+          List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp);
+      assertTrue(Files.isRegularFile(
+          extraction.archiveRoots().get(0).resolve("demo/Foo.java")));
+      assertTrue(Files.isRegularFile(
+          extraction.archiveRoots().get(0).resolve("demo/foo.java")));
+      extraction.close();
+    } catch (IllegalArgumentException acceptableOnCaseInsensitiveFilesystems) {
+      // rejected: the collision must surface as a sanitized failure
+    }
+    try (var paths = Files.list(temp)) {
+      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
+    }
+  }
+
+  @Test
+  void rejectsDirectoryThenFileConflict() throws IOException {
+    Path archive = zip("dir-file-sources.jar", output -> {
+      output.putNextEntry(new ZipEntry("demo/"));
+      output.closeEntry();
+      put(output, "demo", "file where the directory was");
+    });
+
+    assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+  }
+
+  @Test
+  void rejectsDuplicateArchiveFileNamesAcrossArchives() throws IOException {
+    Path first = zip("same-name.jar", output ->
+        put(output, "demo/A.java", "package demo; class A {}\n"));
+    Path directory = Files.createDirectories(temp.resolve("duplicates"));
+    Path second = zip("same-name.jar", output ->
+        put(output, "demo/B.java", "package demo; class B {}\n"));
+    Files.move(second, directory.resolve("same-name.jar"));
+
+    assertThrows(IllegalArgumentException.class, () -> ServiceArchiveExtractor.extract(
+        List.of(first, directory.resolve("same-name.jar")),
+        ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    try (var paths = Files.walk(temp)) {
+      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).count() <= 2);
+    }
+  }
+
+  @Test
+  void budgetAccumulatesAcrossArchives() throws IOException {
+    String content = "package demo; class App {}\n";
+    long contentBytes = content.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+    Path first = zip("accumulate-first.jar", output ->
+        put(output, "demo/App.java", content));
+    Path second = zip("accumulate-second.jar", output ->
+        put(output, "demo/App.java", content));
+
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(first, second), contentBytes * 2, temp)) {
+      assertEquals(2, extraction.archiveRoots().size());
+    }
+    assertThrows(IllegalArgumentException.class, () -> ServiceArchiveExtractor.extract(
+        List.of(first, second), contentBytes * 2 - 1, temp));
+    try (var paths = Files.list(temp)) {
+      assertTrue(paths.filter(path -> !path.toString().endsWith(".jar")).toList().isEmpty());
+    }
+  }
+
+  @Test
+  void repoLayoutArchiveExtractsSourcesAndResourcesAsFiles() throws IOException {
+    Path archive = zip("repo-layout-sources.jar", output -> {
+      put(output, "src/main/java/demo/App.java", "package demo; class App {}\n");
+      put(output, "src/main/resources/META-INF/services/demo.Provider",
+          "demo.ProviderImpl\n");
+    });
+
+    try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
+        List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
+      Path sources = extraction.archiveRoots().get(0);
+      assertTrue(Files.isRegularFile(sources.resolve("src/main/java/demo/App.java")));
+      assertTrue(Files.isRegularFile(
+          sources.resolve("src/main/resources/META-INF/services/demo.Provider")));
     }
   }
 }

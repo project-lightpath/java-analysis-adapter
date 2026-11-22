@@ -77,9 +77,10 @@ which side each descriptor came from.
 
 - Enumeration and entry streams reuse the #34 seekable ZIP reader
   (read-only; the binary descriptor path is unchanged).
-- Entry names are rejected when empty, absolute, containing `\`, NUL, or
-  `.`/`..` segments, resolving to the extraction root itself, duplicated,
-  or in file/directory conflict (including case-insensitive filesystem
+- Entry names are rejected when empty, absolute, containing `\`, NUL, `*`,
+  or `.`/`..` segments, resolving to the extraction root itself, duplicated
+  (non-directory names; duplicate directory entries are idempotent), or in
+  file/directory conflict (including case-insensitive filesystem
   collisions, which surface as sanitized rejections).
 - Bounds: 512 MiB total decompressed bytes per run (new policy), the 512
   MiB compressed archive-size gate re-applied before open, per-entry
@@ -89,10 +90,22 @@ which side each descriptor came from.
   owner-only root and never follows links it did not create. Symlink-mode
   central-directory entries have no representation in the #34 entry record
   and extract as regular files (residual R1).
-- Interruption cleans up and clears the thread interrupt flag. Crash
-  residue (one owner-only `flpath-42-sources-` root) requires ops cleanup,
-  parity with the #34 spill root (residual R2); there is no
-  `deleteOnExit` registration.
+- Interruption cleans up and clears the thread interrupt flag; on any
+  failed run the pending interrupt is cleared before the rejection
+  propagates, so it cannot leak into later phases. Crash residue (one
+  owner-only `flpath-42-sources-` root) requires ops cleanup, parity with
+  the #34 spill root (residual R2); there is no `deleteOnExit`
+  registration.
+- `analyze(context, graph)` (the prebuilt-graph overload) rejects
+  SOURCE_ARCHIVE contexts: a prebuilt graph cannot carry the extracted
+  source roots, so the run fails closed instead of silently skipping the
+  source/javac half.
+- RunMetadata reports `sourceRoots` as empty for SOURCE_ARCHIVE runs (the
+  caller's context has none by the mode invariant); `sourceArchives` in
+  the input handoff is the record of what fed the run.
+- The loader's `inputMode` values are the exact uppercase enum names
+  (`SOURCE_TREE`, `SOURCE_ARCHIVE`, `BINARY_ARCHIVE`), unlike the
+  lowercase-tolerant `framework`/`analysisScope` fields.
 
 ## Residuals
 
@@ -103,7 +116,30 @@ is best-effort and unreported; R5 no per-tenant extraction quota; R6 no
 new provenance channel (existing descriptor kinds only); R7 source
 archives are not freshness-fingerprinted; R8 repo-layout archives'
 resources are not scanned; R9 sources that do not compile cleanly keep
-runs at POSSIBLE through the existing `javac_source_error` diagnostics.
+runs at POSSIBLE through the existing `javac_source_error` diagnostics;
+R10 a symlinked provisioning directory holding a source archive is
+undetected (the final component is checked; read-only impact).
+
+## Review closure
+
+Adversarial plan review: 17 findings, folded into §1 before
+implementation (wildcard-classpath leak, extraction budgets, display-path
+stability, default-mode parity, provisioning contract, layout contract).
+
+Post-implementation review (independent subagent): 12 findings.
+Addressed in code and tests: F1 (prebuilt-graph overload fails closed),
+F2 (TEST scope rejected), F3 (entry-name `*` rejected), F5/F6 (residue
+assertions moved to the test temp dir, removing the tmpdir race), F7
+(SOURCE_ARCHIVE display paths fall back to repository-relative for
+non-extracted inputs), F9 (matrix cells: empty middle segment, wildcard
+entry name, case-variant collision, directory-then-file conflict,
+duplicate archive names, cross-archive budget accumulation, repo-layout
+extraction, BINARY_ARCHIVE × source archives, loader BINARY_ARCHIVE
+parse, TEST-scope cell, wildcard exclusion made observable).
+Dispositioned as documented: F4 (RunMetadata reports empty sourceRoots;
+sourceArchives is the input record), F8 (broadened interrupt clearing,
+commented in code), F10 (uppercase inputMode contract, documented), F11
+(docs wording fixed), F12 (R10 residual).
 
 ## Test gate
 

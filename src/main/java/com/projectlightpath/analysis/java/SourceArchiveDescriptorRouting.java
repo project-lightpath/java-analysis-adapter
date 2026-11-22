@@ -64,11 +64,18 @@ final class SourceArchiveDescriptorRouting {
   /**
    * Display path for one descriptor file: repository-relative by default;
    * for SOURCE_ARCHIVE runs, extracted roots are reported with their stable
-   * declared paths instead of leaking the random temp root.
+   * declared paths, and inputs outside every source root (application
+   * classes, dependency jars) fall back to the repository-relative form
+   * instead of machine-absolute paths.
    */
   static String displayPath(AnalysisContext context, Path path) {
     if (context.inputMode() == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
-      return context.displayPath(path);
+      java.util.Optional<AnalysisContext.SourceRoot> root =
+          AnalysisContext.mostSpecificRoot(
+              path.toAbsolutePath().normalize(), context.includedSourceRoots());
+      if (root.isPresent()) {
+        return context.displayPath(path);
+      }
     }
     Path root = context.repositoryRoot().toAbsolutePath().normalize();
     return path.startsWith(root)

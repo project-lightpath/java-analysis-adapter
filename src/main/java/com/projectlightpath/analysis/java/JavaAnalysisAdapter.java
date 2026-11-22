@@ -105,6 +105,13 @@ public final class JavaAnalysisAdapter {
   public SemanticCallFacts analyze(AnalysisContext context, AnalysisGraph graph) {
     Objects.requireNonNull(context, "analysis context");
     Objects.requireNonNull(graph, "analysis graph");
+    if (context.inputMode() == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
+      // Fail closed: a prebuilt graph cannot carry the extracted source
+      // roots the single-argument path derives, so silently enriching it
+      // would skip the source/javac half of the run (issue #42 review F1).
+      throw new IllegalArgumentException(
+          "inputMode SOURCE_ARCHIVE requires the single-argument analyze path");
+    }
     return enrich(context, graph, () -> SootUpInputLocationFactory.dependencyResolution(context));
   }
 

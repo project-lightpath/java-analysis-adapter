@@ -98,6 +98,9 @@ final class ServiceArchiveExtractor {
       throw rejection(error, root);
     } finally {
       if (!success) {
+        // Broadened beyond InterruptedIOException on purpose (review F8):
+        // any failed run aborts the operation, so a pending interrupt must
+        // not leak into later phases; the rejection still propagates.
         if (Thread.currentThread().isInterrupted()) {
           Thread.interrupted();
         }
@@ -218,6 +221,7 @@ final class ServiceArchiveExtractor {
           || path.startsWith("/")
           || path.contains("\\")
           || path.indexOf('\0') >= 0
+          || path.indexOf('*') >= 0
           || hasUnsafeSegment(path)) {
         throw new ExtractionFailure("unsafe source archive entry name: " + name);
       }
