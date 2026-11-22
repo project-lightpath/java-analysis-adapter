@@ -53,7 +53,16 @@ def main(argv: list[str] | None = None) -> int:
     header += ")"
     print(header, file=sys.stderr)
     diagnostics = report.get("diagnostics")
-    if not isinstance(diagnostics, list) or not diagnostics:
+    if diagnostics is None:
+        print("no diagnostics were recorded in the report", file=sys.stderr)
+        return 0
+    if not isinstance(diagnostics, list):
+        print(
+            f"diagnostics field is malformed (not a list): {diagnostics!r}",
+            file=sys.stderr,
+        )
+        return 0
+    if not diagnostics:
         print("no diagnostics were recorded in the report", file=sys.stderr)
         return 0
     for diagnostic in diagnostics:
