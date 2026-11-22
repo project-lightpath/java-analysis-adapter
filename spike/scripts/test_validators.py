@@ -168,5 +168,82 @@ class ContractFixtureValidatorTest(unittest.TestCase):
             directory.cleanup()
 
 
+class PreparationDiagnosticsPrinterTest(unittest.TestCase):
+    """Covers fail-visible preparation diagnostics for the manual runner (#40)."""
+
+    def load_printer(self):
+        try:
+            return load_module(
+                "print_preparation_diagnostics", "print_preparation_diagnostics.py")
+        except (FileNotFoundError, AssertionError):
+            self.fail(
+                "spike/scripts/print_preparation_diagnostics.py is missing; "
+                "the manual runner cannot surface preparation failures")
+
+    def run_printer(self, report: Path):
+        import contextlib
+        import io
+        module = self.load_printer()
+        stderr = io.StringIO()
+        stdout = io.StringIO()
+        with patch.object(sys, "argv", ["print_preparation_diagnostics.py", str(report)]):
+            with contextlib.redirect_stderr(stderr):
+                with contextlib.redirect_stdout(stdout):
+                    code = module.main()
+        return code, stdout.getvalue(), stderr.getvalue()
+
+    def test_prints_status_and_each_diagnostic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text(json.dumps({
+                "status": "failed",
+                "profileId": "fsi-spring-boot-production",
+                "diagnostics": [
+                    {
+                        "code": "host_execution_forbidden",
+                        "phase": "preparation",
+                        "severity": "error",
+                        "message": "prepare-manual is disabled",
+                    },
+                    {
+                        "code": "acquisition_failed",
+                        "phase": "acquisition",
+                        "severity": "error",
+                        "message": "local source path is unavailable",
+                    },
+                ],
+            }), encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("failed", stderr)
+            self.assertIn("host_execution_forbidden", stderr)
+            self.assertIn("prepare-manual is disabled", stderr)
+            self.assertIn("acquisition_failed", stderr)
+            self.assertIn("local source path is unavailable", stderr)
+
+    def test_missing_report_file_is_actionable(self):
+        code, _, stderr = self.run_printer(Path("does-not-exist-report.json"))
+        self.assertEqual(0, code)
+        self.assertIn("does-not-exist-report.json", stderr)
+        self.assertIn("no preparation report", stderr)
+
+    def test_report_without_diagnostics_says_so(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text(json.dumps({"status": "failed"}), encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("failed", stderr)
+            self.assertIn("no diagnostics", stderr)
+
+    def test_malformed_report_is_actionable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text("not json", encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("unreadable", stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
