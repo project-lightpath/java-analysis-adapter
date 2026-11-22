@@ -17,10 +17,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import javax.tools.ToolProvider;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Behavioral boundaries for selected paths and repeated use of one analysis context. */
+/** Behavioral boundaries for selected paths and repeated use of one analysis context.
+ * SootUp scene lane: bounded heap and reduced parallelism in its own surefire execution. */
+@Tag("sootup")
 class ServiceLoaderSafetyLifetimeTest {
   @TempDir Path temp;
 

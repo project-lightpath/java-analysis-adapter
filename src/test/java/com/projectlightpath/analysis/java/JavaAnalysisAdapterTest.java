@@ -22,9 +22,12 @@ import java.util.zip.ZipOutputStream;
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** SootUp scene lane: bounded heap and reduced parallelism in its own surefire execution. */
+@Tag("sootup")
 class JavaAnalysisAdapterTest {
   @TempDir Path temp;
 
