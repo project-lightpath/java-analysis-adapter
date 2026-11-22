@@ -283,6 +283,17 @@ class PreparationDiagnosticsPrinterTest(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("expected a JSON object", stderr)
 
+    def test_null_diagnostics_field_is_malformed_not_absent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text(
+                json.dumps({"status": "failed", "diagnostics": None}),
+                encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("malformed", stderr)
+            self.assertNotIn("no diagnostics", stderr)
+
     def test_non_list_diagnostics_field_is_malformed_not_empty(self):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "preparation-report.json"

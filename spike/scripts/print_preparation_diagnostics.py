@@ -52,10 +52,10 @@ def main(argv: list[str] | None = None) -> int:
         header += f", profile: {profile}"
     header += ")"
     print(header, file=sys.stderr)
-    diagnostics = report.get("diagnostics")
-    if diagnostics is None:
+    if "diagnostics" not in report:
         print("no diagnostics were recorded in the report", file=sys.stderr)
         return 0
+    diagnostics = report["diagnostics"]
     if not isinstance(diagnostics, list):
         print(
             f"diagnostics field is malformed (not a list): {diagnostics!r}",
