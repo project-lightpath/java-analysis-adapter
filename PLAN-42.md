@@ -251,3 +251,10 @@ shape changes needing careful default-mode parity checks.
   - Temurin 17.0.21.1+2: `make adapter-test` 442 tests, 0 failures.
 - Deviations: none beyond PMD-forced helper placement (documented in the
   GREEN commit messages). Zero edits to existing tests.
+- REVIEW_1 (`14cd855`): 12 post-implementation findings addressed or
+  dispositioned (see docs §"Review closure"); gates re-run green on both
+  JDKs at 453 tests.
+- REVIEW_2 (`8d7093e`): round-2 re-review found no correctness issues;
+  two test-only gaps (NUL cell, display-path fallback pin) closed plus a
+  doc note. Final gates: JDK 27 and Temurin 17.0.21.1+2 both 455 tests,
+  java-lint clean, evidence-validate PASS.
