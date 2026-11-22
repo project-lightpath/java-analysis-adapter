@@ -19,7 +19,10 @@ EVIDENCE="${RUN_DIR}/capability-evidence.json"
 
 echo "[1/4] prepare immutable source, Maven build, and AnalysisContext"
 if ! (
-  cd "${VPE_ROOT}"
+  # The if-condition context suspends errexit inside this subshell, so the cd
+  # must fail loudly itself: otherwise go run would execute from the caller's
+  # directory, possibly against a different VPE checkout.
+  cd "${VPE_ROOT}" || exit 1
   go run ./cmd/analysis-context \
     -mode prepare-manual \
     -profile "${PROFILE}" \
@@ -30,7 +33,7 @@ if ! (
     -output "${CONTEXT}" \
     -report "${REPORT}"
 ); then
-  echo "preparation failed; diagnostics:" >&2
+  echo "preparation failed; report: ${REPORT}" >&2
   if "${MAVEN_BIN}" -B -ntp -q compile -f "${ROOT}/pom.xml" && \
      "${MAVEN_BIN}" -B -ntp -q dependency:build-classpath \
        -Dmdep.outputFile=target/manual-analysis-classpath.txt -DincludeScope=runtime \
