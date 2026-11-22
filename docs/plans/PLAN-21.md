@@ -2,7 +2,8 @@
 
 Issue: project-lightpath/java-analysis-adapter#21 (parent #20).
 Branch: `feature/flpath-5142-javac-index-seam` from `origin/main` @ `5d4635f`.
-Companions: `AGENTS.md`, `PLAN-16.md`, `RESOLUTION-16.md`,
+Companions: `AGENTS.md`, `docs/plans/PLAN-16.md`,
+`docs/resolutions/RESOLUTION-16.md`,
 `src/test/java/.../JavacSourceSymbolResolver.java` (spike reference),
 `src/main/java/.../JavacServiceLoaderSiteResolver.java` (production seam
 reference), `AnalysisContext`/`AnalysisContextAccessors` (read only).
@@ -229,7 +230,7 @@ No scan-global blast radius: none of these reach
 - `wallMillis` = nanoTime around the whole build; `peakHeapBytes` =
   `MemoryMXBean` heap `used` sampled before/after (max), the same indicative
   sampling the #16 harness uses. Both exposed on the index and recorded in
-  `RESOLUTION-21.md`.
+  `docs/resolutions/RESOLUTION-21.md`.
 
 ## Test matrix (`JavacSourceSymbolIndexTest`, new file)
 
@@ -405,7 +406,7 @@ precedence cells are out of scope here:
 - **GREEN_21**: implement the index; targeted test passes; run full
   `make adapter-test`, `make java-lint`, `make evidence-validate`; raise the
   Makefile count floor to 349 + new tests.
-- **EVIDENCE_21**: `RESOLUTION-21.md` with wall time, peak heap,
+- **EVIDENCE_21**: `docs/resolutions/RESOLUTION-21.md` with wall time, peak heap,
   determinism receipts, gate counts, and residuals; commit gate receipts.
 
 ## Adversarial plan review (pre-implementation)
@@ -424,7 +425,7 @@ Findings folded back into the plan:
    behind one compile; accepted (same trade as the existing seam). Note:
    that seam is keyed by `SourceMetadataScanner`, so with the flag on one
    context pays two parses (site resolver + index); recorded in
-   `RESOLUTION-21.md`'s cost table.
+   `docs/resolutions/RESOLUTION-21.md`'s cost table.
 3. **javac unavailable** (`ToolProvider.getSystemJavaCompiler() == null`):
    return a present index with a `javac_unavailable` diagnostic and no
    compilation, instead of an exception. Fail visible, not loud.
@@ -440,7 +441,7 @@ Findings folded back into the plan:
    The duplicate test asserts the minimum guaranteed contract (both files
    present in `typesIn`, both flagged, diagnostic present) and does NOT
    assert the second unit's member completeness; observed attribution
-   behavior is recorded as a residual in `RESOLUTION-21.md`.
+   behavior is recorded as a residual in `docs/resolutions/RESOLUTION-21.md`.
 6. **Diagnostics must never leak absolute paths.** `context.displayPath`
    returns the absolute path for anything outside the included source
    roots, so it is used **only for source-file diagnostics**. Classpath and
@@ -497,10 +498,10 @@ Findings folded back into the plan:
 
 - With the flag on, one context pays two javac parses (site resolver +
   index); the seams are keyed differently on purpose. Recorded with wall
-  time and peak heap in `RESOLUTION-21.md`.
+  time and peak heap in `docs/resolutions/RESOLUTION-21.md`.
 - On duplicate binary names, the second unit's attribution may be
   incomplete; both entries are flagged so consumers abstain, and the
-  observed attribution behavior is recorded in `RESOLUTION-21.md`.
+  observed attribution behavior is recorded in `docs/resolutions/RESOLUTION-21.md`.
 - `missing_source` for zero-roots or all-out-of-scope contexts is
   covered by cell 8b; the `missing_source` variant for
   present-but-empty roots is covered by cell 8. `missing_classpath` is likewise reachable only through
