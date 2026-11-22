@@ -668,16 +668,20 @@ final class JavacSourceSymbolIndex {
     private MemberInfo memberInfo(Element element) {
       boolean executable = element.getKind() == ElementKind.METHOD
           || element.getKind() == ElementKind.CONSTRUCTOR;
+      List<? extends VariableElement> parameters =
+          executable ? ((ExecutableElement) element).getParameters() : List.of();
       return new MemberInfo(
           memberName(element),
           memberKind(element),
           element.getAnnotationMirrors().stream()
               .map(AnnotationRenderer::info).toList(),
-          executable
-              ? ((ExecutableElement) element).getParameters().stream()
-                  .map(variable -> canonicalType(variable.asType()))
-                  .toList()
-              : List.of(),
+          parameters.stream()
+              .map(variable -> canonicalType(variable.asType()))
+              .toList(),
+          parameters.stream()
+              .map(variable -> variable.getAnnotationMirrors().stream()
+                  .map(AnnotationRenderer::info).toList())
+              .toList(),
           memberReturnType(element),
           memberHasErrorType(element, executable));
     }
@@ -838,6 +842,7 @@ final class JavacSourceSymbolIndex {
       String kind,
       List<AnnotationInfo> annotations,
       List<String> parameterTypes,
+      List<List<AnnotationInfo>> parameterAnnotations,
       String returnType,
       boolean errorType) {}
 
