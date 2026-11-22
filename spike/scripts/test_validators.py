@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import stat
@@ -181,8 +183,6 @@ class PreparationDiagnosticsPrinterTest(unittest.TestCase):
                 "the manual runner cannot surface preparation failures")
 
     def run_printer(self, report: Path):
-        import contextlib
-        import io
         module = self.load_printer()
         stderr = io.StringIO()
         stdout = io.StringIO()
@@ -235,6 +235,41 @@ class PreparationDiagnosticsPrinterTest(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("failed", stderr)
             self.assertIn("no diagnostics", stderr)
+
+    def test_argv_misuse_prints_usage_and_exits_zero(self):
+        module = self.load_printer()
+        for argv in (["print_preparation_diagnostics.py"],
+                     ["print_preparation_diagnostics.py", "a", "b"]):
+            with patch.object(sys, "argv", argv):
+                with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    code = module.main()
+            self.assertEqual(0, code)
+            self.assertIn("usage:", stderr.getvalue())
+
+    def test_non_dict_top_level_json_is_actionable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text("[1, 2]", encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("expected a JSON object", stderr)
+
+    def test_non_dict_and_non_string_diagnostics_still_print(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "preparation-report.json"
+            report.write_text(json.dumps({
+                "status": "failed",
+                "diagnostics": [
+                    "plain-string",
+                    {"code": 123, "severity": None, "phase": "p",
+                     "message": {"nested": "obj"}},
+                ],
+            }), encoding="utf-8")
+            code, _, stderr = self.run_printer(report)
+            self.assertEqual(0, code)
+            self.assertIn("plain-string", stderr)
+            self.assertIn("123", stderr)
+            self.assertIn("nested", stderr)
 
     def test_malformed_report_is_actionable(self):
         with tempfile.TemporaryDirectory() as directory:

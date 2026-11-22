@@ -31,7 +31,7 @@ if ! (
     -report "${REPORT}"
 ); then
   echo "preparation failed; diagnostics:" >&2
-  python3 "${ROOT}/spike/scripts/print_preparation_diagnostics.py" "${REPORT}" >&2 || true
+  python3 "${ROOT}/spike/scripts/print_preparation_diagnostics.py" "${REPORT}" || true
   echo "run directory: ${RUN_DIR}" >&2
   exit 1
 fi
