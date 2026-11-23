@@ -240,7 +240,7 @@ public final class ChangedCoverageValidator {
     missingFiles.forEach(missingNode::add);
     result.put("percentage", PythonNumbers.round2(counted.percentage()));
     result.put("report", report.toString());
-    result.put("reportSha256", JacocoReportReader.sha256(report));
+    result.put("reportSha256", FileHashes.sha256(report));
     result.put("threshold", arguments.threshold());
     Path evidence = arguments.evidence();
     if (evidence.getParent() != null) {

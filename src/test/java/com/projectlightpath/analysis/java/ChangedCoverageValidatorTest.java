@@ -540,12 +540,37 @@ class ChangedCoverageValidatorTest {
             .path("v")));
   }
 
+  /**
+   * The sidecar's unmatched sentinel (Long.MIN_VALUE) must not match a report line: a
+   * pathological report carrying that exact nr rejects loudly instead of fabricating a
+   * covered intersection with an out-of-range sidecar value.
+   */
+  @Test
+  void sentinelReportLineRejectsLoudly() throws IOException {
+    Path report = temp.resolve("jacoco-sentinel.xml");
+    Files.writeString(report, """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <report name="demo">
+          <package name="com/example">
+            <sourcefile name="A.java">
+              <line nr="-9223372036854775808" mi="0" ci="1"/>
+            </sourcefile>
+          </package>
+        </report>
+        """);
+    ChangedCoverageValidator.ValidationError error = assertThrows(
+        ChangedCoverageValidator.ValidationError.class,
+        () -> JacocoReportReader.jacocoLines(report, "src/main/java"));
+    assertTrue(error.getMessage().contains("jacoco-sentinel.xml"), error.getMessage());
+    assertTrue(error.getMessage().contains("out of range"), error.getMessage());
+  }
+
   /** sha256 streams the file content. */
   @Test
   void sha256HashesFileContent() throws IOException {
     Path file = temp.resolve("content.txt");
     Files.writeString(file, "hello");
     assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-        JacocoReportReader.sha256(file));
+        FileHashes.sha256(file));
   }
 }

@@ -1,11 +1,8 @@
 package com.projectlightpath.analysis.java;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -176,41 +173,19 @@ final class JacocoReportReader {
   }
 
   private static long parseLong(String value, String field, Path report) {
+    // Long.MIN_VALUE is the sidecar's unmatched-sentinel for out-of-range line
+    // numbers; a report carrying that exact value would match the sentinel and
+    // fabricate coverage, so it rejects loudly instead.
+    if (value.equals(String.valueOf(Long.MIN_VALUE))) {
+      throw new ChangedCoverageValidator.ValidationError("cannot parse JaCoCo report: "
+          + report + " (line number out of range: " + value + ")");
+    }
     try {
       return Long.parseLong(value);
     } catch (NumberFormatException error) {
       throw new ChangedCoverageValidator.ValidationError("cannot parse JaCoCo report: "
-          + report + " (non-numeric " + field + ": " + value + ")", error);
+          + report + " (invalid " + field + ": " + value + ")", error);
     }
   }
 
-  /** SHA-256 of a file's content, streamed. */
-  static String sha256(Path file) {
-    return hash(file, "SHA-256");
-  }
-
-  private static String hash(Path file, String algorithm) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance(algorithm);
-      try (InputStream stream = Files.newInputStream(file)) {
-        byte[] block = new byte[1024 * 1024];
-        int read;
-        while ((read = stream.read(block)) != -1) {
-          digest.update(block, 0, read);
-        }
-      }
-      return hex(digest.digest());
-    } catch (IOException | NoSuchAlgorithmException error) {
-      throw new ChangedCoverageValidator.ValidationError("cannot read " + file + ": "
-          + error.getMessage(), error);
-    }
-  }
-
-  static String hex(byte[] digest) {
-    StringBuilder out = new StringBuilder();
-    for (byte value : digest) {
-      out.append(String.format(java.util.Locale.ROOT, "%02x", value));
-    }
-    return out.toString();
-  }
 }
