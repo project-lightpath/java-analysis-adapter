@@ -229,9 +229,13 @@ spelling — carry the decision); cell
 both compiler behaviors. A `$`-named annotation WITH arguments keeps
 the textual answer at method/bean/parameter sites (documented
 limitation); at FIELD sites the round-6 review's hypothetical
-divergence has no reachable input — the INJECT_FIELD discovery regex
-cannot span the arguments after a `$`-named annotation, so such fields
-are undiscoverable in BOTH flag states, pinned by
+divergence has no reachable input — when the `$`-named annotation is
+the last one before the type, the INJECT_FIELD discovery regex cannot
+span its arguments (the type class excludes the parens) and the field
+is undiscoverable in BOTH flag states; when it appears earlier, the
+discovery match restarts after it and the annotations block truncates
+before it, leaving an unconsumed ASCII mirror that declines the site —
+equally safe. Pinned by
 `dollarNamedWithArgumentsAtFieldSiteIsUndiscoverable`. (2) The design-rules list
 was reconciled with the REVIEW_24_4 per-occurrence semantics (rules 2
 and 5 above). (3) QUARKUS values-path index engagement was unpinned —
