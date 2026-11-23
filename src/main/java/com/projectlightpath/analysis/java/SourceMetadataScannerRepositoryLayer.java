@@ -118,8 +118,35 @@ abstract class SourceMetadataScannerRepositoryLayer
 
   /** Matches only the canonical Spring Data query annotation, not lookalikes. */
   private static boolean queryAnnotated(SourceFile file, MethodInfo method) {
-    return !canonicalAnnotationOccurrences(
+    if (!canonicalAnnotationOccurrences(
         file, method.annotationBlock(), "Query",
-        SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS).isEmpty();
+        SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS).isEmpty()) {
+      return true;
+    }
+    // A bare @Query spelling is also canonically supplied by an on-demand
+    // import of the annotation's package (or of the @Queries container),
+    // which the explicit-import check above does not cover.
+    if (!bareQuerySpelling(method.annotationBlock())) {
+      return false;
+    }
+    String masked = maskStringLiterals(file.structuralSource());
+    for (String canonical : SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS) {
+      String packageName = canonical.substring(0, canonical.lastIndexOf('.'));
+      if (masked.contains("import " + packageName + ".*;")) {
+        return true;
+      }
+      String container = packageName + ".Queries";
+      if (masked.contains("import " + container + ";")
+          || masked.contains("import " + packageName + ".*;")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Checks for a bare @Query spelling (not a qualified or lookalike name). */
+  private static boolean bareQuerySpelling(String block) {
+    return java.util.regex.Pattern.compile("@Query\\b")
+        .matcher(stripComments(maskStringLiterals(block == null ? "" : block))).find();
   }
 }

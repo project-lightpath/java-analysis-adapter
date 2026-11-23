@@ -406,6 +406,28 @@ class SpringDataDelegationLadderTest {
         "a non-imported simple Query spelling is not the Spring Data annotation");
   }
 
+  @Test
+  void wildcardImportedQueryAnnotationIsOverrideEvidence() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.*;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    List<SemanticCallFacts.Fact> delegations = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("delegated_implementation"))
+        .filter(item -> item.caller().equals("demo.AccountRepository#findAll"))
+        .toList();
+    assertEquals(1, delegations.size(), facts.frameworkFacts().toString());
+    assertEquals(
+        "org.springframework.data.jpa.repository.query.AbstractStringBasedJpaQuery#execute",
+        delegations.get(0).callee());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, delegations.get(0).certainty());
+  }
+
   private SemanticCallFacts.Fact delegationFact(SemanticCallFacts facts, String caller) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("delegated_implementation"))
