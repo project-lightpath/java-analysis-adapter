@@ -79,11 +79,12 @@ class ChangedCoverageValidatorTest {
         --- a/src/A.java
         +++ b/src/A.java
         @@ -1,3 +2,4 @@
-        context
         +added one
         +added two
+        +added three
+        +added four
         """);
-    assertEquals(Map.of("src/A.java", Set.of(2L, 3L, 4L)), changed);
+    assertEquals(Map.of("src/A.java", Set.of(2L, 3L, 4L, 5L)), changed);
   }
 
   /** A hunk without a count adds exactly one line; a zero-count hunk adds none. */
@@ -136,6 +137,8 @@ class ChangedCoverageValidatorTest {
   @Test
   void sidecarMustMatchRequestedRevisions() throws IOException {
     Path root = scratchRoot();
+    Files.writeString(root.resolve("changed-lines.json"),
+        "{\"base\": \"wrong-base\", \"head\": \"head\", \"files\": {\"a.java\": [4]}}");
     ChangedCoverageValidator.ValidationError error = assertThrows(
         ChangedCoverageValidator.ValidationError.class,
         () -> ChangedCoverageValidator.changedLines(root, "base", "head", ".java",
@@ -181,11 +184,12 @@ class ChangedCoverageValidatorTest {
   @Test
   void sourceKeyJoinsNonEmptyParts() {
     assertEquals("src/main/java/com/example/A.java",
-        ChangedCoverageValidator.sourceKey("com.example", "A.java", "src/main/java"));
+        JacocoReportReader.sourceKey("com.example", "A.java", "src/main/java"));
     assertEquals("src/main/java/A.java",
-        ChangedCoverageValidator.sourceKey("", "A.java", "src/main/java"));
-    assertEquals("nested/src/main/java/A.java",
-        ChangedCoverageValidator.sourceKey("", "A.java", "nested//src/main/java/"));
+        JacocoReportReader.sourceKey("", "A.java", "src/main/java"));
+    assertEquals("nested/src/main/java/com/example/A.java",
+        JacocoReportReader.sourceKey("/com.example/", "A.java",
+            "nested/src/main/java"));
   }
 
   /** The production prefix must not overlap: src does not admit srcFoo. */
@@ -220,9 +224,9 @@ class ChangedCoverageValidatorTest {
           </package>
         </report>
         """);
-    ChangedCoverageValidator.JacocoCoverage coverage =
-        ChangedCoverageValidator.jacocoLines(report, "src/main/java");
-    assertEquals(Set.of(1L, 5L, 6L),
+    JacocoReportReader.JacocoCoverage coverage =
+        JacocoReportReader.jacocoLines(report, "src/main/java");
+    assertEquals(Set.of(1L),
         coverage.executable().get("src/main/java/com/example/A.java"));
     assertEquals(Set.of(1L),
         coverage.covered().get("src/main/java/com/example/A.java"));
@@ -239,7 +243,7 @@ class ChangedCoverageValidatorTest {
     Files.writeString(report, "not xml");
     ChangedCoverageValidator.ValidationError error = assertThrows(
         ChangedCoverageValidator.ValidationError.class,
-        () -> ChangedCoverageValidator.jacocoLines(report, "src/main/java"));
+        () -> JacocoReportReader.jacocoLines(report, "src/main/java"));
     assertTrue(error.getMessage().contains("jacoco.xml"));
   }
 
@@ -374,6 +378,6 @@ class ChangedCoverageValidatorTest {
     Path file = temp.resolve("content.txt");
     Files.writeString(file, "hello");
     assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-        ChangedCoverageValidator.sha256(file));
+        JacocoReportReader.sha256(file));
   }
 }

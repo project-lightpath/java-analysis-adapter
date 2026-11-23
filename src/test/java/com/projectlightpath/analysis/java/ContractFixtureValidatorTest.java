@@ -68,8 +68,9 @@ class ContractFixtureValidatorTest {
   private static Map<String, String> entryFor(Path vpeRoot, String path) throws IOException {
     Path candidate = vpeRoot.resolve(path);
     String mode = Files.isSymbolicLink(candidate) ? "120000"
-        : (PosixFilePermissions.toString(Files.getPosixFilePermissions(candidate))
-            .contains("OWNER_EXECUTE") ? "100755" : "100644");
+        : (Files.getPosixFilePermissions(candidate)
+            .contains(java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE)
+            ? "100755" : "100644");
     Map<String, String> entry = new LinkedHashMap<>();
     entry.put("path", path);
     entry.put("mode", mode);
@@ -137,11 +138,16 @@ class ContractFixtureValidatorTest {
   @Test
   void unmanifestedVpeFixtureIsRejected() throws IOException {
     Path[] roots = fixtureRoots(Map.of("tracked.txt", "tracked"));
-    Path manifest = manifestFor(roots[0], roots[1], "tracked.txt");
+    // A manifest that tracks only the extra file, not the VPE fixture.
+    Map<String, Object> manifest = new LinkedHashMap<>();
+    manifest.put("commit", "vpe-commit");
+    manifest.put("entries", java.util.List.of(entryFor(roots[1], "tracked.txt")));
+    Path file = temp.resolve("manifest.json");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), manifest);
     ContractFixtureValidator.ValidationError error = assertThrows(
         ContractFixtureValidator.ValidationError.class,
         () -> ContractFixtureValidator.validate(roots[0], roots[1], "vpe-commit",
-            manifest));
+            file));
     assertTrue(error.getMessage().contains("not listed"), error.getMessage());
   }
 
@@ -172,8 +178,8 @@ class ContractFixtureValidatorTest {
   @Test
   void missingVpeTreeFileIsRejected() throws IOException {
     Path[] roots = fixtureRoots(Map.of("gone.txt", "x"));
-    Files.delete(roots[1].resolve("gone.txt"));
     Path manifest = manifestFor(roots[0], roots[1], "gone.txt");
+    Files.delete(roots[1].resolve("gone.txt"));
     ContractFixtureValidator.ValidationError error = assertThrows(
         ContractFixtureValidator.ValidationError.class,
         () -> ContractFixtureValidator.validate(roots[0], roots[1], "vpe-commit",

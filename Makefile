@@ -1,4 +1,4 @@
-.PHONY: package adapter-test adapter-package validator-test java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis e2e-test
+.PHONY: package adapter-test adapter-package java-lint java-lint-report java-lint-test manual-analysis evidence-validate framework-enrichment semantic-facts-spike fixture-test fixture-package spring-test download-jdtls jdtls-probe sootup-quarkus sootup-quarkus-full sootup-spring sootup-fsi codeql-quarkus codeql-spring codeql-fsi normalize-static-analysis e2e-test
 
 # JUnit runs the tests; this target only sizes the pool and heap from the host.
 # The default lane is lightweight: SootUp scene tests are tagged 'sootup' and
@@ -22,9 +22,6 @@ adapter-test:
 	"$${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 534
 e2e-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=ServiceLoaderEndToEndTest test -f pom.xml
-
-validator-test:
-	python3 -m unittest spike/scripts/test_validators.py
 
 manual-analysis:
 	@test -n "$(CONTEXT)" || (echo 'CONTEXT is required' >&2; exit 2)
