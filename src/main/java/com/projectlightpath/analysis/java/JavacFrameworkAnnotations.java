@@ -115,7 +115,10 @@ final class JavacFrameworkAnnotations {
    * Reports whether a rendered argument string is usable outside quotes: a
    * nested annotation value ({@code @}), or an unresolved value
    * ({@code <error>}, e.g. an enum constant whose type the index could not
-   * resolve), means the mirror cannot stand in for the textual answer.
+   * resolve), means the mirror cannot stand in for the textual answer. An
+   * odd quote count (the #21 renderer does not re-escape quotes inside
+   * string values, so a value containing {@code "} flips the tracking
+   * state) also declines — the conservative direction for #48.
    */
   static boolean renderIsUsable(String rendered) {
     boolean quoted = false;
@@ -128,7 +131,7 @@ final class JavacFrameworkAnnotations {
         return false;
       }
     }
-    return true;
+    return !quoted;
   }
 
   /** Returns the annotation's simple name (last canonical segment). */

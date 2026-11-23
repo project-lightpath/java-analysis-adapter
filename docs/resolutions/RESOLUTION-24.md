@@ -157,13 +157,57 @@ qualifier sites migrate instead of falling back, and
 `fqcnSpelledAnnotationsMatchSimpleNameMirrors` pins the both-state
 agreement. The residual list's FQCN bullet is withdrawn accordingly.
 
+## Review round 2 / CI rounds (post-implementation)
+
+Round 2 (same reviewer, delta): the round-1 count guard applied only to
+`arguments()` — `conditionAnnotations` and QUARKUS `pathValues` built
+their pipelines directly; both now require the textual occurrence count
+to be exactly one (REVIEW_24_2, cell
+`nestedArgumentsFallBackOnConditionsAndPaths`), and the theoretical
+`countsMatch` balance vector is documented as a residual.
+
+CI round 1 (REVIEW_24_3): the `$`/Unicode correction cells passed on
+JDK 27 but declined on Temurin 17 — first mis-attributed to the fixture
+file spellings, then reproduced locally with Temurin 17 and traced to
+the real cause:
+
+**Some compilers drop unresolved annotation types from
+`getAnnotationMirrors` entirely** (Temurin 17) while others retain them
+as error mirrors (JDK 27). The occurrence-parity guard then saw textual
+occurrences without mirrors and declined — which would also have made
+the migration silently vacuous for unresolved framework annotations
+(the common no-classpath case) on the CI/production JDK.
+
+Fixed in REVIEW_24_4 by REPLACING the whole-site parity guard with
+per-occurrence processing: each textual occurrence takes its mirror's
+families when the mirror can stand in for it (resolved, usable rendered
+values — where the `$`/Unicode corrections come from), and the TEXTUAL
+family answer otherwise (unresolved, type-use, or nested occurrences —
+nothing dropped, nothing fabricated). Unicode-initial mirrors with no
+possible occurrence append as pure index corrections; an ASCII-named
+mirror no occurrence consumed declines the site. The enrichment
+triggers moved to the textual `hasAnnotation` (exact textual simple-name
+semantics). The redesign was verified on BOTH Temurin 17 and JDK 27.
+
+Round 3 (coordinating session, read-only, head d5961cc): (1) stale
+receipts — the gate-receipts table now records every commit (below);
+the PR body's 447 receipt was current, the "385" in the finding was
+RESOLUTION-22's number; (2) `renderIsUsable` could be defeated by an
+unescaped quote in a rendered string value (the #48 renderer gap)
+flipping the quote tracking — it now also declines on an odd quote
+count, with cell `unescapedQuoteInRenderedValueFallsBackToTextual`
+(the conservative direction until #48 lands).
+
 ## Gate receipts
 
 | Commit | adapter-test | java-lint | evidence-validate |
 |---|---|---|---|
 | RED_24 | 5 of 18 cells fail exactly as partitioned (the five delta cells); 13 parity/fallback cells green; rest of suite green | pass (stub, 0 new) | pass |
 | GREEN_24 + EVIDENCE_24 | 441/441 green locally (Makefile floor tightened 399 → 441; main ran 423 before these 18 cells) | 0 new findings, 0 CPD (GodClass split into three classes and record-parameter collapses are lint-driven, behavior-identical) | pass (10 criteria) |
-| REVIEW_24_1 | 446/446 green locally (floor 441 → 446, the five review cells); CI re-runs the full suite | 0 new findings, 0 CPD | pass |
+| REVIEW_24_1 | 446/446 green locally (floor 441 → 446, the five review cells) | 0 new findings, 0 CPD | pass |
+| REVIEW_24_2 | 447/447 green locally (floor 446 → 447, the nested conditions/paths cell) | 0 new findings, 0 CPD | pass |
+| REVIEW_24_3 | 447/447 green locally (fixture-only change; CI still red on Temurin 17 — the mis-diagnosis) | 0 new findings, 0 CPD | pass |
+| REVIEW_24_4 | 448/448 green locally on BOTH Temurin 17.0.21 and JDK 27 (floor 447 → 448, the odd-quote cell; the per-occurrence redesign fixed the CI-only decline); CI re-runs the full suite | 0 new findings, 0 CPD | pass |
 
 ## Residuals
 

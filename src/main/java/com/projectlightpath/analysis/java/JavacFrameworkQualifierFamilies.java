@@ -6,20 +6,31 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Qualifier-family interpretation over index mirrors: the six-family table
  * (canonical-Spring guard, Resource, bean-name, NON_QUALIFIER,
- * Qualifier/Named, simple name) with the injection enrichment
- * derivations appended after, reproducing the textual pipeline's exact
- * code order and simple-name trigger semantics. The occurrence-parity
- * guard declines whenever the textual occurrences and the mirrors do not
- * multiset-match, so the caller keeps the textual answer.
+ * Qualifier/Named, simple name) with the injection enrichment derivations
+ * appended after, reproducing the textual pipeline's exact code order and
+ * simple-name trigger semantics.
+ *
+ * <p>Processing is per textual occurrence: an occurrence whose mirror is
+ * found and can stand in for it (resolved, with usable rendered values)
+ * takes the mirror's families — this is where the {@code $}/Unicode name
+ * corrections come from; every other occurrence (the annotation type did
+ * not resolve — some compilers drop error-typed mirrors from
+ * {@code getAnnotationMirrors} — or the occurrence is type-use or nested)
+ * keeps the textual family answer, so nothing is dropped and nothing
+ * fabricated. Mirrors with no possible textual occurrence (Unicode-initial
+ * names) append as pure index corrections. A mirror with an ASCII name that
+ * no occurrence consumed means the correlation is untrustworthy: the site
+ * declines.
  */
 final class JavacFrameworkQualifierFamilies {
   /**
-   * The textual occurrence pattern of {@code qualifierNames}; used only
-   * for the occurrence-parity guard, never for value extraction.
+   * The textual occurrence pattern of {@code qualifierNames}; used to walk
+   * occurrences in textual order, never for value extraction.
    */
   private static final Pattern TEXTUAL_ANNOTATION_NAME = Pattern.compile("@([A-Za-z_][\\w.]*)");
 
@@ -31,31 +42,29 @@ final class JavacFrameworkQualifierFamilies {
       String block,
       List<JavacSourceSymbolIndex.AnnotationInfo> mirrors,
       boolean guarded) {
-    if (!occurrenceParity(block, mirrors)) {
-      return Optional.empty();
-    }
+    String source = SourceMetadataScanner.stripComments(block == null ? "" : block);
+    String masked = SourceMetadataScanner.maskStringLiterals(source);
     List<String> result = new ArrayList<>();
-    for (JavacSourceSymbolIndex.AnnotationInfo annotation : mirrors) {
-      String args = JavacFrameworkAnnotations.renderedArguments(annotation);
-      if (hasUnusableRender(args) || valuelessMirrorWithTextualArguments(block, annotation)) {
-        return Optional.empty();
-      }
-      String name = JavacFrameworkAnnotations.simpleName(annotation);
-      if (guarded && SourceMetadataScannerState.SPRING_BEAN_ANNOTATION_TYPES.containsKey(name)
-          && !SourceMetadataScanner.canonicalSpringAnnotation(file, block, name)) {
-        continue;
-      }
-      if (name.equals("Resource")) {
-        result.addAll(SourceMetadataScanner.resourceQualifier(args));
-      } else if (SourceMetadataScanner.isBeanNameAnnotation(name)) {
-        result.addAll(SourceMetadataScanner.beanNameQualifier(args));
-      } else if (SourceMetadataScannerState.NON_QUALIFIER_ANNOTATIONS.contains(name)) {
-        continue;
-      } else if (name.equals("Qualifier") || name.equals("Named")) {
-        result.add(name + ":" + SourceMetadataScanner.quotedValue(
-            args.replaceFirst("^value\\s*=\\s*", "").trim()));
+    List<JavacSourceSymbolIndex.AnnotationInfo> remaining = new ArrayList<>(mirrors);
+    Matcher matcher = TEXTUAL_ANNOTATION_NAME.matcher(masked);
+    while (matcher.find()) {
+      JavacSourceSymbolIndex.AnnotationInfo mirror = takeMirror(remaining, matcher.group(1));
+      if (mirror == null || !mirrorCanReplace(mirror, block)) {
+        // The textual family answer for this occurrence — including the
+        // textual canonical-Spring guard on guarded arms.
+        result.addAll(SourceMetadataScanner.annotationQualifiers(
+            guarded ? file : null, source, matcher));
       } else {
-        result.add(name);
+        result.addAll(mirrorFamilies(file, block, mirror, guarded));
+      }
+    }
+    for (JavacSourceSymbolIndex.AnnotationInfo mirror : remaining) {
+      if (asciiPrefix(JavacFrameworkAnnotations.simpleName(mirror)).isEmpty()) {
+        result.addAll(mirrorFamilies(file, block, mirror, guarded));
+      } else {
+        // An ASCII-named mirror with no textual occurrence cannot be
+        // attributed: decline the whole site.
+        return Optional.empty();
       }
     }
     return Optional.of(List.copyOf(new LinkedHashSet<>(result)));
@@ -71,8 +80,10 @@ final class JavacFrameworkQualifierFamilies {
       boolean setterMethod) {
     return qualifiers(file, block, mirrors, false).map(families -> {
       List<String> result = new ArrayList<>(families);
-      boolean hasNamed = mirrors.stream()
-          .anyMatch(mirror -> JavacFrameworkAnnotations.simpleName(mirror).equals("Named"));
+      // The enrichment triggers reproduce the textual simple-name
+      // semantics over the raw block, exactly as the textual path does.
+      boolean hasNamed = block != null
+          && SourceMetadataScanner.hasAnnotation(block, "Named");
       if (cdi && hasNamed) {
         for (int index = 0; index < result.size(); index++) {
           if (result.get(index).equals("Named:") && !defaultName.isBlank()) {
@@ -80,8 +91,8 @@ final class JavacFrameworkQualifierFamilies {
           }
         }
       }
-      boolean hasResource = mirrors.stream()
-          .anyMatch(mirror -> JavacFrameworkAnnotations.simpleName(mirror).equals("Resource"));
+      boolean hasResource = block != null
+          && SourceMetadataScanner.hasAnnotation(block, "Resource");
       if (hasResource
           && result.stream().noneMatch(value -> value.startsWith("Resource:"))) {
         result.add("ResourceDefault:" + setterDefaultName(defaultName, setterMethod));
@@ -90,64 +101,70 @@ final class JavacFrameworkQualifierFamilies {
     });
   }
 
-  /** Reports whether a rendered argument string is unusable (index fails). */
-  private static boolean hasUnusableRender(String rendered) {
-    return !JavacFrameworkAnnotations.renderIsUsable(rendered);
+  /** Applies the six-family table to one mirror's rendered arguments. */
+  private static List<String> mirrorFamilies(
+      SourceMetadataScannerState.SourceFile file,
+      String block,
+      JavacSourceSymbolIndex.AnnotationInfo mirror,
+      boolean guarded) {
+    String args = JavacFrameworkAnnotations.renderedArguments(mirror);
+    String name = JavacFrameworkAnnotations.simpleName(mirror);
+    if (guarded && SourceMetadataScannerState.SPRING_BEAN_ANNOTATION_TYPES.containsKey(name)
+        && !SourceMetadataScanner.canonicalSpringAnnotation(file, block, name)) {
+      return List.of();
+    }
+    if (name.equals("Resource")) {
+      return SourceMetadataScanner.resourceQualifier(args);
+    }
+    if (SourceMetadataScanner.isBeanNameAnnotation(name)) {
+      return SourceMetadataScanner.beanNameQualifier(args);
+    }
+    if (SourceMetadataScannerState.NON_QUALIFIER_ANNOTATIONS.contains(name)) {
+      return List.of();
+    }
+    if (name.equals("Qualifier") || name.equals("Named")) {
+      return List.of(name + ":" + SourceMetadataScanner.quotedValue(
+          args.replaceFirst("^value\\s*=\\s*", "").trim()));
+    }
+    return List.of(name);
   }
 
   /**
-   * Reports whether a value-less mirror (unresolved annotation type) faces
-   * textual occurrences that carried arguments: the index cannot stand in.
+   * Reports whether a mirror can stand in for its textual occurrence: the
+   * rendered values must be usable (no unquoted nested annotation or
+   * unresolved {@code <error>}), and a value-less mirror (javac drops the
+   * element values of error-typed annotations) must face an occurrence
+   * that carried no arguments.
    */
-  private static boolean valuelessMirrorWithTextualArguments(
-      String block, JavacSourceSymbolIndex.AnnotationInfo annotation) {
-    if (!annotation.values().isEmpty() || block == null) {
+  private static boolean mirrorCanReplace(
+      JavacSourceSymbolIndex.AnnotationInfo mirror, String block) {
+    if (!JavacFrameworkAnnotations.renderIsUsable(
+        JavacFrameworkAnnotations.renderedArguments(mirror))) {
       return false;
     }
-    return SourceMetadataScanner.annotationArguments(
-            block, JavacFrameworkAnnotations.simpleName(annotation)).stream()
+    return !mirror.values().isEmpty() || !hasTextualArguments(
+        block, JavacFrameworkAnnotations.simpleName(mirror));
+  }
+
+  /** Reports whether the textual occurrences of one name carry arguments. */
+  private static boolean hasTextualArguments(String block, String name) {
+    if (block == null) {
+      return false;
+    }
+    return SourceMetadataScanner.annotationArguments(block, name).stream()
         .anyMatch(args -> !args.isBlank());
   }
 
-  /**
-   * Reports whether the textual ASCII-visible annotation occurrences in a
-   * block multiset-match the index mirrors. A divergence (type-use
-   * spellings, nested annotation arguments, spellings the mirrors would
-   * re-spell differently) means the site falls back to the textual answer.
-   * A capture matches its mirror when it is the simple name, a
-   * package-qualified spelling of it (the textual pipeline normalizes
-   * dotted captures to simple names), or the ASCII prefix of a
-   * {@code $}/Unicode name; mirrors with no possible capture
-   * (Unicode-initial names) may stay unmatched as index bonuses.
-   */
-  private static boolean occurrenceParity(
-      String block, List<JavacSourceSymbolIndex.AnnotationInfo> mirrors) {
-    List<String> textual = new ArrayList<>();
-    String source = SourceMetadataScanner.stripComments(block == null ? "" : block);
-    Matcher matcher = TEXTUAL_ANNOTATION_NAME.matcher(
-        SourceMetadataScanner.maskStringLiterals(source));
-    while (matcher.find()) {
-      textual.add(matcher.group(1));
-    }
-    List<String> remaining = mirrors.stream()
-        .map(JavacFrameworkAnnotations::simpleName)
-        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-    for (String capture : textual) {
-      int found = -1;
-      for (int index = 0; index < remaining.size(); index++) {
-        if (captureMatches(capture, remaining.get(index))) {
-          found = index;
-          break;
-        }
+  /** Removes and returns the mirror one textual capture denotes, if any. */
+  private static JavacSourceSymbolIndex.AnnotationInfo takeMirror(
+      List<JavacSourceSymbolIndex.AnnotationInfo> remaining, String capture) {
+    for (int index = 0; index < remaining.size(); index++) {
+      if (captureMatches(capture,
+          JavacFrameworkAnnotations.simpleName(remaining.get(index)))) {
+        return remaining.remove(index);
       }
-      if (found < 0) {
-        return false;
-      }
-      remaining.remove(found);
     }
-    // Every mirror that could have produced a textual capture must have
-    // been consumed; only capture-proof (Unicode-initial) mirrors remain.
-    return remaining.stream().allMatch(name -> asciiPrefix(name).isEmpty());
+    return null;
   }
 
   /** Reports whether one textual capture can denote one mirror name. */

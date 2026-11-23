@@ -784,6 +784,37 @@ class JavacFrameworkAnnotationMigrationTest {
         .toList();
   }
 
+  @Test
+  void unescapedQuoteInRenderedValueFallsBackToTextual() throws IOException {
+    Map<String, String> files = Map.of(
+        "org/springframework/stereotype/Component.java",
+        "package org.springframework.stereotype; public @interface Component {}",
+        "org/springframework/beans/factory/annotation/Autowired.java",
+        "package org.springframework.beans.factory.annotation; public @interface Autowired {}",
+        "demo/Quoted.java", """
+            package demo;
+            import org.springframework.stereotype.Component;
+            import org.springframework.beans.factory.annotation.Autowired;
+            @Component public class Quoted {
+              @Autowired @Label("a\\"b") @Foo(role = @Role("x")) private String value;
+            }
+            @interface Label { String value() default ""; }
+            @interface Role { String value() default ""; }
+            @interface Foo { Role role() default @Role; }
+            """);
+    AnalysisContext context = springContext("quoted", files);
+    System.clearProperty(FLAG);
+    List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
+    System.setProperty(FLAG, "true");
+    List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
+    // The renderer does not re-escape the quote inside "a\"b", so the
+    // rendered arguments end with an odd quote count and the mirror is
+    // declined per occurrence — the textual answer survives (#48).
+    assertEquals(off, on);
+    assertTrue(on.contains("Label") && on.contains("Foo") && on.contains("Role"),
+        on.toString());
+  }
+
   private List<String> profilesOf(SourceMetadataScanner scanner, String id) {
     return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(bean -> bean.candidateId().equals(id))
