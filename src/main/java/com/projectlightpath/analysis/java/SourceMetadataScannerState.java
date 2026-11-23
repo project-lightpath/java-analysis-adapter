@@ -223,8 +223,10 @@ static final List<String> SPRING_DATA_JPA_METHODS = List.of(
       "getReferenceById");
 static final Set<String> SPRING_DATA_JPA_METHODS_REMOVED_IN_BOOT_3 = Set.of(
       "getOne", "getById");
+static final Set<String> SPRING_DATA_JPA_METHODS_ADDED_IN_2_5 = Set.of(
+      "getById", "saveAllAndFlush", "deleteAllByIdInBatch");
 static final Set<String> SPRING_DATA_JPA_METHODS_ADDED_IN_2_7 = Set.of(
-      "saveAllAndFlush", "deleteAllByIdInBatch");
+      "getReferenceById");
 static final Map<String, List<String>> SPRING_DATA_GUARANTEED_CONTRACT_METHODS = Map.ofEntries(
       Map.entry("CrudRepository", SPRING_DATA_CRUD_METHODS),
       Map.entry("ListCrudRepository", SPRING_DATA_CRUD_METHODS),
@@ -484,7 +486,9 @@ static final List<String> SUPPORTED_HTTP_METHODS =
   }
 
   /** A configured repository base class, with its analysis-scope resolution. */
-  record RepositoryBaseClass(String configuredType, boolean applicationScoped, String sourcePath) {}
+  record RepositoryBaseClass(
+      String configuredType, boolean applicationScoped, boolean referenceResolved,
+      String sourcePath) {}
 
   /** A repository fragment composition: custom interface plus its Impl class. */
   record RepositoryFragment(

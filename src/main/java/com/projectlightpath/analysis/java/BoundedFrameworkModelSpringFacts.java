@@ -46,10 +46,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       Map<String, String> fragmentTargets = fragmentTargets(scanner, candidate);
       List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
           scanner.springRepositoryBaseClasses();
-      Set<String> redeclaredNames = scanner.springRepositoryMethods(candidate.file()).stream()
-          .filter(method -> !method.guaranteed())
-          .map(SourceMetadataScannerState.RepositoryMethod::name)
-          .collect(Collectors.toCollection(LinkedHashSet::new));
+      Set<String> redeclaredNames = scanner.redeclaredGuaranteedNames(candidate.file());
       for (SourceMetadataScannerState.RepositoryMethod repositoryMethod
           : scanner.springRepositoryMethods(candidate.file())) {
         if (fragmentTargets.containsKey(repositoryMethod.identity())) {
@@ -255,6 +252,14 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
         .distinct()
         .toList();
     SourceMetadataScannerState.RepositoryBaseClass baseClass = delegation.baseClasses().get(0);
+    if (!baseClass.referenceResolved()) {
+      return new DelegationSelection(
+          baseClass.configuredType() + "#" + method,
+          SemanticCallFacts.Certainty.UNRESOLVED,
+          "The configured repository base class reference cannot be resolved"
+              + " from the analyzed sources; no backing can be selected.",
+          "spring_data_repository_base_class_unresolved");
+    }
     if (configuredTypes.size() > 1) {
       return new DelegationSelection(
           baseClass.configuredType() + "#" + method,

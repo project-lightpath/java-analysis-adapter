@@ -1,23 +1,21 @@
 package com.projectlightpath.analysis.java;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
+import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.stream.Collectors;
 
 /**
  * Responsibility layer for Spring Data repository composition metadata:
- * fragment interfaces, their backing Impl classes, and the configured
- * repository base classes.
+ * fragment interfaces, their backing Impl classes, and guaranteed-method
+ * redeclaration evidence.
  */
-abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScannerFrameworkLayer01 {
+abstract class SourceMetadataScannerRepositoryLayer
+    extends SourceMetadataScannerConfigurationLayer {
 
   SourceMetadataScannerRepositoryLayer(AnalysisContext context) {
     super(context);
@@ -59,6 +57,11 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
     if (inherited == null || !inherited.guaranteed()) {
       return false;
     }
+    if (queryAnnotation(method)) {
+      // An @Query redeclaration reroutes execution; it stays a declared
+      // method so the delegation ladder can treat it as override evidence.
+      return false;
+    }
     List<Parameter> methodParameters = parameters(method.parameters());
     if (methodParameters.size() != 1 || !springRepositoryEntityType(file).isPresent()) {
       return false;
@@ -66,6 +69,41 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
     String parameterType = repositoryTypeToken(methodParameters.get(0).type(), file).orElse("");
     return parameterType.equals(springRepositoryEntityType(file).orElse("\u0000"))
         || parameterType.equals(springRepositoryIdType(file).orElse("\u0000"));
+  }
+
+  /**
+   * Returns the guaranteed method names whose contract default is overridden
+   * by a source declaration: exact signature-shape redeclarations, and any
+   * same-name declaration carrying a query annotation.
+   */
+  Set<String> redeclaredGuaranteedNames(SourceFile file) {
+    Set<String> guaranteedNames = springRepositoryMethods(file).stream()
+        .filter(RepositoryMethod::guaranteed)
+        .map(RepositoryMethod::name)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    Set<String> result = new LinkedHashSet<>();
+    for (MethodInfo method : methods(file)) {
+      if (!typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
+          || !abstractInstanceRepositoryMethod(method)
+          || !guaranteedNames.contains(method.name())) {
+        continue;
+      }
+      List<Parameter> methodParameters = parameters(method.parameters());
+      boolean exactShape = methodParameters.size() == 1
+          && springRepositoryEntityType(file).isPresent()
+          && (repositoryTypeToken(methodParameters.get(0).type(), file)
+                  .map(type -> type.equals(springRepositoryEntityType(file).orElse("\u0000"))
+                      || type.equals(springRepositoryIdType(file).orElse("\u0000")))
+                  .orElse(false));
+      if (exactShape || queryAnnotation(method)) {
+        result.add(method.name());
+      }
+    }
+    return result;
+  }
+
+  private static boolean queryAnnotation(MethodInfo method) {
+    return Pattern.compile("@\\w*\\.?Query\\b").matcher(method.annotationBlock()).find();
   }
 
   /** Returns the repository fragment compositions visible in application source. */
@@ -117,7 +155,6 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
     if (implementsIndex < 0) {
       return false;
     }
-    int extendsIndex = topLevelKeywordIndex(header, "extends");
     int clauseStart = implementsIndex + "implements".length();
     int openBrace = header.indexOf('{', clauseStart);
     String clause = header.substring(clauseStart, openBrace < 0 ? header.length() : openBrace);
@@ -127,7 +164,7 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
         return true;
       }
     }
-    return extendsIndex < 0 || implementsIndex < extendsIndex;
+    return false;
   }
 
   /** Returns app-declared interfaces extended by one repository, excluding Spring contracts. */
@@ -169,68 +206,5 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
     String header = maskStringLiterals(typeHeader(file));
     return !isInterfaceFile(file) && header.matches("(?s).*\\bclass\\s+\\w+\\b.*")
         && !header.matches("(?s).*\\babstract\\s+class\\s+\\w+\\b.*");
-  }
-
-  /**
-   * Returns every configured repository base class, from all
-   * {@code @EnableJpaRepositories} occurrences in application source.
-   */
-  List<RepositoryBaseClass> springRepositoryBaseClasses() {
-    Pattern attribute = Pattern.compile(
-        "repositoryBaseClass\\s*=\\s*([\\w.]+)\\.class");
-    List<RepositoryBaseClass> result = new ArrayList<>();
-    for (SourceFile file : files()) {
-      String block = file.classAnnotationBlock();
-      for (AnnotationOccurrence occurrence : canonicalAnnotationOccurrences(
-          file, block, "EnableJpaRepositories",
-          SPRING_DATA_REPOSITORY_CONFIGURATION_ANNOTATIONS)) {
-        Matcher matcher = attribute.matcher(occurrence.source());
-        if (matcher.find()) {
-          String configured = matcher.group(1);
-          Optional<String> resolved = configured.contains(".")
-              ? Optional.of(configured)
-              : resolveReferenceType(configured, file);
-          String qualified = resolved.orElseGet(() -> qualify(configured, file.packageName()));
-          result.add(new RepositoryBaseClass(
-              qualified, typeInAnalysisScope(qualified), file.displayPath()));
-        }
-      }
-    }
-    return List.copyOf(result);
-  }
-
-  /**
-   * Checks whether one type is application source, or resolvable on the
-   * analysis classpath (the spring-data jars carry the default backing
-   * classes, and a dependency-provided base class is a bounded candidate).
-   */
-  private boolean typeInAnalysisScope(String qualifiedType) {
-    if (files().stream().anyMatch(candidate -> candidate.typeName().equals(qualifiedType))) {
-      return true;
-    }
-    String relative = qualifiedType.replace('.', '/') + ".class";
-    for (Path entry : context.dependencyClasspath()) {
-      if (dependencyContains(entry, relative)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private static boolean dependencyContains(Path entry, String relative) {
-    if (!Files.exists(entry)) {
-      return false;
-    }
-    if (Files.isDirectory(entry)) {
-      return Files.isRegularFile(entry.resolve(relative));
-    }
-    if (!entry.toString().endsWith(".jar")) {
-      return false;
-    }
-    try (ZipFile archive = new ZipFile(entry.toFile())) {
-      return archive.getEntry(relative) != null;
-    } catch (IOException error) {
-      return false;
-    }
   }
 }

@@ -190,13 +190,26 @@ public final class JavaAnalysisAdapter {
         scanner.springRepositoryBaseClasses();
     List<SemanticCallFacts.Diagnostic> result = new ArrayList<>();
     for (SourceMetadataScannerState.RepositoryBaseClass baseClass : baseClasses) {
-      if (!baseClass.applicationScoped()) {
+      if (!baseClass.referenceResolved()) {
+        result.add(new SemanticCallFacts.Diagnostic(
+            "spring_data_repository_base_class_unresolved",
+            baseClass.sourcePath(),
+            "repositoryBaseClass reference " + baseClass.configuredType()
+                + " cannot be resolved from the analyzed sources"));
+      } else if (!baseClass.applicationScoped()) {
         result.add(new SemanticCallFacts.Diagnostic(
             "spring_data_backing_selection_out_of_scope",
             baseClass.sourcePath(),
             "repositoryBaseClass " + baseClass.configuredType()
                 + " is outside the analysis scope"));
       }
+    }
+    for (Map.Entry<String, String> unresolved : scanner.unresolvedRepositoryExtensions()) {
+      result.add(new SemanticCallFacts.Diagnostic(
+          "spring_data_repository_fragment_unresolved",
+          unresolved.getKey(),
+          "repository extends-clause reference " + unresolved.getValue()
+              + " resolves to no type"));
     }
     if (baseClasses.stream()
         .map(SourceMetadataScannerState.RepositoryBaseClass::configuredType)

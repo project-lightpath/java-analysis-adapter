@@ -593,6 +593,7 @@ public final class SemanticCallFacts {
         .sorted(java.util.Comparator.comparing(Diagnostic::code)
             .thenComparing(Diagnostic::path)
             .thenComparing(Diagnostic::detail))
+        .distinct()
         .toList();
     validateLinks();
   }

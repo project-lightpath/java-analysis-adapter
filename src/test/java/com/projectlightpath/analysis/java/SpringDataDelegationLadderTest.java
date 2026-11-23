@@ -63,6 +63,89 @@ class SpringDataDelegationLadderTest {
   }
 
   @Test
+  void queryRedeclaredSingleParamMethodStaysPossible() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.Query;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a where a.id = :id")
+          Account findById(Long id);
+        }
+        """));
+    SemanticCallFacts.Fact findById = delegationFact(facts, "demo.AccountRepository#findById");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, findById.certainty(),
+        "an @Query redeclaration with the exact contract shape is override evidence");
+  }
+
+  @Test
+  void unrelatedOverloadDoesNotDowngradeCrud() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          int save(Account account, int count);
+        }
+        """));
+    SemanticCallFacts.Fact save = delegationFact(facts, "demo.AccountRepository#save");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, save.certainty(),
+        "an overload with a different shape is not override evidence");
+  }
+
+  @Test
+  void unresolvedBaseClassReferenceUsesItsOwnDiagnostic() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+        @EnableJpaRepositories(repositoryBaseClass = NotImportedAnywhere.class)
+        public class AppConfig { }
+        """, """
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> { }
+        """));
+    SemanticCallFacts.Fact save = delegationFact(facts, "demo.AccountRepository#save");
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, save.certainty());
+    assertTrue(facts.diagnostics().stream().anyMatch(item ->
+        item.code().equals("spring_data_repository_base_class_unresolved")),
+        facts.diagnostics().toString());
+    assertTrue(facts.diagnostics().stream()
+        .noneMatch(item -> item.code().equals("spring_data_backing_selection_out_of_scope")),
+        facts.diagnostics().toString());
+  }
+
+  @Test
+  void unresolvedFragmentExtensionIsVisibleAsDiagnostic() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface AccountRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            NowhereFragment { }
+        """));
+    assertTrue(facts.diagnostics().stream().anyMatch(item ->
+        item.code().equals("spring_data_repository_fragment_unresolved")
+            && item.detail().contains("NowhereFragment")),
+        facts.diagnostics().toString());
+  }
+
+  @Test
+  void duplicateBaseClassConfigurationsDedupeDiagnostics() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+        @EnableJpaRepositories(repositoryBaseClass = com.example.MissingBase.class)
+        public class FirstConfig { }
+        @EnableJpaRepositories(repositoryBaseClass = com.example.MissingBase.class)
+        class SecondConfig { }
+        """, """
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> { }
+        """));
+    assertEquals(1, facts.diagnostics().size(), facts.diagnostics().toString());
+  }
+
+  @Test
   void multipleDistinctBaseClassesAbstainAsAmbiguous() throws IOException {
     SemanticCallFacts facts = analyze(List.of("""
         package demo;

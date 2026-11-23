@@ -276,6 +276,56 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, derivedDelegation.certainty());
   }
 
+  @Test
+  void overloadedDerivedMethodsJoinWithDistinctIds() throws IOException {
+    Path sourceRoot = temp.resolve("overload-join/src/main/java");
+    Path stubs = temp.resolve("overload-join/stubs");
+    Path classes = temp.resolve("overload-join/target/classes");
+    writeStubs(stubs);
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/AccountRepository.java", """
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.repository.CrudRepository<Account, Long> {
+          Account findByNumber(String number);
+          Account findByNumber(int number);
+        }
+        """);
+    write(sourceRoot, "demo/AccountService.java", """
+        package demo;
+        public class AccountService {
+          private final AccountRepository accountRepository;
+          public AccountService(AccountRepository accountRepository) {
+            this.accountRepository = accountRepository;
+          }
+          public Account create(Account account) {
+            accountRepository.findByNumber("x");
+            return accountRepository.findByNumber(1);
+          }
+        }
+        """);
+    compile(sourceRoot, stubs, classes);
+
+    SemanticCallFacts facts = analyze(temp.resolve("overload-join"), sourceRoot);
+    List<SemanticCallFacts.Fact> delegations = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("delegated_implementation"))
+        .filter(item -> item.caller().equals("demo.AccountRepository#findByNumber"))
+        .toList();
+    assertEquals(2, delegations.size(), facts.frameworkFacts().toString());
+    assertEquals(2, delegations.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertTrue(delegations.stream().allMatch(item ->
+        item.callee().equals(
+            "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute")));
+    List<SemanticCallFacts.Fact> declared = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("declared_invokes"))
+        .filter(item -> item.callee().equals("demo.AccountRepository#findByNumber"))
+        .toList();
+    assertEquals(2, declared.size(), facts.providerFacts().toString());
+    assertEquals(2, declared.stream()
+        .map(item -> item.evidence().get(0).attributes().get("calleeSignature"))
+        .distinct().count());
+  }
+
   /** Builds the shared derived-query fixture and returns its root. */
   private Path fixture(String name) throws IOException {
     Path root = temp.resolve(name);

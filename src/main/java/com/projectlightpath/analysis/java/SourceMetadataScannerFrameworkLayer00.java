@@ -188,9 +188,9 @@ static boolean springBeanAnnotation(SourceFile file, String block) {
 
   /**
    * Version-pins the JPA-specific guarantees: getOne/getById were removed in
-   * Spring Data 3, and saveAllAndFlush/deleteAllByIdInBatch only exist from
-   * 2.7. An unparsable version keeps only the version-stable CRUD baseline
-   * (the safe abstention direction).
+   * Spring Data 3; getById, saveAllAndFlush and deleteAllByIdInBatch exist
+   * from 2.5; getReferenceById exists from 2.7. An unparsable version keeps
+   * only the version-stable CRUD baseline (the safe abstention direction).
    */
   private List<String> guaranteedJpaMethods() {
     Optional<Integer> major = springBootMajorVersion();
@@ -200,6 +200,9 @@ static boolean springBeanAnnotation(SourceFile file, String block) {
     return SPRING_DATA_JPA_METHODS.stream()
         .filter(name -> !(major.get() >= 3
             && SPRING_DATA_JPA_METHODS_REMOVED_IN_BOOT_3.contains(name)))
+        .filter(name -> !(major.get() < 3
+            && !springBootVersionAtLeast(2, 5)
+            && SPRING_DATA_JPA_METHODS_ADDED_IN_2_5.contains(name)))
         .filter(name -> !(major.get() < 3
             && !springBootVersionAtLeast(2, 7)
             && SPRING_DATA_JPA_METHODS_ADDED_IN_2_7.contains(name)))

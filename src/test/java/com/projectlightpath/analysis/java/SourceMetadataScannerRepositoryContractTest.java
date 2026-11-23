@@ -178,6 +178,40 @@ class SourceMetadataScannerRepositoryContractTest {
   }
 
   @Test
+  void implOfADifferentInterfaceIsNotABacking() throws IOException {
+    Path sourceRoot = temp.resolve("impl-wrong/src/main/java");
+    write(sourceRoot, "shared/SharedFragment.java", """
+        package shared;
+        public interface SharedFragment {
+          void refresh(demo.Account account);
+        }
+        """);
+    write(sourceRoot, "demo/SharedFragmentImpl.java", """
+        package demo;
+        public interface SharedFragment {
+          void unrelated();
+        }
+        """);
+    write(sourceRoot, "demo/WrongImpl.java", """
+        package demo;
+        public class SharedFragmentImpl implements SharedFragment {
+          public void unrelated() { }
+        }
+        """);
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/FragmentedRepository.java", """
+        package demo;
+        import shared.SharedFragment;
+        public interface FragmentedRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            SharedFragment { }
+        """);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context(sourceRoot, "2.7.18"));
+    assertTrue(scanner.springRepositoryFragments().isEmpty(),
+        "an Impl of a same-named different interface is not the backing");
+  }
+
+  @Test
   void crossPackageFragmentResolvesThroughImports() throws IOException {
     Path sourceRoot = temp.resolve("cross-package/src/main/java");
     write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
