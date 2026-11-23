@@ -259,7 +259,9 @@ direction).
 | REVIEW_24_5 | 448/448 green, TWO consecutive full runs (the @Isolated completion on JavacSourceSymbolIndexTest closed the counter-delta interference; count unchanged — annotation-only edit) | 0 new findings, 0 CPD | pass |
 | REVIEW_24_6 | 450/450 green on BOTH Temurin 17.0.21 and JDK 27 (floor 448 → 450, the prefix-capture and QUARKUS folded-path cells) | 0 new findings, 0 CPD | pass |
 | REVIEW_24_7 | 451/451 green on both JDKs (floor 450 → 451, the field-site discovery-gate cell) | 0 new findings, 0 CPD | pass |
-| REVIEW_24_8 | 451/451 (doc-only clause fix; count unchanged) | 0 new findings, 0 CPD | pass |## Residuals
+| REVIEW_24_8 | 451/451 (doc-only clause fix; count unchanged) | 0 new findings, 0 CPD | pass |
+
+## Residuals
 
 - Discovery regexes (INJECT_FIELD, constructor pattern, cdiBean/
   springComponent/springRepositoryContract) and evidence-symbol
