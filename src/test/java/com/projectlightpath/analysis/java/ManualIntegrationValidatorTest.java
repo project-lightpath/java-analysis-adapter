@@ -338,6 +338,18 @@ class ManualIntegrationValidatorTest {
     assertEquals(REVISION, ManualIntegrationValidator.DEFAULT_SOURCE_REVISION);
   }
 
+  /**
+   * The boundary case CPython documents: the correctly rounded 16-digit candidate fails
+   * to round-trip and the adjacent decimal is the shortest repr.
+   */
+  @Test
+  void writerUsesTheAdjacentFloatCandidate() {
+    assertEquals("5.960464477539063e-08", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 5.960464477539063e-08).path("v")));
+    assertEquals("-4.3849174499425896e-221", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", -4.3849174499425896e-221).path("v")));
+  }
+
   /** Python float repr shapes in the passthrough writer. */
   @Test
   void writerMatchesPythonFloatRepr() {
