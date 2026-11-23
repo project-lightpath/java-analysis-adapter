@@ -198,6 +198,18 @@ flipping the quote tracking — it now also declines on an odd quote
 count, with cell `unescapedQuoteInRenderedValueFallsBackToTextual`
 (the conservative direction until #48 lands).
 
+Round 4 (gate rerun on 21f33fe): the sporadic single-cell
+`JavacSourceSymbolIndexTest` counter failures (a different delta cell
+each run, green in isolation, also seen once in REFACTOR_22) were NOT
+flake: `JavacSourceSymbolIndexTest` writes the global flag but was not
+`@Isolated`, and the #24 migration made production framework scans
+read the flag — so during its `withFlag` windows, concurrently running
+scan-driving classes in the default lane built indexes
+(`COMPILATIONS++`) and polluted its counter deltas. Fixed by adding
+`@Isolated` to the class (annotation-only, completing the #22
+isolation pattern; the sanctioned existing-test edit). Two consecutive
+full-suite runs green after the fix.
+
 ## Gate receipts
 
 | Commit | adapter-test | java-lint | evidence-validate |
@@ -208,6 +220,7 @@ count, with cell `unescapedQuoteInRenderedValueFallsBackToTextual`
 | REVIEW_24_2 | 447/447 green locally (floor 446 → 447, the nested conditions/paths cell) | 0 new findings, 0 CPD | pass |
 | REVIEW_24_3 | 447/447 green locally (fixture-only change; CI still red on Temurin 17 — the mis-diagnosis) | 0 new findings, 0 CPD | pass |
 | REVIEW_24_4 | 448/448 green locally on BOTH Temurin 17.0.21 and JDK 27 (floor 447 → 448, the odd-quote cell; the per-occurrence redesign fixed the CI-only decline); CI re-runs the full suite | 0 new findings, 0 CPD | pass |
+| REVIEW_24_5 | 448/448 green, TWO consecutive full runs (the @Isolated completion on JavacSourceSymbolIndexTest closed the counter-delta interference; count unchanged — annotation-only edit) | 0 new findings, 0 CPD | pass |
 
 ## Residuals
 
