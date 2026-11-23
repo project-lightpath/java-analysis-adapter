@@ -176,4 +176,17 @@ static boolean springBeanAnnotation(SourceFile file, String block) {
         || contract.equals("ListPagingAndSortingRepository");
     return !pagingContract || springBootMajorVersion().map(major -> major < 3).orElse(false);
   }
+
+  /** Returns the contract-guaranteed method names for one Spring Data contract. */
+  List<String> guaranteedContractMethods(String contract) {
+    List<String> methods = SPRING_DATA_GUARANTEED_CONTRACT_METHODS.get(contract);
+    if (methods == null) {
+      return List.of();
+    }
+    boolean pagingContract = contract.equals("PagingAndSortingRepository")
+        || contract.equals("ListPagingAndSortingRepository");
+    return !pagingContract || springBootMajorVersion().map(major -> major < 3).orElse(false)
+        ? methods
+        : List.of();
+  }
 }

@@ -146,13 +146,15 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
       return List.of();
     }
     Map<String, RepositoryMethod> result = new LinkedHashMap<>();
-    if (contracts.stream().anyMatch(this::guaranteedFindByIdContract)) {
-      result.put("findById", new RepositoryMethod("findById", "findById", true));
+    for (String contract : contracts) {
+      for (String name : guaranteedContractMethods(contract)) {
+        result.putIfAbsent(name, new RepositoryMethod(name, name, true));
+      }
     }
     for (MethodInfo method : methods(file)) {
       if (typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
           && abstractInstanceRepositoryMethod(method)
-          && (!redeclaresInheritedFindById(file, method) || !result.containsKey("findById"))) {
+          && !redeclaresGuaranteedContractMethod(file, method, result)) {
         RepositoryMethod repositoryMethod = new RepositoryMethod(
             method.name(), repositoryMethodSignature(method), false);
         result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
@@ -161,13 +163,142 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
     return List.copyOf(result.values());
   }
 
+  /** Detects an exact source redeclaration of a guaranteed contract method. */
+  private boolean redeclaresGuaranteedContractMethod(
+      SourceFile file, MethodInfo method, Map<String, RepositoryMethod> guaranteed) {
+    RepositoryMethod inherited = guaranteed.get(method.name());
+    if (inherited == null || !inherited.guaranteed()) {
+      return false;
+    }
+    List<Parameter> methodParameters = parameters(method.parameters());
+    if (methodParameters.size() != 1 || !springRepositoryEntityType(file).isPresent()) {
+      return false;
+    }
+    String parameterType = repositoryTypeToken(methodParameters.get(0).type(), file).orElse("");
+    return parameterType.equals(springRepositoryEntityType(file).orElse("\u0000"))
+        || parameterType.equals(springRepositoryIdType(file).orElse("\u0000"));
+  }
+
+  /** Resolves the entity type from the first supported Spring Data contract declaration. */
+  Optional<String> springRepositoryEntityType(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return Optional.empty();
+    }
+    int permitsIndex = topLevelKeywordIndex(header, "permits");
+    String extended = header.substring(
+        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
+    for (String type : splitArguments(extended)) {
+      if (resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet()).isEmpty()) {
+        continue;
+      }
+      String arguments = genericArguments(type);
+      List<String> parameters = splitArguments(arguments);
+      if (parameters.size() >= 2) {
+        Optional<String> resolved = repositoryTypeToken(parameters.get(0), file);
+        if (resolved.isPresent()) {
+          return resolved;
+        }
+      }
+    }
+    return Optional.empty();
+  }
+
   /** Returns the repository fragment compositions visible in application source. */
   List<RepositoryFragment> springRepositoryFragments() {
-    return List.of();
+    List<RepositoryFragment> result = new ArrayList<>();
+    for (SourceFile file : files()) {
+      if (springRepositoryContracts(file).isEmpty()) {
+        continue;
+      }
+      for (String fragmentType : extendedFragmentInterfaces(file)) {
+        String implementationType = fragmentType + "Impl";
+        SourceFile implementation = files().stream()
+            .filter(candidate -> candidate.typeName().equals(implementationType))
+            .filter(candidate -> isConcreteClass(candidate))
+            .findFirst()
+            .orElse(null);
+        if (implementation == null) {
+          continue;
+        }
+        SourceFile fragmentFile = files().stream()
+            .filter(candidate -> candidate.typeName().equals(fragmentType))
+            .findFirst()
+            .orElseThrow();
+        List<String> methodNames = methods(fragmentFile).stream()
+            .filter(method -> typeContaining(
+                fragmentFile, declarationStart(fragmentFile, method.start()))
+                .equals(fragmentFile.typeName()))
+            .filter(method -> abstractInstanceRepositoryMethod(method))
+            .map(MethodInfo::name)
+            .distinct()
+            .toList();
+        result.add(new RepositoryFragment(
+            file.typeName(), fragmentType, implementationType, methodNames));
+      }
+    }
+    return List.copyOf(result);
+  }
+
+  /** Returns app-declared interfaces extended by one repository, excluding Spring contracts. */
+  private List<String> extendedFragmentInterfaces(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return List.of();
+    }
+    int permitsIndex = topLevelKeywordIndex(header, "permits");
+    String extended = header.substring(
+        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
+    List<String> result = new ArrayList<>();
+    for (String type : typeNames(extended)) {
+      if (resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet())
+          .isPresent()) {
+        continue;
+      }
+      String qualified = qualify(type, file.packageName());
+      boolean isAppInterface = files().stream()
+          .filter(candidate -> candidate.typeName().equals(qualified))
+          .anyMatch(this::isInterfaceFile);
+      if (isAppInterface) {
+        result.add(qualified);
+      }
+    }
+    return result;
+  }
+
+  private boolean isInterfaceFile(SourceFile file) {
+    return maskStringLiterals(typeHeader(file)).matches("(?s).*\\binterface\\s+\\w+\\b.*");
+  }
+
+  private boolean isConcreteClass(SourceFile file) {
+    String header = maskStringLiterals(typeHeader(file));
+    return !isInterfaceFile(file) && header.matches("(?s).*\\bclass\\s+\\w+\\b.*")
+        && !header.matches("(?s).*\\babstract\\s+class\\s+\\w+\\b.*");
   }
 
   /** Returns the configured repository base class, when one is present. */
   Optional<RepositoryBaseClass> springRepositoryBaseClass() {
+    Pattern attribute = Pattern.compile(
+        "repositoryBaseClass\\s*=\\s*([\\w.]+)\\.class");
+    for (SourceFile file : files()) {
+      String block = file.classAnnotationBlock();
+      for (AnnotationOccurrence occurrence : canonicalAnnotationOccurrences(
+          file, block, "EnableJpaRepositories",
+          SPRING_DATA_REPOSITORY_CONFIGURATION_ANNOTATIONS)) {
+        Matcher matcher = attribute.matcher(occurrence.source());
+        if (matcher.find()) {
+          String configured = matcher.group(1);
+          String qualified = configured.contains(".")
+              ? configured
+              : qualify(configured, file.packageName());
+          boolean applicationScoped = files().stream()
+              .anyMatch(candidate -> candidate.typeName().equals(qualified));
+          return Optional.of(new RepositoryBaseClass(qualified, applicationScoped));
+        }
+      }
+    }
     return Optional.empty();
   }
 }
