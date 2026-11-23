@@ -470,6 +470,56 @@ class ChangedCoverageValidatorTest {
     assertTrue(error.getMessage().contains("revisions do not match"));
   }
 
+  /** The standard JaCoCo DOCTYPE header parses; external DTD loading stays blocked. */
+  @Test
+  void doctypeHeaderJacocoReportParses() throws IOException {
+    Path report = temp.resolve("jacoco-doctype.xml");
+    Files.writeString(report, """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">
+        <report name="demo">
+          <package name="com/example">
+            <sourcefile name="A.java">
+              <line nr="1" mi="0" ci="2"/>
+            </sourcefile>
+          </package>
+        </report>
+        """);
+    JacocoReportReader.JacocoCoverage coverage =
+        JacocoReportReader.jacocoLines(report, "src/main/java");
+    assertEquals(Set.of(1L),
+        coverage.executable().get("src/main/java/com/example/A.java"));
+  }
+
+  /** An option-looking following token is an argument error, never a swallowed value. */
+  @Test
+  void optionLookingValueExitsTwo() throws IOException {
+    Path root = scratchRoot();
+    jacocoReport();
+    assertEquals(2, ChangedCoverageValidator.run(new String[] {"--base", "base",
+        "--head", "head", "--report", temp.resolve("jacoco.xml").toString(),
+        "--evidence", root.resolve("coverage.json").toString(),
+        "--allow-missing", "--threshold=100"}, root));
+    // Signed short values stay valid operands (argparse negative-number rule).
+    assertEquals(1, ChangedCoverageValidator.run(new String[] {"--base", "base",
+        "--head", "head", "--report", temp.resolve("jacoco.xml").toString(),
+        "--evidence", root.resolve("coverage.json").toString(),
+        "--threshold", "-1"}, root));
+  }
+
+  /** Out-of-range sidecar line numbers never narrow onto a JaCoCo line. */
+  @Test
+  void outOfRangeSidecarLinesNeverNarrow() throws IOException {
+    Path root = scratchRoot();
+    jacocoReport();
+    String sidecar = "{\"base\": \"base\", \"head\": \"head\", \"files\": {"
+        + "\"src/main/java/com/example/Present.java\": "
+        + "[18446744073709551626, \"18446744073709551627\"]}}";
+    // Python keeps the big ints, which never intersect the report's lines: the
+    // denominator is zero and the gate exits 1 — it must not report line 10 covered.
+    assertEquals(1, runWithSidecar(root, sidecar));
+  }
+
   /** sha256 streams the file content. */
   @Test
   void sha256HashesFileContent() throws IOException {

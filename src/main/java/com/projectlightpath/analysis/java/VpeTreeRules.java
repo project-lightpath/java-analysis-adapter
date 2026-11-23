@@ -58,7 +58,7 @@ final class VpeTreeRules {
           + path);
     }
     long expectedMode = parseMode(entry.path("mode"), path);
-    if (GitTreeFiles.fileType(candidate) != (expectedMode & 0170000L)) {
+    if (GitTreeFiles.fileType(candidate, path) != (expectedMode & 0170000L)) {
       throw new ContractFixtureValidator.ValidationError(
           "VPE tree file type mismatch: " + path);
     }
@@ -106,7 +106,7 @@ final class VpeTreeRules {
     // Python int(s, 8): surrounding whitespace, underscores between digits, and an
     // optional 0o/0O prefix are allowed.
     String mode = modeNode.asText().strip();
-    if (!mode.matches("[+-]?(0[oO])?[0-7]+(_[0-7]+)*")) {
+    if (!mode.matches("[+-]?(0[oO]_?)?[0-7]+(_[0-7]+)*")) {
       throw new ContractFixtureValidator.ValidationError(
           "VPE tree manifest entry has a non-octal mode: " + path + ": " + mode);
     }

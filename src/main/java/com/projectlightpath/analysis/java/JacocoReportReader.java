@@ -122,12 +122,17 @@ final class JacocoReportReader {
   private static Document parseReport(Path report) {
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+      // Standard JaCoCo reports open with a DOCTYPE referencing report.dtd; the
+      // declaration is allowed, but every external resource (the DTD, entities,
+      // schemas) stays blocked: loading is disabled and the resolver answers any
+      // stray lookup with an empty source.
       factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
       factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
       factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
       factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
       DocumentBuilder builder = factory.newDocumentBuilder();
+      builder.setEntityResolver((publicId, systemId) -> new org.xml.sax.InputSource(
+          new java.io.StringReader("")));
       return builder.parse(report.toFile());
     } catch (IOException | ParserConfigurationException | SAXException error) {
       throw new ChangedCoverageValidator.ValidationError(
@@ -204,7 +209,7 @@ final class JacocoReportReader {
   static String hex(byte[] digest) {
     StringBuilder out = new StringBuilder();
     for (byte value : digest) {
-      out.append(String.format("%02x", value));
+      out.append(String.format(java.util.Locale.ROOT, "%02x", value));
     }
     return out.toString();
   }

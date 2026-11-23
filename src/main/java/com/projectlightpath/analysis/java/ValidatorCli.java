@@ -48,6 +48,12 @@ final class ValidatorCli {
           return null;
         }
         value = args[++i];
+        // argparse refuses to consume another option as a value ("expected one
+        // argument"); a leading "--" marks an option, while signed short values
+        // like -1 remain valid operands.
+        if (value.startsWith("--")) {
+          return null;
+        }
       }
       if (!known.contains(name)) {
         return null;

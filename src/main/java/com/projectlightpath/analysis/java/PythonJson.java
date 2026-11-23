@@ -83,7 +83,7 @@ final class PythonJson {
       String mantissa = digits.length() == 1 ? digits
           : digits.charAt(0) + "." + digits.substring(1);
       return sign + mantissa + "e" + (exponent < 0 ? "-" : "+")
-          + String.format("%02d", Math.abs(exponent));
+          + String.format(java.util.Locale.ROOT, "%02d", Math.abs(exponent));
     }
     String positional = stripped.toPlainString();
     return sign + (positional.indexOf('.') < 0 ? positional + ".0" : positional);

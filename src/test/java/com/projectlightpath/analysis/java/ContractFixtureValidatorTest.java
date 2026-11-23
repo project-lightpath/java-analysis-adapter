@@ -321,6 +321,38 @@ class ContractFixtureValidatorTest {
     assertEquals(0, run(roots[0], roots[1], file, temp.resolve("evidence")));
   }
 
+  /** An underscore after the 0o prefix is valid, like Python int(s, 8). */
+  @Test
+  void underscoreAfterOctalPrefixIsAccepted() throws IOException {
+    Path[] roots = fixtureRoots(Map.of("tracked.txt", "tracked"));
+    Map<String, Object> manifest = new LinkedHashMap<>();
+    manifest.put("commit", "vpe-commit");
+    Map<String, String> prefixed = new LinkedHashMap<>();
+    prefixed.put("path", "tracked.txt");
+    prefixed.put("mode", "0o_100644");
+    prefixed.put("blob", ContractFixtureValidator.gitBlob(roots[1].resolve(
+        "tracked.txt")));
+    manifest.put("entries", java.util.List.of(
+        entryFor(roots[1], VPE_FIXTURE), prefixed));
+    Path file = temp.resolve("manifest.json");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), manifest);
+    assertEquals(0, run(roots[0], roots[1], file, temp.resolve("evidence")));
+  }
+
+  /** A special permission bit (setgid) on the staged file rejects, like S_IMODE. */
+  @Test
+  void setgidBitOnStagedFileIsRejected() throws IOException, InterruptedException {
+    Path[] roots = fixtureRoots(Map.of("special.txt", "x"));
+    Path special = roots[1].resolve("special.txt");
+    new ProcessBuilder("chmod", "2644", special.toString()).start().waitFor();
+    Path manifest = manifestFor(roots[0], roots[1], "special.txt");
+    ContractFixtureValidator.ValidationError error = assertThrows(
+        ContractFixtureValidator.ValidationError.class,
+        () -> ContractFixtureValidator.validate(roots[0], roots[1], "vpe-commit",
+            manifest));
+    assertTrue(error.getMessage().contains("mode mismatch"), error.getMessage());
+  }
+
   /** Boundary: a malformed manifest rejects loudly. */
   @Test
   void malformedManifestRejects() throws IOException {

@@ -1,6 +1,5 @@
 package com.projectlightpath.analysis.java;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,9 +21,6 @@ final class ChangedLines {
   private static final Pattern HUNK =
       Pattern.compile("@@ -\\d+(?:,\\d+)? \\+(\\d+)(?:,(\\d+))? @@");
 
-  /** Python's int() grammar for strings: optional sign, digits with single underscores. */
-  private static final Pattern LENIENT_INT = Pattern.compile("[+-]?\\d+(_\\d+)*");
-
   /** Signals that git is unavailable so the sidecar fallback can take over. */
   private static final class GitUnavailable extends RuntimeException {
     private static final long serialVersionUID = 1L;
@@ -44,7 +40,7 @@ final class ChangedLines {
     } catch (GitUnavailable error) {
       // Python: Path(name).parent is "." for a bare filename — never null.
       Path parent = evidence.getParent();
-      return sidecarChangedLines(
+      return ChangedLinesSidecar.read(
           parent == null ? Path.of("changed-lines.json")
               : parent.resolve("changed-lines.json"),
           base, head);
@@ -108,66 +104,4 @@ final class ChangedLines {
     return changed;
   }
 
-  /** The sidecar shape: {base, head, files: {path: [lines]}} with lenient ints. */
-  private static Map<String, Set<Long>> sidecarChangedLines(Path sidecar, String base,
-      String head) {
-    if (!Files.isRegularFile(sidecar)) {
-      throw new ChangedCoverageValidator.ValidationError(
-          "git unavailable and changed-line sidecar is missing: " + sidecar);
-    }
-    JsonNode raw;
-    try {
-      raw = ChangedCoverageValidator.MAPPER.readTree(sidecar.toFile());
-    } catch (IOException error) {
-      throw new ChangedCoverageValidator.ValidationError("cannot parse " + sidecar
-          + ": " + error.getMessage(), error);
-    }
-    JsonNode sidecarBase = raw.path("base");
-    JsonNode sidecarHead = raw.path("head");
-    if (!raw.isObject() || !sidecarBase.isTextual() || !sidecarHead.isTextual()
-        || !base.equals(sidecarBase.asText()) || !head.equals(sidecarHead.asText())) {
-      throw new ChangedCoverageValidator.ValidationError(
-          "changed-line sidecar revisions do not match the requested base and head");
-    }
-    JsonNode files = raw.path("files");
-    if (!files.isObject()) {
-      throw new ChangedCoverageValidator.ValidationError(
-          "changed-line sidecar files must be an object");
-    }
-    Map<String, Set<Long>> changed = new LinkedHashMap<>();
-    files.fields().forEachRemaining(entry ->
-        changed.put(entry.getKey(), sidecarLines(entry.getValue(), entry.getKey())));
-    return changed;
-  }
-
-  /** One sidecar file's line set; values must be arrays of int-like entries. */
-  private static Set<Long> sidecarLines(JsonNode lines, String path) {
-    if (!lines.isArray()) {
-      throw new ChangedCoverageValidator.ValidationError(
-          "changed-line sidecar files values must be arrays: " + path);
-    }
-    Set<Long> values = new LinkedHashSet<>();
-    for (JsonNode line : lines) {
-      Long value = lenientLong(line);
-      if (value == null) {
-        throw new ChangedCoverageValidator.ValidationError(
-            "changed-line sidecar has a non-numeric line: " + path);
-      }
-      values.add(value);
-    }
-    return values;
-  }
-
-  /** Python int(): numbers pass through; strings allow whitespace and inner underscores. */
-  private static Long lenientLong(JsonNode node) {
-    if (node.isNumber()) {
-      return node.longValue();
-    }
-    if (!node.isTextual()) {
-      return null;
-    }
-    String value = node.asText().strip();
-    return LENIENT_INT.matcher(value).matches()
-        ? Long.parseLong(value.replace("_", "")) : null;
-  }
 }
