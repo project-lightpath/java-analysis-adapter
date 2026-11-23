@@ -70,10 +70,21 @@ final class TextualShapeBaseline {
 
   private static String argumentText(String raw) {
     int open = raw.indexOf('(');
-    int close = raw.lastIndexOf(')');
-    if (open < 0 || close <= open) {
+    if (open < 0) {
       return "";
     }
-    return raw.substring(open + 1, close).replaceAll("\\s+", "");
+    int depth = 0;
+    for (int index = open; index < raw.length(); index++) {
+      char character = raw.charAt(index);
+      if (character == '(') {
+        depth++;
+      } else if (character == ')') {
+        depth--;
+        if (depth == 0) {
+          return raw.substring(open + 1, index).replaceAll("\\s+", "");
+        }
+      }
+    }
+    return "";
   }
 }

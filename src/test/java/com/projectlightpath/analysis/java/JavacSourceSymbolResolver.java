@@ -59,15 +59,6 @@ final class JavacSourceSymbolResolver {
     if (sourceFiles.isEmpty()) {
       return JavacResolverResult.empty(cell.id());
     }
-    if (cell.family() == JavacResolverCell.Family.ANNOTATION_NAME
-        || cell.family() == JavacResolverCell.Family.ANNOTATION_ARGUMENT
-        || cell.family() == JavacResolverCell.Family.TYPE_USE
-        || cell.family() == JavacResolverCell.Family.TYPE_SHAPE
-        || cell.family() == JavacResolverCell.Family.REFLECTION_SOURCE_BOUND) {
-      // RED_26_1 behavior-neutral stub: the annotation/type-shape emitters land
-      // in GREEN_26_1. Documented in the RED commit message.
-      return JavacResolverResult.empty(cell.id());
-    }
     List<Path> normalizedRoots = unitRoots.stream()
         .map(root -> root.toAbsolutePath().normalize())
         .toList();
@@ -99,11 +90,13 @@ final class JavacSourceSymbolResolver {
       task.analyze();
       Trees trees = Trees.instance(task);
       Types types = task.getTypes();
+      javax.lang.model.util.Elements elements = task.getElements();
       List<Diagnostic<? extends JavaFileObject>> diagnostics = List.copyOf(collector.getDiagnostics());
       boolean taskHasError = diagnostics.stream()
           .anyMatch(item -> item.getKind() == Diagnostic.Kind.ERROR);
       Path siteFile = normalizedRoots.get(0).resolve(cell.siteFile()).normalize();
-      Facts scanner = new Facts(cell, trees, types, parsed, diagnostics, taskHasError, normalizedRoots, siteFile);
+      Facts scanner = new Facts(
+          cell, trees, types, elements, parsed, diagnostics, taskHasError, normalizedRoots, siteFile);
       for (CompilationUnitTree unit : parsed) {
         scanner.scan(unit, null);
       }
@@ -166,6 +159,7 @@ final class JavacSourceSymbolResolver {
     private final JavacResolverCell cell;
     private final Trees trees;
     private final Types types;
+    private final javax.lang.model.util.Elements elements;
     private final List<Diagnostic<? extends JavaFileObject>> diagnostics;
     private final boolean taskHasError;
     private final List<Path> unitRoots;
@@ -177,6 +171,7 @@ final class JavacSourceSymbolResolver {
         JavacResolverCell cell,
         Trees trees,
         Types types,
+        javax.lang.model.util.Elements elements,
         Iterable<? extends CompilationUnitTree> parsed,
         List<Diagnostic<? extends JavaFileObject>> diagnostics,
         boolean taskHasError,
@@ -185,6 +180,7 @@ final class JavacSourceSymbolResolver {
       this.cell = cell;
       this.trees = trees;
       this.types = types;
+      this.elements = elements;
       this.diagnostics = diagnostics;
       this.taskHasError = taskHasError;
       this.unitRoots = unitRoots;
@@ -199,8 +195,59 @@ final class JavacSourceSymbolResolver {
     }
 
     @Override
+    public Void visitMethod(com.sun.source.tree.MethodTree node, Void unused) {
+      TreePath methodPath = getCurrentPath();
+      if (isProbeClassMethod(methodPath)) {
+        javax.lang.model.element.ExecutableElement method =
+            (javax.lang.model.element.ExecutableElement) trees.getElement(methodPath);
+        if (method.getKind() == ElementKind.METHOD) {
+          if (cell.family() == JavacResolverCell.Family.TYPE_USE
+              || cell.family() == JavacResolverCell.Family.TYPE_SHAPE) {
+            emitParameterFacts(methodPath, node, method);
+            emitReturnFact(methodPath, method);
+          } else if (cell.family() == JavacResolverCell.Family.ANNOTATION_NAME
+              || cell.family() == JavacResolverCell.Family.ANNOTATION_ARGUMENT) {
+            emitAnnotationFacts(methodPath, method);
+          }
+        }
+      }
+      return super.visitMethod(node, unused);
+    }
+
+    @Override
     public Void visitMethodInvocation(MethodInvocationTree node, Void unused) {
       TreePath invocationPath = getCurrentPath();
+      if (isSiteFile(invocationPath)) {
+        if (cell.family() == JavacResolverCell.Family.TYPE_SHAPE) {
+          emitInvocationFact(invocationPath, node);
+          return super.visitMethodInvocation(node, unused);
+        }
+        if (cell.family() == JavacResolverCell.Family.REFLECTION_SOURCE_BOUND) {
+          emitReflectionFact(invocationPath, node);
+          return super.visitMethodInvocation(node, unused);
+        }
+      }
+      return superVisitMethodInvocation(node, unused, invocationPath);
+    }
+
+    @Override
+    public Void visitNewClass(com.sun.source.tree.NewClassTree node, Void unused) {
+      TreePath path = getCurrentPath();
+      if (cell.family() == JavacResolverCell.Family.TYPE_SHAPE && isSiteFile(path)) {
+        Element constructor = trees.getElement(path);
+        if (constructor instanceof javax.lang.model.element.ExecutableElement ctor) {
+          long position = startPosition(path);
+          if (position >= 0) {
+            addShapeFact(path, position,
+                memberName(ctor.getEnclosingElement(), "<init>", ctor), ctor);
+          }
+        }
+      }
+      return super.visitNewClass(node, unused);
+    }
+
+    private Void superVisitMethodInvocation(
+        MethodInvocationTree node, Void unused, TreePath invocationPath) {
       ExpressionTree selectTree = node.getMethodSelect();
       String selectedName = selectedName(selectTree);
       if (!LOAD.equals(selectedName) || !isSiteFile(invocationPath)) {
@@ -231,6 +278,255 @@ final class JavacSourceSymbolResolver {
             reason(method, receiver, line, column, endLine, endColumn));
       }
       return super.visitMethodInvocation(node, unused);
+    }
+
+    /** True when the method is declared by the cell's probe class in the site file. */
+    private boolean isProbeClassMethod(TreePath methodPath) {
+      if (!isSiteFile(methodPath)) {
+        return false;
+      }
+      TreePath parent = methodPath.getParentPath();
+      if (parent == null || !(parent.getLeaf() instanceof ClassTree)) {
+        return false;
+      }
+      Element enclosing = trees.getElement(parent);
+      return enclosing instanceof TypeElement type
+          && cell.owner().equals(type.getQualifiedName().toString());
+    }
+
+    private void emitParameterFacts(
+        TreePath methodPath, com.sun.source.tree.MethodTree node,
+        javax.lang.model.element.ExecutableElement method) {
+      for (int index = 0; index < node.getParameters().size(); index++) {
+        com.sun.source.tree.VariableTree parameter = node.getParameters().get(index);
+        TreePath parameterPath = new TreePath(methodPath, parameter);
+        Element parameterElement = trees.getElement(parameterPath);
+        if (parameterElement == null) {
+          continue;
+        }
+        long position = startPosition(parameterPath);
+        if (position < 0) {
+          continue;
+        }
+        addShapeFact(parameterPath, position,
+            canonicalType(parameterElement.asType(), types), method);
+      }
+    }
+
+    private void emitReturnFact(TreePath methodPath,
+        javax.lang.model.element.ExecutableElement method) {
+      if (method.getReturnType().getKind() == javax.lang.model.type.TypeKind.VOID) {
+        return;
+      }
+      long position = startPosition(methodPath);
+      if (position < 0) {
+        return;
+      }
+      addShapeFact(methodPath, position, canonicalType(method.getReturnType(), types), method);
+    }
+
+    private void emitInvocationFact(TreePath invocationPath, MethodInvocationTree node) {
+      String name = selectedName(node.getMethodSelect());
+      if ("super".equals(name) || "this".equals(name)) {
+        return;
+      }
+      Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
+      if (!(method instanceof javax.lang.model.element.ExecutableElement executable)) {
+        return;
+      }
+      long position = startPosition(invocationPath);
+      if (position < 0) {
+        return;
+      }
+      addShapeFact(invocationPath, position,
+          memberName(executable.getEnclosingElement(),
+              executable.getSimpleName().toString(), executable), executable);
+    }
+
+    private void emitReflectionFact(TreePath invocationPath, MethodInvocationTree node) {
+      if (!"forName".equals(selectedName(node.getMethodSelect()))
+          || node.getArguments().size() != 1
+          || !(node.getArguments().get(0) instanceof com.sun.source.tree.LiteralTree literal)
+          || !(literal.getValue() instanceof String target)) {
+        return;
+      }
+      Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
+      if (method == null || method.getKind() != ElementKind.METHOD
+          || !(method.getEnclosingElement() instanceof TypeElement owner)
+          || !"java.lang.Class".contentEquals(owner.getQualifiedName())) {
+        return;
+      }
+      long position = startPosition(invocationPath);
+      if (position < 0) {
+        return;
+      }
+      TypeElement bound = elements.getTypeElement(target);
+      boolean sourceBound = bound != null && trees.getPath(bound) != null;
+      String certainty = sourceBound && !taskHasError ? "DEFINITE" : "POSSIBLE";
+      int line = lineNumber(invocationPath, position);
+      int column = columnNumber(invocationPath, position);
+      facts.add(new JavacResolverFact(
+          cell.id(), cell.siteFile(), topLevelName(invocationPath), line, column,
+          (int) position, target, "java.lang.Class", "forName",
+          accessibility(method), certainty, sourceBound ? "source-bound" : "runtime-only",
+          diagnosticsFor(line), "", ""));
+    }
+
+    private void addShapeFact(
+        TreePath path, long position, String canonicalValue,
+        javax.lang.model.element.ExecutableElement method) {
+      int line = lineNumber(path, position);
+      int column = columnNumber(path, position);
+      facts.add(new JavacResolverFact(
+          cell.id(), cell.siteFile(), topLevelName(path), line, column, (int) position,
+          canonicalValue, ownerName(method), method.getSimpleName().toString(),
+          accessibility(method),
+          taskHasError ? "POSSIBLE" : "DEFINITE", "", diagnosticsFor(line), "", ""));
+    }
+
+    private static String ownerName(Element element) {
+      Element enclosing = element.getEnclosingElement();
+      if (enclosing instanceof TypeElement type) {
+        return type.getQualifiedName().toString();
+      }
+      return enclosing.getSimpleName().toString();
+    }
+
+    private String memberName(Element owner, String name,
+        javax.lang.model.element.ExecutableElement executable) {
+      StringBuilder signature = new StringBuilder();
+      if (owner instanceof TypeElement type) {
+        signature.append(type.getQualifiedName().toString());
+      } else {
+        signature.append(owner.getSimpleName().toString());
+      }
+      signature.append('.').append(name).append('(');
+      List<? extends javax.lang.model.element.VariableElement> parameters =
+          executable.getParameters();
+      for (int index = 0; index < parameters.size(); index++) {
+        if (index > 0) {
+          signature.append(',');
+        }
+        signature.append(canonicalType(parameters.get(index).asType(), types));
+      }
+      signature.append(')');
+      return signature.toString();
+    }
+
+    private void emitAnnotationFacts(
+        TreePath methodPath, javax.lang.model.element.ExecutableElement method) {
+      if (!(methodPath.getLeaf() instanceof com.sun.source.tree.MethodTree node)) {
+        return;
+      }
+      for (int index = 0; index < node.getModifiers().getAnnotations().size(); index++) {
+        com.sun.source.tree.AnnotationTree annotation =
+            node.getModifiers().getAnnotations().get(index);
+        TreePath annotationPath = TreePath.getPath(methodPath, annotation);
+        if (annotationPath == null) {
+          continue;
+        }
+        long position = startPosition(annotationPath);
+        if (position < 0) {
+          continue;
+        }
+        int line = lineNumber(annotationPath, position);
+        int column = columnNumber(annotationPath, position);
+        String qualified = annotationTypeName(annotationPath, annotation);
+        boolean resolved = annotationResolved(annotationPath, annotation);
+        String certainty = resolved && !taskHasError ? "DEFINITE" : "POSSIBLE";
+        String annotationName = qualified;
+        String annotationValue = "";
+        if (cell.family() == JavacResolverCell.Family.ANNOTATION_ARGUMENT) {
+          annotationValue = renderArguments(annotationPath, annotation);
+        }
+        facts.add(new JavacResolverFact(
+            cell.id(), cell.siteFile(), topLevelName(annotationPath), line, column,
+            (int) position,
+            cell.family() == JavacResolverCell.Family.ANNOTATION_NAME
+                ? qualified : annotationValue,
+            ownerName(method), method.getSimpleName().toString(), accessibility(method),
+            certainty, resolved ? "" : "error-type",
+            resolved ? List.of() : diagnosticsFor(line),
+            annotationName, annotationValue));
+      }
+    }
+
+    private String annotationTypeName(
+        TreePath annotationPath, com.sun.source.tree.AnnotationTree annotation) {
+      Element element = trees.getElement(
+          new TreePath(annotationPath, annotation.getAnnotationType()));
+      if (element instanceof TypeElement type
+          && type.asType().getKind() != javax.lang.model.type.TypeKind.ERROR) {
+        String qualified = type.getQualifiedName().toString();
+        if (!qualified.isEmpty()) {
+          return qualified;
+        }
+      }
+      return annotation.getAnnotationType().toString();
+    }
+
+    private boolean annotationResolved(
+        TreePath annotationPath, com.sun.source.tree.AnnotationTree annotation) {
+      Element element = trees.getElement(
+          new TreePath(annotationPath, annotation.getAnnotationType()));
+      return element instanceof TypeElement type
+          && type.asType().getKind() != javax.lang.model.type.TypeKind.ERROR;
+    }
+
+    private String renderArguments(
+        TreePath annotationPath, com.sun.source.tree.AnnotationTree annotation) {
+      List<String> rendered = new ArrayList<>();
+      for (int index = 0; index < annotation.getArguments().size(); index++) {
+        ExpressionTree argument = annotation.getArguments().get(index);
+        TreePath argumentPath = new TreePath(annotationPath, argument);
+        if (argument instanceof com.sun.source.tree.AssignmentTree assignment) {
+          rendered.add(assignment.getVariable().toString() + "="
+              + renderValue(new TreePath(argumentPath, assignment.getExpression())));
+        } else {
+          rendered.add(renderValue(argumentPath));
+        }
+      }
+      return String.join(";", rendered);
+    }
+
+    private String renderValue(TreePath valuePath) {
+      ExpressionTree value = (ExpressionTree) valuePath.getLeaf();
+      if (value instanceof com.sun.source.tree.LiteralTree literal) {
+        return literal.getValue() == null ? "null" : literal.getValue().toString();
+      }
+      if (value instanceof com.sun.source.tree.AnnotationTree nested) {
+        TreePath nestedPath = TreePath.getPath(valuePath, nested);
+        return "@" + annotationTypeName(nestedPath == null ? valuePath : nestedPath, nested)
+            + "(" + renderArguments(nestedPath == null ? valuePath : nestedPath, nested) + ")";
+      }
+      if (value instanceof com.sun.source.tree.NewArrayTree array) {
+        List<String> items = new ArrayList<>();
+        for (int index = 0; index < array.getInitializers().size(); index++) {
+          items.add(renderValue(new TreePath(valuePath, array.getInitializers().get(index))));
+        }
+        return String.join(",", items);
+      }
+      if (value instanceof MemberSelectTree select
+          && "class".contentEquals(select.getIdentifier())) {
+        TypeMirror mirror = trees.getTypeMirror(new TreePath(valuePath, select.getExpression()));
+        if (mirror != null) {
+          TypeMirror erased = types.erasure(mirror);
+          if (erased instanceof DeclaredType declared
+              && declared.asElement() instanceof TypeElement named) {
+            String qualified = named.getQualifiedName().toString();
+            if (!qualified.isEmpty()) {
+              return qualified;
+            }
+          }
+          return erased.toString();
+        }
+      }
+      Element element = trees.getElement(valuePath);
+      if (element instanceof javax.lang.model.element.VariableElement variable
+          && variable.getEnclosingElement() instanceof TypeElement owner) {
+        return owner.getQualifiedName() + "." + variable.getSimpleName();
+      }
+      return value.toString();
     }
 
     private static String selectedName(ExpressionTree selectTree) {

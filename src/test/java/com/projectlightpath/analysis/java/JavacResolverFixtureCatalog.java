@@ -133,7 +133,7 @@ final class JavacResolverFixtureCatalog {
             """,
             List.of(probe(ANNOTATION_ARGUMENT_TEXT,
                 "@Items({Object.class, String.class}) void audit()")),
-            site(DEFINITE, "java.lang.Object,java.lang.String")),
+            site(DEFINITE, "value=java.lang.Object,java.lang.String")),
         shapeCell("AA2", ANNOTATION_ARGUMENT, """
             package demo;
             class Probe {
@@ -143,7 +143,7 @@ final class JavacResolverFixtureCatalog {
             @interface Level { Severity value(); }
             """,
             List.of(probe(ANNOTATION_ARGUMENT_TEXT, "@Level(Severity.HIGH) void audit()")),
-            site(DEFINITE, "demo.Severity.HIGH")),
+            site(DEFINITE, "value=demo.Severity.HIGH")),
         shapeCell("AA3", ANNOTATION_ARGUMENT, """
             package demo;
             class Probe {
@@ -153,7 +153,7 @@ final class JavacResolverFixtureCatalog {
             @interface Inner { int value(); }
             """,
             List.of(probe(ANNOTATION_ARGUMENT_TEXT, "@Outer(@Inner(1)) void audit()")),
-            site(DEFINITE, "@demo.Inner(1)")),
+            site(DEFINITE, "value=@demo.Inner(value=1)")),
         shapeCell("AA4", ANNOTATION_ARGUMENT, """
             package demo;
             class Probe {
@@ -167,7 +167,7 @@ final class JavacResolverFixtureCatalog {
                 probe(ANNOTATION_ARGUMENT_TEXT, "@Ann(value = 1) void first()"),
                 probe(ANNOTATION_ARGUMENT_TEXT, "@Name(\"x\") void second()")),
             site(DEFINITE, "value=1"),
-            site(DEFINITE, "x")));
+            site(DEFINITE, "value=x")));
   }
 
   private static List<JavacResolverCell> typeUseCells() {

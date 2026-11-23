@@ -344,17 +344,32 @@ def main() -> None:
         "N20 N21 N22 N23 N24a N24b N25 N26 N27 N28 N29 N30 N31 N32 N33 N34 N35 N36 "
         "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A16b A17 A20 A21 "
         "D1 D2 D3 D4 D5 D6 D7 D8 D9 I1 I2 I3 I4 I5").split())
+    required_javac_cells |= set((
+        "AN1 AN2 AN3 AN4 AN5 AA1 AA2 AA3 AA4 TU1 TU2 TU3 TU4 "
+        "TS1 TS2 TS3 TS4 TS5 TS6 TS7 TS8 TS9 R1 R2 R3 R4").split())
     require(javac_cells == required_javac_cells, "javac resolver observation cell set is incomplete or has drifted")
-    require(len(javac_resolver["cells"]) == 71, "javac resolver observation must have 71 cells")
+    require(len(javac_resolver["cells"]) == 97, "javac resolver observation must have 97 cells")
+    service_loader_families = {"PRECEDENCE", "STATIC_OWNER", "DOLLAR_OWNER", "INCOMPLETE"}
+    new_families = {"ANNOTATION_NAME", "ANNOTATION_ARGUMENT", "TYPE_USE", "TYPE_SHAPE", "REFLECTION_SOURCE_BOUND"}
     for cell in javac_resolver["cells"]:
         if cell["blocked"]:
             require(cell["id"] in {"N22", "N23"}, f"unexpected blocked javac resolver cell {cell['id']}")
         for metric in ("wrongDefinite", "wrongServiceType", "lost", "downgraded", "added", "unexpectedFact", "abstentionMismatch"):
             require(cell["javac"]["metrics"][metric] == 0, f"javac resolver cell {cell['id']} metric {metric} must be zero")
+        is_service_loader = cell["family"] in service_loader_families
         for fact in cell["javac"]["facts"]:
-            require(fact["owner"] == "java.util.ServiceLoader", f"javac fact {cell['id']} owner mismatch")
-            require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
-            require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
+            if is_service_loader:
+                require(fact["owner"] == "java.util.ServiceLoader", f"javac fact {cell['id']} owner mismatch")
+                require(fact["member"] == "load", f"javac fact {cell['id']} member mismatch")
+                require(fact["accessibility"] == "PUBLIC_STATIC", f"javac fact {cell['id']} accessibility evidence missing")
+            else:
+                require(cell["family"] in new_families, f"unknown family {cell['family']}")
+                require(fact["serviceType"], f"javac fact {cell['id']} canonical value missing")
+                if cell["family"] == "REFLECTION_SOURCE_BOUND":
+                    require(fact["owner"] == "java.lang.Class", f"reflection fact {cell['id']} owner mismatch")
+                    require(fact["member"] == "forName", f"reflection fact {cell['id']} member mismatch")
+                    if fact["certainty"] == "DEFINITE":
+                        require(fact["promotion"] == "source-bound", f"reflection DEFINITE {cell['id']} must be source-bound")
         if not cell["blocked"]:
             require(cell["expected"], f"{cell['id']} has no expected sites")
             require(all(expected["offset"] >= 0 for expected in cell["expected"]), f"{cell['id']} has an unaligned expected site")

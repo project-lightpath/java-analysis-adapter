@@ -38,10 +38,10 @@ class JavacResolverAccuracyTest {
       Set.of(JavacResolverCell.Family.PRECEDENCE, JavacResolverCell.Family.STATIC_OWNER,
           JavacResolverCell.Family.DOLLAR_OWNER, JavacResolverCell.Family.INCOMPLETE);
   private static final Set<String> NEW_BASELINE_WRONG_TYPE = Set.of(
-      "AN1", "AN2", "AN3", "AA1", "AA2", "AA3", "TU1", "TU3", "TU4",
+      "AN1", "AN2", "AN3", "AA1", "AA2", "AA3", "AA4", "TU1", "TU2", "TU3", "TU4",
       "TS1", "TS2", "TS3", "TS4", "TS6", "TS7", "TS9");
   private static final Set<String> NEW_BASELINE_WRONG_DEFINITE = Set.of("AN5");
-  private static final Set<String> NEW_BASELINE_LOST = Set.of("TS7", "TS8");
+  private static final Set<String> NEW_BASELINE_LOST = Set.of("TS7");
   private static final Set<String> NEW_FAMILIES_ALL_ZERO = Set.of(
       "AN1", "AN2", "AN3", "AN4", "AN5", "AA1", "AA2", "AA3", "AA4",
       "TU1", "TU2", "TU3", "TU4", "TS1", "TS2", "TS3", "TS4", "TS5", "TS6", "TS7",
@@ -81,9 +81,9 @@ class JavacResolverAccuracyTest {
     assertEquals(expectedCount(BASELINE_ADDED, blocked), baseline.added());
     assertEquals(expectedCount(BASELINE_ABSTENTION, blocked), baseline.abstentionMismatch());
     assertEquals(expectedCells(BASELINE_WRONG, blocked),
-        cellsWith(report, "wrongDefinite", true));
+        cellsWith(report, "wrongDefinite", true, SERVICE_LOADER_FAMILIES));
     assertEquals(expectedCells(BASELINE_LOST, blocked),
-        cellsWith(report, "lost", true));
+        cellsWith(report, "lost", true, SERVICE_LOADER_FAMILIES));
     assertEquals(0, report.cells().stream()
         .filter(JavacResolverAccuracyHarness.CellReport::blocked)
         .filter(item -> !List.of("N22", "N23").contains(item.cell().id()))
@@ -370,9 +370,13 @@ class JavacResolverAccuracyTest {
   }
 
   private static Set<String> cellsWith(
-      JavacResolverAccuracyHarness.Report report, String metric, boolean baseline) {
+      JavacResolverAccuracyHarness.Report report, String metric, boolean baseline,
+      Set<JavacResolverCell.Family> families) {
     Set<String> ids = new TreeSet<>();
     for (JavacResolverAccuracyHarness.CellReport cell : report.cells()) {
+      if (!families.contains(cell.cell().family())) {
+        continue;
+      }
       JavacResolverMetrics metrics = baseline ? cell.baselineMetrics() : cell.javacMetrics();
       int value = switch (metric) {
         case "wrongDefinite" -> metrics.wrongDefinite();
