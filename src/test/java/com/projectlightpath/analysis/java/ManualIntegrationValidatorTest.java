@@ -396,6 +396,16 @@ class ManualIntegrationValidatorTest {
     assertMessage(context(), facts, "facts coverage must be an object when present");
   }
 
+  /** A container coverage count rejects rather than printing a Java-shaped summary. */
+  @Test
+  void containerCoverageCountIsRejected() throws IOException {
+    ObjectNode facts = facts();
+    ((ObjectNode) facts.path("coverage")).set("providerFactCount",
+        MAPPER.createObjectNode());
+    Path output = temp.resolve("evidence.json");
+    assertEquals(1, runValidator(context(), facts, output));
+  }
+
   /** A null certainty with definite and possible present rejects with the Python message. */
   @Test
   void missingCertaintyRejectsWithDiagnostic() {

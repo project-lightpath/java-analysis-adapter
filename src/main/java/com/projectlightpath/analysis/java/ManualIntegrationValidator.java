@@ -230,7 +230,15 @@ public final class ManualIntegrationValidator {
     if (node.isNumber() || node.isTextual()) {
       return node.asText();
     }
-    return node.isMissingNode() ? "0" : String.valueOf(node);
+    if (node.isBoolean()) {
+      return node.asBoolean() ? "True" : "False";
+    }
+    if (node.isMissingNode()) {
+      return "0";
+    }
+    // A container count cannot be rendered like Python's f-string; reject instead of
+    // printing a Java-shaped summary line.
+    throw new ValidationError("facts coverage counts must be scalars");
   }
 
   // -------------------------------------------------------------- helpers
