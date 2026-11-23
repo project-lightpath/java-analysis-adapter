@@ -28,6 +28,11 @@ import org.xml.sax.SAXException;
  * AND a sub-baseline total are both reported). Stdout and exit codes are identical.
  */
 public final class SurefireTestCounter {
+  /**
+   * Python-port artifact: the original script's no-argument default. The Makefile
+   * always passes the real recorded floor (534); this default exists only for direct
+   * invocation and is pinned exactly by the no-argument boundary cell.
+   */
   private static final int DEFAULT_MINIMUM = 302;
 
   private SurefireTestCounter() {}
