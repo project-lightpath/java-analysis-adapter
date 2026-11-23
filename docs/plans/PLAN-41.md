@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#41
 Branch: `flpath-5079-repository-reverse-edges` (cut from `origin/main` @ 0297828)
-Status: draft v2 (round-1 adversarial review findings 1–9 addressed)
+Status: draft v4 (review rounds 1–3 findings addressed)
 
 ## Problem
 
@@ -94,7 +94,12 @@ Emission site: `SootUpCallGraphExtractor` (src/main/java/.../SootUpCallGraphExtr
   namespace). Success criterion (Spike 3): in the default-method overlap the
   pre-existing `invokes` edge keeps its `sootup-call-<hex>` ID byte-stable.
   `applicationCallIdentity` already includes the relationship type, so
-  in-namespace identity is complete without further changes.
+  in-namespace identity is complete without further changes. Additionally
+  (round-3 finding 3) `callId` must branch on
+  `relationshipType == "declared_invokes"` **before** the application-origin
+  branch — the `dependencyCallId` analogy routes by target origin, and a
+  `declared_invokes` edge is APPLICATION-origin, so without the precedence
+  it would still land in the legacy-prefix branch.
 - The existing CHA `interface_dispatch` edges to dependency internals are
   retained unchanged (pairwise interaction is a required test cell).
 - New bounded `relationshipType` value: `declared_invokes`, NOT added to
@@ -131,6 +136,11 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
      the spring-data jars on the classpath, not from memory. This makes
      inherited-but-not-declared CRUD methods (the issue's own `save`
      example) enumerate as `RepositoryMethod`s with `guaranteed=true`.
+     This table **replaces** the `findById` injection in
+     `springRepositoryMethods` (single source of guaranteed-ness — no
+     dual gates that can disagree), and the version-unparsable cell
+     (`springBootMajorVersion()` empty) mirrors the existing
+     `.orElse(false)` resolution: no method is guaranteed.
   2. *Reactive contracts*: add the reactive contract FQCNs **actually
      present on the analysis classpath, pinned by Spike 5** (spring-data-jpa
      is blocking; reactive repositories live in other module families, and
@@ -177,21 +187,31 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
     fragment Impl present).
   - `unresolved` (abstain) + scan-global diagnostic — configuration
     references classes outside the analysis scope.
-- **Diagnostic channel (round-1 finding 2, round-2 finding 2):** the
-  ServiceLoader `Scan` channel is **conditionally constructed** —
-  `ProviderFactNormalizer.normalize` builds the descriptor `Scan` only when
-  the graph has `service_loader` edges; a Spring Data application with no
-  ServiceLoader usage would silently drop codes inserted only into that
-  pipeline. The spring-data codes are therefore carried **unconditionally**:
-  a `withSourceDiagnostics`-style combinator appends them at the normalize
-  site regardless of `hasServiceLoaderEdges` (and, for Edge 2, the abstaining
-  facts carry the same code visibly on their evidence). New codes:
+- **Diagnostic channel (round-1 finding 2, rounds 2–3 findings 2):** the
+  ServiceLoader `Scan` channel is conditionally constructed and has **no
+  output surface** outside `ServiceLoaderDescriptorScanner.resolve`, which
+  runs only for `service_loader` edges — so codes inserted only there are
+  invisible in the target scenario (Spring Data app, no ServiceLoader
+  usage). The design therefore adds a **new unconditional diagnostics
+  surface**: a `diagnostics` field on `SemanticCallFacts` output (list of
+  `{code, path, detail}`, serialized like the existing evidence shapes).
+  The spring-data codes are computed by one helper (input: `context` +
+  scanner-derived repository state, so the Edge-1 skip condition is
+  re-derived at the surface site — `SootUpCallGraphExtractor` is upstream
+  and has no carrier on `AnalysisGraph`), and the helper's result is used
+  twice: (a) it populates the new `SemanticCallFacts.diagnostics` field
+  unconditionally — this is the visibility mechanism; (b) the same codes
+  are appended to the ServiceLoader `Scan` at the normalize site so
+  `isUnique`'s `diagnostics().isEmpty()` DEFINITE block includes them — a
+  stated scan-global **side effect** per AGENTS.md, with the blast radius in
+  Item 1/3 commit messages. Edge-2 visibility rides on the abstaining
+  facts' evidence in the `BoundedFrameworkModel.enrich` lane (a separate
+  pipeline from normalize), with the same code recorded in the new
+  diagnostics field via the same helper. New codes:
   `spring_data_backing_selection_out_of_scope` (Edge-2 abstain) and
-  `spring_data_repository_sources_unavailable` (Edge-1 skip). The
-  ServiceLoader DEFINITE-promotion block (`isUnique`'s
-  `diagnostics().isEmpty()` conjunct, scan-global per AGENTS.md) is a stated
-  **side effect** of the channel, not the visibility mechanism. Item 3's
-  commit message must state the blast radius.
+  `spring_data_repository_sources_unavailable` (Edge-1 skip). Cell 10 and
+  cell 5 assert on `SemanticCallFacts.diagnostics`, independent of
+  service_loader edges existing.
 - The runtime proxy is referenced only via the existing stable synthetic
   identity `spring-data-proxy:<FQCN>`; no JVM-generated proxy node.
 - Fact ID: `spring-data-delegation-<slug>-<digest>` via a new
@@ -287,21 +307,23 @@ sanctions zero edits to existing tests).
   metadata-backed facts; delegation facts keep non-open-world evidence kinds.
 - R2: CHA duplicate edges vs the body-scan pass (dedup rule from Spike 1;
   default-method case tested in cell 8).
-- R3 (RESOLVED by design, round 2): distinct `declaredCallId` namespace PLUS
-  `collectCallReferences` count exclusion prevents the legacy-ID flip; Spike 3
-  success criterion is byte-stable pre-existing `invokes` IDs in the
-  default-method overlap.
-- R6 (round 2): the diagnostic channel must be unconditional (not gated on
-  service_loader edges existing); visibility rides on the emitted
-  facts/abstentions and an always-applied combinator at the normalize site.
+- R3 (RESOLVED by design, rounds 2–3): distinct `declaredCallId` namespace
+  PLUS `collectCallReferences` count exclusion PLUS `callId` precedence over
+  the application-origin branch prevents the legacy-ID flip; Spike 3 success
+  criterion is byte-stable pre-existing `invokes` IDs in the default-method
+  overlap.
 - R4: scan-global diagnostic blast radius (items 1 and 3) — acceptable per
   AGENTS, stated in commit messages.
 - R5: reactive/fragment exact backing FQCNs and CRUD method sets verified
   against dependency jars in Spike 5.
+- R6 (round 2/3): diagnostics surface is a new `SemanticCallFacts.diagnostics`
+  field populated unconditionally; the ServiceLoader `isUnique` block is a
+  side effect, not the visibility mechanism; Edge-2 visibility rides on the
+  abstaining facts' evidence in the enrich lane.
 
 ## Confidence score
 
-**0.78 (round-1 findings addressed; implementable as planned).**
+**0.80 (review rounds 1–3 findings addressed; implementable as planned).**
 - High (≥0.9): Edge 1 emission path (body-scan pass, declared-signature
   access, POSSIBLE certainty, distinct ID namespace), test harness shape,
   negative cells, diagnostic channel (PLAN-42 precedent).
@@ -324,3 +346,10 @@ sanctions zero edits to existing tests).
   ID-namespace cure, diagnostic channel made unconditional, reactive FQCN
   enumeration deferred to Spike 5, per-Boot-version guaranteed-method table,
   cell 4 moved into Item 1.
+- Round 3 (delta on v3): 4 addressable findings (1 HIGH, 3 MEDIUM) + 2
+  editorial nits; addressed in v4 — new `SemanticCallFacts.diagnostics`
+  surface named as the visibility mechanism (Edge-1 skip re-derived from
+  context at the surface site), normalize-site scope corrected to Edge 1 +
+  isUnique side effect, `callId` precedence over the origin branch pinned,
+  guaranteed-method table replaces the findById injection with the
+  version-unparsable cell pinned, status line and risk ordering fixed.
