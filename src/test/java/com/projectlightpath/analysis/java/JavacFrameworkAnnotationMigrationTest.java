@@ -815,6 +815,72 @@ class JavacFrameworkAnnotationMigrationTest {
         on.toString());
   }
 
+  @Test
+  void dollarPrefixCaptureKeepsItsOwnOccurrenceFact() throws IOException {
+    // jakarta.inject.Named is deliberately NOT declared: it stays
+    // unresolved, so Temurin 17 drops its mirror while JDK 27 keeps a
+    // value-less one — both paths must keep the @Named("x") fact and
+    // attribute Named$k to its own occurrence.
+    Map<String, String> files = Map.of(
+        "jakarta/inject/Inject.java", "package jakarta.inject; public @interface Inject {}",
+        "demo/DollarPrefix.java", """
+            package demo;
+            import jakarta.inject.Inject;
+            import jakarta.enterprise.context.ApplicationScoped;
+            @ApplicationScoped public class DollarPrefix {
+              @Inject @Named("x") @Named$k private String value;
+            }
+            @interface Named$k {}
+            """,
+        "jakarta/enterprise/context/ApplicationScoped.java",
+        "package jakarta.enterprise.context;"
+            + " public @interface ApplicationScoped {}");
+    AnalysisContext context = context(
+        "dollar-prefix", AnalysisContext.Framework.QUARKUS, files);
+    System.clearProperty(FLAG);
+    List<String> off = quarkusFieldQualifiers(
+        new SourceMetadataScanner(context), "value");
+    System.setProperty(FLAG, "true");
+    List<String> on = quarkusFieldQualifiers(
+        new SourceMetadataScanner(context), "value");
+    // The @Named("x") occurrence must not consume the Named$k mirror and
+    // silently drop its own value-bearing fact. Flag-off: the truncated
+    // @Named$k capture emits the Named family and the CDI enrichment
+    // rewrites the empty content to the field name. Flag-on: the $-name
+    // mirror corrects its own bare occurrence.
+    assertEquals(List.of("Named:x", "Named:value"), off);
+    assertEquals(List.of("Named:x", "Named$k"), on);
+  }
+
+  @Test
+  void quarkusFoldedPathIsResolvedFlagOnOnly() throws IOException {
+    Map<String, String> files = Map.of(
+        "jakarta/ws/rs/Path.java",
+        "package jakarta.ws.rs; public @interface Path { String value() default \"\"; }",
+        "demo/FoldedPath.java", """
+            package demo;
+            import jakarta.ws.rs.Path;
+            @Path("greet" + "ing") public class FoldedPath {
+              @POST public String hello() { return ""; }
+            }
+            """);
+    AnalysisContext context = context(
+        "quarkus-folded", AnalysisContext.Framework.QUARKUS, files);
+    System.clearProperty(FLAG);
+    List<SourceMetadataScannerState.Route> off = new SourceMetadataScanner(context)
+        .routes(AnalysisContext.Framework.QUARKUS);
+    System.setProperty(FLAG, "true");
+    List<SourceMetadataScannerState.Route> on = new SourceMetadataScanner(context)
+        .routes(AnalysisContext.Framework.QUARKUS);
+    // QUARKUS values-path index engagement (non-vacuity on the CI JDK):
+    // the folded constant resolves only through the mirror; the textual
+    // literal extraction cannot, so the class is not routeable flag-off.
+    assertTrue(off.isEmpty(), off.toString());
+    assertTrue(on.stream().anyMatch(route ->
+        route.path().equals("/greeting") && route.httpMethod().equals("POST")),
+        on.toString());
+  }
+
   private List<String> profilesOf(SourceMetadataScanner scanner, String id) {
     return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(bean -> bean.candidateId().equals(id))

@@ -44,12 +44,18 @@ file + owner + member/kind/arity):
    `canonicalName ∈ canonicalSpringAnnotationTypes(simpleName)`
    (unique-or-fallback), never by simple name (loop-2: `@org...GetMapping
    @com.acme.GetMapping` on one member compiles).
-2. **Occurrence-parity guard**: a site whose textual ASCII-visible
-   annotation occurrences do not multiset-match the mirror simple names
-   (type-use return spellings, nested annotation arguments, dotted
-   spellings the mirrors would re-spell) falls back to the textual
-   answer. This subsumes the nested-`@` fallback and pins that flag-on
-   output diverges from textual only through the intended deltas.
+2. **Per-occurrence qualifier processing** (replaced the whole-site
+    occurrence-parity guard in REVIEW_24_4): each textual occurrence
+    takes its mirror's six families when the mirror can stand in for it
+    (resolved, usable rendered values, and — for ASCII-prefix matches of
+    `Family$k`-style names — the occurrence itself carries no
+    arguments), and the TEXTUAL family answer otherwise (unresolved
+    types absent from the mirrors on some compilers, type-use
+    spellings, nested annotation arguments). Unicode-initial mirrors
+    with no possible occurrence append as index corrections; an
+    ASCII-named mirror no occurrence consumed declines the site. The
+    values path retains its own count rule: a named annotation whose
+    textual occurrences number anything but exactly one declines.
 3. **Local-class shape rejection**: owners resolving to LOCAL/ANONYMOUS
    nestings, or spelled with a `$digit` segment (loop-3 F1b:
    MEMBER-nested-inside-local binary `Outer$NLocal$Inner` escapes the
@@ -62,11 +68,12 @@ file + owner + member/kind/arity):
 5. **Value-less-mirror decline** (GREEN-loop empirical finding): javac
    drops element values of annotations whose types are error types
    (unresolved imports — the common case when the framework jar is not on
-   the index classpath). A mirror with an empty values map where the
-   textual occurrence carried arguments declines (fallback), as does a
-   rendered value containing `<error>` (e.g. an unimported enum
-   constant). Without this guard the migration would silently drop
-   values; it was found by the route parity cells, not by inspection.
+   the index classpath), and some compilers drop the mirrors themselves
+    (REVIEW_24_4). A mirror with an empty values map where the
+    textual occurrence carried arguments declines (fallback), as does a
+    rendered value containing `<error>` (e.g. an unimported enum
+    constant) or an odd quote count (the #48 renderer gap). Without
+    these guards the migration would silently drop values; it was found by the route parity cells, not by inspection.
 6. **Six-family qualifier table** reproduced in exact code order
    (canonical-Spring guard → Resource → bean-name → NON_QUALIFIER →
    Qualifier/Named → simple name) with the `Named:`/`ResourceDefault:`
@@ -210,6 +217,26 @@ scan-driving classes in the default lane built indexes
 isolation pattern; the sanctioned existing-test edit). Two consecutive
 full-suite runs green after the fix.
 
+Round 5 (fresh-eyes subagent on 5aeaee5..04e8aa0): three findings, all
+folded back (REVIEW_24_6). (1) MEDIUM — an ASCII-prefix capture
+(`@Named("x")` whose own mirror was dropped on mirror-dropping
+compilers) could consume a `Named$k` mirror and silently replace the
+value-bearing fact: a prefix match now additionally requires the
+occurrence's own parsed arguments to be blank (field-site blocks
+truncate at the `$`, so the occurrence's arguments — not the block's
+spelling — carry the decision); cell
+`dollarPrefixCaptureKeepsItsOwnOccurrenceFact` pins both flag states on
+both compiler behaviors. A `$`-named annotation WITH arguments keeps
+the textual answer (documented limitation). (2) The design-rules list
+was reconciled with the REVIEW_24_4 per-occurrence semantics (rules 2
+and 5 above). (3) QUARKUS values-path index engagement was unpinned —
+`quarkusFoldedPathIsResolvedFlagOnOnly` proves the QUARKUS
+`pathValues` index path non-vacuously. Plus the round-4 residual note:
+the constructor count parity compares the per-owner index constructor
+count with the file-wide textual site count, so a file whose
+constructor sites resolve to two owners declines wholesale (safe
+direction).
+
 ## Gate receipts
 
 | Commit | adapter-test | java-lint | evidence-validate |
@@ -221,7 +248,7 @@ full-suite runs green after the fix.
 | REVIEW_24_3 | 447/447 green locally (fixture-only change; CI still red on Temurin 17 — the mis-diagnosis) | 0 new findings, 0 CPD | pass |
 | REVIEW_24_4 | 448/448 green locally on BOTH Temurin 17.0.21 and JDK 27 (floor 447 → 448, the odd-quote cell; the per-occurrence redesign fixed the CI-only decline); CI re-runs the full suite | 0 new findings, 0 CPD | pass |
 | REVIEW_24_5 | 448/448 green, TWO consecutive full runs (the @Isolated completion on JavacSourceSymbolIndexTest closed the counter-delta interference; count unchanged — annotation-only edit) | 0 new findings, 0 CPD | pass |
-
+| REVIEW_24_6 | 450/450 green on BOTH Temurin 17.0.21 and JDK 27 (floor 448 → 450, the prefix-capture and QUARKUS folded-path cells) | 0 new findings, 0 CPD | pass |
 ## Residuals
 
 - Discovery regexes (INJECT_FIELD, constructor pattern, cdiBean/
