@@ -227,7 +227,12 @@ truncate at the `$`, so the occurrence's arguments — not the block's
 spelling — carry the decision); cell
 `dollarPrefixCaptureKeepsItsOwnOccurrenceFact` pins both flag states on
 both compiler behaviors. A `$`-named annotation WITH arguments keeps
-the textual answer (documented limitation). (2) The design-rules list
+the textual answer at method/bean/parameter sites (documented
+limitation); at FIELD sites the round-6 review's hypothetical
+divergence has no reachable input — the INJECT_FIELD discovery regex
+cannot span the arguments after a `$`-named annotation, so such fields
+are undiscoverable in BOTH flag states, pinned by
+`dollarNamedWithArgumentsAtFieldSiteIsUndiscoverable`. (2) The design-rules list
 was reconciled with the REVIEW_24_4 per-occurrence semantics (rules 2
 and 5 above). (3) QUARKUS values-path index engagement was unpinned —
 `quarkusFoldedPathIsResolvedFlagOnOnly` proves the QUARKUS
