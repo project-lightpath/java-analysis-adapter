@@ -261,6 +261,109 @@ class SpringDataDelegationLadderTest {
     assertFalse(blocked.diagnostics().isEmpty(), blocked.diagnostics().toString());
   }
 
+  @Test
+  void fullyQualifiedQueryAnnotationIsOverrideEvidence() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @org.springframework.data.jpa.repository.Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("delegated_implementation"))
+        .filter(item -> item.caller().equals("demo.AccountRepository#findAll"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, findAll.certainty());
+    assertEquals(
+        "org.springframework.data.jpa.repository.query.AbstractStringBasedJpaQuery#execute",
+        findAll.callee());
+    assertTrue(facts.frameworkFacts().stream()
+            .noneMatch(item -> item.relationshipType().equals("delegated_implementation")
+                && item.callee().endsWith("SimpleJpaRepository#findAll")),
+        "the query-overridden contract slot must not also claim the default backing");
+  }
+
+  @Test
+  void lookalikeQueryAnnotationIsNotOverrideEvidence() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @NamedQuery(name = "findAll", query = "select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findAll.certainty(),
+        "a lookalike annotation does not reroute the contract default");
+  }
+
+  @Test
+  void wildcardImportedDependencyFragmentDoesNotRaiseUnresolved() throws IOException {
+    Path sourceRoot = temp.resolve("wildcard-fragment/src/main/java");
+    write(sourceRoot.resolve("demo/Account.java"), "package demo; public class Account {}\n");
+    write(sourceRoot.resolve("demo/AccountRepository.java"), """
+        package demo;
+        import org.springframework.data.querydsl.*;
+        public interface AccountRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            QueryDslPredicateExecutor<Account> { }
+        """);
+    Path dependency = temp.resolve("wildcard-fragment/deps/querydsl.jar");
+    writeArchive(dependency,
+        "org/springframework/data/querydsl/QueryDslPredicateExecutor.class",
+        "presence is what the scope probe reads");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("spring-boot-production")
+        .framework(AnalysisContext.Framework.SPRING_BOOT)
+        .frameworkVersion("2.7.18")
+        .fixtureId("fsi-spring-boot")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependency))
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-data-repository-contract", "source_interface_metadata",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context, AnalysisGraph.empty());
+    assertTrue(facts.diagnostics().stream()
+            .noneMatch(item -> item.code().equals("spring_data_repository_fragment_unresolved")),
+        facts.diagnostics().toString());
+  }
+
+  @Test
+  void unconfirmedFragmentImplIsVisibleAsDiagnostic() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface CustomFragment {
+          void refresh(demo.Account account);
+        }
+        """, """
+        package demo;
+        public class CustomFragmentImpl { }
+        """, """
+        package demo;
+        public interface AccountRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            CustomFragment { }
+        """));
+    assertTrue(facts.diagnostics().stream().anyMatch(item ->
+        item.code().equals("spring_data_repository_fragment_impl_unconfirmed")),
+        facts.diagnostics().toString());
+  }
+
   private SemanticCallFacts.Fact delegationFact(SemanticCallFacts facts, String caller) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("delegated_implementation"))
@@ -315,5 +418,17 @@ class SpringDataDelegationLadderTest {
   private static void write(Path file, String contents) throws IOException {
     Files.createDirectories(file.getParent());
     Files.writeString(file, contents);
+  }
+
+  /** Writes one placeholder zip entry for classpath-presence probes. */
+  private static void writeArchive(Path archive, String entryName, String value)
+      throws IOException {
+    Files.createDirectories(archive.getParent());
+    try (java.util.zip.ZipOutputStream output =
+        new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new java.util.zip.ZipEntry(entryName));
+      output.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
   }
 }

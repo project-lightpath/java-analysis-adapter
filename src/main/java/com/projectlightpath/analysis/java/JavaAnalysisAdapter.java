@@ -194,7 +194,7 @@ public final class JavaAnalysisAdapter {
         result.add(new SemanticCallFacts.Diagnostic(
             "spring_data_repository_base_class_unresolved",
             baseClass.sourcePath(),
-            "repositoryBaseClass reference " + baseClass.configuredType()
+            "repositoryBaseClass reference " + baseClass.sourceSpelling()
                 + " cannot be resolved from the analyzed sources"));
       } else if (!baseClass.applicationScoped()) {
         result.add(new SemanticCallFacts.Diagnostic(
@@ -210,6 +210,13 @@ public final class JavaAnalysisAdapter {
           unresolved.getKey(),
           "repository extends-clause reference " + unresolved.getValue()
               + " resolves to no type"));
+    }
+    for (Map.Entry<String, String> unconfirmed : scanner.unconfirmedFragmentImplementations()) {
+      result.add(new SemanticCallFacts.Diagnostic(
+          "spring_data_repository_fragment_impl_unconfirmed",
+          unconfirmed.getKey(),
+          "the conventional Impl class does not name fragment interface "
+              + unconfirmed.getValue() + " in its implements clause"));
     }
     if (baseClasses.stream()
         .map(SourceMetadataScannerState.RepositoryBaseClass::configuredType)

@@ -46,7 +46,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       Map<String, String> fragmentTargets = fragmentTargets(scanner, candidate);
       List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
           scanner.springRepositoryBaseClasses();
-      Set<String> redeclaredNames = scanner.redeclaredGuaranteedNames(candidate.file());
+      Set<String> queryOverriddenNames = scanner.queryOverriddenGuaranteedNames(candidate.file());
+      Set<String> queryAnnotatedIdentities = scanner.queryAnnotatedMethodIdentities(candidate.file());
       for (SourceMetadataScannerState.RepositoryMethod repositoryMethod
           : scanner.springRepositoryMethods(candidate.file())) {
         if (fragmentTargets.containsKey(repositoryMethod.identity())) {
@@ -79,11 +80,13 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
                         "repositoryContract", repositoryContract,
                         "repositoryMethod", methodIdentity))),
                 "Spring Data implementation and proxy identity are generated outside application source.")));
-        facts.add(delegationFact(
-            context, scanner, candidates,
-            new DelegationContext(candidate, repositoryMethod, repositoryContract,
-                metadataAvailable, fragmentTargets, baseClasses,
-                redeclaredNames.contains(repositoryMethod.name()))));
+        if (!(repositoryMethod.guaranteed()
+            && queryOverriddenNames.contains(repositoryMethod.name()))) {
+          facts.add(delegationFact(
+              context, scanner, candidates,
+              new DelegationContext(candidate, repositoryMethod, repositoryContract,
+                  metadataAvailable, fragmentTargets, baseClasses, queryAnnotatedIdentities)));
+        }
       }
       for (Map.Entry<String, String> fragment : fragmentTargets.entrySet()) {
         facts.add(fragmentDelegationFact(
@@ -140,7 +143,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       boolean metadataAvailable,
       Map<String, String> fragmentTargets,
       List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses,
-      boolean redeclared) {}
+      Set<String> queryAnnotatedIdentities) {}
 
   /** The selected backing target and its certainty-ladder outcome. */
   private record DelegationSelection(
@@ -215,6 +218,16 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
     if (delegation.repositoryMethod().guaranteed()) {
       return crudBacking(delegation);
     }
+    if (delegation.queryAnnotatedIdentities().contains(delegation.repositoryMethod().identity())) {
+      return new DelegationSelection(
+          "org.springframework.data.jpa.repository.query.AbstractStringBasedJpaQuery#execute",
+          delegation.metadataAvailable()
+              ? SemanticCallFacts.Certainty.POSSIBLE
+              : SemanticCallFacts.Certainty.UNRESOLVED,
+          "The declared query annotation reroutes execution to the"
+              + " string-query machinery; the query text itself is not modeled.",
+          null);
+    }
     return new DelegationSelection(
         "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute",
         delegation.metadataAvailable()
@@ -228,16 +241,6 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
   /** Selects the backing for a guaranteed CRUD method under override evidence. */
   private DelegationSelection crudBacking(DelegationContext delegation) {
     String method = delegation.repositoryMethod().name();
-    if (delegation.redeclared()) {
-      return new DelegationSelection(
-          "org.springframework.data.jpa.repository.support.SimpleJpaRepository#" + method,
-          delegation.metadataAvailable()
-              ? SemanticCallFacts.Certainty.POSSIBLE
-              : SemanticCallFacts.Certainty.UNRESOLVED,
-          "A source redeclaration of the contract method is override evidence;"
-              + " the runtime backing is not proven to be the default.",
-          null);
-    }
     if (delegation.baseClasses().isEmpty()) {
       return new DelegationSelection(
           "org.springframework.data.jpa.repository.support.SimpleJpaRepository#" + method,

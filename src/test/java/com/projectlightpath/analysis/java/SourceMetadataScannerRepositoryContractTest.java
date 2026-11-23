@@ -341,6 +341,18 @@ class SourceMetadataScannerRepositoryContractTest {
         new SourceMetadataScanner(context(sourceRoot, "2.7.18")).springRepositoryMethods(file));
     assertTrue(boot2.contains("getOne"));
     assertTrue(boot2.contains("saveAllAndFlush"));
+    List<String> boot24 = guaranteedNames(
+        new SourceMetadataScanner(context(sourceRoot, "2.4.0")).springRepositoryMethods(file));
+    assertFalse(boot24.contains("getById"));
+    assertFalse(boot24.contains("saveAllAndFlush"));
+    assertFalse(boot24.contains("deleteAllByIdInBatch"));
+    assertFalse(boot24.contains("getReferenceById"));
+    assertTrue(boot24.contains("getOne"));
+    List<String> boot26 = guaranteedNames(
+        new SourceMetadataScanner(context(sourceRoot, "2.6.5")).springRepositoryMethods(file));
+    assertTrue(boot26.contains("getById"));
+    assertTrue(boot26.contains("saveAllAndFlush"));
+    assertFalse(boot26.contains("getReferenceById"));
     List<String> boot3 = guaranteedNames(
         new SourceMetadataScanner(context(sourceRoot, "3.2.0")).springRepositoryMethods(file));
     assertFalse(boot3.contains("getOne"));

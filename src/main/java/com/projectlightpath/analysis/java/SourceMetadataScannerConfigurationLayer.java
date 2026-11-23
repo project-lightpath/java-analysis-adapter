@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
@@ -48,7 +49,7 @@ abstract class SourceMetadataScannerConfigurationLayer
               .orElseGet(() -> qualify(configured, file.packageName()));
           result.add(new SourceMetadataScannerState.RepositoryBaseClass(
               qualified, resolved.isPresent() && typeInAnalysisScope(qualified),
-              resolved.isPresent(), file.displayPath()));
+              resolved.isPresent(), file.displayPath(), configured));
         }
       }
     }
@@ -58,7 +59,9 @@ abstract class SourceMetadataScannerConfigurationLayer
   /**
    * Returns repository extends-clause references that resolve to no type at
    * all — neither a modeled Spring contract, an app interface, nor an
-   * import-resolvable dependency type. Each is (path, spelling).
+   * import-resolvable dependency type (explicit import, on-demand import
+   * package, or the file's own package, each probed against the dependency
+   * classpath). Each is (path, spelling).
    */
   List<Map.Entry<String, String>> unresolvedRepositoryExtensions() {
     List<Map.Entry<String, String>> result = new ArrayList<>();
@@ -81,14 +84,44 @@ abstract class SourceMetadataScannerConfigurationLayer
             .isPresent()) {
           continue;
         }
-        boolean resolvable = type.contains(".")
-            || resolveReferenceType(type, file).isPresent();
-        if (!resolvable) {
-          result.add(Map.entry(file.displayPath(), type));
+        if (type.contains(".") || resolveReferenceType(type, file).isPresent()) {
+          continue;
         }
+        if (resolvableOnDependencyClasspath(type, file)) {
+          continue;
+        }
+        result.add(Map.entry(file.displayPath(), type));
       }
     }
     return List.copyOf(result);
+  }
+
+  /**
+   * Probes the dependency classpath for one simple type name under the
+   * file's on-demand import packages and its own package, so dependency
+   * fragments referenced without a single-type import do not raise false
+   * unresolved diagnostics.
+   */
+  private boolean resolvableOnDependencyClasspath(String simpleType, SourceFile file) {
+    Set<String> packages = new java.util.LinkedHashSet<>();
+    packages.add(file.packageName());
+    Matcher onDemand = Pattern.compile("import\\s+([\\w.]+)\\.\\*\\s*;").matcher(
+        maskStringLiterals(file.structuralSource()));
+    while (onDemand.find()) {
+      packages.add(onDemand.group(1));
+    }
+    for (String packageName : packages) {
+      if (packageName.isBlank()) {
+        continue;
+      }
+      String relative = packageName.replace('.', '/') + "/" + simpleType + ".class";
+      for (Path entry : context.dependencyClasspath()) {
+        if (dependencyContains(entry, relative)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**

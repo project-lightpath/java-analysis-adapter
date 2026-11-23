@@ -1,21 +1,20 @@
 package com.projectlightpath.analysis.java;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Responsibility layer for Spring Data repository composition metadata:
- * fragment interfaces, their backing Impl classes, and guaranteed-method
- * redeclaration evidence.
+ * Responsibility layer for Spring Data repository methods: the guaranteed
+ * contract table application, declaration suppression, and query-override
+ * evidence.
  */
 abstract class SourceMetadataScannerRepositoryLayer
-    extends SourceMetadataScannerConfigurationLayer {
+    extends SourceMetadataScannerFragmentLayer {
 
   SourceMetadataScannerRepositoryLayer(AnalysisContext context) {
     super(context);
@@ -32,7 +31,7 @@ abstract class SourceMetadataScannerRepositoryLayer
     if (contracts.isEmpty()) {
       return List.of();
     }
-    Map<String, RepositoryMethod> result = new java.util.LinkedHashMap<>();
+    Map<String, RepositoryMethod> result = new LinkedHashMap<>();
     for (String contract : contracts) {
       for (String name : guaranteedContractMethods(contract)) {
         result.putIfAbsent(name, new RepositoryMethod(name, name, true));
@@ -57,9 +56,9 @@ abstract class SourceMetadataScannerRepositoryLayer
     if (inherited == null || !inherited.guaranteed()) {
       return false;
     }
-    if (queryAnnotation(method)) {
+    if (method.hasAnnotation("Query")) {
       // An @Query redeclaration reroutes execution; it stays a declared
-      // method so the delegation ladder can treat it as override evidence.
+      // method so the delegation ladder can treat it as a query override.
       return false;
     }
     List<Parameter> methodParameters = parameters(method.parameters());
@@ -72,11 +71,12 @@ abstract class SourceMetadataScannerRepositoryLayer
   }
 
   /**
-   * Returns the guaranteed method names whose contract default is overridden
-   * by a source declaration: exact signature-shape redeclarations, and any
-   * same-name declaration carrying a query annotation.
+   * Returns the guaranteed method names whose contract default is rerouted
+   * by a same-name declaration carrying a query annotation. A plain
+   * redeclaration does not reroute the proxy backing and is not override
+   * evidence.
    */
-  Set<String> redeclaredGuaranteedNames(SourceFile file) {
+  Set<String> queryOverriddenGuaranteedNames(SourceFile file) {
     Set<String> guaranteedNames = springRepositoryMethods(file).stream()
         .filter(RepositoryMethod::guaranteed)
         .map(RepositoryMethod::name)
@@ -85,126 +85,29 @@ abstract class SourceMetadataScannerRepositoryLayer
     for (MethodInfo method : methods(file)) {
       if (!typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
           || !abstractInstanceRepositoryMethod(method)
-          || !guaranteedNames.contains(method.name())) {
+          || !guaranteedNames.contains(method.name())
+          || !method.hasAnnotation("Query")) {
         continue;
       }
-      List<Parameter> methodParameters = parameters(method.parameters());
-      boolean exactShape = methodParameters.size() == 1
-          && springRepositoryEntityType(file).isPresent()
-          && (repositoryTypeToken(methodParameters.get(0).type(), file)
-                  .map(type -> type.equals(springRepositoryEntityType(file).orElse("\u0000"))
-                      || type.equals(springRepositoryIdType(file).orElse("\u0000")))
-                  .orElse(false));
-      if (exactShape || queryAnnotation(method)) {
-        result.add(method.name());
-      }
+      result.add(method.name());
     }
     return result;
   }
 
-  private static boolean queryAnnotation(MethodInfo method) {
-    return Pattern.compile("@\\w*\\.?Query\\b").matcher(method.annotationBlock()).find();
-  }
-
-  /** Returns the repository fragment compositions visible in application source. */
-  List<RepositoryFragment> springRepositoryFragments() {
-    List<RepositoryFragment> result = new ArrayList<>();
-    for (SourceFile file : files()) {
-      if (springRepositoryContracts(file).isEmpty()) {
+  /**
+   * Returns the source signatures of declared repository methods carrying a
+   * query annotation, keyed for identity lookup.
+   */
+  Set<String> queryAnnotatedMethodIdentities(SourceFile file) {
+    Set<String> result = new LinkedHashSet<>();
+    for (MethodInfo method : methods(file)) {
+      if (!typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
+          || !abstractInstanceRepositoryMethod(method)
+          || !method.hasAnnotation("Query")) {
         continue;
       }
-      for (String fragmentType : extendedFragmentInterfaces(file)) {
-        SourceFile fragmentFile = files().stream()
-            .filter(candidate -> candidate.typeName().equals(fragmentType))
-            .findFirst()
-            .orElseThrow();
-        SourceFile implementation = fragmentImplementation(fragmentFile);
-        if (implementation == null) {
-          continue;
-        }
-        List<RepositoryMethod> fragmentMethods = methods(fragmentFile).stream()
-            .filter(method -> typeContaining(
-                fragmentFile, declarationStart(fragmentFile, method.start()))
-                .equals(fragmentFile.typeName()))
-            .filter(method -> abstractInstanceRepositoryMethod(method))
-            .map(method -> new RepositoryMethod(
-                method.name(), repositoryMethodSignature(method), false))
-            .toList();
-        result.add(new RepositoryFragment(
-            file.typeName(), fragmentType, implementation.typeName(), fragmentMethods));
-      }
-    }
-    return List.copyOf(result);
-  }
-
-  /** Returns the Impl class that actually implements one fragment interface. */
-  private SourceFile fragmentImplementation(SourceFile fragmentFile) {
-    String implementationName = fragmentFile.simpleTypeName() + "Impl";
-    return files().stream()
-        .filter(candidate -> candidate.simpleTypeName().equals(implementationName))
-        .filter(this::isConcreteClass)
-        .filter(candidate -> implementsFragment(candidate, fragmentFile))
-        .findFirst()
-        .orElse(null);
-  }
-
-  /** Checks that one concrete class names the fragment interface in its implements clause. */
-  private boolean implementsFragment(SourceFile candidate, SourceFile fragmentFile) {
-    String header = maskStringLiterals(typeHeader(candidate));
-    int implementsIndex = topLevelKeywordIndex(header, "implements");
-    if (implementsIndex < 0) {
-      return false;
-    }
-    int clauseStart = implementsIndex + "implements".length();
-    int openBrace = header.indexOf('{', clauseStart);
-    String clause = header.substring(clauseStart, openBrace < 0 ? header.length() : openBrace);
-    for (String type : typeNames(clause)) {
-      Optional<String> resolved = resolveReferenceType(type, candidate);
-      if (resolved.isPresent() && resolved.get().equals(fragmentFile.typeName())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Returns app-declared interfaces extended by one repository, excluding Spring contracts. */
-  private List<String> extendedFragmentInterfaces(SourceFile file) {
-    String header = maskStringLiterals(typeHeader(file));
-    int extendsIndex = topLevelKeywordIndex(header, "extends");
-    if (extendsIndex < 0) {
-      return List.of();
-    }
-    int permitsIndex = topLevelKeywordIndex(header, "permits");
-    String extended = header.substring(
-        extendsIndex + "extends".length(), permitsIndex >= 0 ? permitsIndex : header.length());
-    List<String> result = new ArrayList<>();
-    for (String type : typeNames(extended)) {
-      if (resolveKnownFrameworkType(type, file, SPRING_DATA_REPOSITORY_CONTRACTS.keySet())
-          .isPresent()) {
-        continue;
-      }
-      Optional<String> resolved = type.contains(".")
-          ? Optional.of(type)
-          : resolveReferenceType(type, file);
-      boolean isAppInterface = resolved
-          .map(qualified -> files().stream()
-              .filter(candidate -> candidate.typeName().equals(qualified))
-              .anyMatch(this::isInterfaceFile))
-          .orElse(false);
-      if (isAppInterface) {
-        result.add(resolved.orElseThrow());
-      }
+      result.add(repositoryMethodSignature(method));
     }
     return result;
-  }
-
-  private boolean isInterfaceFile(SourceFile file) {
-    return maskStringLiterals(typeHeader(file)).matches("(?s).*\\binterface\\s+\\w+\\b.*");
-  }
-
-  private boolean isConcreteClass(SourceFile file) {
-    String header = maskStringLiterals(typeHeader(file));
-    return !isInterfaceFile(file) && header.matches("(?s).*\\bclass\\s+\\w+\\b.*")
-        && !header.matches("(?s).*\\babstract\\s+class\\s+\\w+\\b.*");
   }
 }
