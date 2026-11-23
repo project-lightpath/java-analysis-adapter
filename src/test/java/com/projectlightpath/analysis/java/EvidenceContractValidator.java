@@ -1,7 +1,7 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceCollections.idSet;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,13 +17,15 @@ import java.util.Set;
  * Validates the checked-in FLPATH-5000 spike contracts without third-party tools (#45 step
  * 2, ported from spike/scripts/validate_spike.py).
  *
- * <p>Loads the eighteen checked-in contract, capability, and observation documents and
- * enforces every recorded invariant through three rule groups: {@link
- * SpikeContractDocumentChecks} (matrix, framework model, AnalysisContext, acceptance,
- * baseline, cases, advisory), {@link SpikeContractFactChecks} (expected call facts,
- * enrichment, semantic facts), and {@link SpikeContractObservationChecks} (observation
+ * <p>A regression gate over checked-in files, so it lives in the test tree and runs as
+ * part of the suite; {@code make evidence-validate} runs the same cells focused. Loads
+ * the eighteen checked-in contract, capability, and observation documents and enforces
+ * every recorded invariant through three rule groups: {@link
+ * EvidenceDocumentChecks} (matrix, framework model, AnalysisContext, acceptance,
+ * baseline, cases, advisory), {@link EvidenceFactChecks} (expected call facts,
+ * enrichment, semantic facts), and {@link EvidenceObservationChecks} (observation
  * coverage, analyzer results, javac resolver GO/NO-GO). Python-behavior helpers live in
- * {@link SpikeContractSemantics}.
+ * {@link EvidenceSemantics}.
  *
  * <p>Deliberate divergences from the Python original, all preserving exit code 1 (the
  * Python gate exited 1 through an uncaught traceback; this port fails with a stable
@@ -60,7 +62,7 @@ import java.util.Set;
  * character-for-character the Python gate's (14/14 parity receipts: the real tree plus
  * eleven mutated trees and two malformed-shape trees, identical stdout and exit codes).
  */
-public final class SpikeContractValidator {
+public final class EvidenceContractValidator {
   private static final ObjectMapper MAPPER = new ObjectMapper()
       .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
@@ -147,7 +149,7 @@ public final class SpikeContractValidator {
     }
   }
 
-  private SpikeContractValidator() {}
+  private EvidenceContractValidator() {}
 
   /**
    * Runs the gate against a repository root, printing the summary or the failure
@@ -168,15 +170,6 @@ public final class SpikeContractValidator {
   }
 
   /**
-   * Entry point; resolves the repository root from the working directory.
-   *
-   * @param args ignored, matching the Python original
-   */
-  public static void main(String[] args) {
-    System.exit(run(args, resolveRepositoryRoot(Path.of("").toAbsolutePath())));
-  }
-
-  /**
    * Validates every checked-in contract, capability case, and observation.
    *
    * @param root repository root holding the {@code spike/} tree
@@ -184,9 +177,9 @@ public final class SpikeContractValidator {
    */
   public static String validate(Path root) {
     Documents documents = Documents.load(root);
-    new SpikeContractDocumentChecks(documents).checkAll();
-    new SpikeContractFactChecks(documents).checkAll();
-    new SpikeContractObservationChecks(documents, root).checkAll();
+    new EvidenceDocumentChecks(documents).checkAll();
+    new EvidenceFactChecks(documents).checkAll();
+    new EvidenceObservationChecks(documents, root).checkAll();
     return summaryLine(documents);
   }
 

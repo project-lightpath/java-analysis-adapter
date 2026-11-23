@@ -7,16 +7,16 @@ import java.util.Set;
  * Python-scalar-semantics helpers shared by the spike-contract rule classes (#45 step 2):
  * each helper reproduces one Python behavior the port must preserve — {@code ==} on JSON
  * scalars, truthiness, whole-number dict keys. Collection traversal lives in {@link
- * SpikeContractCollections}.
+ * EvidenceCollections}.
  */
-final class SpikeContractSemantics {
+final class EvidenceSemantics {
 
-  private SpikeContractSemantics() {}
+  private EvidenceSemantics() {}
 
   /** Aborts validation with a stable diagnostic when a contract fails. */
   static void require(boolean condition, String message) {
     if (!condition) {
-      throw new SpikeContractValidator.ValidationError(message);
+      throw new EvidenceContractValidator.ValidationError(message);
     }
   }
 

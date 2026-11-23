@@ -1,8 +1,8 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.JAVAC_METRICS;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_JAVAC_CELLS;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.JAVAC_METRICS;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_JAVAC_CELLS;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
@@ -16,11 +16,11 @@ import java.util.regex.Pattern;
  * the per-cell totals sum behind the GO/NO-GO totals check. Ported from the corresponding
  * blocks of spike/scripts/validate_spike.py.
  */
-final class SpikeContractJavacRules {
+final class EvidenceJavacRules {
   /** The javac host-path walker's drive-letter predicate (Python raw regex). */
   private static final Pattern DRIVE_LETTER = Pattern.compile("[A-Za-z]:[\\\\/]");
 
-  private SpikeContractJavacRules() {}
+  private EvidenceJavacRules() {}
 
   /** Rejects machine-specific POSIX paths anywhere in a normalized analyzer result. */
   static boolean containsHostPath(JsonNode node) {

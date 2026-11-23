@@ -1,6 +1,6 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.require;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
@@ -16,7 +16,7 @@ import java.util.Set;
  * traversal and text-field lookups that reproduce Python's iteration semantics, with
  * non-textual set elements kept visible as a sentinel (Python's {@code set()} keeps them).
  */
-final class SpikeContractCollections {
+final class EvidenceCollections {
   /**
    * Prefix marking a set element that is present but non-textual: Python's {@code set()}
    * keeps such elements and counts distinct values distinctly ({@code {17, 18}} has size
@@ -27,7 +27,7 @@ final class SpikeContractCollections {
    */
   static final String NON_TEXTUAL_PREFIX = "\u0000";
 
-  private SpikeContractCollections() {}
+  private EvidenceCollections() {}
 
   /** Text values of an array field; non-textual elements surface as prefixed sentinels. */
   static Set<String> textSet(JsonNode array) {
@@ -98,7 +98,7 @@ final class SpikeContractCollections {
   static Map<String, JsonNode> byField(List<JsonNode> nodes, String field) {
     Map<String, JsonNode> byField = new LinkedHashMap<>();
     for (JsonNode node : nodes) {
-      String key = SpikeContractSemantics.text(node, field);
+      String key = EvidenceSemantics.text(node, field);
       if (key != null) {
         byField.put(key, node);
       }
@@ -109,7 +109,7 @@ final class SpikeContractCollections {
   /** The first node whose text field equals the value, or null. */
   static JsonNode findByText(List<JsonNode> nodes, String field, String value) {
     for (JsonNode node : nodes) {
-      if (SpikeContractSemantics.eq(SpikeContractSemantics.text(node, field), value)) {
+      if (EvidenceSemantics.eq(EvidenceSemantics.text(node, field), value)) {
         return node;
       }
     }

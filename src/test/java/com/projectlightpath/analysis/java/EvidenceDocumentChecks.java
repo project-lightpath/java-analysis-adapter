@@ -1,23 +1,23 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.byField;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldNames;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldTextSet;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldValues;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.first;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.textSet;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.CERTAINTY_STATES;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.MANDATORY_CRITERIA;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.PINNED_BASELINE_COMMIT;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_CASES;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_EVIDENCE;
+import static com.projectlightpath.analysis.java.EvidenceCollections.byField;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceCollections.fieldNames;
+import static com.projectlightpath.analysis.java.EvidenceCollections.fieldTextSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.fieldValues;
+import static com.projectlightpath.analysis.java.EvidenceCollections.first;
+import static com.projectlightpath.analysis.java.EvidenceCollections.idSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.textSet;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.eq;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.numEquals;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.require;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.text;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.truthy;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.CERTAINTY_STATES;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.MANDATORY_CRITERIA;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.PINNED_BASELINE_COMMIT;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_CASES;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_EVIDENCE;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
@@ -32,10 +32,10 @@ import java.util.Set;
  * criteria, candidate assessment, FSI baseline, capability cases, and synthetic advisory.
  * Ported from the corresponding blocks of spike/scripts/validate_spike.py.
  */
-final class SpikeContractDocumentChecks {
-  private final SpikeContractValidator.Documents documents;
+final class EvidenceDocumentChecks {
+  private final EvidenceContractValidator.Documents documents;
 
-  SpikeContractDocumentChecks(SpikeContractValidator.Documents documents) {
+  EvidenceDocumentChecks(EvidenceContractValidator.Documents documents) {
     this.documents = documents;
   }
 
@@ -97,7 +97,7 @@ final class SpikeContractDocumentChecks {
     require(truthy(model.path("certaintyPolicy").path("promotionGuard")),
         "framework model promotion guard is missing");
     Set<String> edgeTypes = fieldTextSet(model.path("edgeTypes"), "id");
-    require(edgeTypes.containsAll(SpikeContractValidator.REQUIRED_EDGE_TYPES),
+    require(edgeTypes.containsAll(EvidenceContractValidator.REQUIRED_EDGE_TYPES),
         "framework model edge types are incomplete");
     require(fieldTextSet(model.path("frameworks"), "id")
         .equals(Set.of("quarkus", "spring-boot")),

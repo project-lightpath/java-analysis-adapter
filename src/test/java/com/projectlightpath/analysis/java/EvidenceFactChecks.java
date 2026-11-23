@@ -1,19 +1,19 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.byField;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldNames;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldTextSet;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.findByText;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.textSet;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.CERTAINTY_STATES;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_EDGE_TYPES;
+import static com.projectlightpath.analysis.java.EvidenceCollections.byField;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceCollections.fieldNames;
+import static com.projectlightpath.analysis.java.EvidenceCollections.fieldTextSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.findByText;
+import static com.projectlightpath.analysis.java.EvidenceCollections.idSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.textSet;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.eq;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.numEquals;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.require;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.text;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.truthy;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.CERTAINTY_STATES;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_EDGE_TYPES;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
@@ -28,10 +28,10 @@ import java.util.Set;
  * facts assembly. Ported from the corresponding blocks of
  * spike/scripts/validate_spike.py.
  */
-final class SpikeContractFactChecks {
-  private final SpikeContractValidator.Documents documents;
+final class EvidenceFactChecks {
+  private final EvidenceContractValidator.Documents documents;
 
-  SpikeContractFactChecks(SpikeContractValidator.Documents documents) {
+  EvidenceFactChecks(EvidenceContractValidator.Documents documents) {
     this.documents = documents;
   }
 
@@ -115,7 +115,7 @@ final class SpikeContractFactChecks {
     String id = text(relationship, "id");
     JsonNode selection = relationship.path("selectionCriteria");
     require(selection.isObject()
-        && fieldNames(selection).containsAll(SpikeContractValidator.ROUTE_SELECTION_FIELDS),
+        && fieldNames(selection).containsAll(EvidenceContractValidator.ROUTE_SELECTION_FIELDS),
         "route fact " + id + " is missing runtime selection criteria");
     require(truthy(selection.path("httpMethod")),
         "route fact " + id + " needs an HTTP method");

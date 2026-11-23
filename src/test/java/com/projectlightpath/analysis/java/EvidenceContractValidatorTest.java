@@ -27,14 +27,14 @@ import org.junit.jupiter.api.io.TempDir;
  * gate printed for the same mutation. No test captures System.out or System.err; output is
  * asserted on returned values, per the parallel-suite constraint.
  */
-class SpikeContractValidatorTest {
+class EvidenceContractValidatorTest {
   @TempDir Path temp;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   /** The repository root, resolved the way the validator resolves it at run time. */
   private static Path repoRoot() {
-    return SpikeContractValidator.resolveRepositoryRoot(Path.of("").toAbsolutePath());
+    return EvidenceContractValidator.resolveRepositoryRoot(Path.of("").toAbsolutePath());
   }
 
   /**
@@ -48,8 +48,8 @@ class SpikeContractValidatorTest {
     Files.createDirectories(root);
     Path repository = repoRoot();
     java.util.List<String> inputs = new java.util.ArrayList<>(
-        SpikeContractValidator.DOCUMENT_PATHS);
-    inputs.addAll(SpikeContractValidator.SCRIPT_PATHS);
+        EvidenceContractValidator.DOCUMENT_PATHS);
+    inputs.addAll(EvidenceContractValidator.SCRIPT_PATHS);
     for (String relative : inputs) {
       Path target = root.resolve(relative);
       Files.createDirectories(target.getParent());
@@ -83,9 +83,9 @@ class SpikeContractValidatorTest {
 
   /** Asserts validation of the mutated tree fails with a message containing the fragment. */
   private static void assertFailsWith(Path root, String fragment) {
-    SpikeContractValidator.ValidationError error = assertThrows(
-        SpikeContractValidator.ValidationError.class,
-        () -> SpikeContractValidator.validate(root));
+    EvidenceContractValidator.ValidationError error = assertThrows(
+        EvidenceContractValidator.ValidationError.class,
+        () -> EvidenceContractValidator.validate(root));
     assertTrue(error.getMessage().contains(fragment),
         "expected message containing <" + fragment + ">, got <" + error.getMessage() + ">");
   }
@@ -96,14 +96,14 @@ class SpikeContractValidatorTest {
     assertEquals(
         "validated 10 acceptance criteria, 3 candidates, 10 capability cases,"
             + " 21 expected relationships, and 10 observed results",
-        SpikeContractValidator.validate(repoRoot()));
-    assertEquals(0, SpikeContractValidator.run(new String[] {}, repoRoot()));
+        EvidenceContractValidator.validate(repoRoot()));
+    assertEquals(0, EvidenceContractValidator.run(new String[] {}, repoRoot()));
   }
 
   /** Python ignored argv entirely; the port keeps that behavior for parity. */
   @Test
   void runIgnoresExtraArgumentsForPythonParity() throws IOException {
-    assertEquals(0, SpikeContractValidator.run(new String[] {"stray", "args"}, repoRoot()));
+    assertEquals(0, EvidenceContractValidator.run(new String[] {"stray", "args"}, repoRoot()));
   }
 
   /** A missing document fails loudly, naming the file. */
@@ -112,7 +112,7 @@ class SpikeContractValidatorTest {
     Path root = copiedSpikeTree();
     Files.delete(root.resolve("spike/capability-matrix.json"));
 
-    assertEquals(1, SpikeContractValidator.run(new String[] {}, root));
+    assertEquals(1, EvidenceContractValidator.run(new String[] {}, root));
     assertFailsWith(root, "spike/capability-matrix.json");
   }
 
@@ -122,7 +122,7 @@ class SpikeContractValidatorTest {
     Path root = copiedSpikeTree();
     Files.writeString(root.resolve("spike/acceptance-criteria.json"), "{ not json");
 
-    assertEquals(1, SpikeContractValidator.run(new String[] {}, root));
+    assertEquals(1, EvidenceContractValidator.run(new String[] {}, root));
     assertFailsWith(root, "spike/acceptance-criteria.json");
   }
 
@@ -304,20 +304,20 @@ class SpikeContractValidatorTest {
    */
   @Test
   void truthinessMirrorsPython() {
-    assertFalse(SpikeContractSemantics.truthy(MAPPER.missingNode()));
-    assertFalse(SpikeContractSemantics.truthy(MAPPER.nullNode()));
-    assertFalse(SpikeContractSemantics.truthy(MAPPER_BOOLEAN(false)));
-    assertFalse(SpikeContractSemantics.truthy(
+    assertFalse(EvidenceSemantics.truthy(MAPPER.missingNode()));
+    assertFalse(EvidenceSemantics.truthy(MAPPER.nullNode()));
+    assertFalse(EvidenceSemantics.truthy(MAPPER_BOOLEAN(false)));
+    assertFalse(EvidenceSemantics.truthy(
         MAPPER.createObjectNode().put("v", 0).path("v")));
-    assertFalse(SpikeContractSemantics.truthy(
+    assertFalse(EvidenceSemantics.truthy(
         MAPPER.createObjectNode().put("v", "").path("v")));
-    assertFalse(SpikeContractSemantics.truthy(MAPPER.createArrayNode()));
-    assertTrue(SpikeContractSemantics.truthy(MAPPER_BOOLEAN(true)));
-    assertTrue(SpikeContractSemantics.truthy(
+    assertFalse(EvidenceSemantics.truthy(MAPPER.createArrayNode()));
+    assertTrue(EvidenceSemantics.truthy(MAPPER_BOOLEAN(true)));
+    assertTrue(EvidenceSemantics.truthy(
         MAPPER.createObjectNode().put("v", 1).path("v")));
-    assertTrue(SpikeContractSemantics.truthy(
+    assertTrue(EvidenceSemantics.truthy(
         MAPPER.createObjectNode().put("v", "x").path("v")));
-    assertTrue(SpikeContractSemantics.truthy(MAPPER.createArrayNode().add(1)));
+    assertTrue(EvidenceSemantics.truthy(MAPPER.createArrayNode().add(1)));
   }
 
   private static JsonNode MAPPER_BOOLEAN(boolean value) {
@@ -330,15 +330,15 @@ class SpikeContractValidatorTest {
    */
   @Test
   void analyzerHostPathWalkRejectsPosixShapes() {
-    assertTrue(SpikeContractJavacRules.containsHostPath(
+    assertTrue(EvidenceJavacRules.containsHostPath(
         textNode("/absolute/path.java")));
-    assertTrue(SpikeContractJavacRules.containsHostPath(
+    assertTrue(EvidenceJavacRules.containsHostPath(
         textNode("nested/Users/leak")));
-    assertTrue(SpikeContractJavacRules.containsHostPath(
+    assertTrue(EvidenceJavacRules.containsHostPath(
         textNode("nested/private/var/folders")));
-    assertFalse(SpikeContractJavacRules.containsHostPath(
+    assertFalse(EvidenceJavacRules.containsHostPath(
         textNode("relative/path.java")));
-    assertTrue(SpikeContractJavacRules.containsHostPath(
+    assertTrue(EvidenceJavacRules.containsHostPath(
         MAPPER.createArrayNode().add(MAPPER.createObjectNode().put("note", "/Users/x"))));
   }
 
@@ -348,26 +348,26 @@ class SpikeContractValidatorTest {
    */
   @Test
   void javacHostPathWalkRejectsWindowsShapes() {
-    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
+    assertTrue(EvidenceJavacRules.javacContainsHostPath(
         textNode("\\\\server\\share\\cell.java")));
-    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
+    assertTrue(EvidenceJavacRules.javacContainsHostPath(
         textNode("C:\\Users\\leak\\cell.java")));
-    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
+    assertTrue(EvidenceJavacRules.javacContainsHostPath(
         textNode("D:/repos/cell.java")));
-    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
+    assertTrue(EvidenceJavacRules.javacContainsHostPath(
         textNode("prefix/tmp/scratch")));
-    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
+    assertTrue(EvidenceJavacRules.javacContainsHostPath(
         textNode("a\\\\Users\\\\leak")));
-    assertFalse(SpikeContractJavacRules.javacContainsHostPath(
+    assertFalse(EvidenceJavacRules.javacContainsHostPath(
         textNode("relative/cell.java")));
-    assertFalse(SpikeContractJavacRules.javacContainsHostPath(
+    assertFalse(EvidenceJavacRules.javacContainsHostPath(
         textNode("N24a.java")));
   }
 
   /** The required javac cell inventory parses to exactly 71 ids with the compound labels. */
   @Test
   void requiredJavacCellsParseToExactSet() {
-    Set<String> cells = SpikeContractJavacRules.requiredJavacCells();
+    Set<String> cells = EvidenceJavacRules.requiredJavacCells();
     assertEquals(71, cells.size());
     assertTrue(cells.contains("N24a"));
     assertTrue(cells.contains("N24b"));
@@ -384,23 +384,23 @@ class SpikeContractValidatorTest {
   void javacTotalsRecomputeToPerCellSumOnRealObservation() throws IOException {
     JsonNode observation = MAPPER.readTree(
         repoRoot().resolve("spike/results/javac-symbol-resolver-observation.json").toFile());
-    assertEquals(SpikeContractJavacRules.recomputeTotals(observation),
-        SpikeContractJavacRules.totalsAsLongMap(observation.path("javacTotals")));
+    assertEquals(EvidenceJavacRules.recomputeTotals(observation),
+        EvidenceJavacRules.totalsAsLongMap(observation.path("javacTotals")));
   }
 
   /** The repository root is found by walking up from a nested directory. */
   @Test
   void repositoryRootResolvesFromNestedDirectory() {
     assertEquals(repoRoot(),
-        SpikeContractValidator.resolveRepositoryRoot(repoRoot().resolve("spike/contracts")));
+        EvidenceContractValidator.resolveRepositoryRoot(repoRoot().resolve("spike/contracts")));
   }
 
   /** A tree with no pom.xml and spike directory above it cannot resolve a root: loud failure. */
   @Test
   void unresolvableRootFailsLoudly() {
-    SpikeContractValidator.ValidationError error = assertThrows(
-        SpikeContractValidator.ValidationError.class,
-        () -> SpikeContractValidator.resolveRepositoryRoot(temp));
+    EvidenceContractValidator.ValidationError error = assertThrows(
+        EvidenceContractValidator.ValidationError.class,
+        () -> EvidenceContractValidator.resolveRepositoryRoot(temp));
     assertTrue(error.getMessage().contains("repository root"));
   }
 
@@ -491,20 +491,20 @@ class SpikeContractValidatorTest {
         "spike/results/sootup-3.0.1-java21-quarkus-observation.json");
     ((ObjectNode) document.path("observations").get(0)).put("certainty", 17);
     write(root, "spike/results/sootup-3.0.1-java21-quarkus-observation.json", document);
-    assertEquals(0, SpikeContractValidator.run(new String[] {}, root));
+    assertEquals(0, EvidenceContractValidator.run(new String[] {}, root));
   }
 
   /** Distinct non-textual values stay distinct in sets, like Python's set of 17 and 18. */
   @Test
   void distinctNonTextualValuesStayDistinctInSets() {
-    assertEquals(2, SpikeContractCollections.idSet(java.util.List.of(
+    assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
         MAPPER.createObjectNode().put("id", 17),
         MAPPER.createObjectNode().put("id", 18)), "id").size());
-    assertEquals(1, SpikeContractCollections.idSet(java.util.List.of(
+    assertEquals(1, EvidenceCollections.idSet(java.util.List.of(
         MAPPER.createObjectNode().put("id", 17),
         MAPPER.createObjectNode().put("id", 17)), "id").size());
     // A textual "17" and a numeric 17 stay distinct too (Python: "17" != 17).
-    assertEquals(2, SpikeContractCollections.idSet(java.util.List.of(
+    assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
         MAPPER.createObjectNode().put("id", "17"),
         MAPPER.createObjectNode().put("id", 17)), "id").size());
   }
@@ -556,13 +556,13 @@ class SpikeContractValidatorTest {
   /** Whole-number offsets: 64.0 maps to 64 like Python's dict key, 64.5 and oversized reject. */
   @Test
   void wholeNumberOffsetsMatchPythonDictKeySemantics() {
-    assertEquals(64L, SpikeContractSemantics.wholeNumberOrNull(
+    assertEquals(64L, EvidenceSemantics.wholeNumberOrNull(
         MAPPER.createObjectNode().put("v", 64.0).path("v")));
-    assertEquals(64L, SpikeContractSemantics.wholeNumberOrNull(
+    assertEquals(64L, EvidenceSemantics.wholeNumberOrNull(
         MAPPER.createObjectNode().put("v", 64).path("v")));
-    assertEquals(null, SpikeContractSemantics.wholeNumberOrNull(
+    assertEquals(null, EvidenceSemantics.wholeNumberOrNull(
         MAPPER.createObjectNode().put("v", 64.5).path("v")));
-    assertEquals(null, SpikeContractSemantics.wholeNumberOrNull(
+    assertEquals(null, EvidenceSemantics.wholeNumberOrNull(
         MAPPER.createObjectNode().put("v", new java.math.BigInteger(
             "18446744073709551680")).path("v")));
   }

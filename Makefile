@@ -57,11 +57,7 @@ java-lint-report:
 	"$${MAVEN_BIN}" -B -ntp org.projectlightpath:java-lint-maven-plugin:0.1.0:validate -DjavaLint.enforce=false -f pom.xml
 
 evidence-validate:
-	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
-	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-$${JAVA_HOME:+$${JAVA_HOME}/bin/}java}}" && \
-	"$${MAVEN_BIN}" -B -ntp -q compile -f pom.xml && \
-	"$${MAVEN_BIN}" -B -ntp -q dependency:build-classpath -Dmdep.outputFile=target/evidence-validate-classpath.txt -DincludeScope=runtime -f pom.xml && \
-	"$${JAVA_BIN}" -cp "target/classes:$$(cat target/evidence-validate-classpath.txt)" com.projectlightpath.analysis.java.SpikeContractValidator
+	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=EvidenceContractValidatorTest test -f pom.xml
 
 framework-enrichment:
 	python3 spike/scripts/enrich_framework_facts.py

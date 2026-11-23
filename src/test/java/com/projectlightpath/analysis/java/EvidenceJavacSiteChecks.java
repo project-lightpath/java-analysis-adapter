@@ -1,10 +1,10 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.MISSING_INPUT_CODES;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.eq;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.require;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.text;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.MISSING_INPUT_CODES;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashSet;
@@ -19,9 +19,9 @@ import java.util.Set;
  * POSSIBLE, MISSING_INPUT, AMBIGUOUS, SHADOWED, NO_FACT), and duplicate-offset rejection.
  * Ported from Python 358-395 of spike/scripts/validate_spike.py.
  */
-final class SpikeContractJavacSiteChecks {
+final class EvidenceJavacSiteChecks {
 
-  private SpikeContractJavacSiteChecks() {}
+  private EvidenceJavacSiteChecks() {}
 
   /** Site-level agreement between expected and observed javac facts (Python 358-367). */
   static void checkJavacCellSites(JsonNode cell, String id, JsonNode javac) {
@@ -31,7 +31,7 @@ final class SpikeContractJavacSiteChecks {
     require(!expected.isEmpty(), id + " has no expected sites");
     Set<Long> expectedOffsets = new HashSet<>();
     for (JsonNode site : expected) {
-      Long offset = SpikeContractSemantics.wholeNumberOrNull(site.path("offset"));
+      Long offset = EvidenceSemantics.wholeNumberOrNull(site.path("offset"));
       require(offset != null && offset >= 0, id + " has an unaligned expected site");
       expectedOffsets.add(offset);
     }
@@ -51,7 +51,7 @@ final class SpikeContractJavacSiteChecks {
   /** One expected site's fact-side arms (Python 374-384). */
   private static void checkExpectedSite(JsonNode site, String id,
       Map<Long, JsonNode> factsByOffset, Map<Long, JsonNode> abstentionsByOffset) {
-    Long offset = SpikeContractSemantics.wholeNumberOrNull(site.path("offset"));
+    Long offset = EvidenceSemantics.wholeNumberOrNull(site.path("offset"));
     String expectation = text(site, "expectation");
     require(expectation != null,
         id + " has an expected site without an expectation at " + offset);
@@ -98,7 +98,7 @@ final class SpikeContractJavacSiteChecks {
       String duplicateMessage) {
     Map<Long, JsonNode> byOffset = new LinkedHashMap<>();
     for (JsonNode node : nodes) {
-      Long offset = SpikeContractSemantics.wholeNumberOrNull(node.path("offset"));
+      Long offset = EvidenceSemantics.wholeNumberOrNull(node.path("offset"));
       require(offset != null && byOffset.putIfAbsent(offset, node) == null,
           id + " has " + duplicateMessage);
     }

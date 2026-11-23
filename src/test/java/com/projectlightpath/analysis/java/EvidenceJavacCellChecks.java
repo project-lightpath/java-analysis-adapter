@@ -1,16 +1,16 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
-import static com.projectlightpath.analysis.java.SpikeContractJavacRules.recomputeTotals;
-import static com.projectlightpath.analysis.java.SpikeContractJavacRules.totalsAsLongMap;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.JAVAC_METRICS;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_JAVAC_CELLS;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceCollections.idSet;
+import static com.projectlightpath.analysis.java.EvidenceJavacRules.recomputeTotals;
+import static com.projectlightpath.analysis.java.EvidenceJavacRules.totalsAsLongMap;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.eq;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.numEquals;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.require;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.text;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.truthy;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.JAVAC_METRICS;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_JAVAC_CELLS;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
@@ -19,13 +19,13 @@ import java.util.Set;
 /**
  * Javac resolver GO/NO-GO cell rules of the spike-contract gate (#45 step 2): the cell
  * inventory, per-cell metrics and fact shape, and the totals consistency check. Site-level
- * agreement lives in {@link SpikeContractJavacSiteChecks}. Ported from Python 336-357 and
+ * agreement lives in {@link EvidenceJavacSiteChecks}. Ported from Python 336-357 and
  * 396-418 of spike/scripts/validate_spike.py.
  */
-final class SpikeContractJavacCellChecks {
-  private final SpikeContractValidator.Documents documents;
+final class EvidenceJavacCellChecks {
+  private final EvidenceContractValidator.Documents documents;
 
-  SpikeContractJavacCellChecks(SpikeContractValidator.Documents documents) {
+  EvidenceJavacCellChecks(EvidenceContractValidator.Documents documents) {
     this.documents = documents;
   }
 
@@ -50,12 +50,12 @@ final class SpikeContractJavacCellChecks {
     }
     // Python keyed the recomputed map off the document's own totals, so an extra
     // javacTotals key failed the equality; reject unknown keys explicitly.
-    require(SpikeContractCollections.fieldNames(javacTotals)
+    require(EvidenceCollections.fieldNames(javacTotals)
         .equals(Set.copyOf(JAVAC_METRICS)),
         "javac resolver totals must equal the per-cell sum");
     require(recomputeTotals(javacResolver).equals(totalsAsLongMap(javacTotals)),
         "javac resolver totals must equal the per-cell sum");
-    require(!SpikeContractJavacRules.javacContainsHostPath(javacResolver),
+    require(!EvidenceJavacRules.javacContainsHostPath(javacResolver),
         "javac resolver observation contains a host path");
   }
 
@@ -85,7 +85,7 @@ final class SpikeContractJavacCellChecks {
           "javac fact " + id + " accessibility evidence missing");
     }
     if (!blocked) {
-      SpikeContractJavacSiteChecks.checkJavacCellSites(cell, id, javac);
+      EvidenceJavacSiteChecks.checkJavacCellSites(cell, id, javac);
     }
   }
 }

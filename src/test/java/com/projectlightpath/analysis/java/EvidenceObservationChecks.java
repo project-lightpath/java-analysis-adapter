@@ -1,21 +1,21 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractCollections.byField;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldTextSet;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.findByText;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.first;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
-import static com.projectlightpath.analysis.java.SpikeContractCollections.textSet;
-import static com.projectlightpath.analysis.java.SpikeContractJavacRules.containsHostPath;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.CERTAINTY_STATES;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_CASES;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_FSI_CASES;
+import static com.projectlightpath.analysis.java.EvidenceCollections.byField;
+import static com.projectlightpath.analysis.java.EvidenceCollections.elements;
+import static com.projectlightpath.analysis.java.EvidenceCollections.fieldTextSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.findByText;
+import static com.projectlightpath.analysis.java.EvidenceCollections.first;
+import static com.projectlightpath.analysis.java.EvidenceCollections.idSet;
+import static com.projectlightpath.analysis.java.EvidenceCollections.textSet;
+import static com.projectlightpath.analysis.java.EvidenceJavacRules.containsHostPath;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.eq;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.numEquals;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.require;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.text;
+import static com.projectlightpath.analysis.java.EvidenceSemantics.truthy;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.CERTAINTY_STATES;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_CASES;
+import static com.projectlightpath.analysis.java.EvidenceContractValidator.REQUIRED_FSI_CASES;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.file.Files;
@@ -29,14 +29,14 @@ import java.util.Set;
 /**
  * Observation-level rules of the spike-contract gate (#45 step 2): capability-case
  * coverage and the normalized analyzer results (SootUp, CodeQL, host paths). The javac
- * resolver rules live in {@link SpikeContractJavacCellChecks}. Ported from the
+ * resolver rules live in {@link EvidenceJavacCellChecks}. Ported from the
  * corresponding blocks of spike/scripts/validate_spike.py.
  */
-final class SpikeContractObservationChecks {
-  private final SpikeContractValidator.Documents documents;
+final class EvidenceObservationChecks {
+  private final EvidenceContractValidator.Documents documents;
   private final Path root;
 
-  SpikeContractObservationChecks(SpikeContractValidator.Documents documents, Path root) {
+  EvidenceObservationChecks(EvidenceContractValidator.Documents documents, Path root) {
     this.documents = documents;
     this.root = root;
   }
@@ -45,7 +45,7 @@ final class SpikeContractObservationChecks {
   void checkAll() {
     checkObservationCoverage();
     checkAnalyzerResults();
-    new SpikeContractJavacCellChecks(documents).checkAll();
+    new EvidenceJavacCellChecks(documents).checkAll();
   }
 
   /** JDT LS and SootUp observation coverage of capability cases (Python 266-273). */
@@ -69,9 +69,9 @@ final class SpikeContractObservationChecks {
 
   /** Normalized analyzer results: pins, coverage, host paths (Python 275-334). */
   private void checkAnalyzerResults() {
-    require(Files.isRegularFile(root.resolve(SpikeContractValidator.SCRIPT_PATHS.get(0))),
+    require(Files.isRegularFile(root.resolve(EvidenceContractValidator.SCRIPT_PATHS.get(0))),
         "static-analysis runner is missing");
-    require(Files.isRegularFile(root.resolve(SpikeContractValidator.SCRIPT_PATHS.get(1))),
+    require(Files.isRegularFile(root.resolve(EvidenceContractValidator.SCRIPT_PATHS.get(1))),
         "static-analysis normalizer is missing");
     List<JsonNode> analyzerResults = List.of(documents.sootupQuarkus(),
         documents.sootupFsi(), documents.codeqlQuarkus(), documents.codeqlFsi());
@@ -256,7 +256,7 @@ final class SpikeContractObservationChecks {
   private boolean hasConcreteEdge(JsonNode entry) {
     for (JsonNode evidence : elements(entry.path("evidence"))) {
       if (evidence.isObject()
-          && SpikeContractCollections.fieldNames(evidence).contains("caller")) {
+          && EvidenceCollections.fieldNames(evidence).contains("caller")) {
         return true;
       }
       if (evidence.isTextual() && evidence.asText().contains("caller")) {
