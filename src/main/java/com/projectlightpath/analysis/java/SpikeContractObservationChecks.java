@@ -124,8 +124,14 @@ final class SpikeContractObservationChecks {
     require(result.path("observations").isArray(),
         providerName + " observations are missing");
     for (JsonNode item : elements(result.path("observations"))) {
-      require(!item.path("certainty").isMissingNode(),
+      JsonNode certaintyNode = item.path("certainty");
+      require(!certaintyNode.isMissingNode(),
           providerName + " observation certainty is missing");
+      // Python's set rejected container certainties as unhashable (TypeError, exit 1),
+      // while scalar non-textual values are hashable set members that never break the
+      // superset check — the port rejects containers and keeps scalars accepted.
+      require(!certaintyNode.isArray() && !certaintyNode.isObject(),
+          providerName + " observation certainty must be a scalar");
       certainties.add(text(item, "certainty"));
       require(truthy(item.path("evidence")), providerName + " observations need evidence");
     }

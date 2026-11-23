@@ -473,6 +473,27 @@ class SpikeContractValidatorTest {
         "observation certainty is missing");
   }
 
+  /** A container certainty rejects (Python's set found it unhashable). */
+  @Test
+  void containerAnalyzerCertaintyIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/sootup-3.0.1-java21-quarkus-observation.json",
+        document -> ((ObjectNode) document.path("observations").get(0)).set("certainty",
+            MAPPER.createArrayNode())),
+        "observation certainty must be a scalar");
+  }
+
+  /** A scalar non-textual certainty stays accepted, like Python's hashable set member. */
+  @Test
+  void numericAnalyzerCertaintyIsAccepted() throws IOException {
+    Path root = copiedSpikeTree();
+    ObjectNode document = read(root,
+        "spike/results/sootup-3.0.1-java21-quarkus-observation.json");
+    ((ObjectNode) document.path("observations").get(0)).put("certainty", 17);
+    write(root, "spike/results/sootup-3.0.1-java21-quarkus-observation.json", document);
+    assertEquals(0, SpikeContractValidator.run(new String[] {}, root));
+  }
+
   /** Distinct non-textual values stay distinct in sets, like Python's set of 17 and 18. */
   @Test
   void distinctNonTextualValuesStayDistinctInSets() {
