@@ -47,14 +47,15 @@ class BoundedFrameworkModelSpringDelegationTest {
         }
         """);
     SemanticCallFacts.Fact save = delegationFact(facts, "demo.AccountRepository#save");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, save.certainty());
     assertEquals(
         "org.springframework.data.jpa.repository.support.SimpleJpaRepository#save",
         save.callee());
-    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, save.certainty());
     SemanticCallFacts.Fact findById = delegationFact(facts, "demo.AccountRepository#findById");
     assertEquals(
         "org.springframework.data.jpa.repository.support.SimpleJpaRepository#findById",
         findById.callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findById.certainty());
   }
 
   @Test

@@ -43,6 +43,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
           : SemanticCallFacts.Certainty.UNRESOLVED;
       String repositoryContract = scanner.springRepositoryContract(candidate.file()).orElse("Repository");
       Map<String, String> fragmentTargets = fragmentTargets(scanner, candidate);
+      Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass =
+          scanner.springRepositoryBaseClass();
       for (SourceMetadataScannerState.RepositoryMethod repositoryMethod
           : scanner.springRepositoryMethods(candidate.file())) {
         if (fragmentTargets.containsKey(repositoryMethod.name())) {
@@ -77,7 +79,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
                 "Spring Data implementation and proxy identity are generated outside application source.")));
         facts.add(delegationFact(
             context, scanner, candidates, candidate, repositoryMethod,
-            repositoryContract, metadataAvailable, fragmentTargets));
+            repositoryContract, metadataAvailable, fragmentTargets, baseClass));
       }
       for (Map.Entry<String, String> fragment : fragmentTargets.entrySet()) {
         facts.add(fragmentDelegationFact(
@@ -132,7 +134,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       SourceMetadataScannerState.RepositoryMethod repositoryMethod,
       String repositoryContract,
       boolean metadataAvailable,
-      Map<String, String> fragmentTargets) {
+      Map<String, String> fragmentTargets,
+      Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass) {
     String methodIdentity = repositoryMethod.identity();
     String caller = candidate.file().typeName() + "#" + methodIdentity;
     String fragmentImplementation = fragmentTargets.get(repositoryMethod.name());
@@ -140,6 +143,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
     String target;
     SemanticCallFacts.Certainty certainty;
     String limitation;
+    String diagnosticCode = null;
     if (fragmentImplementation != null) {
       target = fragmentImplementation;
       certainty = metadataAvailable
@@ -152,14 +156,27 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       certainty = SemanticCallFacts.Certainty.UNRESOLVED;
       limitation = "Reactive repository backing is module-specific and outside"
           + " the analyzed dependencies; no backing class can be selected.";
+    } else if (repositoryMethod.guaranteed() && baseClass.isPresent()) {
+      target = baseClass.get().configuredType() + "#" + repositoryMethod.name();
+      if (baseClass.get().applicationScoped()) {
+        certainty = metadataAvailable
+            ? SemanticCallFacts.Certainty.POSSIBLE
+            : SemanticCallFacts.Certainty.UNRESOLVED;
+        limitation = "The configured repository base class overrides the default"
+            + " backing; exact method resolution inside it is not proven.";
+      } else {
+        certainty = SemanticCallFacts.Certainty.UNRESOLVED;
+        diagnosticCode = "spring_data_backing_selection_out_of_scope";
+        limitation = "The configured repository base class is outside the"
+            + " analysis scope; no backing can be selected.";
+      }
     } else if (repositoryMethod.guaranteed()) {
       target = "org.springframework.data.jpa.repository.support.SimpleJpaRepository#"
           + repositoryMethod.name();
       certainty = metadataAvailable
-          ? SemanticCallFacts.Certainty.POSSIBLE
+          ? SemanticCallFacts.Certainty.DEFINITE
           : SemanticCallFacts.Certainty.UNRESOLVED;
-      limitation = "Backing selection is framework-determined; promotion to"
-          + " definite requires unique metadata-backed selection.";
+      limitation = null;
     } else {
       target = "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute";
       certainty = metadataAvailable
@@ -167,6 +184,13 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
           : SemanticCallFacts.Certainty.UNRESOLVED;
       limitation = "Derived query execution goes through the query-derivation"
           + " machinery; the generated query is not visible statically.";
+    }
+    Map<String, String> attributes = new HashMap<>(Map.of(
+        "repositoryContract", repositoryContract,
+        "repositoryMethod", methodIdentity,
+        "backingTarget", target));
+    if (diagnosticCode != null) {
+      attributes.put("diagnosticCode", diagnosticCode);
     }
     return SemanticCallFacts.Fact.framework(
         delegationFactId(scanner, candidates, candidate, methodIdentity, target),
@@ -187,10 +211,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
                         : "declared " + methodIdentity,
                     "backing " + target))),
                 null,
-                Map.of(
-                    "repositoryContract", repositoryContract,
-                    "repositoryMethod", methodIdentity,
-                    "backingTarget", target))),
+                Map.copyOf(attributes))),
             limitation));
   }
 

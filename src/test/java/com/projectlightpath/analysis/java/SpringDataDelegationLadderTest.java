@@ -85,7 +85,7 @@ class SpringDataDelegationLadderTest {
     assertEquals(1, facts.diagnostics().size(), facts.diagnostics().toString());
     assertEquals("spring_data_backing_selection_out_of_scope",
         facts.diagnostics().get(0).code());
-    assertEquals("src/main/java/demo/AppConfig.java", facts.diagnostics().get(0).path());
+    assertEquals("src/main/java/demo/Source0.java", facts.diagnostics().get(0).path());
   }
 
   @Test
@@ -101,16 +101,9 @@ class SpringDataDelegationLadderTest {
         "package demo; public class HandlerImpl implements Handler { public void record() {} }\n");
     write(app, "package demo;\nimport java.util.ServiceLoader;\nclass App {\n"
         + "void call() { ServiceLoader.load(Handler.class).findFirst().ifPresent(h -> h.record()); }\n}\n");
-    write(source.resolve("demo/AccountRepository.java"), """
-        package demo;
-        public interface AccountRepository
-            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> { }
-        """);
-    write(source.resolve("demo/Account.java"), "package demo; public class Account {}\n");
     assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, "--release", "17",
         "-g", "-d", classes.toString(), provider.toString(), implementation.toString(),
-        app.toString(), source.resolve("demo/AccountRepository.java").toString(),
-        source.resolve("demo/Account.java").toString()));
+        app.toString()));
     Path unique = dependencies.resolve("unique.jar");
     jar(unique, "demo.HandlerImpl");
 

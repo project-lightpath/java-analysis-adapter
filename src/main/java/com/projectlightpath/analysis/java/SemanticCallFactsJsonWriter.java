@@ -45,13 +45,23 @@ public final class SemanticCallFactsJsonWriter {
     result.put("frameworkFacts", facts.frameworkFacts().stream().map(SemanticCallFactsJsonWriter::fact).toList());
     result.put("links", facts.links().stream().map(SemanticCallFactsJsonWriter::link).toList());
     result.put("mergePolicy", mergePolicy(facts));
+    result.put("diagnostics", facts.diagnostics().stream()
+        .map(SemanticCallFactsJsonWriter::diagnostic)
+        .toList());
     result.put("coverage", coverage(facts));
     result.put("limitations", facts.runMetadata().handoff().limitations());
     return result;
   }
 
-  private static Map<String, Object> runMetadata(SemanticCallFacts.RunMetadata metadata) {
+  private static Map<String, Object> diagnostic(SemanticCallFacts.Diagnostic diagnostic) {
     Map<String, Object> result = new LinkedHashMap<>();
+    result.put("code", diagnostic.code());
+    result.put("path", diagnostic.path());
+    result.put("detail", diagnostic.detail());
+    return result;
+  }
+
+  private static Map<String, Object> runMetadata(SemanticCallFacts.RunMetadata metadata) {    Map<String, Object> result = new LinkedHashMap<>();
     result.put("contextId", metadata.contextId());
     result.put("framework", metadata.framework());
     result.put("frameworkVersion", metadata.frameworkVersion());

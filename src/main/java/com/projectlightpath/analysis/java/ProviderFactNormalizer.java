@@ -26,6 +26,14 @@ final class ProviderFactNormalizer {
       AnalysisContext context,
       AnalysisGraph graph,
       Supplier<SootUpInputLocationFactory.DependencyResolution> dependencies) {
+    return normalize(context, graph, dependencies, List.of());
+  }
+
+  static List<SemanticCallFacts.Fact> normalize(
+      AnalysisContext context,
+      AnalysisGraph graph,
+      Supplier<SootUpInputLocationFactory.DependencyResolution> dependencies,
+      List<SemanticCallFacts.Diagnostic> diagnostics) {
     Set<String> ids = new HashSet<>();
     CallReferences references = collectCallReferences(graph);
     Map<Integer, String> callIds = callIds(references, ids);
@@ -36,6 +44,11 @@ final class ProviderFactNormalizer {
     ServiceLoaderDescriptorScanner.Scan descriptors = hasServiceLoaderEdges
         ? ServiceLoaderDescriptorScanner.scan(context, dependencies.get())
         : new ServiceLoaderDescriptorScanner.Scan(List.of());
+    descriptors = descriptors.withAdditionalDiagnostics(
+        diagnostics.stream()
+            .map(item -> new ServiceLoaderDescriptorScanner.Diagnostic(
+                item.code(), item.path(), item.detail()))
+            .toList());
     ServiceLoaderDescriptorEvidenceCache evidenceCache =
         new ServiceLoaderDescriptorEvidenceCache();
     List<SemanticCallFacts.Fact> facts = callFacts(

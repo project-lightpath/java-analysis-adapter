@@ -483,7 +483,7 @@ static final List<String> SUPPORTED_HTTP_METHODS =
   }
 
   /** A configured repository base class, with its application-scope resolution. */
-  record RepositoryBaseClass(String configuredType, boolean applicationScoped) {}
+  record RepositoryBaseClass(String configuredType, boolean applicationScoped, String sourcePath) {}
 
   /** A repository fragment composition: custom interface plus its Impl class. */
   record RepositoryFragment(

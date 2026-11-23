@@ -72,7 +72,8 @@ public final class JavaAnalysisAdapter {
           graph,
           facts.providerFacts(),
           facts.frameworkFacts(),
-          facts.links());
+          facts.links(),
+          facts.diagnostics());
     }
   }
 
@@ -160,8 +161,9 @@ public final class JavaAnalysisAdapter {
     FrameworkModel selectedModel = frameworkModel == null
         ? FrameworkModels.forContext(context.framework())
         : frameworkModel;
+    List<SemanticCallFacts.Diagnostic> diagnostics = springDataDiagnostics(context);
     List<SemanticCallFacts.Fact> providerFacts = new ArrayList<>(
-        ProviderFactNormalizer.normalize(context, graph, dependencies));
+        ProviderFactNormalizer.normalize(context, graph, dependencies, diagnostics));
     List<SemanticCallFacts.Fact> frameworkFacts = attachExactProviderIdentities(
         selectedModel.enrich(context, graph), providerFacts);
     return new SemanticCallFacts(
@@ -169,7 +171,33 @@ public final class JavaAnalysisAdapter {
         graph,
         providerFacts,
         frameworkFacts,
-        links(providerFacts, frameworkFacts));
+        links(providerFacts, frameworkFacts),
+        diagnostics);
+  }
+
+  /**
+   * Computes the Spring Data scan-global diagnostics once, from the (derived)
+   * context: an out-of-scope repository base class blocks DEFINITE promotion
+   * for the whole scan and must stay visible on the facts output.
+   */
+  private static List<SemanticCallFacts.Diagnostic> springDataDiagnostics(
+      AnalysisContext context) {
+    if (context.framework() != AnalysisContext.Framework.SPRING_BOOT) {
+      return List.of();
+    }
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    return scanner.springRepositoryBaseClass()
+        .filter(baseClass -> !baseClass.applicationScoped())
+        .map(baseClass -> new SemanticCallFacts.Diagnostic(
+            "spring_data_backing_selection_out_of_scope",
+            baseClass.sourcePath(),
+            "repositoryBaseClass " + baseClass.configuredType()
+                + " is outside the analysis scope"))
+        .stream()
+        .sorted(java.util.Comparator.comparing(SemanticCallFacts.Diagnostic::code)
+            .thenComparing(SemanticCallFacts.Diagnostic::path)
+            .thenComparing(SemanticCallFacts.Diagnostic::detail))
+        .toList();
   }
 
   /** Abstains open-world dynamic evidence and attaches identities for eligible targets. */

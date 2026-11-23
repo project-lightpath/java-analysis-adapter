@@ -154,7 +154,8 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
               : qualify(configured, file.packageName());
           boolean applicationScoped = files().stream()
               .anyMatch(candidate -> candidate.typeName().equals(qualified));
-          return Optional.of(new RepositoryBaseClass(qualified, applicationScoped));
+          return Optional.of(new RepositoryBaseClass(
+              qualified, applicationScoped, file.displayPath()));
         }
       }
     }
