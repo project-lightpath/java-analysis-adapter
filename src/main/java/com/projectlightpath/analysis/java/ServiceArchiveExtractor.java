@@ -197,16 +197,36 @@ final class ServiceArchiveExtractor {
     /**
      * Opens the archive channel and re-checks the size limit on it: the
      * file may have been replaced between the probe and the open (PR #47
-     * review CR-4).
+     * review CR-4). The channel is closed before any rejection so the
+     * descriptor is not held until GC (final review N1), matching the
+     * sibling reader's convention.
      */
     private SeekableByteChannel openBoundedChannel(
         ServiceLoaderDescriptorArchiveConfig config) throws IOException {
       SeekableByteChannel channel = config.channelOpener().open(archive);
-      if (channel.size() > ServiceLoaderDescriptorArchiveSource.MAX_ARCHIVE_BYTES) {
+      long size;
+      try {
+        size = channel.size();
+      } catch (IOException sizeError) {
+        closeQuietly(channel, sizeError);
+        throw sizeError;
+      }
+      if (size > ServiceLoaderDescriptorArchiveSource.MAX_ARCHIVE_BYTES) {
+        closeQuietly(channel, null);
         throw new SourceArchiveExtractionFailure(
             "source archive exceeds the archive size limit: " + archive);
       }
       return channel;
+    }
+
+    private static void closeQuietly(SeekableByteChannel channel, Exception suppressed) {
+      try {
+        channel.close();
+      } catch (IOException closeError) {
+        if (suppressed != null) {
+          suppressed.addSuppressed(closeError);
+        }
+      }
     }
 
     private void probeArchive() throws IOException {

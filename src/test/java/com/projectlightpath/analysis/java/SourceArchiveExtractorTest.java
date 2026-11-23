@@ -618,7 +618,8 @@ class SourceArchiveExtractorTest {
 
   @Test
   void rejectsEntryNamesBeyondTheDepthAndLengthBounds() throws IOException {
-    // 1,025 segments: over the depth bound before any Path prefix is built.
+    // One segment over the depth bound (129 segments): rejected before any
+    // Path prefix is built.
     StringBuilder deep = new StringBuilder("a");
     for (int index = 0; index < ServiceArchiveExtractor.MAX_ENTRY_NAME_SEGMENTS; index++) {
       deep.append("/a");
@@ -632,7 +633,7 @@ class SourceArchiveExtractorTest {
     assertTrue(deepError.getMessage().contains("unsafe source archive entry name"),
         deepError.getMessage());
 
-    // One segment of 4,097 characters: over the name-length bound.
+    // One character over the length bound (513 characters).
     StringBuilder longName = new StringBuilder("L");
     for (int index = 0; index < ServiceArchiveExtractor.MAX_ENTRY_NAME_CHARS; index++) {
       longName.append('l');
@@ -649,8 +650,8 @@ class SourceArchiveExtractorTest {
 
   @Test
   void acceptsEntryNamesAtTheDepthAndLengthBounds() throws IOException {
-    // Exactly 128 two-character segments (255 total chars): at the depth
-    // bound, inside the length bound and the filesystem's own limits.
+    // Exactly 128 segments: at the depth bound, inside the length bound
+    // and the filesystem's own limits.
     StringBuilder deep = new StringBuilder();
     for (int index = 0; index < ServiceArchiveExtractor.MAX_ENTRY_NAME_SEGMENTS; index++) {
       if (index > 0) {
@@ -665,16 +666,57 @@ class SourceArchiveExtractorTest {
       assertTrue(Files.exists(extraction.archiveRoots().get(0).resolve(deep.toString())));
     }
 
-    // Two components of 255 characters each: 511 characters at the length
-    // bound, each component within NAME_MAX.
-    StringBuilder longName = new StringBuilder("L".repeat(255));
-    longName.append('/').append("B".repeat(255));
+    // Exactly 512 characters across three components of at most 170
+    // characters each (plus two separators): the exact length bound, each
+    // component within NAME_MAX.
+    StringBuilder longName = new StringBuilder("L".repeat(170));
+    longName.append('/').append("M".repeat(170));
+    longName.append('/').append("B".repeat(170));
+    assertEquals(ServiceArchiveExtractor.MAX_ENTRY_NAME_CHARS, longName.length());
     Path longArchive = zip("long-boundary-sources.jar", output ->
         put(output, longName.toString(), "package a; class A {}\n"));
     try (ServiceArchiveExtractor.Extraction extraction = ServiceArchiveExtractor.extract(
         List.of(longArchive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp)) {
       assertTrue(Files.exists(extraction.archiveRoots().get(0).resolve(longName.toString())));
     }
+  }
+
+  @Test
+  void rejectsEntriesWhoseDeclaredLengthDisagreesWithTheData() throws IOException {
+    // Raw ZIP: the local/CEN records declare one byte less than the stored
+    // data. The #34 reader's CRC-at-EOF validation rejects the entry first
+    // ("could not be read"); the extractor's mismatch flag is
+    // defense-in-depth behind it. Either way the inconsistent entry is
+    // rejected fail-closed with a sanitized message (final review N4).
+    byte[] name = "demo/Short.java".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] data = "package demo; class Short {}\n"
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+    crc.update(data);
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    long local = out.size();
+    writeStoredLocalHeader(out, name, (int) crc.getValue(), data.length - 1);
+    out.writeBytes(data);
+    long cenStart = out.size();
+    writeCenRecord(out, name, (int) crc.getValue(), data.length - 1, local);
+    int cenSize = out.size() - (int) cenStart;
+    out.writeBytes(new byte[] {0x50, 0x4b, 0x05, 0x06});
+    short_(out, 0);
+    short_(out, 0);
+    short_(out, 1);
+    short_(out, 1);
+    int_(out, cenSize);
+    int_(out, (int) cenStart);
+    short_(out, 0);
+    Path archive = temp.resolve("short-length-sources.jar");
+    Files.write(archive, out.toByteArray());
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+        () -> ServiceArchiveExtractor.extract(
+            List.of(archive), ServiceArchiveExtractor.MAX_EXTRACTED_BYTES, temp));
+    assertTrue(error.getMessage().contains("could not be read")
+            || error.getMessage().contains("length mismatch"),
+        error.getMessage());
   }
 
   @Test
