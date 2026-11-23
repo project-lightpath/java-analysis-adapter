@@ -428,6 +428,50 @@ class SpringDataDelegationLadderTest {
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, delegations.get(0).certainty());
   }
 
+  @Test
+  void samePackageQueryAnnotationShadowsTheWildcardImport() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public @interface Query {
+          String value();
+        }
+        """, """
+        package demo;
+        import org.springframework.data.jpa.repository.*;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(
+        "org.springframework.data.jpa.repository.support.SimpleJpaRepository#findAll",
+        findAll.callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findAll.certainty(),
+        "a same-package Query type shadows the on-demand import (JLS 6.4.1)");
+  }
+
+  @Test
+  void singleTypeImportShadowsTheWildcardImport() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import com.example.Query;
+        import org.springframework.data.jpa.repository.*;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(
+        "org.springframework.data.jpa.repository.support.SimpleJpaRepository#findAll",
+        findAll.callee());
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findAll.certainty(),
+        "a single-type import of another Query shadows the on-demand import (JLS 6.4.1)");
+  }
+
   private SemanticCallFacts.Fact delegationFact(SemanticCallFacts facts, String caller) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("delegated_implementation"))

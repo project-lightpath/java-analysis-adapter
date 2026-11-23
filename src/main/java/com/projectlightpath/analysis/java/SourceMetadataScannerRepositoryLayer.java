@@ -117,27 +117,32 @@ abstract class SourceMetadataScannerRepositoryLayer
   }
 
   /** Matches only the canonical Spring Data query annotation, not lookalikes. */
-  private static boolean queryAnnotated(SourceFile file, MethodInfo method) {
+  private boolean queryAnnotated(SourceFile file, MethodInfo method) {
     if (!canonicalAnnotationOccurrences(
         file, method.annotationBlock(), "Query",
         SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS).isEmpty()) {
       return true;
     }
-    // A bare @Query spelling is also canonically supplied by an on-demand
-    // import of the annotation's package (or of the @Queries container),
-    // which the explicit-import check above does not cover.
+    // A bare @Query spelling can also be canonically supplied by an
+    // on-demand import of the annotation's package — the weakest
+    // declaration form (JLS 6.4.1). A single-type import of another Query,
+    // or a same-package Query type, shadows it and must reject.
     if (!bareQuerySpelling(method.annotationBlock())) {
       return false;
     }
-    String masked = maskStringLiterals(file.structuralSource());
+    if (!importedTypes("Query", file).isEmpty()) {
+      return false;
+    }
+    boolean samePackageQuery = files().stream()
+        .filter(candidate -> candidate.packageName().equals(file.packageName()))
+        .anyMatch(candidate -> candidate.simpleTypeName().equals("Query"));
+    if (samePackageQuery) {
+      return false;
+    }
+    String masked = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
     for (String canonical : SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS) {
       String packageName = canonical.substring(0, canonical.lastIndexOf('.'));
       if (masked.contains("import " + packageName + ".*;")) {
-        return true;
-      }
-      String container = packageName + ".Queries";
-      if (masked.contains("import " + container + ";")
-          || masked.contains("import " + packageName + ".*;")) {
         return true;
       }
     }
