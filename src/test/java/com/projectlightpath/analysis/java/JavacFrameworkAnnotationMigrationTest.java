@@ -881,6 +881,42 @@ class JavacFrameworkAnnotationMigrationTest {
         on.toString());
   }
 
+  @Test
+  void dollarNamedWithArgumentsAtFieldSiteIsUndiscoverable() throws IOException {
+    // jakarta.inject.Named is deliberately NOT declared (unresolved).
+    Map<String, String> files = Map.of(
+        "jakarta/inject/Inject.java", "package jakarta.inject; public @interface Inject {}",
+        "jakarta/enterprise/context/ApplicationScoped.java",
+        "package jakarta.enterprise.context;"
+            + " public @interface ApplicationScoped {}",
+        "demo/DollarArgs.java", """
+            package demo;
+            import jakarta.inject.Inject;
+            import jakarta.enterprise.context.ApplicationScoped;
+            @ApplicationScoped public class DollarArgs {
+              @Inject @Named$k("y") private String value;
+            }
+            @interface Named$k {}
+            """);
+    AnalysisContext context = context(
+        "dollar-args", AnalysisContext.Framework.QUARKUS, files);
+    for (boolean flag : new boolean[] {false, true}) {
+      if (flag) {
+        System.setProperty(FLAG, "true");
+      } else {
+        System.clearProperty(FLAG);
+      }
+      // The INJECT_FIELD discovery regex cannot span the arguments after a
+      // $-named annotation (its type class excludes the parens), so the
+      // field is undiscoverable in BOTH flag states — the round-6 review's
+      // hypothetical field-site "$-name with arguments" divergence has no
+      // reachable input.
+      assertTrue(new SourceMetadataScanner(context)
+          .injectionPoints(AnalysisContext.Framework.QUARKUS).stream()
+          .noneMatch(point -> point.member().equals("value")));
+    }
+  }
+
   private List<String> profilesOf(SourceMetadataScanner scanner, String id) {
     return scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
         .filter(bean -> bean.candidateId().equals(id))
