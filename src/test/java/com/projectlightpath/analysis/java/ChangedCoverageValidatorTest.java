@@ -414,6 +414,38 @@ class ChangedCoverageValidatorTest {
     assertEquals("nan", PythonNumbers.format2(Double.NaN));
   }
 
+  /** Python float('inf') runs the gate; the parse path must not crash on any spelling. */
+  @Test
+  void infiniteThresholdParsesAndRuns() throws IOException {
+    Path root = scratchRoot();
+    jacocoReport();
+    for (String spelling : new String[] {"inf", "INF", "Infinity", "-infinity", "nan",
+        "1_000.5", "1e1_0", "5.", ".5"}) {
+      Double parsed = PythonNumbers.parsePythonFloat(spelling);
+      assertTrue(parsed != null && !parsed.isNaN() || "nan".equals(spelling),
+          spelling);
+    }
+    assertEquals(Double.POSITIVE_INFINITY, PythonNumbers.parsePythonFloat("inf"));
+    assertEquals(Double.NEGATIVE_INFINITY, PythonNumbers.parsePythonFloat("-Infinity"));
+    assertEquals(1000.5, PythonNumbers.parsePythonFloat("1_000.5"));
+    assertEquals(null, PythonNumbers.parsePythonFloat("90.0d"));
+    assertEquals(null, PythonNumbers.parsePythonFloat("0x1p3"));
+  }
+
+  /** A parentless evidence path reaches the sidecar lookup without an NPE. */
+  @Test
+  void parentlessEvidenceReachesSidecarLookup() throws IOException {
+    Path root = scratchRoot();
+    // The bare filename has no parent; the fallback sidecar is looked up in the
+    // process working directory, where no sidecar exists — the Python message, not
+    // a NullPointerException.
+    ChangedCoverageValidator.ValidationError error = assertThrows(
+        ChangedCoverageValidator.ValidationError.class,
+        () -> ChangedCoverageValidator.changedLines(root, "base", "head", ".java",
+            Path.of("coverage.json")));
+    assertTrue(error.getMessage().contains("sidecar is missing"));
+  }
+
   /** A missing sidecar when git is unavailable rejects with the Python message. */
   @Test
   void missingSidecarRejectsWhenGitUnavailable() throws IOException {

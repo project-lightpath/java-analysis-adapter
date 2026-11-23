@@ -33,15 +33,24 @@ final class PythonNumbers {
   }
 
   /**
-   * Python float() grammar: decimal exponent forms plus inf/infinity/nan (signable,
-   * case-insensitive). Java-only forms (hex, d/f suffixes) reject as argument errors.
+   * Python float() grammar: decimal forms with underscores between digits, exponents,
+   * and inf/infinity/nan (signable, case-insensitive). Java-only forms (hex, d/f
+   * suffixes) reject as argument errors; inf/nan map to the double constants directly
+   * because Double.parseDouble accepts only the exact-case spellings.
    */
   static Double parsePythonFloat(String text) {
     String value = text.strip();
-    if (!value.matches("(?i)[+-]?(inf(inity)?)|(?i)[+-]?nan")
-        && !value.matches("[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?")) {
+    if (value.matches("(?i)[+-]?inf(inity)?")) {
+      return value.startsWith("-") ? Double.NEGATIVE_INFINITY
+          : Double.POSITIVE_INFINITY;
+    }
+    if (value.matches("(?i)[+-]?nan")) {
+      return Double.NaN;
+    }
+    if (!value.matches("[+-]?(\\d+(_\\d+)*(\\.(\\d+(_\\d+)*)?)?|\\.\\d+(_\\d+)*)"
+        + "([eE][+-]?\\d+(_\\d+)*)?")) {
       return null;
     }
-    return Double.parseDouble(value);
+    return Double.parseDouble(value.replace("_", ""));
   }
 }

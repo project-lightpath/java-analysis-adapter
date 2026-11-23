@@ -103,12 +103,19 @@ final class VpeTreeRules {
       throw new ContractFixtureValidator.ValidationError(
           "VPE tree manifest entry is missing its textual mode: " + path);
     }
-    // Python int(s, 8): surrounding whitespace and underscores between digits allowed.
+    // Python int(s, 8): surrounding whitespace, underscores between digits, and an
+    // optional 0o/0O prefix are allowed.
     String mode = modeNode.asText().strip();
-    if (!mode.matches("[+-]?[0-7]+(_[0-7]+)*")) {
+    if (!mode.matches("[+-]?(0[oO])?[0-7]+(_[0-7]+)*")) {
       throw new ContractFixtureValidator.ValidationError(
           "VPE tree manifest entry has a non-octal mode: " + path + ": " + mode);
     }
-    return Long.parseLong(mode.replace("_", ""), 8);
+    String digits = mode.replace("_", "");
+    int digitsStart = digits.startsWith("-") || digits.startsWith("+") ? 1 : 0;
+    if (digits.length() > digitsStart + 1 && digits.charAt(digitsStart) == '0'
+        && (digits.charAt(digitsStart + 1) == 'o' || digits.charAt(digitsStart + 1) == 'O')) {
+      digits = digits.substring(0, digitsStart) + digits.substring(digitsStart + 2);
+    }
+    return Long.parseLong(digits, 8);
   }
 }
