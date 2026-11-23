@@ -83,15 +83,16 @@ Emission site: `SootUpCallGraphExtractor` (src/main/java/.../SootUpCallGraphExtr
   `scanner.beanCandidates(SPRING_BOOT)` filtered to kind
   `repository_interface` (typeName set), passed into the extractor alongside
   `applicationClasses`. Guarded by framework == SPRING_BOOT.
-- **Provider-fact ID namespace (round-1 finding 3):** `declared_invokes`
-  edges use a **distinct ID namespace** (a `declaredCallId` analogous to
-  `dependencyCallId`), NOT the legacy `sootup-call-` base ID. Reason:
-  `legacyCallId` hashes only caller/callee@line; a `declared_invokes` edge
-  sharing that tuple with an existing application edge (possible for
-  interface *default* methods, which CHA can target) would flip BOTH edges to
-  the `-sha256` suffixed form via `collectCallReferences`' duplicate-base-ID
-  rule, perturbing published IDs of unchanged facts
-  (pinned by `collidingProviderBaseIdsAreStableAndNeverUseLegacyId`).
+- **Provider-fact ID namespace (round-1 finding 3, round-2 finding 1):**
+  `declared_invokes` edges use a **distinct ID namespace** (a `declaredCallId`
+  analogous to `dependencyCallId`), NOT the legacy `sootup-call-` base ID —
+  AND `collectCallReferences` must exclude `declared_invokes` edges from
+  `applicationBaseIdCounts` (the count is keyed on `legacyCallId`, which
+  hashes only caller/callee@line with no relationship type; counting the
+  declared edge there would flip the *existing* `invokes` edge to the
+  `-sha256` form even though the declared edge itself takes the new
+  namespace). Success criterion (Spike 3): in the default-method overlap the
+  pre-existing `invokes` edge keeps its `sootup-call-<hex>` ID byte-stable.
   `applicationCallIdentity` already includes the relationship type, so
   in-namespace identity is complete without further changes.
 - The existing CHA `interface_dispatch` edges to dependency internals are
@@ -116,23 +117,29 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
 
 - **Scanner additions required first (round-1 findings 1, 5, 6 — explicit
   work items, not free):**
-  1. *Per-contract guaranteed-method table* (generalizing the
+  1. *Per-contract, per-version guaranteed-method table* (generalizing the
      `findById`/`SPRING_DATA_FIND_BY_ID_CONTRACTS` special case): a bounded,
-     documented method set per contract family — `CrudRepository`
-     (`save`, `saveAll`, `findById`, `existsById`, `findAll`, `findAllById`,
-     `count`, `deleteById`, `delete`, `deleteAll`) and the `JpaRepository`
-     additions (`flush`, `saveAndFlush`, `deleteAllInBatch`,
-     `deleteInBatch`, `getById`, `getOne`, `getReferenceById` — exact list
-     pinned by Spike 5 against the spring-data jars on the classpath, not
-     from memory). This makes inherited-but-not-declared CRUD methods (the
-     issue's own `save` example) enumerate as `RepositoryMethod`s with
-     `guaranteed=true`.
-  2. *Reactive contracts*: add the reactive contract FQCNs
-     (`org.springframework.data.repository.reactive.ReactiveCrudRepository`,
-     `ReactiveSortingRepository`, and the reactive JPA variant) to
+     documented method set keyed by (contract family, Boot major version) —
+     reusing `springBootMajorVersion()` the same way
+     `guaranteedFindByIdContract` already does, because contract guarantees
+     are version-sensitive (e.g. `deleteInBatch`/`getOne` changed across the
+     Spring Data 2→3 boundary). A version-blind table can fabricate
+     guaranteed methods and feed the false-DEFINITE bug class. The
+     `CrudRepository` baseline (`save`, `saveAll`, `findById`, `existsById`,
+     `findAll`, `findAllById`, `count`, `deleteById`, `delete`, `deleteAll`)
+     and `JpaRepository` additions are pinned per version by Spike 5 against
+     the spring-data jars on the classpath, not from memory. This makes
+     inherited-but-not-declared CRUD methods (the issue's own `save`
+     example) enumerate as `RepositoryMethod`s with `guaranteed=true`.
+  2. *Reactive contracts*: add the reactive contract FQCNs **actually
+     present on the analysis classpath, pinned by Spike 5** (spring-data-jpa
+     is blocking; reactive repositories live in other module families, and
+     at least one historical reactive contract was removed from
+     spring-data-commons — do not enumerate from memory) to
      `SPRING_DATA_REPOSITORY_CONTRACTS` so reactive repositories classify as
      `repository_interface` at all; reactive guaranteed-method set from the
-     same spike.
+     same spike. Mind the `Map.of` 10-pair ceiling (currently 6 entries) —
+     switch to `Map.ofEntries` if the addition would exceed it.
   3. *Fragment composition*: detect repository fragments (a repository
      interface extending an app-declared custom interface, plus the `Impl`-
      suffixed implementation class in the application scope).
@@ -170,15 +177,21 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
     fragment Impl present).
   - `unresolved` (abstain) + scan-global diagnostic — configuration
     references classes outside the analysis scope.
-- **Diagnostic channel (round-1 finding 2):** reuse the established
-  scan-global channel that `ServiceLoaderDescriptorScanner.isUnique`
-  consumes (`Scan`'s `diagnostics()`, the same channel PLAN-42 used for
-  `descriptor_metadata_unavailable_for_source_archive`). New codes:
+- **Diagnostic channel (round-1 finding 2, round-2 finding 2):** the
+  ServiceLoader `Scan` channel is **conditionally constructed** —
+  `ProviderFactNormalizer.normalize` builds the descriptor `Scan` only when
+  the graph has `service_loader` edges; a Spring Data application with no
+  ServiceLoader usage would silently drop codes inserted only into that
+  pipeline. The spring-data codes are therefore carried **unconditionally**:
+  a `withSourceDiagnostics`-style combinator appends them at the normalize
+  site regardless of `hasServiceLoaderEdges` (and, for Edge 2, the abstaining
+  facts carry the same code visibly on their evidence). New codes:
   `spring_data_backing_selection_out_of_scope` (Edge-2 abstain) and
-  `spring_data_repository_sources_unavailable` (Edge-1 skip). Stated blast
-  radius: these diagnostics are scan-global — while present, ServiceLoader
-  DEFINITE promotion is blocked for the whole scan (AGENTS.md rule). Commit
-  messages for Item 3 must state this.
+  `spring_data_repository_sources_unavailable` (Edge-1 skip). The
+  ServiceLoader DEFINITE-promotion block (`isUnique`'s
+  `diagnostics().isEmpty()` conjunct, scan-global per AGENTS.md) is a stated
+  **side effect** of the channel, not the visibility mechanism. Item 3's
+  commit message must state the blast radius.
 - The runtime proxy is referenced only via the existing stable synthetic
   identity `spring-data-proxy:<FQCN>`; no JVM-generated proxy node.
 - Fact ID: `spring-data-delegation-<slug>-<digest>` via a new
@@ -254,10 +267,13 @@ sanctions zero edits to existing tests).
 - **Item 0 (scanner substrate)**: RED_00 failing tests for the guaranteed
   CRUD/reactive method table, fragment detection, and
   `@EnableJpaRepositories` reading (scanner-level) → GREEN_00 → EVIDENCE_00.
-- **Item 1 (Edge 1)**: RED_01 failing tests for cells 1–3, 7, 8, 10, 11 →
-  GREEN_01 body-scan pass + `declared_invokes` + `declaredCallId` →
-  EVIDENCE_01. Gates: `make adapter-test` (floor 534 executions),
-  `make java-lint` (0 new), `make evidence-validate`.
+- **Item 1 (Edge 1)**: RED_01 failing tests for cells 1–5, 7, 8, 10, 11
+  (cell 4's fragment method is an ordinary interface invoke — its
+  `declared_invokes` edge is Item-1 behavior) →
+  GREEN_01 body-scan pass + `declared_invokes` + `declaredCallId` (with the
+  `collectCallReferences` count exclusion) → EVIDENCE_01. Gates:
+  `make adapter-test` (floor 534 executions), `make java-lint` (0 new),
+  `make evidence-validate`.
 - **Item 2 (Edge 2 default)**: RED_02 failing tests for cells 1–4, 6, 9 →
   GREEN_02 delegation facts (possible) → EVIDENCE_02.
 - **Item 3 (ladder)**: RED_03 failing tests for cell 5 (promotion + abstain
@@ -271,8 +287,13 @@ sanctions zero edits to existing tests).
   metadata-backed facts; delegation facts keep non-open-world evidence kinds.
 - R2: CHA duplicate edges vs the body-scan pass (dedup rule from Spike 1;
   default-method case tested in cell 8).
-- R3 (RESOLVED by design): distinct `declaredCallId` namespace prevents the
-  legacy-ID flip.
+- R3 (RESOLVED by design, round 2): distinct `declaredCallId` namespace PLUS
+  `collectCallReferences` count exclusion prevents the legacy-ID flip; Spike 3
+  success criterion is byte-stable pre-existing `invokes` IDs in the
+  default-method overlap.
+- R6 (round 2): the diagnostic channel must be unconditional (not gated on
+  service_loader edges existing); visibility rides on the emitted
+  facts/abstentions and an always-applied combinator at the normalize site.
 - R4: scan-global diagnostic blast radius (items 1 and 3) — acceptable per
   AGENTS, stated in commit messages.
 - R5: reactive/fragment exact backing FQCNs and CRUD method sets verified
@@ -298,3 +319,8 @@ sanctions zero edits to existing tests).
   diagnostic channel specified, ID namespace split, line-number spike folded
   in, reactive/fragment scanner additions enumerated, R1 resolved from
   precedent, skip-diagnostic asymmetry resolved, typo fixed.
+- Round 2 (delta on v2): 5 findings (2 HIGH, 2 MEDIUM, 1 LOW, 1 NIT folded);
+  all addressed in v3 — `collectCallReferences` count exclusion added to the
+  ID-namespace cure, diagnostic channel made unconditional, reactive FQCN
+  enumeration deferred to Spike 5, per-Boot-version guaranteed-method table,
+  cell 4 moved into Item 1.
