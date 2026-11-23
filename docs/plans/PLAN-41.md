@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#41
 Branch: `flpath-5079-repository-reverse-edges` (cut from `origin/main` @ 0297828)
-Status: draft v6 (review rounds 1–5 findings addressed)
+Status: draft v7 (review rounds 1–6 findings addressed)
 
 ## Problem
 
@@ -214,7 +214,10 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
   `ProviderFactNormalizer.normalize` as a new parameter**, consumed where
   the ServiceLoader `Scan` is assembled (a `ProviderFactNormalizer`
   signature change — distinct from, and compatible with, avoiding the
-  `FrameworkModel.enrich` change). The helper's result (a) is passed as a
+  `FrameworkModel.enrich` change — implemented overload-preserving: a new
+  4-arg `normalize(context, graph, dependencies, diagnostics)`; the
+  existing 2- and 3-arg overloads delegate with `List.of()`, so the direct
+  3-arg call in `ServiceLoaderSafetyLifetimeTest` compiles unchanged). The helper's result (a) is passed as a
   constructor parameter into the `SemanticCallFacts` built in `enrich`
   — a **new constructor arity; the existing two arities default
   `diagnostics` to `List.of()`**, keeping the public surface additive and
@@ -323,7 +326,11 @@ sanctions zero edits to existing tests).
   `@EnableJpaRepositories` reading (scanner-level) → GREEN_00 → EVIDENCE_00.
 - **Item 1 (Edge 1)**: RED_01 failing tests for cells 1–5, 7, 8, 10, 11
   (cell 4's fragment method is an ordinary interface invoke — its
-  `declared_invokes` edge is Item-1 behavior) →
+  `declared_invokes` edge is Item-1 behavior; cell 10's RED_01/GREEN_01
+  scope is the **skip behavior only** — the
+  `spring_data_repository_sources_unavailable` assertion on
+  `SemanticCallFacts.diagnostics` belongs to RED_03/GREEN_03, where the
+  carrier is built) →
   GREEN_01 body-scan pass + `declared_invokes` + `declaredCallId` (with the
   `collectCallReferences` count exclusion) → EVIDENCE_01. Gates:
   `make adapter-test` (floor 534 executions), `make java-lint` (0 new),
@@ -363,7 +370,7 @@ sanctions zero edits to existing tests).
 
 ## Confidence score
 
-**0.84 (review rounds 1–5 findings addressed; implementable as planned).**
+**0.85 (review rounds 1–6 findings addressed; implementable as planned).**
 - High (≥0.9): Edge 1 emission path (body-scan pass, declared-signature
   access, POSSIBLE certainty, distinct ID namespace), test harness shape,
   negative cells, diagnostic channel (PLAN-42 precedent).
@@ -407,3 +414,7 @@ sanctions zero edits to existing tests).
   correct mirror cited (`BoundedFrameworkModel.enrich:731`) with scanner
   cost/consistency facts recorded, cross-context scanner invariance
   argument stated, diagnostics output surface assigned to Item 3.
+- Round 7 (delta on v6): 2 findings (1 MEDIUM, 1 LOW); addressed in v7 —
+  overload-preserving 4-arg `normalize` addition pinned (existing 2-/3-arg
+  overloads delegate with `List.of()`), cell 10 split between Item 1 (skip
+  behavior) and Item 3 (diagnostics assertion).
