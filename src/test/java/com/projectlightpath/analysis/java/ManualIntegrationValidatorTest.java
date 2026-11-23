@@ -396,14 +396,24 @@ class ManualIntegrationValidatorTest {
     assertMessage(context(), facts, "facts coverage must be an object when present");
   }
 
-  /** A container coverage count rejects rather than printing a Java-shaped summary. */
+  /** A container coverage count rejects and leaves no evidence file behind. */
   @Test
   void containerCoverageCountIsRejected() throws IOException {
     ObjectNode facts = facts();
     ((ObjectNode) facts.path("coverage")).set("providerFactCount",
         MAPPER.createObjectNode());
-    Path output = temp.resolve("evidence.json");
+    Path output = temp.resolve("out").resolve("evidence.json");
     assertEquals(1, runValidator(context(), facts, output));
+    assertFalse(Files.exists(output), "a failed run must not leave an evidence file");
+  }
+
+  /** A trailing option without a value exits 2 with usage, never a bounds crash. */
+  @Test
+  void trailingOptionWithoutValueExitsTwo() throws IOException {
+    Path contextFile = temp.resolve("context.json");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(contextFile.toFile(), context());
+    assertEquals(2, ManualIntegrationValidator.run(new String[] {"--context",
+        contextFile.toString(), "--facts"}, temp));
   }
 
   /** A null coverage count renders as Python's None. */

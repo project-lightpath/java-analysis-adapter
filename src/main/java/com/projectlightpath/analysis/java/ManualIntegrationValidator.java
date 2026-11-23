@@ -86,6 +86,10 @@ public final class ManualIntegrationValidator {
       ObjectNode context = readObject(arguments.context());
       ObjectNode facts = readObject(arguments.facts());
       ObjectNode evidence = validate(context, facts, arguments.sourceRevision());
+      // The summary is computed before the file is written so a count-shape failure
+      // (a container-valued coverage count) cannot leave a complete evidence document
+      // behind on a failed run.
+      String summary = summaryLine(evidence);
       Path output = arguments.output();
       Path resolved = output.isAbsolute() ? output : cwd.resolve(output);
       if (resolved.getParent() != null) {
@@ -93,7 +97,7 @@ public final class ManualIntegrationValidator {
       }
       Files.writeString(resolved, PythonJson.dumps(evidence) + "\n",
           StandardCharsets.UTF_8);
-      System.out.println(summaryLine(evidence));
+      System.out.println(summary);
       System.out.println(output);
       return 0;
     } catch (ValidationError | IOException error) {
@@ -316,6 +320,11 @@ public final class ManualIntegrationValidator {
           name = arg.substring(0, arg.indexOf('='));
           inlineValue = arg.substring(arg.indexOf('=') + 1);
         }
+        // A trailing option without an inline value must fail here, before the
+        // switch reads args[i + 1]: the parse runs outside run()'s try block.
+        if (inlineValue == null && i + 1 >= args.length) {
+          return null;
+        }
         switch (name) {
           case "--context" -> context = Path.of(value(args, i, inlineValue));
           case "--facts" -> facts = Path.of(value(args, i, inlineValue));
@@ -326,9 +335,6 @@ public final class ManualIntegrationValidator {
           }
         }
         if (inlineValue == null) {
-          if (i + 1 >= args.length) {
-            return null;
-          }
           i++;
         }
       }
