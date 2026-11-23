@@ -82,7 +82,8 @@ record JavacResolverCell(
   }
 
   enum Expectation {
-    DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT, NON_LITERAL_FORNAME
+    DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT,
+    NON_LITERAL_FORNAME, UNRESOLVED_FORNAME
   }
 
   /** One expected load site. An offset of -1 is filled from the javac result. */

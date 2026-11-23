@@ -46,7 +46,7 @@ class JavacResolverAccuracyTest {
   private static final Set<String> NEW_FAMILIES_ALL_ZERO = Set.of(
       "AN1", "AN2", "AN3", "AN4", "AN5", "AA1", "AA2", "AA3", "AA4",
       "TU1", "TU2", "TU3", "TU4", "TS1", "TS2", "TS3", "TS4", "TS5", "TS6", "TS7",
-      "TS8", "TS9", "R1", "R2", "R3", "R4", "R5");
+      "TS8", "TS9", "R1", "R2", "R3", "R4", "R5", "R6");
 
   private static boolean isNewFamily(JavacResolverCell.Family family) {
     return !SERVICE_LOADER_FAMILIES.contains(family);
@@ -284,6 +284,11 @@ class JavacResolverAccuracyTest {
     assertTrue(nonLiteral.javac().abstentions().stream()
         .anyMatch(item -> "NON_LITERAL_FORNAME".equals(item.reason())),
         "R5 must abstain visibly on the non-literal forName shape");
+    JavacResolverAccuracyHarness.CellReport unattributed = cell(report, "R6");
+    assertTrue(unattributed.javac().facts().isEmpty(), "R6 must not emit a fact");
+    assertTrue(unattributed.javac().abstentions().stream()
+        .anyMatch(item -> "UNRESOLVED_FORNAME".equals(item.reason())),
+        "R6 must abstain visibly when forName attribution fails");
   }
 
   @Test

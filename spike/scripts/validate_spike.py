@@ -346,9 +346,9 @@ def main() -> None:
         "D1 D2 D3 D4 D5 D6 D7 D8 D9 I1 I2 I3 I4 I5").split())
     required_javac_cells |= set((
         "AN1 AN2 AN3 AN4 AN5 AA1 AA2 AA3 AA4 TU1 TU2 TU3 TU4 "
-        "TS1 TS2 TS3 TS4 TS5 TS6 TS7 TS8 TS9 R1 R2 R3 R4 R5").split())
+        "TS1 TS2 TS3 TS4 TS5 TS6 TS7 TS8 TS9 R1 R2 R3 R4 R5 R6").split())
     require(javac_cells == required_javac_cells, "javac resolver observation cell set is incomplete or has drifted")
-    require(len(javac_resolver["cells"]) == 98, "javac resolver observation must have 98 cells")
+    require(len(javac_resolver["cells"]) == 99, "javac resolver observation must have 99 cells")
     service_loader_families = {"PRECEDENCE", "STATIC_OWNER", "DOLLAR_OWNER", "INCOMPLETE"}
     new_families = {"ANNOTATION_NAME", "ANNOTATION_ARGUMENT", "TYPE_USE", "TYPE_SHAPE", "REFLECTION_SOURCE_BOUND"}
     for cell in javac_resolver["cells"]:
@@ -411,6 +411,9 @@ def main() -> None:
                 elif expectation == "NON_LITERAL_FORNAME":
                     require(fact is None, f"{cell['id']} unexpected fact at a non-literal forName site {offset}")
                     require(abstention is not None and abstention["reason"] == "NON_LITERAL_FORNAME", f"{cell['id']} missing NON_LITERAL_FORNAME abstention at {offset}")
+                elif expectation == "UNRESOLVED_FORNAME":
+                    require(fact is None, f"{cell['id']} unexpected fact at an unattributed forName site {offset}")
+                    require(abstention is not None and abstention["reason"] == "UNRESOLVED_FORNAME", f"{cell['id']} missing UNRESOLVED_FORNAME abstention at {offset}")
     recomputed = {metric: 0 for metric in javac_totals}
     for cell in javac_resolver["cells"]:
         for metric in recomputed:

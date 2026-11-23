@@ -49,6 +49,17 @@ Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1, REVIEW_26_1.
      the harness now skips the baseline measurement for blocked cells.
   Two NITs (constant-folded `"a" + "b"` lands in the abstention arm —
   safe direction, now commented; documented) were folded into fix 4.
+- **Round 3** (delta-only, on REVIEW_26_2): 1 addressable finding (LOW),
+  addressed in REVIEW_26_3: the round-2 owner-check reorder traded the
+  mislabeled abstention for a silent skip when forName attribution fails
+  or is error-typed. Attribution failure and error-typed mirrors (the
+  compilers-drop-vs-keep variance) now abstain visibly as
+  UNRESOLVED_FORNAME, pinned by R6 (unresolved `missing.Helper.forName`)
+  through Expectation.UNRESOLVED_FORNAME, Evaluation, and
+  validate_spike.py (99 cells). A provably foreign resolved forName owner
+  still returns silently — proven out of contract. One NIT (the defensive
+  UNRESOLVED arm invents position 0) dispositioned: fail-visible by
+  design (abstentionMismatch + validator rejection).
 
 
 ## What changed

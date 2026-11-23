@@ -31,7 +31,8 @@ final class Evaluation {
       if (found == null) {
         switch (site.expectation()) {
           case DEFINITE -> lost++;
-          case POSSIBLE, AMBIGUOUS, MISSING_INPUT, NON_LITERAL_FORNAME -> abstentionMismatch++;
+          case POSSIBLE, AMBIGUOUS, MISSING_INPUT, NON_LITERAL_FORNAME, UNRESOLVED_FORNAME ->
+            abstentionMismatch++;
           default -> { }
         }
         continue;
@@ -60,7 +61,7 @@ final class Evaluation {
               abstentionMismatch++;
             }
           }
-          case AMBIGUOUS, SHADOWED, NO_FACT, NON_LITERAL_FORNAME -> {
+          case AMBIGUOUS, SHADOWED, NO_FACT, NON_LITERAL_FORNAME, UNRESOLVED_FORNAME -> {
             added++;
             unexpected++;
             if (definite) {
@@ -109,6 +110,7 @@ final class Evaluation {
       case SHADOWED -> "SHADOWED";
       case NO_FACT -> "NO_CLASS_LITERAL";
       case NON_LITERAL_FORNAME -> "NON_LITERAL_FORNAME";
+      case UNRESOLVED_FORNAME -> "UNRESOLVED_FORNAME";
       default -> null;
     };
   }

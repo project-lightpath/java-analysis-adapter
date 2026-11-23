@@ -145,8 +145,8 @@ same task-global ERROR downgrade to POSSIBLE):
 | R3 | task error (missing import) + source-bound forName | MISSING_INPUT (POSSIBLE + diagnostic) |
 | R4 | `Class.forName("no.such.Type")`, unresolvable | POSSIBLE `no.such.Type` |
 
-26 cells + R5 (non-literal forName abstention pin) = 27; 71 + 27 = 98 in
-the observation.
+26 cells + R5 (non-literal forName abstention pin) + R6 (unattributed
+forName abstention pin) = 28; 71 + 28 = 99 in the observation.
 
 ### 5. Gates
 

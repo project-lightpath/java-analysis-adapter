@@ -5,6 +5,7 @@ import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.D
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.MISSING_INPUT;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.NON_LITERAL_FORNAME;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.NO_FACT;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.UNRESOLVED_FORNAME;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.POSSIBLE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.SHADOWED;
 import static com.projectlightpath.analysis.java.JavacResolverCell.BaselineMode.LIVE_TEXTUAL;
@@ -357,7 +358,18 @@ final class JavacResolverFixtureCatalog {
             }
             """,
             List.of(),
-            site(NON_LITERAL_FORNAME, "")));
+            site(NON_LITERAL_FORNAME, "")),
+        shapeCell("R6", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() {
+                missing.Helper.forName("demo.Present");
+              }
+            }
+            class Present { }
+            """,
+            List.of(),
+            site(UNRESOLVED_FORNAME, "")));
   }
 
   private static List<JavacResolverCell> precedenceCells() {

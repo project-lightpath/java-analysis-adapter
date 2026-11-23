@@ -347,15 +347,30 @@ final class JavacSourceSymbolResolver {
       if (!"forName".equals(selectedName(node.getMethodSelect()))) {
         return;
       }
-      Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
-      if (method == null || method.getKind() != ElementKind.METHOD
-          || !(method.getEnclosingElement() instanceof TypeElement owner)
-          || !"java.lang.Class".contentEquals(owner.getQualifiedName())) {
-        return;
-      }
       long position = startPosition(invocationPath);
       if (position < 0) {
         addAbstention(0, 0, 0, "UNRESOLVED");
+        return;
+      }
+      Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
+      int line = lineNumber(invocationPath, position);
+      int column = columnNumber(invocationPath, position);
+      boolean unattributed = method == null
+          || method.asType() == null
+          || method.asType().getKind() == javax.lang.model.type.TypeKind.ERROR;
+      if (!unattributed && method.getEnclosingElement() instanceof TypeElement owner) {
+        unattributed = owner.asType().getKind() == javax.lang.model.type.TypeKind.ERROR;
+      }
+      if (unattributed) {
+        // Attribution failed or is error-typed (compilers differ on whether
+        // unresolved mirrors survive): this may still be a
+        // java.lang.Class.forName site, so the skip must be visible.
+        addAbstention((int) position, line, column, "UNRESOLVED_FORNAME");
+        return;
+      }
+      if (method.getKind() != ElementKind.METHOD
+          || !(method.getEnclosingElement() instanceof TypeElement owner)
+          || !"java.lang.Class".contentEquals(owner.getQualifiedName())) {
         return;
       }
       if (!(node.getArguments().size() == 1
@@ -365,9 +380,7 @@ final class JavacSourceSymbolResolver {
         // not fold "a" + "b" argument trees into LiteralTree, so folded
         // concatenations land here too): visible abstention, never a silent
         // skip. Only genuine java.lang.Class.forName shapes reach this arm.
-        int skipLine = lineNumber(invocationPath, position);
-        addAbstention((int) position, skipLine, columnNumber(invocationPath, position),
-            "NON_LITERAL_FORNAME");
+        addAbstention((int) position, line, column, "NON_LITERAL_FORNAME");
         return;
       }
       String target = (String) literal.getValue();
@@ -375,8 +388,6 @@ final class JavacSourceSymbolResolver {
       boolean sourceBound = bound != null && trees.getPath(bound) != null;
       boolean resolvable = bound != null;
       String certainty = sourceBound && !taskHasError ? "DEFINITE" : "POSSIBLE";
-      int line = lineNumber(invocationPath, position);
-      int column = columnNumber(invocationPath, position);
       facts.add(new JavacResolverFact(
           cell.id(), cell.siteFile(), topLevelName(invocationPath), line, column,
           (int) position, target, "java.lang.Class", "forName",
