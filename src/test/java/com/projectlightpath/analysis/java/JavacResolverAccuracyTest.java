@@ -34,6 +34,22 @@ class JavacResolverAccuracyTest {
       Set.of("N34", "N36", "A10", "A13", "A14", "A16b", "A17", "A20");
   private static final Set<String> BASELINE_ABSTENTION =
       Set.of("A2", "A5", "A8", "I1", "I2", "I3", "I5");
+  private static final Set<JavacResolverCell.Family> SERVICE_LOADER_FAMILIES =
+      Set.of(JavacResolverCell.Family.PRECEDENCE, JavacResolverCell.Family.STATIC_OWNER,
+          JavacResolverCell.Family.DOLLAR_OWNER, JavacResolverCell.Family.INCOMPLETE);
+  private static final Set<String> NEW_BASELINE_WRONG_TYPE = Set.of(
+      "AN1", "AN2", "AN3", "AA1", "AA2", "AA3", "TU1", "TU3", "TU4",
+      "TS1", "TS2", "TS3", "TS4", "TS6", "TS7", "TS9");
+  private static final Set<String> NEW_BASELINE_WRONG_DEFINITE = Set.of("AN5");
+  private static final Set<String> NEW_BASELINE_LOST = Set.of("TS7", "TS8");
+  private static final Set<String> NEW_FAMILIES_ALL_ZERO = Set.of(
+      "AN1", "AN2", "AN3", "AN4", "AN5", "AA1", "AA2", "AA3", "AA4",
+      "TU1", "TU2", "TU3", "TU4", "TS1", "TS2", "TS3", "TS4", "TS5", "TS6", "TS7",
+      "TS8", "TS9", "R1", "R2", "R3", "R4");
+
+  private static boolean isNewFamily(JavacResolverCell.Family family) {
+    return !SERVICE_LOADER_FAMILIES.contains(family);
+  }
 
   @TempDir Path temp;
 
@@ -53,7 +69,7 @@ class JavacResolverAccuracyTest {
     assertEquals(0, javac.unexpectedFact());
     assertEquals(0, javac.abstentionMismatch());
 
-    JavacResolverMetrics baseline = report.baselineTotals();
+    JavacResolverMetrics baseline = serviceLoaderBaselineTotals(report);
     Set<String> blocked = new TreeSet<>();
     for (JavacResolverAccuracyHarness.CellReport item : report.cells()) {
       if (item.blocked()) {
@@ -82,6 +98,9 @@ class JavacResolverAccuracyTest {
     JavacResolverAccuracyHarness.Report report =
         JavacResolverAccuracyHarness.run(temp.resolve("evidence-work"), JavacResolverFixtureCatalog.cells());
     for (JavacResolverAccuracyHarness.CellReport cell : report.cells()) {
+      if (!SERVICE_LOADER_FAMILIES.contains(cell.cell().family())) {
+        continue;
+      }
       for (JavacResolverFact fact : cell.javac().facts()) {
         assertEquals("java.util.ServiceLoader", fact.owner());
         assertEquals("load", fact.member());
@@ -159,7 +178,7 @@ class JavacResolverAccuracyTest {
             import java.util.*;
             class Bridge { void audit() { ServiceLoader.load(Object.class); } }
             """),
-        List.of(), false,
+        List.of(), JavacResolverCell.BaselineMode.NONE, List.of(),
         List.of(new JavacResolverCell.ExpectedSite(
             JavacResolverCell.Expectation.DEFINITE, "java.lang.Object")));
     JavacResolverAccuracyHarness.Report report =
@@ -187,6 +206,121 @@ class JavacResolverAccuracyTest {
         JavacSourceSymbolResolver.parameterType(source, "demo.Probe", "annotated", 0, temp));
     assertEquals("String@$Ann[]", SourceMetadataScanner.parameterType("String @$Ann... args"));
     assertEquals("(value=1)String", SourceMetadataScanner.parameterType("@Ann(value = 1) String value"));
+  }
+
+  @Test
+  void newFamilyCellsMeetGoThresholds() throws IOException {
+    JavacResolverAccuracyHarness.Report report =
+        JavacResolverAccuracyHarness.run(temp.resolve("shape-work"), JavacResolverFixtureCatalog.cells());
+    List<JavacResolverAccuracyHarness.CellReport> newCells = report.cells().stream()
+        .filter(item -> isNewFamily(item.cell().family()))
+        .toList();
+    assertEquals(NEW_FAMILIES_ALL_ZERO,
+        newCells.stream().map(item -> item.cell().id())
+            .collect(java.util.stream.Collectors.toCollection(TreeSet::new)),
+        "the new-family cell set must match the plan matrix");
+    for (JavacResolverAccuracyHarness.CellReport cell : newCells) {
+      JavacResolverMetrics metrics = cell.javacMetrics();
+      assertEquals(0, metrics.wrongDefinite(), cell.cell().id() + " wrongDefinite");
+      assertEquals(0, metrics.wrongServiceType(), cell.cell().id() + " wrongServiceType");
+      assertEquals(0, metrics.lost(), cell.cell().id() + " lost");
+      assertEquals(0, metrics.downgraded(), cell.cell().id() + " downgraded");
+      assertEquals(0, metrics.added(), cell.cell().id() + " added");
+      assertEquals(0, metrics.unexpectedFact(), cell.cell().id() + " unexpectedFact");
+      assertEquals(0, metrics.abstentionMismatch(), cell.cell().id() + " abstentionMismatch");
+    }
+    for (JavacResolverFact fact : newCells.stream()
+        .flatMap(cell -> cell.javac().facts().stream())
+        .toList()) {
+      assertFalse(fact.serviceType().isBlank(), "canonical value must be non-blank");
+      assertFalse("textual".equals(fact.owner()),
+          "javac facts must not carry textual-baseline markers");
+    }
+  }
+
+  @Test
+  void textualDefectsStayPinnedOnNewFamilyCells() throws IOException {
+    JavacResolverAccuracyHarness.Report report =
+        JavacResolverAccuracyHarness.run(temp.resolve("defect-work"), JavacResolverFixtureCatalog.cells());
+    List<JavacResolverAccuracyHarness.CellReport> newCells = report.cells().stream()
+        .filter(item -> isNewFamily(item.cell().family()))
+        .toList();
+    assertEquals(NEW_BASELINE_WRONG_TYPE, cellsWithMetrics(newCells, "wrongServiceType"),
+        "the live textual path's wrong canonical values must stay pinned");
+    assertEquals(NEW_BASELINE_WRONG_DEFINITE, cellsWithMetrics(newCells, "wrongDefinite"),
+        "the live textual path's wrong DEFINITE must stay pinned");
+    assertEquals(NEW_BASELINE_LOST, cellsWithMetrics(newCells, "lost"),
+        "the live textual path's lost facts must stay pinned");
+    assertFalse(NEW_BASELINE_WRONG_TYPE.isEmpty(), "pinned defect sets must be non-empty");
+  }
+
+  @Test
+  void reflectionCellsAbstainFromUnprovenTargets() throws IOException {
+    JavacResolverAccuracyHarness.Report report =
+        JavacResolverAccuracyHarness.run(temp.resolve("reflection-work"), JavacResolverFixtureCatalog.cells());
+    JavacResolverAccuracyHarness.CellReport source = cell(report, "R1");
+    assertTrue(source.javac().facts().stream()
+        .anyMatch(fact -> "DEFINITE".equals(fact.certainty())
+            && "demo.Present".equals(fact.serviceType())),
+        "R1 must bind the source-present target DEFINITE");
+    for (String id : List.of("R2", "R4")) {
+      JavacResolverAccuracyHarness.CellReport runtimeOnly = cell(report, id);
+      assertTrue(runtimeOnly.javac().facts().stream()
+          .noneMatch(fact -> "DEFINITE".equals(fact.certainty())),
+          id + " must abstain from DEFINITE on a runtime-only target");
+    }
+    JavacResolverAccuracyHarness.CellReport missing = cell(report, "R3");
+    assertTrue(missing.javac().facts().stream()
+        .noneMatch(fact -> "DEFINITE".equals(fact.certainty())),
+        "R3 must not emit DEFINITE under a task error");
+    assertTrue(missing.javac().facts().stream()
+            .anyMatch(fact -> !fact.diagnostics().isEmpty())
+        || missing.javac().abstentions().stream()
+            .anyMatch(item -> !item.diagnostics().isEmpty()),
+        "R3 must carry a diagnostic");
+  }
+
+  @Test
+  void harnessRunLeavesResolverFlagAndDefaultSelectionUnchanged() throws IOException {
+    String before = System.getProperty("flpath.java.resolver");
+    try {
+      JavacResolverAccuracyHarness.run(temp.resolve("flag-guard-work"),
+          JavacResolverFixtureCatalog.cells().stream()
+              .filter(item -> isNewFamily(item.family()))
+              .toList());
+    } finally {
+      assertEquals(before, System.getProperty("flpath.java.resolver"),
+          "the harness must not touch the production resolver flag");
+    }
+    assertTrue(new java.io.File("src/main/java/com/projectlightpath/analysis/java/"
+        + "JavacServiceLoaderSiteResolver.java").isFile(),
+        "flag-off default-output guard: production sources are untouched by this change");
+  }
+
+  private static Set<String> cellsWithMetrics(
+      List<JavacResolverAccuracyHarness.CellReport> cells, String metric) {
+    Set<String> ids = new TreeSet<>();
+    for (JavacResolverAccuracyHarness.CellReport cell : cells) {
+      JavacResolverMetrics metrics = cell.baselineMetrics();
+      int value = switch (metric) {
+        case "wrongDefinite" -> metrics.wrongDefinite();
+        case "wrongServiceType" -> metrics.wrongServiceType();
+        case "lost" -> metrics.lost();
+        default -> throw new IllegalArgumentException(metric);
+      };
+      if (value > 0) {
+        ids.add(cell.cell().id());
+      }
+    }
+    return ids;
+  }
+
+  private static JavacResolverMetrics serviceLoaderBaselineTotals(
+      JavacResolverAccuracyHarness.Report report) {
+    return JavacResolverMetrics.sum(report.cells().stream()
+        .filter(item -> SERVICE_LOADER_FAMILIES.contains(item.cell().family()))
+        .map(JavacResolverAccuracyHarness.CellReport::baselineMetrics)
+        .toList());
   }
 
   private static void runHarness(Path work, Path report) throws IOException {

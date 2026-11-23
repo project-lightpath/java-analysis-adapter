@@ -64,7 +64,7 @@ class JavacResolverMetricsTest {
     return new JavacResolverCell(
         "control", JavacResolverCell.Family.PRECEDENCE, "demo/Bridge.java", "demo.Bridge",
         "audit", 17, Map.of("demo/Bridge.java", "package demo; class Bridge { }"),
-        List.of(), true,
+        List.of(), JavacResolverCell.BaselineMode.NONE, List.of(),
         List.of(new JavacResolverCell.ExpectedSite(expectation, "java.lang.Object", 30)));
   }
 

@@ -59,6 +59,15 @@ final class JavacSourceSymbolResolver {
     if (sourceFiles.isEmpty()) {
       return JavacResolverResult.empty(cell.id());
     }
+    if (cell.family() == JavacResolverCell.Family.ANNOTATION_NAME
+        || cell.family() == JavacResolverCell.Family.ANNOTATION_ARGUMENT
+        || cell.family() == JavacResolverCell.Family.TYPE_USE
+        || cell.family() == JavacResolverCell.Family.TYPE_SHAPE
+        || cell.family() == JavacResolverCell.Family.REFLECTION_SOURCE_BOUND) {
+      // RED_26_1 behavior-neutral stub: the annotation/type-shape emitters land
+      // in GREEN_26_1. Documented in the RED commit message.
+      return JavacResolverResult.empty(cell.id());
+    }
     List<Path> normalizedRoots = unitRoots.stream()
         .map(root -> root.toAbsolutePath().normalize())
         .toList();

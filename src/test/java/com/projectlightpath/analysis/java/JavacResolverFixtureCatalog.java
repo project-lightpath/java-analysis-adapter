@@ -6,10 +6,20 @@ import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.M
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.NO_FACT;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.POSSIBLE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.SHADOWED;
+import static com.projectlightpath.analysis.java.JavacResolverCell.BaselineMode.LIVE_TEXTUAL;
+import static com.projectlightpath.analysis.java.JavacResolverCell.BaselineMode.NONE;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Family.ANNOTATION_ARGUMENT;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Family.ANNOTATION_NAME;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Family.DOLLAR_OWNER;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Family.INCOMPLETE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Family.PRECEDENCE;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Family.REFLECTION_SOURCE_BOUND;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Family.STATIC_OWNER;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Family.TYPE_SHAPE;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Family.TYPE_USE;
+import static com.projectlightpath.analysis.java.JavacResolverCell.TextualProbe.Kind.ANNOTATION_ARGUMENT_TEXT;
+import static com.projectlightpath.analysis.java.JavacResolverCell.TextualProbe.Kind.ANNOTATION_NAME_TOKEN;
+import static com.projectlightpath.analysis.java.JavacResolverCell.TextualProbe.Kind.PARAMETER_TYPE;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -37,7 +47,305 @@ final class JavacResolverFixtureCatalog {
     cells.addAll(staticOwnerCells());
     cells.addAll(dollarOwnerCells());
     cells.addAll(incompleteCells());
+    cells.addAll(annotationNameCells());
+    cells.addAll(annotationArgumentCells());
+    cells.addAll(typeUseCells());
+    cells.addAll(typeShapeCells());
+    cells.addAll(reflectionCells());
     return List.copyOf(cells);
+  }
+
+  /**
+   * One annotation/type-shape parity cell: a probe class in one site file, the
+   * live-textual probes in javac-fact ordinal order, and the spec expectations.
+   */
+  private static JavacResolverCell shapeCell(
+      String id, JavacResolverCell.Family family, String source,
+      List<JavacResolverCell.TextualProbe> probes,
+      JavacResolverCell.ExpectedSite... expected) {
+    return new JavacResolverCell(
+        id, family, "demo/Probe.java", "demo.Probe", "audit", 17,
+        sources("demo/Probe.java", source), List.of(),
+        probes.isEmpty() ? NONE : LIVE_TEXTUAL, probes, List.of(expected));
+  }
+
+  private static JavacResolverCell.TextualProbe probe(
+      JavacResolverCell.TextualProbe.Kind kind, String raw) {
+    return new JavacResolverCell.TextualProbe(kind, raw);
+  }
+
+  private static List<JavacResolverCell> annotationNameCells() {
+    return List.of(
+        shapeCell("AN1", ANNOTATION_NAME, """
+            package demo;
+            class Probe {
+              @Route void audit() { }
+            }
+            @interface Route { }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "@Route void audit()")),
+            site(DEFINITE, "demo.Route")),
+        shapeCell("AN2", ANNOTATION_NAME, """
+            package demo;
+            class Probe {
+              @$Mark void audit() { }
+            }
+            @interface $Mark { }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "@$Mark void audit()")),
+            site(DEFINITE, "demo.$Mark")),
+        shapeCell("AN3", ANNOTATION_NAME, """
+            package demo;
+            class Probe {
+              @Über void audit() { }
+            }
+            @interface Über { }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "@Über void audit()")),
+            site(DEFINITE, "demo.Über")),
+        shapeCell("AN4", ANNOTATION_NAME, """
+            package demo;
+            class Probe {
+              @demo.Outer.Inner void audit() { }
+            }
+            class Outer { @interface Inner { } }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "@demo.Outer.Inner void audit()")),
+            site(DEFINITE, "demo.Outer.Inner")),
+        shapeCell("AN5", ANNOTATION_NAME, """
+            package demo;
+            class Probe {
+              @missing.Route void audit() { }
+            }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "@missing.Route void audit()")),
+            site(MISSING_INPUT, "missing.Route")));
+  }
+
+  private static List<JavacResolverCell> annotationArgumentCells() {
+    return List.of(
+        shapeCell("AA1", ANNOTATION_ARGUMENT, """
+            package demo;
+            class Probe {
+              @Items({Object.class, String.class}) void audit() { }
+            }
+            @interface Items { Class<?>[] value(); }
+            """,
+            List.of(probe(ANNOTATION_ARGUMENT_TEXT,
+                "@Items({Object.class, String.class}) void audit()")),
+            site(DEFINITE, "java.lang.Object,java.lang.String")),
+        shapeCell("AA2", ANNOTATION_ARGUMENT, """
+            package demo;
+            class Probe {
+              @Level(Severity.HIGH) void audit() { }
+            }
+            enum Severity { LOW, HIGH }
+            @interface Level { Severity value(); }
+            """,
+            List.of(probe(ANNOTATION_ARGUMENT_TEXT, "@Level(Severity.HIGH) void audit()")),
+            site(DEFINITE, "demo.Severity.HIGH")),
+        shapeCell("AA3", ANNOTATION_ARGUMENT, """
+            package demo;
+            class Probe {
+              @Outer(@Inner(1)) void audit() { }
+            }
+            @interface Outer { Inner value(); }
+            @interface Inner { int value(); }
+            """,
+            List.of(probe(ANNOTATION_ARGUMENT_TEXT, "@Outer(@Inner(1)) void audit()")),
+            site(DEFINITE, "@demo.Inner(1)")),
+        shapeCell("AA4", ANNOTATION_ARGUMENT, """
+            package demo;
+            class Probe {
+              @Ann(value = 1) void first() { }
+              @Name("x") void second() { }
+            }
+            @interface Ann { int value(); }
+            @interface Name { String value(); }
+            """,
+            List.of(
+                probe(ANNOTATION_ARGUMENT_TEXT, "@Ann(value = 1) void first()"),
+                probe(ANNOTATION_ARGUMENT_TEXT, "@Name(\"x\") void second()")),
+            site(DEFINITE, "value=1"),
+            site(DEFINITE, "x")));
+  }
+
+  private static List<JavacResolverCell> typeUseCells() {
+    return List.of(
+        shapeCell("TU1", TYPE_USE, """
+            package demo;
+            import java.lang.annotation.*;
+            class Probe {
+              void shape(@Route String p) { }
+            }
+            @Target(ElementType.TYPE_USE) @interface Route { }
+            """,
+            List.of(probe(PARAMETER_TYPE, "@Route String p")),
+            site(DEFINITE, "java.lang.String")),
+        shapeCell("TU2", TYPE_USE, """
+            package demo;
+            import java.lang.annotation.*;
+            class Probe {
+              void shape(String @Route [] p) { }
+            }
+            @Target(ElementType.TYPE_USE) @interface Route { }
+            """,
+            List.of(probe(PARAMETER_TYPE, "String @Route [] p")),
+            site(DEFINITE, "java.lang.String[]")),
+        shapeCell("TU3", TYPE_USE, """
+            package demo;
+            import java.lang.annotation.*;
+            class Probe {
+              void shape(String @$Mark... args) { }
+            }
+            @Target(ElementType.TYPE_USE) @interface $Mark { }
+            """,
+            List.of(probe(PARAMETER_TYPE, "String @$Mark... args")),
+            site(DEFINITE, "java.lang.String[]")),
+        shapeCell("TU4", TYPE_USE, """
+            package demo;
+            import java.lang.annotation.*;
+            class Probe {
+              void shape(@Ann(value = 1) String p) { }
+            }
+            @Target(ElementType.TYPE_USE) @interface Ann { int value(); }
+            """,
+            List.of(probe(PARAMETER_TYPE, "@Ann(value = 1) String p")),
+            site(DEFINITE, "java.lang.String")));
+  }
+
+  private static List<JavacResolverCell> typeShapeCells() {
+    return List.of(
+        shapeCell("TS1", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(java.util.List<String> p) { }
+            }
+            """,
+            List.of(probe(PARAMETER_TYPE, "java.util.List<String> p")),
+            site(DEFINITE, "java.util.List")),
+        shapeCell("TS2", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(java.util.List<?> p) { }
+            }
+            """,
+            List.of(probe(PARAMETER_TYPE, "java.util.List<?> p")),
+            site(DEFINITE, "java.util.List")),
+        shapeCell("TS3", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(String[] p) { }
+            }
+            """,
+            List.of(probe(PARAMETER_TYPE, "String[] p")),
+            site(DEFINITE, "java.lang.String[]")),
+        shapeCell("TS4", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(String[][] p) { }
+            }
+            """,
+            List.of(probe(PARAMETER_TYPE, "String[][] p")),
+            site(DEFINITE, "java.lang.String[][]")),
+        shapeCell("TS5", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(int p) { }
+            }
+            """,
+            List.of(probe(PARAMETER_TYPE, "int p")),
+            site(DEFINITE, "int")),
+        shapeCell("TS6", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(Outer.Inner p) { }
+            }
+            class Outer { static class Inner { } }
+            """,
+            List.of(probe(PARAMETER_TYPE, "Outer.Inner p")),
+            site(DEFINITE, "demo.Outer.Inner")),
+        shapeCell("TS7", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              void shape(String p) { }
+              void shape(Integer p) { }
+              void audit() { shape("x"); shape(1); }
+            }
+            """,
+            List.of(
+                probe(PARAMETER_TYPE, "String p"),
+                probe(PARAMETER_TYPE, "Integer p")),
+            site(DEFINITE, "java.lang.String"),
+            site(DEFINITE, "java.lang.Integer"),
+            site(DEFINITE, "demo.Probe.shape(java.lang.String)"),
+            site(DEFINITE, "demo.Probe.shape(java.lang.Integer)")),
+        shapeCell("TS8", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              Probe(int count) { }
+              Probe(String label) { }
+              void audit() { new Probe(1); new Probe("x"); }
+            }
+            """,
+            List.of(),
+            site(DEFINITE, "demo.Probe.<init>(int)"),
+            site(DEFINITE, "demo.Probe.<init>(java.lang.String)")),
+        shapeCell("TS9", TYPE_SHAPE, """
+            package demo;
+            class Probe {
+              java.util.List<String> audit() { return null; }
+            }
+            """,
+            List.of(probe(PARAMETER_TYPE, "java.util.List<String> audit()")),
+            site(DEFINITE, "java.util.List")));
+  }
+
+  private static List<JavacResolverCell> reflectionCells() {
+    return List.of(
+        shapeCell("R1", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName("demo.Present");
+              }
+            }
+            class Present { }
+            """,
+            List.of(),
+            site(DEFINITE, "demo.Present")),
+        shapeCell("R2", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName("java.lang.String");
+              }
+            }
+            """,
+            List.of(),
+            site(POSSIBLE, "java.lang.String")),
+        shapeCell("R3", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName("demo.Present");
+                missing.Dep marker = null;
+              }
+            }
+            class Present { }
+            """,
+            List.of(),
+            site(MISSING_INPUT, "demo.Present")),
+        shapeCell("R4", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName("no.such.Type");
+              }
+            }
+            """,
+            List.of(),
+            site(POSSIBLE, "no.such.Type")));
   }
 
   private static List<JavacResolverCell> precedenceCells() {
@@ -824,7 +1132,10 @@ final class JavacResolverFixtureCatalog {
       boolean baselineAvailable, JavacResolverCell.ExpectedSite... expected) {
     return new JavacResolverCell(
         id, family, siteFile, owner, "audit", release, sources, extraUnits,
-        baselineAvailable, List.of(expected));
+        baselineAvailable
+            ? JavacResolverCell.BaselineMode.FROZEN
+            : JavacResolverCell.BaselineMode.NONE,
+        List.of(), List.of(expected));
   }
 
   private static JavacResolverCell.ExpectedSite site(
