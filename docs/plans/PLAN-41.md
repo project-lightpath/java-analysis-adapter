@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#41
 Branch: `flpath-5079-repository-reverse-edges` (cut from `origin/main` @ 0297828)
-Status: draft v9 (review rounds 1–8 findings addressed)
+Status: draft v10 (review rounds 1–9 findings addressed)
 
 ## Problem
 
@@ -328,14 +328,14 @@ sanctions zero edits to existing tests).
   cell 10 as a **differential pair** — the same compiled fixture run twice,
   once without source roots (no `declared_invokes` edges) and once with a
   source-root control (the `declared_invokes` edge DOES appear). The pair's
-  actual coverage: the control half fails at RED and pins
-  emission-with-sources; the no-source-roots half pins
-  no-false-edges-without-sources and catches an inverted or always-skip
-  predicate. The skip predicate firing at all (never-skip, weakened-conjunct
-  defects) is verifiable only via the Item-3 diagnostic assertion —
-  with no source roots `beanCandidates` is empty whether or not the
-  predicate fires, so skip-vs-ran-and-found-nothing is NOT observable at
-  Item 1. The `spring_data_repository_sources_unavailable` assertion on
+  actual coverage: the control half fails at RED, pins
+  emission-with-sources, and is the only Item-1 guard against over-skipping
+  — inverted and always-skip predicates are caught by the **control half**
+  (the expected edge goes missing); the no-source-roots half itself catches
+  nothing beyond false edges, since with no source roots `beanCandidates`
+  is empty whether or not the pass runs. The skip predicate firing at all
+  (never-skip, weakened-conjunct defects) is verifiable only via the
+  Item-3 diagnostic assertion. The `spring_data_repository_sources_unavailable` assertion on
   `SemanticCallFacts.diagnostics` belongs to RED_03/GREEN_03, where the
   carrier is built (cell 4's fragment method is an ordinary interface
   invoke — its `declared_invokes` edge is Item-1 behavior) →
@@ -378,7 +378,7 @@ sanctions zero edits to existing tests).
 
 ## Confidence score
 
-**0.86 (review rounds 1–8 findings addressed; implementable as planned).**
+**0.86 (review rounds 1–9 findings addressed; implementable as planned).**
 - High (≥0.9): Edge 1 emission path (body-scan pass, declared-signature
   access, POSSIBLE certainty, distinct ID namespace), test harness shape,
   negative cells, diagnostic channel (PLAN-42 precedent).
@@ -428,7 +428,10 @@ sanctions zero edits to existing tests).
   behavior) and Item 3 (diagnostics assertion).
 - Round 8 (delta on v7): 1 finding (1 MEDIUM); addressed in v8/v9 — cell
   10's Item-1 test made a differential pair whose coverage is stated
-  honestly: control half fails at RED (emission-with-sources),
-  no-source-roots half pins no-false-edges and inverted/always-skip
-  predicates; never-skip and weakened-conjunct defects remain verifiable
-  only via the Item-3 diagnostic assertion.
+  honestly: control half fails at RED (emission-with-sources) and at GREEN
+  catches inverted/always-skip predicates; the no-source-roots half pins
+  no-false-edges; never-skip and weakened-conjunct defects remain
+  verifiable only via the Item-3 diagnostic assertion.
+- Round 9 (delta on v8): 1 finding (1 LOW); addressed in v9/v10 —
+  inverted/always-skip detection re-attributed to the control half (the
+  no-source-roots half catches nothing beyond false edges).
