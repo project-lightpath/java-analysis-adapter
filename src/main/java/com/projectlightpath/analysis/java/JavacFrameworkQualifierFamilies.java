@@ -48,7 +48,8 @@ final class JavacFrameworkQualifierFamilies {
     List<JavacSourceSymbolIndex.AnnotationInfo> remaining = new ArrayList<>(mirrors);
     Matcher matcher = TEXTUAL_ANNOTATION_NAME.matcher(masked);
     while (matcher.find()) {
-      JavacSourceSymbolIndex.AnnotationInfo mirror = takeMirror(remaining, matcher.group(1));
+      JavacSourceSymbolIndex.AnnotationInfo mirror =
+          takeMirror(remaining, matcher, source);
       if (mirror == null || !mirrorCanReplace(mirror, block)) {
         // The textual family answer for this occurrence — including the
         // textual canonical-Spring guard on guarded arms.
@@ -155,12 +156,26 @@ final class JavacFrameworkQualifierFamilies {
         .anyMatch(args -> !args.isBlank());
   }
 
-  /** Removes and returns the mirror one textual capture denotes, if any. */
+  /**
+   * Removes and returns the mirror one textual occurrence denotes, if any.
+   * An ASCII-prefix match (a {@code Family$k}-style name whose capture
+   * stopped at the {@code $} or non-ASCII character) is valid only when
+   * the occurrence itself carries no arguments: a value-bearing
+   * {@code @Named("x")} occurrence whose own mirror was dropped (unresolved
+   * types are absent from the mirrors on some compilers) must not consume
+   * a {@code Named$k} mirror and silently replace its fact. Field-site
+   * blocks can truncate at the {@code $}, so the occurrence's own parsed
+   * arguments — not the block's spelling — carry the decision.
+   */
   private static JavacSourceSymbolIndex.AnnotationInfo takeMirror(
-      List<JavacSourceSymbolIndex.AnnotationInfo> remaining, String capture) {
+      List<JavacSourceSymbolIndex.AnnotationInfo> remaining,
+      Matcher matcher,
+      String source) {
+    String occurrenceArguments =
+        SourceMetadataScanner.parseAnnotation(source, matcher).arguments();
     for (int index = 0; index < remaining.size(); index++) {
-      if (captureMatches(capture,
-          JavacFrameworkAnnotations.simpleName(remaining.get(index)))) {
+      String mirrorName = JavacFrameworkAnnotations.simpleName(remaining.get(index));
+      if (captureMatches(matcher.group(1), mirrorName, occurrenceArguments)) {
         return remaining.remove(index);
       }
     }
@@ -168,12 +183,14 @@ final class JavacFrameworkQualifierFamilies {
   }
 
   /** Reports whether one textual capture can denote one mirror name. */
-  private static boolean captureMatches(String capture, String mirrorName) {
+  private static boolean captureMatches(
+      String capture, String mirrorName, String occurrenceArguments) {
     if (mirrorName.equals(capture) || capture.endsWith("." + mirrorName)) {
       return true;
     }
     String prefix = asciiPrefix(mirrorName);
-    return !prefix.isEmpty() && !prefix.equals(mirrorName) && prefix.equals(capture);
+    return !prefix.isEmpty() && !prefix.equals(mirrorName)
+        && prefix.equals(capture) && occurrenceArguments.isBlank();
   }
 
   /** Returns the maximal ASCII prefix the textual pattern could capture. */
