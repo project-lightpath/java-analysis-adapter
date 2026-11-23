@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#41
 Branch: `flpath-5079-repository-reverse-edges` (cut from `origin/main` @ 0297828)
-Status: draft v4 (review rounds 1–3 findings addressed)
+Status: draft v5 (review rounds 1–4 findings addressed)
 
 ## Problem
 
@@ -187,27 +187,43 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
     fragment Impl present).
   - `unresolved` (abstain) + scan-global diagnostic — configuration
     references classes outside the analysis scope.
-- **Diagnostic channel (round-1 finding 2, rounds 2–3 findings 2):** the
+- **Diagnostic channel (round-1 finding 2, rounds 2–4 findings 2):** the
   ServiceLoader `Scan` channel is conditionally constructed and has **no
   output surface** outside `ServiceLoaderDescriptorScanner.resolve`, which
   runs only for `service_loader` edges — so codes inserted only there are
   invisible in the target scenario (Spring Data app, no ServiceLoader
   usage). The design therefore adds a **new unconditional diagnostics
   surface**: a `diagnostics` field on `SemanticCallFacts` output (list of
-  `{code, path, detail}`, serialized like the existing evidence shapes).
-  The spring-data codes are computed by one helper (input: `context` +
-  scanner-derived repository state, so the Edge-1 skip condition is
-  re-derived at the surface site — `SootUpCallGraphExtractor` is upstream
-  and has no carrier on `AnalysisGraph`), and the helper's result is used
-  twice: (a) it populates the new `SemanticCallFacts.diagnostics` field
-  unconditionally — this is the visibility mechanism; (b) the same codes
-  are appended to the ServiceLoader `Scan` at the normalize site so
-  `isUnique`'s `diagnostics().isEmpty()` DEFINITE block includes them — a
-  stated scan-global **side effect** per AGENTS.md, with the blast radius in
-  Item 1/3 commit messages. Edge-2 visibility rides on the abstaining
-  facts' evidence in the `BoundedFrameworkModel.enrich` lane (a separate
-  pipeline from normalize), with the same code recorded in the new
-  diagnostics field via the same helper. New codes:
+  `{code, path, detail}`, serialized like the existing evidence shapes;
+  emitted **sorted by (code, path, detail)** for byte-determinism, required
+  by `repeatedRunsProduceIdenticalJsonWithoutLeakingTheExtractionRoot`;
+  documented as additive under the existing `schemaVersion` 0.1.0 — no
+  consumer asserts an exact top-level key set and `evidence-validate`
+  validates the spike observation artifact, not this document).
+  Plumbing (round-4 findings 1–3): the codes are computed **exactly once in
+  `enrich`**, by a helper that constructs its own `SourceMetadataScanner`
+  from the (derived) context at the surface site — mirroring how
+  `normalize` constructs `new SourceMetadataScanner(context)` — so no
+  `FrameworkModel.enrich` API change is needed and no scanner state has to
+  escape `BoundedFrameworkModelSpringFacts`. The helper's result (a) is
+  passed as a constructor parameter into the `SemanticCallFacts` built in
+  `enrich`, and **threaded through the `analyzeSourceArchive` re-wrap as a
+  constructor parameter** (same as `providerFacts`) — never re-derived from
+  the caller's original context, whose `sourceRoots` shape differs and
+  would fabricate or drop codes. The Edge-1 skip predicate is pinned and
+  shared verbatim by the extractor and the helper:
+  `context.framework() == SPRING_BOOT &&
+  Files.exists(context.applicationClasses()) &&
+  context.includedSourceRoots().isEmpty()` — both sites use
+  `includedSourceRoots()` (the extractor's repository-interface set is
+  empty exactly when this holds, since bean candidates come from included
+  source roots). Additionally the same codes are appended to the
+  ServiceLoader `Scan` at the normalize site; that `isUnique` DEFINITE
+  block fires only when service_loader edges exist (**opportunistic side
+  effect**, stated as such — in the no-ServiceLoader scenario the new
+  `SemanticCallFacts.diagnostics` field is the visibility mechanism).
+  Edge-2 visibility rides on the abstaining facts' evidence in the enrich
+  lane plus the same code in the new diagnostics field. New codes:
   `spring_data_backing_selection_out_of_scope` (Edge-2 abstain) and
   `spring_data_repository_sources_unavailable` (Edge-1 skip). Cell 10 and
   cell 5 assert on `SemanticCallFacts.diagnostics`, independent of
@@ -312,18 +328,21 @@ sanctions zero edits to existing tests).
   the application-origin branch prevents the legacy-ID flip; Spike 3 success
   criterion is byte-stable pre-existing `invokes` IDs in the default-method
   overlap.
-- R4: scan-global diagnostic blast radius (items 1 and 3) — acceptable per
-  AGENTS, stated in commit messages.
+- R4: the ServiceLoader `isUnique` DEFINITE block (scan-global per AGENTS.md)
+  fires only when service_loader edges exist — opportunistic; the always-on
+  visibility is the new `SemanticCallFacts.diagnostics` field. Commit
+  messages state whichever blast radius applies.
 - R5: reactive/fragment exact backing FQCNs and CRUD method sets verified
   against dependency jars in Spike 5.
-- R6 (round 2/3): diagnostics surface is a new `SemanticCallFacts.diagnostics`
-  field populated unconditionally; the ServiceLoader `isUnique` block is a
-  side effect, not the visibility mechanism; Edge-2 visibility rides on the
+- R6 (rounds 2–4): diagnostics surface is a new `SemanticCallFacts.diagnostics`
+  field, computed once in `enrich` by a context-derived helper, threaded
+  through the `analyzeSourceArchive` re-wrap, deterministically sorted,
+  additive under schemaVersion 0.1.0; Edge-2 visibility rides on the
   abstaining facts' evidence in the enrich lane.
 
 ## Confidence score
 
-**0.80 (review rounds 1–3 findings addressed; implementable as planned).**
+**0.82 (review rounds 1–4 findings addressed; implementable as planned).**
 - High (≥0.9): Edge 1 emission path (body-scan pass, declared-signature
   access, POSSIBLE certainty, distinct ID namespace), test harness shape,
   negative cells, diagnostic channel (PLAN-42 precedent).
@@ -353,3 +372,10 @@ sanctions zero edits to existing tests).
   isUnique side effect, `callId` precedence over the origin branch pinned,
   guaranteed-method table replaces the findById injection with the
   version-unparsable cell pinned, status line and risk ordering fixed.
+- Round 5 (delta on v4): 5 findings (1 HIGH, 3 MEDIUM, 1 LOW); addressed in
+  v5 — diagnostics computed once in `enrich` and threaded through the
+  source-archive re-wrap (never re-derived from the caller context),
+  isUnique side effect reworded as opportunistic, helper constructs its own
+  scanner at the surface site (no enrich API change), skip predicate pinned
+  to `includedSourceRoots()` + `Files.exists(applicationClasses())`,
+  deterministic ordering and schemaVersion additivity stated.
