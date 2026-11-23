@@ -56,7 +56,8 @@ echo "[2/4] run Java adapter and emit SemanticCallFacts"
 echo "[3/4] validate provenance and capability evidence"
 (
   cd "${ROOT}"
-  python3 spike/scripts/validate_manual_integration.py \
+  "${JAVA_BIN}" -cp "${ROOT}/target/classes:$(cat "${ROOT}/target/manual-analysis-classpath.txt")" \
+    com.projectlightpath.analysis.java.ManualIntegrationValidator \
     --context "${CONTEXT}" \
     --facts "${FACTS}" \
     --output "${EVIDENCE}"

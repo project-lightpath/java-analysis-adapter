@@ -165,7 +165,7 @@ class ManualIntegrationValidatorTest {
   /** Python json.dumps(indent=2) byte shapes: nesting, separators, empty containers. */
   @Test
   void writerMatchesPythonJsonDumps() throws Exception {
-    assertEquals("{\"a\": 1}", ManualIntegrationValidator.pythonJson(
+    assertEquals("{\n  \"a\": 1\n}", ManualIntegrationValidator.pythonJson(
         MAPPER.createObjectNode().put("a", 1)));
     assertEquals("{}",
         ManualIntegrationValidator.pythonJson(MAPPER.createObjectNode()));
