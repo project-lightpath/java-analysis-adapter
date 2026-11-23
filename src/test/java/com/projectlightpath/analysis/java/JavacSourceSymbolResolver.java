@@ -330,7 +330,7 @@ final class JavacSourceSymbolResolver {
       if ("super".equals(name) || "this".equals(name)) {
         return;
       }
-      Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
+      Element method = invokedMethod(invocationPath, node);
       if (!(method instanceof javax.lang.model.element.ExecutableElement executable)) {
         return;
       }
@@ -343,6 +343,11 @@ final class JavacSourceSymbolResolver {
               executable.getSimpleName().toString(), executable), executable);
     }
 
+    /** The element of a method-select expression, shared by the emitters. */
+    private Element invokedMethod(TreePath invocationPath, MethodInvocationTree node) {
+      return trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
+    }
+
     private void emitReflectionFact(TreePath invocationPath, MethodInvocationTree node) {
       if (!"forName".equals(selectedName(node.getMethodSelect()))) {
         return;
@@ -352,24 +357,22 @@ final class JavacSourceSymbolResolver {
         addAbstention(0, 0, 0, "UNRESOLVED");
         return;
       }
-      Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
-      int line = lineNumber(invocationPath, position);
-      int column = columnNumber(invocationPath, position);
+      Element method = invokedMethod(invocationPath, node);
+      TypeElement owner = method != null && method.getEnclosingElement() instanceof TypeElement type
+          ? type : null;
       boolean unattributed = method == null
           || method.asType() == null
-          || method.asType().getKind() == javax.lang.model.type.TypeKind.ERROR;
-      if (!unattributed && method.getEnclosingElement() instanceof TypeElement owner) {
-        unattributed = owner.asType().getKind() == javax.lang.model.type.TypeKind.ERROR;
-      }
+          || method.asType().getKind() == javax.lang.model.type.TypeKind.ERROR
+          || (owner != null && owner.asType().getKind() == javax.lang.model.type.TypeKind.ERROR);
       if (unattributed) {
         // Attribution failed or is error-typed (compilers differ on whether
         // unresolved mirrors survive): this may still be a
         // java.lang.Class.forName site, so the skip must be visible.
-        addAbstention((int) position, line, column, "UNRESOLVED_FORNAME");
+        forNameAbstention(invocationPath, position, "UNRESOLVED_FORNAME");
         return;
       }
       if (method.getKind() != ElementKind.METHOD
-          || !(method.getEnclosingElement() instanceof TypeElement owner)
+          || owner == null
           || !"java.lang.Class".contentEquals(owner.getQualifiedName())) {
         return;
       }
@@ -380,7 +383,7 @@ final class JavacSourceSymbolResolver {
         // not fold "a" + "b" argument trees into LiteralTree, so folded
         // concatenations land here too): visible abstention, never a silent
         // skip. Only genuine java.lang.Class.forName shapes reach this arm.
-        addAbstention((int) position, line, column, "NON_LITERAL_FORNAME");
+        forNameAbstention(invocationPath, position, "NON_LITERAL_FORNAME");
         return;
       }
       String target = (String) literal.getValue();
@@ -388,12 +391,20 @@ final class JavacSourceSymbolResolver {
       boolean sourceBound = bound != null && trees.getPath(bound) != null;
       boolean resolvable = bound != null;
       String certainty = sourceBound && !taskHasError ? "DEFINITE" : "POSSIBLE";
+      int line = lineNumber(invocationPath, position);
+      int column = columnNumber(invocationPath, position);
       facts.add(new JavacResolverFact(
           cell.id(), cell.siteFile(), topLevelName(invocationPath), line, column,
           (int) position, target, "java.lang.Class", "forName",
           accessibility(method), certainty,
           sourceBound ? "source-bound" : resolvable ? "runtime-only" : "unresolved-target",
           diagnosticsFor(line), "", ""));
+    }
+
+    /** Visible abstention for an uncovered forName shape, at its real position. */
+    private void forNameAbstention(TreePath invocationPath, long position, String reason) {
+      addAbstention((int) position, lineNumber(invocationPath, position),
+          columnNumber(invocationPath, position), reason);
     }
 
     private void addShapeFact(
@@ -477,8 +488,7 @@ final class JavacSourceSymbolResolver {
 
     private String annotationTypeName(
         TreePath annotationPath, com.sun.source.tree.AnnotationTree annotation) {
-      Element element = trees.getElement(
-          new TreePath(annotationPath, annotation.getAnnotationType()));
+      Element element = annotationTypeElement(annotationPath, annotation);
       if (element instanceof TypeElement type
           && type.asType().getKind() != javax.lang.model.type.TypeKind.ERROR) {
         String qualified = type.getQualifiedName().toString();
@@ -491,10 +501,16 @@ final class JavacSourceSymbolResolver {
 
     private boolean annotationResolved(
         TreePath annotationPath, com.sun.source.tree.AnnotationTree annotation) {
-      Element element = trees.getElement(
-          new TreePath(annotationPath, annotation.getAnnotationType()));
+      Element element = annotationTypeElement(annotationPath, annotation);
       return element instanceof TypeElement type
           && type.asType().getKind() != javax.lang.model.type.TypeKind.ERROR;
+    }
+
+    /** The element of the annotation's type expression, resolved once. */
+    private Element annotationTypeElement(
+        TreePath annotationPath, com.sun.source.tree.AnnotationTree annotation) {
+      return trees.getElement(
+          new TreePath(annotationPath, annotation.getAnnotationType()));
     }
 
     private String renderArguments(
