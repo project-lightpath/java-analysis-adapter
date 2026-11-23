@@ -12,8 +12,9 @@ Plan: `docs/plans/PLAN-41.md` (v10 + implementation amendments)
 - Item 1 (Edge 1, declared_invokes): DONE — RED_01 (b063cd9 + amendment),
   GREEN_01 (281ceac + PMD placement refactor). Gates: adapter-test 560 ≥ 534,
   java-lint 0 new, evidence-validate pass.
-- Item 2 (Edge 2, delegation facts): in progress.
-- Item 3 (promotion ladder + SemanticCallFacts.diagnostics carrier): pending.
+- Item 2 (Edge 2, delegation facts): DONE — RED_02 (b063cd9 line), GREEN_02.
+  Gates: adapter-test 565 ≥ 534, java-lint 0 new, evidence-validate pass.
+- Item 3 (promotion ladder + SemanticCallFacts.diagnostics carrier): in progress.
 
 ## Evidence
 
@@ -58,3 +59,22 @@ Plan: `docs/plans/PLAN-41.md` (v10 + implementation amendments)
 - Gates: `make adapter-test` 560 executions (baseline 534), `make java-lint`
   0 new findings (PMD placement refactor documented in GREEN_01), `make
   evidence-validate` pass.
+
+### Item 2 — framework-model delegation ladder (default tier)
+
+- `delegated_implementation` facts (`spring-data-delegation` rule, evidence
+  kind `spring_data_backing_selection`): guaranteed CRUD →
+  `SimpleJpaRepository#<m>`; derived queries → `PartTreeJpaQuery#execute`;
+  fragment methods → the app-declared `Impl` class (bare-name caller
+  identity, joining the `declared_invokes` displayName grammar); reactive
+  contracts abstain UNRESOLVED targeting the stable `spring-data-proxy`
+  identity (no reactive backing exists on a JPA classpath — module-family
+  specific, pinned by Spike 5).
+- Implementation finding: fragment methods inherited from the fragment
+  interface are not enumerated by `springRepositoryMethods`; their
+  delegation facts are emitted from the fragment composition list instead,
+  and repository-declared fragment methods are routed there too (no
+  double emission).
+- Gates: adapter-test 565 executions, java-lint 0 new, evidence-validate
+  pass.
+
