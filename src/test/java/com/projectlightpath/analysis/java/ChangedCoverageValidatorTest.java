@@ -520,6 +520,26 @@ class ChangedCoverageValidatorTest {
     assertEquals(1, runWithSidecar(root, sidecar));
   }
 
+  /**
+   * The boundary case CPython documents: the correctly rounded 16-digit candidate fails
+   * to round-trip and the adjacent decimal is the shortest repr.
+   */
+  @Test
+  void boundaryFloatReprUsesTheAdjacentCandidate() {
+    assertEquals("5.960464477539063e-08",
+        PythonJson.dumps(MAPPER.createObjectNode().put("v", 5.960464477539063e-08)
+            .path("v")));
+    // The full sweep the fix was fuzz-verified against, spot-checked here:
+    // subnormals, the exponent thresholds, and the previously failing re-parse case.
+    assertEquals("5e-324",
+        PythonJson.dumps(MAPPER.createObjectNode().put("v", 5e-324).path("v")));
+    assertEquals("1e+16",
+        PythonJson.dumps(MAPPER.createObjectNode().put("v", 1e16).path("v")));
+    assertEquals("-4.3849174499425896e-221",
+        PythonJson.dumps(MAPPER.createObjectNode().put("v", -4.3849174499425896e-221)
+            .path("v")));
+  }
+
   /** sha256 streams the file content. */
   @Test
   void sha256HashesFileContent() throws IOException {
