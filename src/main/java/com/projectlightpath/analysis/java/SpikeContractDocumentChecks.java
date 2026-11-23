@@ -144,7 +144,8 @@ final class SpikeContractDocumentChecks {
     for (JsonNode rule : elements(framework.path("resolutionRules"))) {
       require(edgeTypes.contains(text(rule, "edgeType")),
           "unknown framework edge type in " + id + " resolution rules");
-      require(CERTAINTY_STATES.contains(text(rule, "certainty")),
+      String ruleCertainty = text(rule, "certainty");
+      require(ruleCertainty != null && CERTAINTY_STATES.contains(ruleCertainty),
           "invalid framework certainty in " + id + " resolution rules");
     }
     for (JsonNode abstention : elements(framework.path("abstentions"))) {

@@ -136,7 +136,9 @@ final class SpikeContractFactChecks {
       String id = text(relationship, "id");
       require(edgeTypes.contains(text(relationship, "relationshipType")),
           "unknown framework relationship type for " + id);
-      require(CERTAINTY_STATES.contains(text(relationship, "certainty")),
+      String relationshipCertainty = text(relationship, "certainty");
+      require(relationshipCertainty != null
+          && CERTAINTY_STATES.contains(relationshipCertainty),
           "invalid framework certainty for " + id);
       require(truthy(relationship.path("sourceEvidence")),
           "framework fact " + id + " needs source evidence");

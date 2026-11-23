@@ -69,9 +69,9 @@ final class SpikeContractObservationChecks {
 
   /** Normalized analyzer results: pins, coverage, host paths (Python 275-334). */
   private void checkAnalyzerResults() {
-    require(Files.isRegularFile(root.resolve("spike/scripts/run_static_analysis.py")),
+    require(Files.isRegularFile(root.resolve(SpikeContractValidator.SCRIPT_PATHS.get(0))),
         "static-analysis runner is missing");
-    require(Files.isRegularFile(root.resolve("spike/scripts/normalize_static_analysis.py")),
+    require(Files.isRegularFile(root.resolve(SpikeContractValidator.SCRIPT_PATHS.get(1))),
         "static-analysis normalizer is missing");
     List<JsonNode> analyzerResults = List.of(documents.sootupQuarkus(),
         documents.sootupFsi(), documents.codeqlQuarkus(), documents.codeqlFsi());
@@ -204,14 +204,19 @@ final class SpikeContractObservationChecks {
           "CodeQL Java pack must be pinned");
       require(eq(text(coverage, "buildMode"), "none"),
           "CodeQL build-mode limitation must be explicit");
-      // Python summed the raw numbers (52.5 + 12 = 64.5 != 64), so the comparison must
-      // not truncate fractional counts onto integers.
-      Double productionFacts = numericOrNull(coverage.path("productionFacts"));
-      Double testFactsFiltered = numericOrNull(coverage.path("testFactsFiltered"));
-      require(productionFacts != null && testFactsFiltered != null
-          && numEquals(coverage.path("rawFacts"), productionFacts + testFactsFiltered),
+      // Python summed arbitrary-precision integers; the counts must be whole,
+      // non-negative, and compared exactly, so no fractional or oversized value can
+      // wrap or round onto a passing sum.
+      java.math.BigDecimal productionFacts = wholeCountOrNull(coverage.path(
+          "productionFacts"));
+      java.math.BigDecimal testFactsFiltered = wholeCountOrNull(coverage.path(
+          "testFactsFiltered"));
+      java.math.BigDecimal rawFacts = wholeCountOrNull(coverage.path("rawFacts"));
+      require(productionFacts != null && testFactsFiltered != null && rawFacts != null
+          && productionFacts.signum() >= 0 && testFactsFiltered.signum() >= 0
+          && rawFacts.compareTo(productionFacts.add(testFactsFiltered)) == 0,
           "CodeQL fact scope counts must balance");
-      require(testFactsFiltered != null && testFactsFiltered > 0,
+      require(testFactsFiltered.signum() > 0,
           "CodeQL test-source filtering evidence is missing");
     }
     require(numEquals(documents.codeqlQuarkus().path("coverage").path("rawFacts"), 64),
@@ -220,9 +225,13 @@ final class SpikeContractObservationChecks {
         "CodeQL FSI measurement changed unexpectedly");
   }
 
-  /** A node's numeric value as a Double, or null when absent or non-numeric. */
-  private static Double numericOrNull(JsonNode node) {
-    return node != null && node.isNumber() ? node.doubleValue() : null;
+  /** A node's whole, non-negative numeric value, or null when absent or fractional. */
+  private static java.math.BigDecimal wholeCountOrNull(JsonNode node) {
+    if (node == null || !node.isNumber()) {
+      return null;
+    }
+    java.math.BigDecimal value = node.decimalValue();
+    return value.scale() <= 0 || value.stripTrailingZeros().scale() <= 0 ? value : null;
   }
 
   /** True when any observation matches the case id and classification. */

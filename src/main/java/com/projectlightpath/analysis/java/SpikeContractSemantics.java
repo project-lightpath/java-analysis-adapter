@@ -43,13 +43,24 @@ final class SpikeContractSemantics {
   }
 
   /**
-   * A node's whole-number value as a Long, or null when absent, non-numeric, or
-   * fractional. Python dict keys treat 64.0 and 64 as equal but keep 64.5 distinct, so a
-   * fractional offset must never silently truncate onto an integer key.
+   * A node's whole-number value as a Long, or null when absent, non-numeric, fractional,
+   * or out of long range. Python dict keys treat 64.0 and 64 as equal but keep 64.5 and
+   * oversized integers distinct, so an integral float maps onto its integer while a
+   * fractional or out-of-range value must never silently truncate onto a key.
    */
   static Long wholeNumberOrNull(JsonNode node) {
-    return node != null && node.isNumber() && node.isIntegralNumber()
-        ? node.longValue() : null;
+    if (node == null || !node.isNumber()) {
+      return null;
+    }
+    if (node.isIntegralNumber()) {
+      return node.canConvertToLong() ? node.longValue() : null;
+    }
+    double value = node.doubleValue();
+    if (node.isFloatingPointNumber() && value == Math.floor(value)
+        && value >= Long.MIN_VALUE && value <= Long.MAX_VALUE) {
+      return (long) value;
+    }
+    return null;
   }
 
   /** Python truthiness: false for missing, null, false, zero, empty string/container. */

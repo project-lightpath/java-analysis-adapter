@@ -18,20 +18,24 @@ import java.util.Set;
  */
 final class SpikeContractCollections {
   /**
-   * Sentinel added to set-valued collections when an element is present but non-textual:
-   * Python's {@code set()} keeps such elements (breaking equality, preserving subset
-   * checks), so the port must keep them visible instead of silently dropping them.
+   * Prefix marking a set element that is present but non-textual: Python's {@code set()}
+   * keeps such elements and counts distinct values distinctly ({@code {17, 18}} has size
+   * 2), so the sentinel carries the value's JSON text to preserve both distinctness and
+   * duplicate detection. Residual divergences, both reject-direction: Python collapses
+   * {@code True} with {@code 1}, and {@code 17} with {@code 17.0}, where the JSON texts
+   * differ.
    */
-  static final String NON_TEXTUAL = "\u0000non-textual";
+  static final String NON_TEXTUAL_PREFIX = "\u0000";
 
   private SpikeContractCollections() {}
 
-  /** Text values of an array field; non-textual elements surface as the sentinel. */
+  /** Text values of an array field; non-textual elements surface as prefixed sentinels. */
   static Set<String> textSet(JsonNode array) {
     Set<String> values = new LinkedHashSet<>();
     if (array != null && array.isArray()) {
       array.forEach(element ->
-          values.add(element.isTextual() ? element.asText() : NON_TEXTUAL));
+          values.add(element.isTextual() ? element.asText()
+              : NON_TEXTUAL_PREFIX + element));
     }
     return values;
   }
@@ -76,15 +80,16 @@ final class SpikeContractCollections {
 
   /**
    * Text values of one field across a node list. A missing field rejects loudly (Python
-   * raised KeyError reading it); a non-textual value surfaces as the sentinel, breaking
-   * equality comparisons exactly like Python's set of mixed elements.
+   * raised KeyError reading it); a non-textual value surfaces as a value-distinct
+   * sentinel, so equality comparisons break and uniqueness comparisons keep distinct
+   * values distinct, exactly like Python's set of mixed elements.
    */
   static Set<String> idSet(List<JsonNode> nodes, String field) {
     Set<String> values = new LinkedHashSet<>();
     for (JsonNode node : nodes) {
       JsonNode value = node.path(field);
       require(!value.isMissingNode(), "missing " + field + " in a list entry");
-      values.add(value.isTextual() ? value.asText() : NON_TEXTUAL);
+      values.add(value.isTextual() ? value.asText() : NON_TEXTUAL_PREFIX + value);
     }
     return values;
   }

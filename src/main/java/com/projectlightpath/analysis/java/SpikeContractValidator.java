@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -47,7 +48,12 @@ import java.util.Set;
  *       but fails this gate, and a mirrored extra metric key (present in
  *       {@code javacTotals} and every cell with matching sums) passes Python's
  *       document-keyed recompute but fails this gate's fixed metric inventory. Both
- *       reject what Python accepted; neither accepts what Python rejected.
+ *       reject what Python accepted; neither accepts what Python rejected. The same
+ *       applies to the CodeQL fact counts: Python's float sum accepted balanced
+ *       fractional counts ({@code 51.5 + 12.5 == 64}), which this gate rejects by
+ *       requiring whole non-negative counts compared with exact arithmetic, and to
+ *       set sentinels: Python collapses {@code True} with {@code 1} and {@code 17} with
+ *       {@code 17.0}, where the port's value-text sentinels stay distinct.
  * </ul>
  *
  * <p>The final summary line, every requirement message, and both exit codes are otherwise
@@ -101,6 +107,32 @@ public final class SpikeContractValidator {
 
   static final List<String> MISSING_INPUT_CODES = List.of("doesnt.exist",
       "cant.resolve", "duplicate.class", "not.def.public");
+
+  /** Repository-relative paths of every document the gate loads, in load order. */
+  static final List<String> DOCUMENT_PATHS = List.of(
+      "spike/capability-matrix.json",
+      "spike/acceptance-criteria.json",
+      "spike/candidate-matrix.json",
+      "spike/baselines/fsi-spring-boot.json",
+      "spike/contracts/synthetic-advisory.json",
+      "spike/contracts/expected-call-facts.json",
+      "spike/contracts/framework-model.json",
+      "spike/contracts/framework-binding-metadata.json",
+      "spike/contracts/analysis-context.json",
+      "spike/results/framework-enrichment-observation.json",
+      "spike/results/semantic-call-facts-spike-observation.json",
+      "spike/results/jdtls-1.63.0-java21-observation.json",
+      "spike/results/jdtls-1.63.0-fsi-spring-observation.json",
+      "spike/results/sootup-3.0.1-java21-quarkus-observation.json",
+      "spike/results/sootup-3.0.1-fsi-spring-observation.json",
+      "spike/results/codeql-2.27.4-java21-quarkus-observation.json",
+      "spike/results/codeql-2.27.4-fsi-spring-observation.json",
+      "spike/results/javac-symbol-resolver-observation.json");
+
+  /** Repository-relative script paths whose presence the gate checks. */
+  static final List<String> SCRIPT_PATHS = List.of(
+      "spike/scripts/run_static_analysis.py",
+      "spike/scripts/normalize_static_analysis.py");
 
   /** Thrown for any failed requirement; the run boundary renders it as exit code 1. */
   public static final class ValidationError extends RuntimeException {
@@ -180,25 +212,15 @@ public final class SpikeContractValidator {
       JsonNode javacResolver) {
 
     static Documents load(Path root) {
+      List<JsonNode> nodes = new ArrayList<>();
+      for (String path : DOCUMENT_PATHS) {
+        nodes.add(loadNode(root, path));
+      }
       return new Documents(
-          loadNode(root, "spike/capability-matrix.json"),
-          loadNode(root, "spike/acceptance-criteria.json"),
-          loadNode(root, "spike/candidate-matrix.json"),
-          loadNode(root, "spike/baselines/fsi-spring-boot.json"),
-          loadNode(root, "spike/contracts/synthetic-advisory.json"),
-          loadNode(root, "spike/contracts/expected-call-facts.json"),
-          loadNode(root, "spike/contracts/framework-model.json"),
-          loadNode(root, "spike/contracts/framework-binding-metadata.json"),
-          loadNode(root, "spike/contracts/analysis-context.json"),
-          loadNode(root, "spike/results/framework-enrichment-observation.json"),
-          loadNode(root, "spike/results/semantic-call-facts-spike-observation.json"),
-          loadNode(root, "spike/results/jdtls-1.63.0-java21-observation.json"),
-          loadNode(root, "spike/results/jdtls-1.63.0-fsi-spring-observation.json"),
-          loadNode(root, "spike/results/sootup-3.0.1-java21-quarkus-observation.json"),
-          loadNode(root, "spike/results/sootup-3.0.1-fsi-spring-observation.json"),
-          loadNode(root, "spike/results/codeql-2.27.4-java21-quarkus-observation.json"),
-          loadNode(root, "spike/results/codeql-2.27.4-fsi-spring-observation.json"),
-          loadNode(root, "spike/results/javac-symbol-resolver-observation.json"));
+          nodes.get(0), nodes.get(1), nodes.get(2), nodes.get(3), nodes.get(4),
+          nodes.get(5), nodes.get(6), nodes.get(7), nodes.get(8), nodes.get(9),
+          nodes.get(10), nodes.get(11), nodes.get(12), nodes.get(13), nodes.get(14),
+          nodes.get(15), nodes.get(16), nodes.get(17));
     }
   }
 

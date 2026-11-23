@@ -38,26 +38,22 @@ class SpikeContractValidatorTest {
   }
 
   /**
-   * Copies the real checked-in spike tree into a scratch root so one field can be mutated
-   * without touching the repository. Disposable analyzer output (spike/runs, spike/.cache)
-   * is excluded: it is untracked and can be large when an analyzer run was reproduced.
+   * Copies exactly the inputs the gate reads — the eighteen documents and the two
+   * presence-checked scripts — into a scratch root so one field can be mutated without
+   * touching the repository. No tree walk, so disposable analyzer output under
+   * spike/runs or spike/.cache is never traversed or copied.
    */
   private Path copiedSpikeTree() throws IOException {
     Path root = temp.resolve("root");
     Files.createDirectories(root);
-    Path spike = repoRoot().resolve("spike");
-    Path repository = spike.getParent();
-    try (Stream<Path> files = Files.walk(spike)) {
-      for (Path file : files.filter(Files::isRegularFile).toList()) {
-        Path relative = repository.relativize(file);
-        if (relative.startsWith(spike.getFileName().resolve("runs"))
-            || relative.startsWith(spike.getFileName().resolve(".cache"))) {
-          continue;
-        }
-        Path target = root.resolve(relative.toString());
-        Files.createDirectories(target.getParent());
-        Files.copy(file, target);
-      }
+    Path repository = repoRoot();
+    java.util.List<String> inputs = new java.util.ArrayList<>(
+        SpikeContractValidator.DOCUMENT_PATHS);
+    inputs.addAll(SpikeContractValidator.SCRIPT_PATHS);
+    for (String relative : inputs) {
+      Path target = root.resolve(relative);
+      Files.createDirectories(target.getParent());
+      Files.copy(repository.resolve(relative), target);
     }
     return root;
   }
@@ -475,6 +471,79 @@ class SpikeContractValidatorTest {
         document -> ((ObjectNode) document.path("observations").get(0)).remove(
             "certainty")),
         "observation certainty is missing");
+  }
+
+  /** Distinct non-textual values stay distinct in sets, like Python's set of 17 and 18. */
+  @Test
+  void distinctNonTextualValuesStayDistinctInSets() {
+    assertEquals(2, SpikeContractCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", 17),
+        MAPPER.createObjectNode().put("id", 18)), "id").size());
+    assertEquals(1, SpikeContractCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", 17),
+        MAPPER.createObjectNode().put("id", 17)), "id").size());
+    // A textual "17" and a numeric 17 stay distinct too (Python: "17" != 17).
+    assertEquals(2, SpikeContractCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", "17"),
+        MAPPER.createObjectNode().put("id", 17)), "id").size());
+  }
+
+  /** A missing certainty on a framework rule reports the requirement, not an NPE. */
+  @Test
+  void missingRuleCertaintyIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree("spike/contracts/framework-model.json",
+        document -> ((ObjectNode) document.path("frameworks").get(0)
+            .path("resolutionRules").get(0)).remove("certainty")),
+        "invalid framework certainty in");
+  }
+
+  /** A missing certainty on a framework relationship reports a requirement, not an NPE. */
+  @Test
+  void missingRelationshipCertaintyIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree("spike/contracts/expected-call-facts.json",
+        document -> ((ObjectNode) document.path("frameworkRelationships").get(0))
+            .remove("certainty")),
+        "missing certainty in a list entry");
+  }
+
+  /** Balanced fractional CodeQL counts reject (Python's float sum accepted 51.5 + 12.5). */
+  @Test
+  void balancedFractionalCodeqlCountsAreRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/codeql-2.27.4-java21-quarkus-observation.json",
+        document -> {
+          ObjectNode coverage = (ObjectNode) document.path("coverage");
+          coverage.put("productionFacts", 51.5);
+          coverage.put("testFactsFiltered", 12.5);
+        }), "CodeQL fact scope counts must balance");
+  }
+
+  /** Oversized integer counts cannot wrap onto a passing sum. */
+  @Test
+  void oversizedCodeqlCountsCannotWrap() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/codeql-2.27.4-java21-quarkus-observation.json",
+        document -> {
+          ObjectNode coverage = (ObjectNode) document.path("coverage");
+          coverage.put("productionFacts", new java.math.BigInteger(
+              "-9007199254740993"));
+          coverage.put("testFactsFiltered", new java.math.BigInteger(
+              "9007199254741056"));
+        }), "CodeQL fact scope counts must balance");
+  }
+
+  /** Whole-number offsets: 64.0 maps to 64 like Python's dict key, 64.5 and oversized reject. */
+  @Test
+  void wholeNumberOffsetsMatchPythonDictKeySemantics() {
+    assertEquals(64L, SpikeContractSemantics.wholeNumberOrNull(
+        MAPPER.createObjectNode().put("v", 64.0).path("v")));
+    assertEquals(64L, SpikeContractSemantics.wholeNumberOrNull(
+        MAPPER.createObjectNode().put("v", 64).path("v")));
+    assertEquals(null, SpikeContractSemantics.wholeNumberOrNull(
+        MAPPER.createObjectNode().put("v", 64.5).path("v")));
+    assertEquals(null, SpikeContractSemantics.wholeNumberOrNull(
+        MAPPER.createObjectNode().put("v", new java.math.BigInteger(
+            "18446744073709551680")).path("v")));
   }
 
   private static JsonNode textNode(String value) {
