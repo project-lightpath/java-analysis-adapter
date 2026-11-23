@@ -37,49 +37,61 @@ public final class PrintPreparationDiagnostics {
     if (!Files.isRegularFile(reportPath)) {
       return List.of("preparation report not found or not a file: " + reportPath);
     }
-    JsonNode report;
     try {
-      report = MAPPER.readTree(Files.readAllBytes(reportPath));
+      JsonNode report = MAPPER.readTree(Files.readAllBytes(reportPath));
+      if (report != null && report.isObject()) {
+        return renderReport(reportPath, report);
+      }
+      return List.of("preparation report is unreadable: " + reportPath
+          + " (expected a JSON object)");
     } catch (IOException error) {
       return List.of("preparation report is unreadable: " + reportPath
           + " (" + error.getMessage() + ")");
     }
-    if (report == null || !report.isObject()) {
-      return List.of("preparation report is unreadable: " + reportPath
-          + " (expected a JSON object)");
-    }
+  }
+
+  private static List<String> renderReport(Path reportPath, JsonNode report) {
     List<String> lines = new ArrayList<>();
+    lines.add(renderHeader(reportPath, report));
+    lines.addAll(renderDiagnostics(report));
+    return lines;
+  }
+
+  private static String renderHeader(Path reportPath, JsonNode report) {
     StringBuilder header = new StringBuilder("preparation report: ").append(reportPath)
         .append(" (status: ").append(textOrString(report.path("status"), "unknown"));
     if (report.has("profileId")) {
       header.append(", profile: ").append(textOrString(report.path("profileId"), ""));
     }
-    header.append(")");
-    lines.add(header.toString());
+    return header.append(")").toString();
+  }
+
+  private static List<String> renderDiagnostics(JsonNode report) {
     if (!report.has("diagnostics")) {
-      lines.add("no diagnostics were recorded in the report");
-      return lines;
+      return List.of("no diagnostics were recorded in the report");
     }
     JsonNode diagnostics = report.path("diagnostics");
     if (!diagnostics.isArray()) {
-      lines.add("diagnostics field is malformed (not a list): " + diagnostics);
-      return lines;
+      return List.of("diagnostics field is malformed (not a list): " + diagnostics);
     }
     if (diagnostics.isEmpty()) {
-      lines.add("no diagnostics were recorded in the report");
-      return lines;
+      return List.of("no diagnostics were recorded in the report");
     }
+    List<String> lines = new ArrayList<>();
     for (JsonNode diagnostic : diagnostics) {
-      if (!diagnostic.isObject()) {
-        lines.add("  - " + diagnostic);
-        continue;
-      }
-      lines.add("  - [" + textOrString(diagnostic.path("severity"), "unknown_severity")
-          + "] " + textOrString(diagnostic.path("code"), "unknown_code")
-          + " (phase: " + textOrString(diagnostic.path("phase"), "unknown_phase")
-          + "): " + textOrString(diagnostic.path("message"), ""));
+      lines.add(renderDiagnostic(diagnostic));
     }
     return lines;
+  }
+
+  private static String renderDiagnostic(JsonNode diagnostic) {
+    if (!diagnostic.isObject()) {
+      return "  - " + diagnostic;
+    }
+    return "  - [" + textOrString(diagnostic.path("severity"), "unknown_severity")
+        + "] " + textOrString(diagnostic.path("code"), "unknown_code")
+        + " (phase: " + textOrString(diagnostic.path("phase"), "unknown_phase")
+        + "): " + textOrString(diagnostic.path("message"), "");
   }
 
   /**
