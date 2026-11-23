@@ -264,7 +264,53 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
 - No change to `interface_dispatch` classification or CHA edge emission.
 - No synthesis of proxy nodes with JVM-generated names.
 
-## Spikes (empirical, before RED_01 — scratch probes outside the tree)
+## Spike results (empirical, recorded 2026-11-23; probes under system temp, not committed)
+
+1. **CHA coverage + Stmt lines (DONE)**: on a compiled fixture
+   (AccountService → AccountRepository extends CrudRepository) the adapter
+   emits **zero provider facts** — CHA drops invokeinterface edges with no
+   implementor in view; the body-scan pass is the only reliable emission
+   path. Line numbers ARE available:
+   `stmt.getPositionInfo().getStmtPosition()` returns a `LinePosition`
+   (`[line:col-col]`, first line matches source); no lineless fallback
+   needed for bytecode-input bodies. Body scan API:
+   `body.getStmts()` → `isInvokableStmt()` → `asInvokableStmt().
+   getInvokeExpr()` → `JInterfaceInvokeExpr.getMethodSignature()`.
+2. **Constant-pool shape (DONE)**: `invokeinterface` names the receiver's
+   static type (`demo/AccountRepository.save:(Ljava/lang/Object;)...`), including
+   methods inherited from the parent contract — confirmed by `javap -c`.
+3. **Provider-fact identity (DONE by review rounds)**: `declaredCallId`
+   namespace + `collectCallReferences` count exclusion + `callId`
+   relationshipType precedence (design pins verified against code by
+   review rounds 3–7).
+4. **Certainty policy (DONE by review rounds)**: `declared_invokes` and
+   `delegated_implementation`/`spring_data_backing_selection` stay off the
+   open-world lists; FrameworkModel definite is permitted for bounded
+   metadata-backed facts.
+5. **Backing targets + method sets (DONE — spring-data-commons/jpa 2.7.18
+   jars on the FSI classpath)**:
+   - `CrudRepository`: save, saveAll, findById, existsById, findAll,
+     findAllById, count, deleteById, delete, deleteAllById, deleteAll
+     (overloads: findAll×1+Sort/Example in JpaRepository, deleteAll×2).
+   - `JpaRepository` additions: flush, saveAndFlush, saveAllAndFlush,
+     deleteAllInBatch (×2), deleteAllByIdInBatch, getOne, getById,
+     getReferenceById, findAll(Sort), findAll(Example[, Sort]).
+   - `SimpleJpaRepository implements JpaRepositoryImplementation` ✓ (an
+     ordinary class in spring-data-jpa 2.7.18).
+   - `PartTreeJpaQuery#execute(Object[])` ✓ (inherited from
+     `AbstractJpaQuery`).
+   - Reactive contracts exist in spring-data-commons 2.7.18
+     (`reactive.ReactiveCrudRepository`, `ReactiveSortingRepository`,
+     `RxJava2/3CrudRepository`) but **no reactive backing class exists on
+     the JPA analysis classpath** (spring-data-jpa is blocking; reactive
+     backing is module-specific). Consequence for the design: the reactive
+     variant lands in the **out-of-scope abstain cell** of the ladder
+     (UNRESOLVED + `spring_data_backing_selection_out_of_scope`) — not a
+     reactive backing FQCN. Cell 6 asserts: classification works, Edge 1
+     works, Edge 2 abstains with the diagnostic, no SimpleJpaRepository
+     target.
+
+## Spikes (pre-implementation plan — all completed above)
 
 1. **CHA pass coverage + Stmt line numbers**: compile a fixture with a
    repository-like interface (a) with and (b) without an implementor in the
@@ -300,8 +346,11 @@ Cells (each = one test method):
    delegation targets the app Impl class; certainty per ladder.
 5. `repositoryBaseClass` via `@EnableJpaRepositories`: possible (in-scope
    base class) / unresolved + diagnostic (out-of-scope class).
-6. Reactive repository variant: classified as repository_interface; reactive
-   backing target, no SimpleJpaRepository.
+6. Reactive repository variant: classified as repository_interface;
+   reactive backing target, no SimpleJpaRepository (Spike 5: no reactive
+   backing exists on the JPA classpath — this cell asserts the
+   out-of-scope abstain: UNRESOLVED +
+   `spring_data_backing_selection_out_of_scope`, Edge 1 still emitted).
 7. Negative: NON-repository app interface invoked at an app call site — no
    `declared_invokes` edge, no synthetic delegation facts.
 8. Pairwise: same call site keeps its `interface_dispatch` edge to dependency
@@ -368,8 +417,9 @@ sanctions zero edits to existing tests).
   fires only when service_loader edges exist — opportunistic; the always-on
   visibility is the new `SemanticCallFacts.diagnostics` field. Commit
   messages state whichever blast radius applies.
-- R5: reactive/fragment exact backing FQCNs and CRUD method sets verified
-  against dependency jars in Spike 5.
+- R5 (RESOLVED by Spike 5): CRUD method sets and CRUD/derived backing FQCNs
+  pinned from the 2.7.18 jars; reactive has no in-classpath backing and
+  lands in the out-of-scope abstain cell.
 - R6 (rounds 2–4): diagnostics surface is a new `SemanticCallFacts.diagnostics`
   field, computed once in `enrich` by a context-derived helper, threaded
   through the `analyzeSourceArchive` re-wrap, deterministically sorted,
