@@ -205,8 +205,7 @@ abstract class BoundedFrameworkModelIdentity extends BoundedFrameworkModelUtilit
       SourceMetadataScanner scanner,
       List<SourceMetadataScannerState.BeanCandidate> candidates,
       SourceMetadataScannerState.BeanCandidate candidate,
-      String repositoryMethod) {
-    boolean uniqueLegacyRepository = repositoryMethod.equals("findById")
+      String repositoryMethod) {    boolean uniqueLegacyRepository = repositoryMethod.equals("findById")
         && candidate.file().simpleTypeName().equals("AccountRepository")
         && uniqueSimpleType(scanner, candidate.file().simpleTypeName())
         && candidates.stream()
@@ -228,6 +227,26 @@ abstract class BoundedFrameworkModelIdentity extends BoundedFrameworkModelUtilit
         candidate.kind(),
         repositoryMethod);
     return "spring-data-generated-"
+        + slug(candidate.file().typeName() + "-" + repositoryMethod)
+        + "-" + digest(identity).substring(0, 16);
+  }
+
+  String delegationFactId(
+      SourceMetadataScanner scanner,
+      List<SourceMetadataScannerState.BeanCandidate> candidates,
+      SourceMetadataScannerState.BeanCandidate candidate,
+      String repositoryMethod,
+      String backingTarget) {
+    String identity = String.join("\u0000",
+        framework.id(),
+        candidate.file().typeName(),
+        candidate.file().displayPath(),
+        candidate.candidateId(),
+        candidate.candidateType(),
+        candidate.kind(),
+        repositoryMethod,
+        backingTarget);
+    return "spring-data-delegation-"
         + slug(candidate.file().typeName() + "-" + repositoryMethod)
         + "-" + digest(identity).substring(0, 16);
   }

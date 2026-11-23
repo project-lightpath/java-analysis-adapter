@@ -42,8 +42,12 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
           ? SemanticCallFacts.Certainty.POSSIBLE
           : SemanticCallFacts.Certainty.UNRESOLVED;
       String repositoryContract = scanner.springRepositoryContract(candidate.file()).orElse("Repository");
+      Map<String, String> fragmentTargets = fragmentTargets(scanner, candidate);
       for (SourceMetadataScannerState.RepositoryMethod repositoryMethod
           : scanner.springRepositoryMethods(candidate.file())) {
+        if (fragmentTargets.containsKey(repositoryMethod.name())) {
+          continue;
+        }
         String methodName = repositoryMethod.name();
         String methodIdentity = repositoryMethod.identity();
         String id = springRepositoryFactId(scanner, candidates, candidate, methodIdentity);
@@ -71,9 +75,142 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
                         "repositoryContract", repositoryContract,
                         "repositoryMethod", methodIdentity))),
                 "Spring Data implementation and proxy identity are generated outside application source.")));
+        facts.add(delegationFact(
+            context, scanner, candidates, candidate, repositoryMethod,
+            repositoryContract, metadataAvailable, fragmentTargets));
+      }
+      for (Map.Entry<String, String> fragment : fragmentTargets.entrySet()) {
+        facts.add(fragmentDelegationFact(
+            context, scanner, candidates, candidate, repositoryContract,
+            metadataAvailable, fragment));
       }
     }
     return facts;
+  }
+
+  /** Emits the delegation fact for one inherited fragment method. */
+  private SemanticCallFacts.Fact fragmentDelegationFact(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      List<SourceMetadataScannerState.BeanCandidate> candidates,
+      SourceMetadataScannerState.BeanCandidate candidate,
+      String repositoryContract,
+      boolean metadataAvailable,
+      Map.Entry<String, String> fragment) {
+    String caller = candidate.file().typeName() + "#" + fragment.getKey();
+    String target = fragment.getValue();
+    return SemanticCallFacts.Fact.framework(
+        delegationFactId(scanner, candidates, candidate, fragment.getKey(), target),
+        context,
+        new SemanticCallFacts.Fact.FrameworkInput(
+            caller,
+            target,
+            "delegated_implementation",
+            metadataAvailable
+                ? SemanticCallFacts.Certainty.POSSIBLE
+                : SemanticCallFacts.Certainty.UNRESOLVED,
+            "spring-data-delegation",
+            List.of(new SemanticCallFacts.Evidence(
+                "spring_data_backing_selection",
+                candidate.file().displayPath(),
+                List.of("extends " + repositoryContract, "fragment " + fragment.getKey()),
+                null,
+                Map.of(
+                    "repositoryContract", repositoryContract,
+                    "repositoryMethod", fragment.getKey(),
+                    "backingTarget", target))),
+            "Fragment backing is an application-declared implementation;"
+                + " proxy composition order at runtime is not captured."));
+  }
+
+  /** Emits the delegation fact from one repository method to its runtime backing. */
+  private SemanticCallFacts.Fact delegationFact(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      List<SourceMetadataScannerState.BeanCandidate> candidates,
+      SourceMetadataScannerState.BeanCandidate candidate,
+      SourceMetadataScannerState.RepositoryMethod repositoryMethod,
+      String repositoryContract,
+      boolean metadataAvailable,
+      Map<String, String> fragmentTargets) {
+    String methodIdentity = repositoryMethod.identity();
+    String caller = candidate.file().typeName() + "#" + methodIdentity;
+    String fragmentImplementation = fragmentTargets.get(repositoryMethod.name());
+    boolean reactive = reactiveContract(repositoryContract);
+    String target;
+    SemanticCallFacts.Certainty certainty;
+    String limitation;
+    if (fragmentImplementation != null) {
+      target = fragmentImplementation;
+      certainty = metadataAvailable
+          ? SemanticCallFacts.Certainty.POSSIBLE
+          : SemanticCallFacts.Certainty.UNRESOLVED;
+      limitation = "Fragment backing is an application-declared implementation;"
+          + " proxy composition order at runtime is not captured.";
+    } else if (reactive) {
+      target = "spring-data-proxy:" + candidate.file().typeName() + "#" + methodIdentity;
+      certainty = SemanticCallFacts.Certainty.UNRESOLVED;
+      limitation = "Reactive repository backing is module-specific and outside"
+          + " the analyzed dependencies; no backing class can be selected.";
+    } else if (repositoryMethod.guaranteed()) {
+      target = "org.springframework.data.jpa.repository.support.SimpleJpaRepository#"
+          + repositoryMethod.name();
+      certainty = metadataAvailable
+          ? SemanticCallFacts.Certainty.POSSIBLE
+          : SemanticCallFacts.Certainty.UNRESOLVED;
+      limitation = "Backing selection is framework-determined; promotion to"
+          + " definite requires unique metadata-backed selection.";
+    } else {
+      target = "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute";
+      certainty = metadataAvailable
+          ? SemanticCallFacts.Certainty.POSSIBLE
+          : SemanticCallFacts.Certainty.UNRESOLVED;
+      limitation = "Derived query execution goes through the query-derivation"
+          + " machinery; the generated query is not visible statically.";
+    }
+    return SemanticCallFacts.Fact.framework(
+        delegationFactId(scanner, candidates, candidate, methodIdentity, target),
+        context,
+        new SemanticCallFacts.Fact.FrameworkInput(
+            caller,
+            target,
+            "delegated_implementation",
+            certainty,
+            "spring-data-delegation",
+            List.of(new SemanticCallFacts.Evidence(
+                "spring_data_backing_selection",
+                candidate.file().displayPath(),
+                List.copyOf(new LinkedHashSet<>(List.of(
+                    "extends " + repositoryContract,
+                    repositoryMethod.guaranteed()
+                        ? "CrudRepository#" + repositoryMethod.name()
+                        : "declared " + methodIdentity,
+                    "backing " + target))),
+                null,
+                Map.of(
+                    "repositoryContract", repositoryContract,
+                    "repositoryMethod", methodIdentity,
+                    "backingTarget", target))),
+            limitation));
+  }
+
+  /** Maps fragment method names to their application Impl target for one repository. */
+  private Map<String, String> fragmentTargets(
+      SourceMetadataScanner scanner, SourceMetadataScannerState.BeanCandidate candidate) {
+    Map<String, String> result = new HashMap<>();
+    for (SourceMetadataScannerState.RepositoryFragment fragment : scanner.springRepositoryFragments()) {
+      if (!fragment.repositoryType().equals(candidate.file().typeName())) {
+        continue;
+      }
+      for (String methodName : fragment.methodNames()) {
+        result.put(methodName, fragment.implementationType() + "#" + methodName);
+      }
+    }
+    return result;
+  }
+
+  private static boolean reactiveContract(String repositoryContract) {
+    return repositoryContract.startsWith("Reactive") || repositoryContract.startsWith("RxJava");
   }
 
   /** Emits bounded Spring lifecycle callback candidates. */

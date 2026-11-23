@@ -28,7 +28,7 @@ class BoundedFrameworkModelSpringDelegationTest {
           Account findByAccountNumber(String number);
         }
         """);
-    SemanticCallFacts.Fact fact = delegationFact(facts, "demo.AccountRepository#findByAccountNumber");
+    SemanticCallFacts.Fact fact = delegationFact(facts, "demo.AccountRepository#findByAccountNumber(String)");
     assertEquals(
         "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute",
         fact.callee());
