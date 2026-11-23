@@ -52,7 +52,9 @@ final class FrameworkRouteScanning {
         List<String> classHttpMethods,
         MethodInfo method,
         String annotationName,
-        Set<String> seen) {}
+        Set<String> seen,
+        List<JavacSourceSymbolIndex.AnnotationInfo> classMirrors,
+        List<JavacSourceSymbolIndex.AnnotationInfo> methodMirrors) {}
 
     private record RouteVariantsRequest(
         SourceMetadataScanner scanner,
@@ -85,19 +87,26 @@ final class FrameworkRouteScanning {
         AnalysisContext.Framework framework,
         SourceFile file,
         Set<String> seen) {
+      JavacFrameworkAnnotations javac = JavacFrameworkAnnotations.of(scanner);
       String classBlock = file.classAnnotationBlock();
       boolean quarkusClassPath = scanner.hasAnnotation(classBlock, "Path");
       boolean springController = framework == AnalysisContext.Framework.SPRING_BOOT
           && scanner.canonicalSpringAnnotation(file, classBlock, "RestController");
-      if (!classIsRouteable(scanner, framework, file, classBlock, quarkusClassPath, springController)) {
+      List<JavacSourceSymbolIndex.AnnotationInfo> classMirrors =
+          javac.typeAnnotations(file).orElse(List.of());
+      if (!classIsRouteable(
+          scanner, javac, framework, file, classBlock, quarkusClassPath, springController,
+          classMirrors)) {
         return List.of();
       }
-      List<String> classPaths = classPaths(scanner, framework, file, classBlock);
+      List<String> classPaths = classPaths(
+          scanner, javac, framework, file, classBlock, classMirrors);
       if (classPaths.isEmpty()) {
         classPaths = List.of("");
       }
       List<String> classHttpMethods = framework == AnalysisContext.Framework.SPRING_BOOT
-          ? scanner.httpMethods(file, classBlock, "RequestMapping")
+          ? JavacFrameworkAnnotationValues.requestMappingHttpMethods(classMirrors, file, classBlock)
+              .orElseGet(() -> scanner.httpMethods(file, classBlock, "RequestMapping"))
           : SourceMetadataScanner.SUPPORTED_HTTP_METHODS;
       List<Route> result = new ArrayList<>();
       TypeInfo topLevelType = scanner.innermostType(file, file.typeDeclarationStart());
@@ -124,15 +133,18 @@ final class FrameworkRouteScanning {
 
     private static boolean classIsRouteable(
         SourceMetadataScanner scanner,
+        JavacFrameworkAnnotations javac,
         AnalysisContext.Framework framework,
         SourceFile file,
         String classBlock,
         boolean quarkusClassPath,
-        boolean springController) {
+        boolean springController,
+        List<JavacSourceSymbolIndex.AnnotationInfo> classMirrors) {
       if (framework == AnalysisContext.Framework.SPRING_BOOT && !springController) {
         return false;
       }
-      List<String> classPaths = classPaths(scanner, framework, file, classBlock);
+      List<String> classPaths = classPaths(
+          scanner, javac, framework, file, classBlock, classMirrors);
       if (framework == AnalysisContext.Framework.QUARKUS
           && quarkusClassPath && classPaths.isEmpty()) {
         return false;
@@ -144,12 +156,16 @@ final class FrameworkRouteScanning {
 
     private static List<String> classPaths(
         SourceMetadataScanner scanner,
+        JavacFrameworkAnnotations javac,
         AnalysisContext.Framework framework,
         SourceFile file,
-        String classBlock) {
+        String classBlock,
+        List<JavacSourceSymbolIndex.AnnotationInfo> classMirrors) {
       return framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.pathValues(classBlock, "Path")
-          : scanner.mappingPaths(file, classBlock, "RequestMapping");
+          ? JavacFrameworkAnnotationValues.pathValues(classMirrors, classBlock, "Path")
+              .orElseGet(() -> scanner.pathValues(classBlock, "Path"))
+          : JavacFrameworkAnnotationValues.mappingPaths(classMirrors, file, classBlock, "RequestMapping")
+              .orElseGet(() -> scanner.mappingPaths(file, classBlock, "RequestMapping"));
     }
 
     private static List<Route> routesForMethod(RouteMethodRequest request) {
@@ -162,6 +178,14 @@ final class FrameworkRouteScanning {
       List<String> classHttpMethods = request.classHttpMethods();
       MethodInfo method = request.method();
       Set<String> seen = request.seen();
+      JavacFrameworkAnnotations javac = JavacFrameworkAnnotations.of(scanner);
+      List<JavacSourceSymbolIndex.AnnotationInfo> classMirrors =
+          javac.typeAnnotations(file).orElse(List.of());
+      List<JavacSourceSymbolIndex.AnnotationInfo> methodMirrors =
+          javac.memberAnnotations(
+              scanner.typeContaining(file, method.start()), method.name(), "method",
+              JavacFrameworkAnnotations.parameterArity(method.parameters()))
+          .orElse(List.of());
       List<Route> result = new ArrayList<>();
       for (String annotationName : scanner.routeAnnotations(
           file, method.annotationBlock(), framework)) {
@@ -175,7 +199,9 @@ final class FrameworkRouteScanning {
             classHttpMethods,
             method,
             annotationName,
-            seen)));
+            seen,
+            classMirrors,
+            methodMirrors)));
       }
       return result;
     }
@@ -185,38 +211,51 @@ final class FrameworkRouteScanning {
       AnalysisContext.Framework framework = request.framework();
       SourceFile file = request.file();
       String classBlock = request.classBlock();
-      boolean quarkusClassPath = request.quarkusClassPath();
       List<String> classPaths = request.classPaths();
       List<String> classHttpMethods = request.classHttpMethods();
       MethodInfo method = request.method();
       String annotationName = request.annotationName();
       Set<String> seen = request.seen();
-      List<String> httpMethods = scanner.intersectHttpMethods(
-          scanner.httpMethods(file, method.annotationBlock(), annotationName), classHttpMethods);
+      List<JavacSourceSymbolIndex.AnnotationInfo> classMirrors = request.classMirrors();
+      List<JavacSourceSymbolIndex.AnnotationInfo> methodMirrors = request.methodMirrors();
+      List<String> methodHttpMethods = "RequestMapping".equals(annotationName)
+          ? JavacFrameworkAnnotationValues.requestMappingHttpMethods(methodMirrors, file, method.annotationBlock())
+              .orElseGet(() -> scanner.httpMethods(
+                  file, method.annotationBlock(), annotationName))
+          : scanner.httpMethods(file, method.annotationBlock(), annotationName);
+      List<String> httpMethods = scanner.intersectHttpMethods(methodHttpMethods, classHttpMethods);
       if (httpMethods.isEmpty()) {
         return List.of();
       }
-      List<String> methodPaths = methodPaths(scanner, framework, file, method, annotationName);
-      if (!methodPathsAllowed(scanner, framework, file, method, annotationName, methodPaths,
-          quarkusClassPath)) {
+      List<String> methodPaths = methodPaths(scanner, framework, file, method,
+          annotationName, methodMirrors);
+      if (!methodPathsAllowed(request, methodPaths)) {
         return List.of();
       }
       if (methodPaths.isEmpty()) {
         methodPaths = List.of("");
       }
-      List<String> consumes = mediaValues(
-          scanner, framework, file, classBlock, method.annotationBlock(), annotationName, "consumes");
-      List<String> produces = mediaValues(
-          scanner, framework, file, classBlock, method.annotationBlock(), annotationName, "produces");
+      List<String> consumes = mediaValues(request, "consumes");
+      List<String> produces = mediaValues(request, "produces");
       List<String> headers = framework == AnalysisContext.Framework.SPRING_BOOT
           ? scanner.mergeValues(
-              scanner.values(file, classBlock, "RequestMapping", "headers"),
-              scanner.values(file, method.annotationBlock(), annotationName, "headers"))
+              JavacFrameworkAnnotationValues.values(classMirrors, file, classBlock, "RequestMapping", "headers", true)
+                  .orElseGet(() -> scanner.values(
+                      file, classBlock, "RequestMapping", "headers")),
+              JavacFrameworkAnnotationValues.values(methodMirrors, file, method.annotationBlock(),
+                  annotationName, "headers", true)
+                  .orElseGet(() -> scanner.values(
+                      file, method.annotationBlock(), annotationName, "headers")))
           : List.of();
       List<String> parameters = framework == AnalysisContext.Framework.SPRING_BOOT
           ? scanner.mergeValues(
-              scanner.values(file, classBlock, "RequestMapping", "params"),
-              scanner.values(file, method.annotationBlock(), annotationName, "params"))
+              JavacFrameworkAnnotationValues.values(classMirrors, file, classBlock, "RequestMapping", "params", true)
+                  .orElseGet(() -> scanner.values(
+                      file, classBlock, "RequestMapping", "params")),
+              JavacFrameworkAnnotationValues.values(methodMirrors, file, method.annotationBlock(),
+                  annotationName, "params", true)
+                  .orElseGet(() -> scanner.values(
+                      file, method.annotationBlock(), annotationName, "params")))
           : List.of();
       return routeVariants(new RouteVariantsRequest(
           scanner,
@@ -240,20 +279,22 @@ final class FrameworkRouteScanning {
         AnalysisContext.Framework framework,
         SourceFile file,
         MethodInfo method,
-        String annotationName) {
+        String annotationName,
+        List<JavacSourceSymbolIndex.AnnotationInfo> methodMirrors) {
       return framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.pathValues(method.annotationBlock(), "Path")
-          : scanner.mappingPaths(file, method.annotationBlock(), annotationName);
+          ? JavacFrameworkAnnotationValues.pathValues(methodMirrors, method.annotationBlock(), "Path")
+              .orElseGet(() -> scanner.pathValues(method.annotationBlock(), "Path"))
+          : JavacFrameworkAnnotationValues.mappingPaths(methodMirrors, file, method.annotationBlock(), annotationName)
+              .orElseGet(() -> scanner.mappingPaths(
+                  file, method.annotationBlock(), annotationName));
     }
 
     private static boolean methodPathsAllowed(
-        SourceMetadataScanner scanner,
-        AnalysisContext.Framework framework,
-        SourceFile file,
-        MethodInfo method,
-        String annotationName,
-        List<String> methodPaths,
-        boolean quarkusClassPath) {
+        RouteAnnotationRequest request, List<String> methodPaths) {
+      SourceMetadataScanner scanner = request.scanner();
+      AnalysisContext.Framework framework = request.framework();
+      MethodInfo method = request.method();
+      String annotationName = request.annotationName();
       boolean quarkusExplicitPath = framework == AnalysisContext.Framework.QUARKUS
           && scanner.hasAnnotation(method.annotationBlock(), "Path");
       if (framework == AnalysisContext.Framework.QUARKUS && quarkusExplicitPath
@@ -261,26 +302,39 @@ final class FrameworkRouteScanning {
         return false;
       }
       if (framework == AnalysisContext.Framework.SPRING_BOOT && methodPaths.isEmpty()
-          && scanner.hasExplicitMappingPath(file, method.annotationBlock(), annotationName)) {
+          && JavacFrameworkAnnotationValues.hasExplicitMappingPath(
+              request.methodMirrors(), request.file(), method.annotationBlock(), annotationName)
+              .orElseGet(() -> scanner.hasExplicitMappingPath(
+                  request.file(), method.annotationBlock(), annotationName))) {
         return false;
       }
-      return framework != AnalysisContext.Framework.QUARKUS || quarkusClassPath;
+      return framework != AnalysisContext.Framework.QUARKUS || request.quarkusClassPath();
     }
 
     private static List<String> mediaValues(
-        SourceMetadataScanner scanner,
-        AnalysisContext.Framework framework,
-        SourceFile file,
-        String classBlock,
-        String methodBlock,
-        String annotationName,
-        String attribute) {
+        RouteAnnotationRequest request, String attribute) {
+      SourceMetadataScanner scanner = request.scanner();
+      AnalysisContext.Framework framework = request.framework();
+      String classBlock = request.classBlock();
+      String methodBlock = request.method().annotationBlock();
+      String annotationName = request.annotationName();
+      String classAnnotation = attribute.equals("consumes") ? "Consumes" : "Produces";
       List<String> classValues = framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.mediaValues(classBlock, attribute.equals("consumes") ? "Consumes" : "Produces", null)
-          : scanner.mediaValues(file, classBlock, "RequestMapping", attribute);
+          ? JavacFrameworkAnnotationValues.values(
+              request.classMirrors(), request.file(), classBlock, classAnnotation, null, false)
+              .orElseGet(() -> scanner.mediaValues(classBlock, classAnnotation, null))
+          : JavacFrameworkAnnotationValues.mediaValues(
+              request.classMirrors(), request.file(), classBlock, "RequestMapping", attribute)
+              .orElseGet(() -> scanner.mediaValues(
+                  request.file(), classBlock, "RequestMapping", attribute));
       List<String> methodValues = framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.mediaValues(methodBlock, attribute.equals("consumes") ? "Consumes" : "Produces", null)
-          : scanner.mediaValues(file, methodBlock, annotationName, attribute);
+          ? JavacFrameworkAnnotationValues.values(
+              request.methodMirrors(), request.file(), methodBlock, classAnnotation, null, false)
+              .orElseGet(() -> scanner.mediaValues(methodBlock, classAnnotation, null))
+          : JavacFrameworkAnnotationValues.mediaValues(
+              request.methodMirrors(), request.file(), methodBlock, annotationName, attribute)
+              .orElseGet(() -> scanner.mediaValues(
+                  request.file(), methodBlock, annotationName, attribute));
       return scanner.overrideValues(classValues, methodValues);
     }
 

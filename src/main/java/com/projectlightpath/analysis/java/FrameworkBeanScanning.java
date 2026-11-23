@@ -27,14 +27,19 @@ import java.util.stream.Stream;
 
 /** Responsibility layer for bounded framework source scanning. */
 final class FrameworkBeanScanning {
+  private static final List<String> CONDITION_ANNOTATION_NAMES = List.of(
+      "Conditional", "ConditionalOnBean", "ConditionalOnMissingBean", "ConditionalOnClass",
+      "ConditionalOnMissingClass", "ConditionalOnProperty", "ConditionalOnExpression");
+
   private FrameworkBeanScanning() {}
 
     static List<BeanCandidate> beanCandidates(
         SourceMetadataScanner scanner, AnalysisContext.Framework framework) {
+      JavacFrameworkAnnotations javac = JavacFrameworkAnnotations.of(scanner);
       List<BeanCandidate> result = new ArrayList<>();
       for (SourceFile file : scanner.files()) {
-        addTypeCandidate(result, scanner, framework, file);
-        addProducerCandidates(result, scanner, framework, file);
+        addTypeCandidate(result, scanner, framework, file, javac);
+        addProducerCandidates(result, scanner, framework, file, javac);
       }
       return List.copyOf(result);
     }
@@ -43,7 +48,8 @@ final class FrameworkBeanScanning {
         List<BeanCandidate> result,
         SourceMetadataScanner scanner,
         AnalysisContext.Framework framework,
-        SourceFile file) {
+        SourceFile file,
+        JavacFrameworkAnnotations javac) {
       String block = file.classAnnotationBlock();
       boolean repository = framework == AnalysisContext.Framework.SPRING_BOOT
           && scanner.springRepositoryContract(file).isPresent();
@@ -53,15 +59,17 @@ final class FrameworkBeanScanning {
       if (!bean) {
         return;
       }
+      Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> mirrors =
+          javac.typeAnnotations(file);
       result.add(new BeanCandidate(
           file,
           scanner.contracts(file),
           repository ? "repository_interface" : scanner.beanKind(file, block, framework),
           file.typeName(),
           file.typeName(),
-          qualifiers(scanner, framework, file, block),
-          profiles(scanner, framework, file, block),
-          conditions(scanner, framework, file, block),
+          beanValues(scanner, javac, framework, file, block, mirrors, "qualifier"),
+          beanValues(scanner, javac, framework, file, block, mirrors, "profile"),
+          beanValues(scanner, javac, framework, file, block, mirrors, "condition"),
           scanner.hasAnnotation(block, "Alternative"),
           primary(scanner, framework, file, block),
           null,
@@ -69,25 +77,32 @@ final class FrameworkBeanScanning {
           null));
     }
 
-    private static List<String> qualifiers(
-        SourceMetadataScanner scanner, AnalysisContext.Framework framework,
-        SourceFile file, String block) {
-      return framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.qualifierNames(block) : scanner.qualifierNames(file, block);
-    }
-
-    private static List<String> profiles(
-        SourceMetadataScanner scanner, AnalysisContext.Framework framework,
-        SourceFile file, String block) {
-      return framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.profileValues(block) : scanner.profileValues(file, block);
-    }
-
-    private static List<String> conditions(
-        SourceMetadataScanner scanner, AnalysisContext.Framework framework,
-        SourceFile file, String block) {
-      return framework == AnalysisContext.Framework.QUARKUS
-          ? scanner.conditionAnnotations(block) : scanner.conditionAnnotations(file, block);
+    /** Extracts one bean annotation-value family, index first. */
+    private static List<String> beanValues(
+        SourceMetadataScanner scanner,
+        JavacFrameworkAnnotations javac,
+        AnalysisContext.Framework framework,
+        SourceFile file,
+        String block,
+        Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> mirrors,
+        String kind) {
+      boolean quarkus = framework == AnalysisContext.Framework.QUARKUS;
+      return switch (kind) {
+        case "qualifier" -> JavacFrameworkQualifierFamilies.qualifiers(file, block, mirrors.orElse(List.of()), !quarkus)
+            .orElseGet(() -> quarkus
+                ? scanner.qualifierNames(block)
+                : scanner.qualifierNames(file, block));
+        case "profile" -> JavacFrameworkAnnotationValues.values(mirrors.orElse(List.of()), file, block,
+                "Profile", null, !quarkus)
+            .orElseGet(() -> quarkus
+                ? scanner.profileValues(block)
+                : scanner.profileValues(file, block));
+        default -> JavacFrameworkAnnotationValues.conditionAnnotations(mirrors.orElse(List.of()), file, block,
+                CONDITION_ANNOTATION_NAMES, !quarkus)
+            .orElseGet(() -> quarkus
+                ? scanner.conditionAnnotations(block)
+                : scanner.conditionAnnotations(file, block));
+      };
     }
 
     private static boolean primary(
@@ -102,11 +117,12 @@ final class FrameworkBeanScanning {
         List<BeanCandidate> result,
         SourceMetadataScanner scanner,
         AnalysisContext.Framework framework,
-        SourceFile file) {
+        SourceFile file,
+        JavacFrameworkAnnotations javac) {
       String block = file.classAnnotationBlock();
       for (MethodInfo method : SourceMetadataScanner.methods(file)) {
         if (isProducer(scanner, framework, file, method) && !method.returnType().isBlank()) {
-          result.add(producerCandidate(scanner, framework, file, block, method));
+          result.add(producerCandidate(scanner, framework, file, block, method, javac));
         }
       }
     }
@@ -124,19 +140,28 @@ final class FrameworkBeanScanning {
         AnalysisContext.Framework framework,
         SourceFile file,
         String block,
-        MethodInfo method) {
+        MethodInfo method,
+        JavacFrameworkAnnotations javac) {
       String candidateId = file.typeName() + "#" + method.name() + "("
           + method.parameters().replaceAll("\\s+", " ").trim() + ")";
       String producerType = scanner.resolveReferenceType(method.returnType(), file).orElse("");
+      Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> classMirrors =
+          javac.typeAnnotations(file);
+      Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> methodMirrors =
+          javac.memberAnnotations(
+              scanner.typeContaining(file, method.start()), method.name(), "method",
+              JavacFrameworkAnnotations.parameterArity(method.parameters()));
+      ProducerSite site = new ProducerSite(
+          file, block, method, classMirrors, methodMirrors);
       return new BeanCandidate(
           file,
           Set.of(),
           "producer",
           candidateId,
           producerType,
-          producerQualifiers(scanner, framework, file, block, method),
-          mergeAnnotationValues(scanner, framework, file, block, method, "profile"),
-          mergeAnnotationValues(scanner, framework, file, block, method, "condition"),
+          producerQualifiers(scanner, javac, framework, site),
+          mergeAnnotationValues(scanner, javac, framework, site, "profile"),
+          mergeAnnotationValues(scanner, javac, framework, site, "condition"),
           scanner.hasAnnotation(block, "Alternative")
               || scanner.hasAnnotation(method.annotationBlock(), "Alternative"),
           producerPrimary(scanner, framework, file, block, method),
@@ -145,52 +170,43 @@ final class FrameworkBeanScanning {
           method.parameters());
     }
 
+    /** One producer-method site and its class- and method-level mirrors. */
+    private record ProducerSite(
+        SourceFile file,
+        String classBlock,
+        MethodInfo method,
+        Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> classMirrors,
+        Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> methodMirrors) {}
+
     /** Keeps a configuration class's bean name separate from its produced bean. */
     private static List<String> producerQualifiers(
         SourceMetadataScanner scanner,
+        JavacFrameworkAnnotations javac,
         AnalysisContext.Framework framework,
-        SourceFile file,
-        String classBlock,
-        MethodInfo method) {
-      List<String> factoryQualifiers = annotationValues(scanner, framework, file, classBlock, "qualifier")
+        ProducerSite site) {
+      List<String> factoryQualifiers = beanValues(
+          scanner, javac, framework, site.file(), site.classBlock(),
+          site.classMirrors(), "qualifier")
           .stream()
           .filter(value -> !value.startsWith("BeanName:"))
           .toList();
       return scanner.mergeValues(
           factoryQualifiers,
-          annotationValues(scanner, framework, file, method.annotationBlock(), "qualifier"));
+          beanValues(scanner, javac, framework, site.file(),
+              site.method().annotationBlock(), site.methodMirrors(), "qualifier"));
     }
 
     private static List<String> mergeAnnotationValues(
         SourceMetadataScanner scanner,
+        JavacFrameworkAnnotations javac,
         AnalysisContext.Framework framework,
-        SourceFile file,
-        String classBlock,
-        MethodInfo method,
+        ProducerSite site,
         String kind) {
       return scanner.mergeValues(
-          annotationValues(scanner, framework, file, classBlock, kind),
-          annotationValues(scanner, framework, file, method.annotationBlock(), kind));
-    }
-
-    private static List<String> annotationValues(
-        SourceMetadataScanner scanner,
-        AnalysisContext.Framework framework,
-        SourceFile file,
-        String block,
-        String kind) {
-      if (framework == AnalysisContext.Framework.QUARKUS) {
-        return switch (kind) {
-          case "qualifier" -> scanner.qualifierNames(block);
-          case "profile" -> scanner.profileValues(block);
-          default -> scanner.conditionAnnotations(block);
-        };
-      }
-      return switch (kind) {
-        case "qualifier" -> scanner.qualifierNames(file, block);
-        case "profile" -> scanner.profileValues(file, block);
-        default -> scanner.conditionAnnotations(file, block);
-      };
+          beanValues(scanner, javac, framework, site.file(), site.classBlock(),
+              site.classMirrors(), kind),
+          beanValues(scanner, javac, framework, site.file(),
+              site.method().annotationBlock(), site.methodMirrors(), kind));
     }
 
     private static boolean producerPrimary(

@@ -23,15 +23,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.Isolated;
 
 /**
  * javac source-symbol index: one parse per AnalysisContext, read API, and
  * fail-visible diagnostics, behind the {@code flpath.java.symbolindex} flag.
  *
- * <p>The class runs same-thread because it owns the flag and the
- * {@link JavacSourceSymbolIndex#COMPILATIONS} counter; every counter
- * assertion is a delta, never an absolute value.
+ * <p>The class runs same-thread and {@link Isolated isolated} because it
+ * owns the flag and the {@link JavacSourceSymbolIndex#COMPILATIONS}
+ * counter; every counter assertion is a delta, never an absolute value.
+ * The isolation completes the #22 pattern: production scan code reads the
+ * flag from every framework scan (the #24 migration), so a leaked flag
+ * window while another class scans concurrently would build an index and
+ * pollute this class's compilation deltas.
  */
+@Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacSourceSymbolIndexTest {
   private static final String FLAG = "flpath.java.symbolindex";
