@@ -54,6 +54,18 @@ class SurefireTestCounterTest {
     assertEquals(0, SurefireTestCounter.count(temp.resolve("absent")));
   }
 
+  /** A regular file at the reports path fails loudly, naming the path. */
+  @Test
+  void fileAtReportsPathFailsLoudlyNamingThePath() throws IOException {
+    Path file = temp.resolve("surefire-reports");
+    Files.writeString(file, "not a directory");
+
+    IllegalStateException error = assertThrows(
+        IllegalStateException.class, () -> SurefireTestCounter.count(file));
+    assertTrue(error.getMessage().contains("surefire-reports"));
+    assertTrue(error.getMessage().contains("not a directory"));
+  }
+
   /** Counting uses long arithmetic; two huge reports must not wrap. */
   @Test
   void countSumsBeyondIntRangeWithoutWrapping() throws IOException {
@@ -176,13 +188,19 @@ class SurefireTestCounterTest {
     assertEquals(1, SurefireTestCounter.run(new String[] {"1", "999"}, base));
   }
 
+  /**
+   * A base that passes the gate under every plausible baseline misread: lanes total
+   * 1000, above the default 302 and above any single argument the argv cells pass
+   * (1, 999), so an exit 1 in those cells can only come from the argv error itself.
+   */
   private Path passingBase() throws IOException {
     Path base = temp.resolve("passing-base");
-    for (String lane : new String[] {"surefire-reports", "surefire-reports-large",
-        "surefire-reports-sootup"}) {
-      report(Files.createDirectories(base.resolve(lane)), "TEST-one.xml", "100");
-    }
-    report(base.resolve("surefire-reports"), "TEST-two.xml", "2");
+    report(Files.createDirectories(base.resolve("surefire-reports")),
+        "TEST-one.xml", "400");
+    report(Files.createDirectories(base.resolve("surefire-reports-large")),
+        "TEST-one.xml", "300");
+    report(Files.createDirectories(base.resolve("surefire-reports-sootup")),
+        "TEST-one.xml", "300");
     return base;
   }
 

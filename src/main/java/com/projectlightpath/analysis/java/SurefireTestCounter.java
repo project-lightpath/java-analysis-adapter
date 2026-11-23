@@ -50,8 +50,16 @@ public final class SurefireTestCounter {
    *     file, instead of silently undercounting
    */
   static long count(Path directory) {
-    if (!Files.isDirectory(directory)) {
+    if (Files.notExists(directory)) {
       return 0;
+    }
+    if (!Files.isDirectory(directory)) {
+      // Also covers a path whose type cannot be determined: isDirectory returns
+      // false without throwing, and notExists already returned false, so the only
+      // remaining explanations are a wrong type or an unreadable path — both must
+      // fail loudly with the path named, not silently count as zero.
+      throw new IllegalStateException("surefire reports path is not a directory: "
+          + directory);
     }
     long total = 0;
     List<Path> reports = new ArrayList<>();
