@@ -51,10 +51,11 @@ final class EvidenceCollections {
   /**
    * Sentinel for a non-textual set member. Containers reject outright (Python's set
    * finds lists and dicts unhashable); scalars keep Python's numeric equality —
-   * {@code 17 == 17.0} and {@code True == 1} are the same set member — so integral
-   * numbers collapse onto their long form and booleans onto 1/0. A residual
-   * divergence remains for out-of-range big integers versus numerically equal floats
-   * (Python's cross-type equality collapses them; the value texts stay distinct).
+   * {@code 17 == 17.0}, {@code True == 1}, and {@code 2**64 == 2.0**64} are the same
+   * set member — by canonicalizing every number to its exact mathematical value
+   * (BigDecimal stripped of trailing zeros), never through double: double conversion
+   * would collapse distinct integers beyond 2^53 and is the failure this replaces.
+   * Booleans collapse onto 1/0 because Python's bool subclasses int.
    */
   private static String sentinel(JsonNode value) {
     require(!value.isArray() && !value.isObject(),
@@ -63,11 +64,14 @@ final class EvidenceCollections {
       return NON_TEXTUAL_PREFIX + (value.asBoolean() ? "1" : "0");
     }
     if (value.isNumber()) {
-      double number = value.doubleValue();
-      if (number == Math.floor(number) && number >= Long.MIN_VALUE
-          && number <= Long.MAX_VALUE) {
-        return NON_TEXTUAL_PREFIX + (long) number;
-      }
+      // Floats canonicalize through the EXACT binary expansion (new BigDecimal(double)),
+      // never decimalValue(): Jackson routes floats through the shortest-repr string,
+      // which is a different number for values like 2^64. Python compares the double's
+      // exact value, so int 2^64 and float 2.0**64 are the same member.
+      java.math.BigDecimal exact = value.isFloatingPointNumber()
+          ? new java.math.BigDecimal(value.doubleValue())
+          : value.decimalValue();
+      return NON_TEXTUAL_PREFIX + exact.stripTrailingZeros().toPlainString();
     }
     return NON_TEXTUAL_PREFIX + value;
   }

@@ -595,6 +595,15 @@ class EvidenceContractValidatorTest {
     assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
         MAPPER.createObjectNode().put("id", 17),
         MAPPER.createObjectNode().put("id", 18)), "id").size());
+    // Distinct integers beyond 2^53 stay distinct (double conversion would collapse
+    // them); a big integer and its exactly-representable float are the same member.
+    assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", new java.math.BigInteger("9007199254740992")),
+        MAPPER.createObjectNode().put("id", new java.math.BigInteger("9007199254740993"))),
+        "id").size());
+    assertEquals(1, EvidenceCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", new java.math.BigInteger("18446744073709551616")),
+        MAPPER.createObjectNode().put("id", 1.8446744073709552e19)), "id").size());
     // End to end: two relationships whose ids are 17 and 17.0 are duplicates.
     assertFailsWith(mutatedSpikeTree("spike/contracts/expected-call-facts.json",
         document -> {
