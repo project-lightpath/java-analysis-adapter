@@ -238,6 +238,33 @@ static final Map<String, List<String>> SPRING_DATA_GUARANTEED_CONTRACT_METHODS =
       Map.entry("JpaRepository", SPRING_DATA_JPA_METHODS));
 static final Set<String> SPRING_DATA_REPOSITORY_CONFIGURATION_ANNOTATIONS = Set.of(
       "org.springframework.data.jpa.repository.config.EnableJpaRepositories");
+static final Set<String> SPRING_DATA_QUERY_ANNOTATIONS = Set.of(
+      "org.springframework.data.jpa.repository.Query");
+static final Map<String, Set<Integer>> SPRING_DATA_CONTRACT_METHOD_ARITIES = Map.ofEntries(
+      Map.entry("save", Set.of(1)),
+      Map.entry("saveAll", Set.of(1)),
+      Map.entry("findById", Set.of(1)),
+      Map.entry("existsById", Set.of(1)),
+      Map.entry("findAll", Set.of(0)),
+      Map.entry("findAllById", Set.of(1)),
+      Map.entry("count", Set.of(0)),
+      Map.entry("deleteById", Set.of(1)),
+      Map.entry("delete", Set.of(1)),
+      Map.entry("deleteAllById", Set.of(1)),
+      Map.entry("deleteAll", Set.of(0, 1)),
+      Map.entry("flush", Set.of(0)),
+      Map.entry("saveAndFlush", Set.of(1)),
+      Map.entry("saveAllAndFlush", Set.of(1)),
+      Map.entry("deleteAllInBatch", Set.of(1)),
+      Map.entry("deleteAllByIdInBatch", Set.of(1)),
+      Map.entry("getOne", Set.of(1)),
+      Map.entry("getById", Set.of(1)),
+      Map.entry("getReferenceById", Set.of(1)));
+
+  /** Returns the contract parameter-count shapes for one guaranteed method name. */
+  static Set<Integer> springDataContractMethodArities(String methodName) {
+    return SPRING_DATA_CONTRACT_METHOD_ARITIES.getOrDefault(methodName, Set.of());
+  }
 static final List<String> SUPPORTED_HTTP_METHODS =
       List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 

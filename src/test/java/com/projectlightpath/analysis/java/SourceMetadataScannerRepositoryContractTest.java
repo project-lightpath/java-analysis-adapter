@@ -416,6 +416,39 @@ class SourceMetadataScannerRepositoryContractTest {
         .build();
   }
 
+  @Test
+  void transitiveFragmentCompositionIsAccepted() throws IOException {
+    Path sourceRoot = temp.resolve("transitive-fragment/src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/CustomFragment.java", """
+        package demo;
+        public interface CustomFragment {
+          void refresh(Account account);
+        }
+        """);
+    write(sourceRoot, "demo/BaseFragmentImpl.java", """
+        package demo;
+        public class BaseFragmentImpl implements CustomFragment {
+          public void refresh(Account account) { }
+        }
+        """);
+    write(sourceRoot, "demo/CustomFragmentImpl.java", """
+        package demo;
+        public class CustomFragmentImpl extends BaseFragmentImpl { }
+        """);
+    write(sourceRoot, "demo/FragmentedRepository.java", """
+        package demo;
+        public interface FragmentedRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            CustomFragment { }
+        """);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context(sourceRoot, "2.7.18"));
+    List<SourceMetadataScannerState.RepositoryFragment> fragments = scanner.springRepositoryFragments();
+    assertEquals(1, fragments.size(),
+        "one level of extends counts as implementing the fragment");
+    assertEquals("demo.CustomFragmentImpl", fragments.get(0).implementationType());
+  }
+
   /** Writes one temporary Java fixture source file. */
   private static void write(Path root, String relative, String source) throws IOException {
     Path path = root.resolve(relative);

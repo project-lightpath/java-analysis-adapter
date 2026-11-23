@@ -94,6 +94,28 @@ abstract class SourceMetadataScannerFragmentLayer
 
   /** Checks that one concrete class names the fragment interface in its implements clause. */
   private boolean implementsFragment(SourceFile candidate, SourceFile fragmentFile) {
+    if (implementsClauseNames(candidate, fragmentFile)) {
+      return true;
+    }
+    // One bounded level of transitivity: Spring Data's runtime wiring checks
+    // assignability, so an Impl extending a class that implements the
+    // fragment is a valid composition. Deeper chains remain a documented
+    // false-reject residual (visible as the unconfirmed-impl diagnostic).
+    Optional<String> superclass = extendedSuperclass(candidate);
+    if (superclass.isPresent()) {
+      SourceFile superclassFile = files().stream()
+          .filter(file -> file.typeName().equals(superclass.get()))
+          .findFirst()
+          .orElse(null);
+      if (superclassFile != null && implementsClauseNames(superclassFile, fragmentFile)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Checks one file's own implements clause for the fragment interface. */
+  private boolean implementsClauseNames(SourceFile candidate, SourceFile fragmentFile) {
     String header = maskStringLiterals(typeHeader(candidate));
     int implementsIndex = topLevelKeywordIndex(header, "implements");
     if (implementsIndex < 0) {
@@ -109,6 +131,25 @@ abstract class SourceMetadataScannerFragmentLayer
       }
     }
     return false;
+  }
+
+  /** Resolves the extends-clause superclass of one concrete class, one level. */
+  private Optional<String> extendedSuperclass(SourceFile candidate) {
+    String header = maskStringLiterals(typeHeader(candidate));
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    if (extendsIndex < 0) {
+      return Optional.empty();
+    }
+    int implementsIndex = topLevelKeywordIndex(header, "implements");
+    String extended = header.substring(
+        extendsIndex + "extends".length(),
+        implementsIndex >= 0 ? implementsIndex : header.length());
+    List<String> names = typeNames(extended);
+    if (names.size() != 1) {
+      return Optional.empty();
+    }
+    String name = names.get(0);
+    return name.contains(".") ? Optional.of(name) : resolveReferenceType(name, candidate);
   }
 
   /** Returns app-declared interfaces extended by one repository, excluding Spring contracts. */

@@ -364,6 +364,48 @@ class SpringDataDelegationLadderTest {
         facts.diagnostics().toString());
   }
 
+  @Test
+  void queryOverloadWithDifferentShapeKeepsTheSlotFact() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.Query;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll(demo.Account probe);
+        }
+        """));
+    List<SemanticCallFacts.Fact> delegations = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("delegated_implementation"))
+        .filter(item -> item.caller().equals("demo.AccountRepository#findAll"))
+        .toList();
+    assertEquals(2, delegations.size(), facts.frameworkFacts().toString());
+    assertTrue(delegations.stream().anyMatch(item ->
+        item.callee().equals(
+            "org.springframework.data.jpa.repository.support.SimpleJpaRepository#findAll")
+            && item.certainty() == SemanticCallFacts.Certainty.DEFINITE),
+        "the contract slot keeps its default backing for a different-shape overload");
+    assertTrue(delegations.stream().anyMatch(item ->
+        item.callee().equals(
+            "org.springframework.data.jpa.repository.query.AbstractStringBasedJpaQuery#execute")),
+        "the overload gets its own query fact");
+  }
+
+  @Test
+  void nonCanonicalQueryAnnotationIsNotOverrideEvidence() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findAll.certainty(),
+        "a non-imported simple Query spelling is not the Spring Data annotation");
+  }
+
   private SemanticCallFacts.Fact delegationFact(SemanticCallFacts facts, String caller) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("delegated_implementation"))

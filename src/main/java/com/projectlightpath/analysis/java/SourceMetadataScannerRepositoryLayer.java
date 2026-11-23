@@ -56,7 +56,7 @@ abstract class SourceMetadataScannerRepositoryLayer
     if (inherited == null || !inherited.guaranteed()) {
       return false;
     }
-    if (method.hasAnnotation("Query")) {
+    if (queryAnnotated(file, method)) {
       // An @Query redeclaration reroutes execution; it stays a declared
       // method so the delegation ladder can treat it as a query override.
       return false;
@@ -71,10 +71,11 @@ abstract class SourceMetadataScannerRepositoryLayer
   }
 
   /**
-   * Returns the guaranteed method names whose contract default is rerouted
-   * by a same-name declaration carrying a query annotation. A plain
-   * redeclaration does not reroute the proxy backing and is not override
-   * evidence.
+   * Returns the guaranteed method names whose contract slot is rerouted by a
+   * same-name query-annotated declaration that redeclares the slot's
+   * parameter shape. A same-name overload with a different shape does not
+   * replace the slot, and a plain redeclaration does not reroute the proxy
+   * backing at all.
    */
   Set<String> queryOverriddenGuaranteedNames(SourceFile file) {
     Set<String> guaranteedNames = springRepositoryMethods(file).stream()
@@ -86,28 +87,39 @@ abstract class SourceMetadataScannerRepositoryLayer
       if (!typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
           || !abstractInstanceRepositoryMethod(method)
           || !guaranteedNames.contains(method.name())
-          || !method.hasAnnotation("Query")) {
+          || !queryAnnotated(file, method)) {
         continue;
       }
-      result.add(method.name());
+      int parameterCount = parameters(method.parameters()).size();
+      if (SourceMetadataScannerState
+          .springDataContractMethodArities(method.name()).contains(parameterCount)) {
+        result.add(method.name());
+      }
     }
     return result;
   }
 
   /**
-   * Returns the source signatures of declared repository methods carrying a
-   * query annotation, keyed for identity lookup.
+   * Returns the source signatures of declared repository methods carrying
+   * the canonical Spring Data query annotation, keyed for identity lookup.
    */
   Set<String> queryAnnotatedMethodIdentities(SourceFile file) {
     Set<String> result = new LinkedHashSet<>();
     for (MethodInfo method : methods(file)) {
       if (!typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
           || !abstractInstanceRepositoryMethod(method)
-          || !method.hasAnnotation("Query")) {
+          || !queryAnnotated(file, method)) {
         continue;
       }
       result.add(repositoryMethodSignature(method));
     }
     return result;
+  }
+
+  /** Matches only the canonical Spring Data query annotation, not lookalikes. */
+  private static boolean queryAnnotated(SourceFile file, MethodInfo method) {
+    return !canonicalAnnotationOccurrences(
+        file, method.annotationBlock(), "Query",
+        SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS).isEmpty();
   }
 }

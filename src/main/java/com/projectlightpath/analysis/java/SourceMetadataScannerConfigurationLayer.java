@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -103,7 +104,7 @@ abstract class SourceMetadataScannerConfigurationLayer
    * unresolved diagnostics.
    */
   private boolean resolvableOnDependencyClasspath(String simpleType, SourceFile file) {
-    Set<String> packages = new java.util.LinkedHashSet<>();
+    Set<String> packages = new LinkedHashSet<>();
     packages.add(file.packageName());
     Matcher onDemand = Pattern.compile("import\\s+([\\w.]+)\\.\\*\\s*;").matcher(
         maskStringLiterals(file.structuralSource()));
