@@ -40,7 +40,13 @@ import java.util.Set;
  *       membership on dicts, element equality on lists); the port implements the shapes
  *       the checked-in documents use — substring on strings, key membership on objects —
  *       and skips other shapes, so a JSON array containing the exact string
- *       {@code "caller"} (SootUp evidence) fails here where Python passed.
+ *       {@code "caller"} (SootUp evidence) fails here where Python passed;
+ *   <li>two checks are deliberately stricter than Python in the reject direction: a
+ *       JSON-null {@code testProfile} passes Python's {@code None != "prod"} comparison
+ *       but fails this gate, and a mirrored extra metric key (present in
+ *       {@code javacTotals} and every cell with matching sums) passes Python's
+ *       document-keyed recompute but fails this gate's fixed metric inventory. Both
+ *       reject what Python accepted; neither accepts what Python rejected.
  * </ul>
  *
  * <p>The final summary line, every requirement message, and both exit codes are otherwise
