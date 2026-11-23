@@ -15,12 +15,14 @@ record JavacResolverCell(
     int release,
     Map<String, String> sources,
     List<Map<String, String>> extraUnits,
-    boolean baselineAvailable,
+    BaselineMode baselineMode,
+    List<TextualProbe> textualProbes,
     List<ExpectedSite> expectedSites) {
 
   JavacResolverCell {
     sources = Map.copyOf(sources);
     extraUnits = List.copyOf(extraUnits);
+    textualProbes = List.copyOf(textualProbes);
     expectedSites = List.copyOf(expectedSites);
   }
 
@@ -43,7 +45,7 @@ record JavacResolverCell(
     }
     return new JavacResolverCell(
         id, family, siteFile, owner, method, release, sources, extraUnits,
-        baselineAvailable, aligned);
+        baselineMode, textualProbes, aligned);
   }
 
   private static int offset(Object site) {
@@ -53,9 +55,36 @@ record JavacResolverCell(
     return ((JavacResolverAbstention) site).offset();
   }
 
-  enum Family { PRECEDENCE, STATIC_OWNER, DOLLAR_OWNER, INCOMPLETE }
+  enum Family {
+    PRECEDENCE, STATIC_OWNER, DOLLAR_OWNER, INCOMPLETE,
+    ANNOTATION_NAME, ANNOTATION_ARGUMENT, TYPE_USE, TYPE_SHAPE, REFLECTION_SOURCE_BOUND
+  }
 
-  enum Expectation { DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT }
+  /**
+   * How the textual baseline is measured for one cell. FROZEN reads the
+   * pre-removal JSON capture; LIVE_TEXTUAL runs the production textual
+   * heuristics now; NONE records that no textual measurement exists.
+   */
+  enum BaselineMode { FROZEN, LIVE_TEXTUAL, NONE }
+
+  boolean baselineAvailable() {
+    return baselineMode != BaselineMode.NONE;
+  }
+
+  /**
+   * One live-textual probe: the raw declaration text handed to the production
+   * heuristic, in the same ordinal order as the cell's javac facts.
+   */
+  record TextualProbe(Kind kind, String raw) {
+
+    /** Which production textual heuristic the raw text is measured with. */
+    enum Kind { PARAMETER_TYPE, ANNOTATION_NAME_TOKEN, ANNOTATION_ARGUMENT_TEXT }
+  }
+
+  enum Expectation {
+    DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT,
+    NON_LITERAL_FORNAME, UNRESOLVED_FORNAME
+  }
 
   /** One expected load site. An offset of -1 is filled from the javac result. */
   record ExpectedSite(Expectation expectation, String serviceType, int offset) {

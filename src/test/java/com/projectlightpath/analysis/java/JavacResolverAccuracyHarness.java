@@ -27,12 +27,14 @@ final class JavacResolverAccuracyHarness {
     for (JavacResolverCell cell : cells) {
       Path cellRoot = workRoot.resolve(cell.id());
       Files.createDirectories(cellRoot);
-      Measured baseline = measure(() -> baseline(cell, cellRoot));
       boolean blocked = cell.release() > Runtime.version().feature();
       Measured javac = blocked
           ? new Measured(JavacResolverResult.empty(cell.id()), 0, 0)
           : measure(() -> javac(cell, cellRoot));
       JavacResolverCell scored = blocked ? cell : cell.alignedTo(javac.result());
+      Measured baseline = blocked
+          ? new Measured(JavacResolverResult.empty(cell.id()), 0, 0)
+          : measure(() -> baseline(scored, cellRoot, javac.result()));
       reports.add(new CellReport(
           scored,
           baseline.result(),
@@ -51,12 +53,17 @@ final class JavacResolverAccuracyHarness {
   }
 
   /**
-   * Returns the frozen textual baseline captured before the textual resolver
-   * was removed. It is historical comparison data, not a live measurement.
+   * Returns the textual baseline for one cell. FROZEN reads the pre-removal
+   * JSON capture; LIVE_TEXTUAL runs the production textual heuristics now,
+   * anchored to the javac result's offsets; NONE records no measurement.
    */
-  static JavacResolverResult baseline(JavacResolverCell cell, Path cellRoot) {
+  static JavacResolverResult baseline(
+      JavacResolverCell cell, Path cellRoot, JavacResolverResult javacResult) {
     if (!cell.baselineAvailable()) {
       return JavacResolverResult.empty(cell.id());
+    }
+    if (cell.baselineMode() == JavacResolverCell.BaselineMode.LIVE_TEXTUAL) {
+      return TextualShapeBaseline.run(cell, javacResult);
     }
     JsonNode entry = frozenBaseline().path("cells").path(cell.id());
     if (entry.isMissingNode()) {
@@ -284,6 +291,8 @@ final class JavacResolverAccuracyHarness {
         value.put("accessibility", fact.accessibility());
         value.put("certainty", fact.certainty());
         value.put("promotion", fact.promotion());
+        value.put("annotationName", fact.annotationName());
+        value.put("annotationValue", fact.annotationValue());
         value.put("diagnostics", fact.diagnostics().stream()
             .map(Report::diagnostic)
             .toList());

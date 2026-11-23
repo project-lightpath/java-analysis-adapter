@@ -13,8 +13,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 75,
-      "peakHeapBytes" : 4266536,
+      "wallMillis" : 94,
+      "peakHeapBytes" : 21680416,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -38,13 +38,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 285,
-      "peakHeapBytes" : 16621440,
+      "wallMillis" : 282,
+      "peakHeapBytes" : 22052392,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -68,6 +70,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -83,8 +87,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 14389640,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 25294552,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -101,7 +105,7 @@
     },
     "javac" : {
       "wallMillis" : 37,
-      "peakHeapBytes" : 25923976,
+      "peakHeapBytes" : 25294552,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -134,8 +138,8 @@
       "offset" : 76
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 25923976,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 36828888,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -159,13 +163,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 24,
-      "peakHeapBytes" : 38506888,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 36828888,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -189,6 +195,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -204,8 +212,8 @@
       "offset" : 72
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 38506888,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 48363224,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -221,8 +229,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 31,
-      "peakHeapBytes" : 48992648,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 48363224,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -255,8 +263,8 @@
       "offset" : 92
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 35651584,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 60946136,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -272,8 +280,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 45088768,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 60946136,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -306,8 +314,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 46137344,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 72480472,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -323,8 +331,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 26,
-      "peakHeapBytes" : 52428800,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 72480472,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -357,8 +365,8 @@
       "offset" : 173
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 51380224,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 85063384,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -374,8 +382,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 24,
-      "peakHeapBytes" : 51916784,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 85063384,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -408,8 +416,8 @@
       "offset" : 176
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 46673904,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 66060288,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -425,8 +433,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 53273648,
+      "wallMillis" : 29,
+      "peakHeapBytes" : 85063384,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -459,8 +467,8 @@
       "offset" : 104
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 53273648,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 42439648,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -476,8 +484,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 63759408,
+      "wallMillis" : 25,
+      "peakHeapBytes" : 66060288,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -516,8 +524,8 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 64807984,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 53973984,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -533,8 +541,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 76342320,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 53973984,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -573,8 +581,8 @@
       "offset" : 151
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 76342320,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 66556896,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -590,8 +598,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 88925232,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 66556896,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -630,8 +638,8 @@
       "offset" : 125
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 88925232,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 59768832,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -647,8 +655,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 100459568,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 73896928,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -687,8 +695,8 @@
       "offset" : 133
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 101508144,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 71303168,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -704,8 +712,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 25,
-      "peakHeapBytes" : 101508144,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 71303168,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -744,8 +752,8 @@
       "offset" : 151
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 86507120,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 82837504,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -761,8 +769,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 98041456,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 82837504,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -801,8 +809,8 @@
       "offset" : 120
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 99090032,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 95420416,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -818,8 +826,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 99090032,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 95420416,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -858,8 +866,8 @@
       "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 87556096,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 89128960,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -875,8 +883,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 99090432,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 95420416,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -909,8 +917,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 100139008,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 90104512,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -934,13 +942,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 110624768,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 90104512,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -964,6 +974,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -979,8 +991,8 @@
       "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 4,
-      "peakHeapBytes" : 111673344,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 59555904,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1004,13 +1016,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 22,
-      "peakHeapBytes" : 111673344,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 91013184,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1034,6 +1048,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -1049,8 +1065,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 104857600,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 71090240,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1066,8 +1082,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 115343360,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 71090240,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1104,8 +1120,8 @@
       "offset" : 257
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 116391936,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 82624576,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1129,13 +1145,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 116391936,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 82624576,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1159,6 +1177,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ {
@@ -1185,8 +1205,8 @@
       "offset" : 273
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 116916224,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 94158912,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1210,13 +1230,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 128450560,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 94158912,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1240,6 +1262,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ {
@@ -1266,8 +1290,8 @@
       "offset" : 199
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 128450560,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 79606368,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1291,13 +1315,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 139984896,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 94158912,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1321,6 +1347,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.cant.resolve.location.args",
           "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
@@ -1359,8 +1387,8 @@
       "offset" : 242
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 139984896,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 93237856,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1384,13 +1412,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 151519232,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 93237856,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1414,6 +1444,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.cant.resolve.location.args",
           "message" : "cannot find symbol\n  symbol:   method load(java.lang.Class<java.lang.Object>)\n  location: variable ServiceLoader of type java.lang.String",
@@ -1448,8 +1480,8 @@
       "offset" : 160
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 132519488,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 104772192,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1465,8 +1497,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 143005248,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 104772192,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1499,8 +1531,8 @@
       "offset" : 173
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 144053824,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 116306528,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1516,8 +1548,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 154539584,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 116306528,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1550,8 +1582,8 @@
       "offset" : 98
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 155588160,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 127840864,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1567,8 +1599,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 167122496,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 127840864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1601,8 +1633,8 @@
       "offset" : 95
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 167122496,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 65739392,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1618,8 +1650,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 25,
-      "peakHeapBytes" : 167122496,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 127840864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1652,8 +1684,8 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 105906176,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 77273728,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1669,8 +1701,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 116391936,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 77273728,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1703,8 +1735,8 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 117440512,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 88808064,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1720,8 +1752,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 117440512,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 88808064,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1745,6 +1777,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -1760,8 +1794,8 @@
       "offset" : 79
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 109576192,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 100342400,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1777,8 +1811,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 121110528,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 100342400,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1811,8 +1845,8 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 121110528,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 111876736,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1828,8 +1862,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 131596288,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 111876736,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1868,8 +1902,8 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 131596288,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 123411072,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1893,13 +1927,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 143130624,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 123411072,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1923,6 +1959,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -1938,8 +1976,8 @@
       "offset" : 88
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 144179200,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 104333312,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1955,8 +1993,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 150470656,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 131799680,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1980,6 +2018,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -1995,8 +2035,8 @@
       "offset" : 84
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 125824832,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 115867648,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2012,8 +2052,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 136310592,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 115867648,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2046,8 +2086,8 @@
       "offset" : 66
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 137359168,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 127401984,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2071,13 +2111,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 148893504,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 127401984,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2110,8 +2152,8 @@
       "offset" : 66
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 148893504,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 138936320,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2127,8 +2169,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 160427840,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 138936320,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2161,8 +2203,8 @@
       "offset" : 90
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 160427840,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 150470656,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2186,13 +2228,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 171962176,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 150470656,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2225,8 +2269,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 173010752,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 162004992,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2242,8 +2286,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 173010752,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 162004992,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2267,6 +2311,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -2282,8 +2328,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 150991672,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2299,8 +2345,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 162526008,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 170393600,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2339,8 +2385,8 @@
       "offset" : 101
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 162526008,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 74448896,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2356,8 +2402,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 174060344,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2390,8 +2436,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 174060344,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 87031808,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2407,8 +2453,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 185594680,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 87031808,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2432,6 +2478,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -2447,8 +2495,8 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 185594680,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 98566144,
       "selectedPath" : "a/Bridge.java",
       "selectedTopLevel" : "a.Bridge",
       "metrics" : {
@@ -2464,8 +2512,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 185594680,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 98566144,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2504,8 +2552,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 165150720,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 110100480,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2529,13 +2577,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 175636480,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 110100480,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2559,6 +2609,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -2574,8 +2626,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 176685056,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 121634816,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2591,8 +2643,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 30,
-      "peakHeapBytes" : 187170816,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 121634816,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2616,6 +2668,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -2631,8 +2685,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 188219392,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 134217728,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2648,8 +2702,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 25,
-      "peakHeapBytes" : 194510848,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 134217728,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2673,6 +2727,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.doesnt.exist",
           "message" : "package a does not exist",
@@ -2694,8 +2750,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 175636480,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 114294784,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2719,13 +2775,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 188219392,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 134217728,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2749,6 +2807,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.doesnt.exist",
           "message" : "package a does not exist",
@@ -2770,8 +2830,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 188219392,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 125829120,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2795,13 +2855,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 190054416,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 125829120,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2840,8 +2902,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 190054416,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 138412032,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2865,13 +2927,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 191802672,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 138412032,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2895,6 +2959,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.doesnt.exist",
           "message" : "package external does not exist",
@@ -2916,8 +2982,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 191802672,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 149946368,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2941,13 +3007,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 25,
-      "peakHeapBytes" : 191802672,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 149946368,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2971,6 +3039,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -2986,8 +3056,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 124290168,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 161480704,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3011,13 +3081,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 135824504,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 161480704,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3056,8 +3128,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 135824504,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 173015040,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3081,13 +3153,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 143164536,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 173015040,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3126,8 +3200,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 3,
-      "peakHeapBytes" : 137363456,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 184549376,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3151,13 +3225,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 148897792,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 184549376,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3181,6 +3257,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.doesnt.exist",
           "message" : "package external does not exist",
@@ -3202,8 +3280,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 148897792,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 135266304,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3227,13 +3305,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 160432128,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 184549376,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3257,6 +3337,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3272,8 +3354,8 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 161480704,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 77070336,
       "selectedPath" : "a/Bridge.java",
       "selectedTopLevel" : "a.Bridge",
       "metrics" : {
@@ -3297,13 +3379,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 173015040,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 135266304,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3342,8 +3426,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 173015040,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 89653248,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3367,13 +3451,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 184549376,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 89653248,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3412,8 +3498,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 185597952,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 101187584,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3437,13 +3523,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 185597952,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 101187584,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3482,8 +3570,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 148373504,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 112721920,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3507,13 +3595,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 159907840,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 112721920,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3537,6 +3627,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3552,8 +3644,8 @@
       "offset" : 67
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 159907840,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "demo/Cash.java",
       "selectedTopLevel" : "demo.Cash",
       "metrics" : {
@@ -3569,8 +3661,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 171442176,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3594,6 +3686,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3609,8 +3703,8 @@
       "offset" : 86
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 172490752,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 109576192,
       "selectedPath" : "demo/Outer.java",
       "selectedTopLevel" : "demo.Outer",
       "metrics" : {
@@ -3634,13 +3728,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 182976512,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 131596288,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3664,6 +3760,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3679,8 +3777,8 @@
       "offset" : 69
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 184025088,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 121110528,
       "selectedPath" : "demo/Outer.java",
       "selectedTopLevel" : "demo.Outer",
       "metrics" : {
@@ -3696,8 +3794,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 194510848,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 121110528,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3721,6 +3819,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3736,8 +3836,8 @@
       "offset" : 85
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 195559424,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 132644864,
       "selectedPath" : "a.java",
       "selectedTopLevel" : "a",
       "metrics" : {
@@ -3753,8 +3853,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 195559424,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 132644864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3778,6 +3878,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3793,8 +3895,8 @@
       "offset" : 98
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 162529280,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 144179200,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3818,13 +3920,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 174063616,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 144179200,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3848,6 +3952,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3863,8 +3969,8 @@
       "offset" : 63
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 174063616,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 155713536,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3881,7 +3987,7 @@
     },
     "javac" : {
       "wallMillis" : 11,
-      "peakHeapBytes" : 184549376,
+      "peakHeapBytes" : 155713536,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3905,6 +4011,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3920,8 +4028,8 @@
       "offset" : 68
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 184549376,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 167247872,
       "selectedPath" : "demo/Cash.java",
       "selectedTopLevel" : "demo.Cash",
       "metrics" : {
@@ -3938,7 +4046,7 @@
     },
     "javac" : {
       "wallMillis" : 12,
-      "peakHeapBytes" : 196083712,
+      "peakHeapBytes" : 167247872,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3962,6 +4070,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -3977,8 +4087,8 @@
       "offset" : 59
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 196083712,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 128450560,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3994,8 +4104,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 203423744,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 174587904,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4019,6 +4129,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -4034,8 +4146,8 @@
       "offset" : 62
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 174587904,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 139984896,
       "selectedPath" : "a.java",
       "selectedTopLevel" : "a",
       "metrics" : {
@@ -4051,8 +4163,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 186122240,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 139984896,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4076,6 +4188,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
@@ -4091,8 +4205,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 186122240,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 132914048,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4116,13 +4230,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 197656576,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 139984896,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4146,6 +4262,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "error-type",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.cant.resolve.location",
           "message" : "cannot find symbol\n  symbol:   class Missing\n  location: class demo.Bridge",
@@ -4167,8 +4285,8 @@
       "offset" : 84
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 197656576,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 64652704,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4192,13 +4310,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 25,
-      "peakHeapBytes" : 197656576,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 133962624,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4222,6 +4342,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.doesnt.exist",
           "message" : "package missing does not exist",
@@ -4243,8 +4365,8 @@
       "offset" : 87
     } ],
     "baseline" : {
-      "wallMillis" : 2,
-      "peakHeapBytes" : 119537664,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 77235616,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4268,13 +4390,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 131072000,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 77235616,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4298,6 +4422,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.doesnt.exist",
           "message" : "package missing does not exist",
@@ -4320,7 +4446,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 131072000,
+      "peakHeapBytes" : 88769952,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4336,8 +4462,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 142606336,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 88769952,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4361,6 +4487,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.duplicate.class",
           "message" : "duplicate class: demo.Dup",
@@ -4382,8 +4510,8 @@
       "offset" : 89
     } ],
     "baseline" : {
-      "wallMillis" : 1,
-      "peakHeapBytes" : 143654912,
+      "wallMillis" : 0,
+      "peakHeapBytes" : 100304288,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4407,13 +4535,15 @@
         "accessibility" : "TEXTUAL_SITE",
         "certainty" : "DEFINITE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ ]
       } ],
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 149946368,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 100304288,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4437,6 +4567,8 @@
         "accessibility" : "PUBLIC_STATIC",
         "certainty" : "POSSIBLE",
         "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
         "diagnostics" : [ {
           "code" : "compiler.err.cant.resolve.location",
           "message" : "cannot find symbol\n  symbol:   class Missing\n  location: class a.Base",
@@ -4447,15 +4579,2375 @@
       } ],
       "abstentions" : [ ]
     }
+  }, {
+    "id" : "AN1",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Route",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 111838624,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "Route",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 110790048,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "demo.Route",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Route",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN2",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.$Mark",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 89895104,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 15,
+      "peakHeapBytes" : 120227232,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "demo.$Mark",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.$Mark",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN3",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Über",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 100380864,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 100380864,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "demo.Über",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Über",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN4",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Outer.Inner",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 110866624,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "demo.Outer.Inner",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 8,
+      "peakHeapBytes" : 110866624,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "demo.Outer.Inner",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Outer.Inner",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN5",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "missing.Route",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 122400960,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 1,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 1
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "missing.Route",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 122400960,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "missing.Route",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "POSSIBLE",
+        "promotion" : "error-type",
+        "annotationName" : "missing.Route",
+        "annotationValue" : "",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package missing does not exist",
+          "path" : "demo/Probe.java",
+          "line" : 3,
+          "column" : 11
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN6",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Param",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 133935296,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "Param",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 133935296,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "demo.Param",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Param",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN7",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Marker",
+      "offset" : 82
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 144421056,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 24,
+        "offset" : 82,
+        "serviceType" : "Marker",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 144421056,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 24,
+        "offset" : 82,
+        "serviceType" : "demo.Marker",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Marker",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AA1",
+    "family" : "ANNOTATION_ARGUMENT",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "value=java.lang.Object,java.lang.String",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 154906816,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "{Object.class, String.class}",
+        "owner" : "textual",
+        "member" : "ANNOTATION_ARGUMENT_TEXT",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 154906816,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "value=java.lang.Object,java.lang.String",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Items",
+        "annotationValue" : "value=java.lang.Object,java.lang.String",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AA2",
+    "family" : "ANNOTATION_ARGUMENT",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "value=demo.Severity.HIGH",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 166441152,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "Severity.HIGH",
+        "owner" : "textual",
+        "member" : "ANNOTATION_ARGUMENT_TEXT",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 166441152,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "value=demo.Severity.HIGH",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Level",
+        "annotationValue" : "value=demo.Severity.HIGH",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AA3",
+    "family" : "ANNOTATION_ARGUMENT",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "value=@demo.Inner(value=1)",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 123731968,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "@Inner(1)",
+        "owner" : "textual",
+        "member" : "ANNOTATION_ARGUMENT_TEXT",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 19,
+      "peakHeapBytes" : 166441152,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "value=@demo.Inner(value=1)",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Outer",
+        "annotationValue" : "value=@demo.Inner(value=1)",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AA4",
+    "family" : "ANNOTATION_ARGUMENT",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "value=1",
+      "offset" : 30
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "value=x",
+      "offset" : 65
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 115904736,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 2,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "value = 1",
+        "owner" : "textual",
+        "member" : "ANNOTATION_ARGUMENT_TEXT",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 3,
+        "offset" : 65,
+        "serviceType" : "\"x\"",
+        "owner" : "textual",
+        "member" : "ANNOTATION_ARGUMENT_TEXT",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 123731968,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "value=1",
+        "owner" : "demo.Probe",
+        "member" : "first",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Ann",
+        "annotationValue" : "value=1",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 3,
+        "offset" : 65,
+        "serviceType" : "value=x",
+        "owner" : "demo.Probe",
+        "member" : "second",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Name",
+        "annotationValue" : "value=x",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TU1",
+    "family" : "TYPE_USE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String",
+      "offset" : 72
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 127439072,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "String",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 127439072,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "java.lang.String",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TU2",
+    "family" : "TYPE_USE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String[]",
+      "offset" : 72
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 77040784,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "String[]",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 16,
+      "peakHeapBytes" : 127439072,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "java.lang.String[]",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TU3",
+    "family" : "TYPE_USE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String[]",
+      "offset" : 72
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 88575120,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "String@$Mark[]",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 88575120,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "java.lang.String[]",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TU4",
+    "family" : "TYPE_USE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String",
+      "offset" : 72
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 99060880,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "(value=1)String",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 99060880,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 72,
+        "serviceType" : "java.lang.String",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS1",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.util.List",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 110595216,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.util.List<String>",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 110595216,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.util.List",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS2",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.util.List",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 122129552,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.util.List<?>",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 122129552,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.util.List",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS3",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String[]",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 132615312,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "String[]",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 132615312,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.lang.String[]",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS4",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String[][]",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 102152576,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "String[][]",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 15,
+      "peakHeapBytes" : 141003920,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.lang.String[][]",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS5",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "int",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 113686912,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "int",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 113686912,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "int",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS6",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Outer.Inner",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 123124096,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "Outer.Inner",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 123124096,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "demo.Outer.Inner",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS7",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.String",
+      "offset" : 41
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.lang.Integer",
+      "offset" : 68
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Probe.shape(java.lang.String)",
+      "offset" : 100
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Probe.shape(java.lang.Integer)",
+      "offset" : 112
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 134658432,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 2,
+        "lost" : 2,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "String",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 68,
+        "serviceType" : "Integer",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 134658432,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "java.lang.String",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 14,
+        "offset" : 68,
+        "serviceType" : "java.lang.Integer",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 5,
+        "column" : 18,
+        "offset" : 100,
+        "serviceType" : "demo.Probe.shape(java.lang.String)",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 5,
+        "column" : 30,
+        "offset" : 112,
+        "serviceType" : "demo.Probe.shape(java.lang.Integer)",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS8",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Probe.<init>(int)",
+      "offset" : 94
+    }, {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Probe.<init>(java.lang.String)",
+      "offset" : 108
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 145144192,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 145144192,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 5,
+        "column" : 18,
+        "offset" : 94,
+        "serviceType" : "demo.Probe.<init>(int)",
+        "owner" : "demo.Probe",
+        "member" : "<init>",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      }, {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 5,
+        "column" : 32,
+        "offset" : 108,
+        "serviceType" : "demo.Probe.<init>(java.lang.String)",
+        "owner" : "demo.Probe",
+        "member" : "<init>",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "TS9",
+    "family" : "TYPE_SHAPE",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "java.util.List",
+      "offset" : 30
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 157727104,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "java.util.List<String>",
+        "owner" : "textual",
+        "member" : "PARAMETER_TYPE",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 9,
+      "peakHeapBytes" : 157727104,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 3,
+        "offset" : 30,
+        "serviceType" : "java.util.List",
+        "owner" : "demo.Probe",
+        "member" : "audit",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R1",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Present",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 169261440,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 169261440,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "demo.Present",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "promotion" : "source-bound",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R2",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "java.lang.String",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 179747200,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 179747200,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "java.lang.String",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "promotion" : "runtime-only",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R3",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "MISSING_INPUT",
+      "serviceType" : "demo.Present",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 125304832,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 18,
+      "peakHeapBytes" : 180795776,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "demo.Present",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "promotion" : "source-bound",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package missing does not exist",
+          "path" : "demo/Probe.java",
+          "line" : 5,
+          "column" : 12
+        } ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R4",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "no.such.Type",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 79663136,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 19,
+      "peakHeapBytes" : 125304832,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "no.such.Type",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "promotion" : "unresolved-target",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R5",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "NON_LITERAL_FORNAME",
+      "serviceType" : "",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 92246048,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 13,
+      "peakHeapBytes" : 92246048,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Probe.java",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "reason" : "NON_LITERAL_FORNAME",
+        "diagnostics" : [ ]
+      } ]
+    }
+  }, {
+    "id" : "R6",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "UNRESOLVED_FORNAME",
+      "serviceType" : "",
+      "offset" : 49
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 103780384,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 103780384,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ {
+        "path" : "demo/Probe.java",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 49,
+        "reason" : "UNRESOLVED_FORNAME",
+        "diagnostics" : [ {
+          "code" : "compiler.err.doesnt.exist",
+          "message" : "package missing does not exist",
+          "path" : "demo/Probe.java",
+          "line" : 4,
+          "column" : 12
+        } ]
+      } ]
+    }
+  }, {
+    "id" : "R7",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "demo.Outer.Inner",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 115314720,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 115314720,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "demo.Outer.Inner",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "promotion" : "binary-name-mismatch",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R8",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Outer$Inner",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 127897632,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 127897632,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "demo.Outer$Inner",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "promotion" : "source-bound",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
   } ],
   "baselineTotals" : {
-    "wrongDefinite" : 17,
-    "wrongServiceType" : 0,
-    "lost" : 12,
+    "wrongDefinite" : 18,
+    "wrongServiceType" : 22,
+    "lost" : 14,
     "downgraded" : 0,
     "added" : 8,
     "unexpectedFact" : 8,
-    "abstentionMismatch" : 7
+    "abstentionMismatch" : 8
   },
   "javacTotals" : {
     "wrongDefinite" : 0,
