@@ -35,7 +35,12 @@ import java.util.Set;
  *       comparisons skip non-textual elements;
  *   <li>the repository root is resolved by walking up from the working directory until a
  *       directory holding {@code pom.xml} and {@code spike/} is found (Python resolved it
- *       from the script file's location), so the gate works from any nested directory.
+ *       from the script file's location), so the gate works from any nested directory;
+ *   <li>Python's {@code in} operator is shape-polymorphic (substring on strings, key
+ *       membership on dicts, element equality on lists); the port implements the shapes
+ *       the checked-in documents use — substring on strings, key membership on objects —
+ *       and skips other shapes, so a JSON array containing the exact string
+ *       {@code "caller"} (SootUp evidence) fails here where Python passed.
  * </ul>
  *
  * <p>The final summary line, every requirement message, and both exit codes are otherwise

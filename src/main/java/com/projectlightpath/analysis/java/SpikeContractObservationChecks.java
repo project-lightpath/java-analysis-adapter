@@ -94,6 +94,12 @@ final class SpikeContractObservationChecks {
     checkAnalyzerCoverage(analyzerResults);
     checkSootupPins();
     checkCodeqlPins();
+    Set<String> fixtureFrameworks = new HashSet<>();
+    for (JsonNode result : analyzerResults) {
+      fixtureFrameworks.add(text(result.path("fixture"), "framework"));
+    }
+    require(fixtureFrameworks.equals(Set.of("quarkus", "spring-boot")),
+        "analyzer results must cover both frameworks");
     for (String candidateId : List.of("sootup", "codeql")) {
       JsonNode candidate = findByText(elements(
           documents.candidates().path("candidateSet")), "id", candidateId);
@@ -129,7 +135,7 @@ final class SpikeContractObservationChecks {
     require(!containsHostPath(result), providerName + " result contains a host path");
   }
 
-  /** Analyzer observation coverage against the matrix cases (Python 303-310, 330). */
+  /** Analyzer observation coverage against the matrix cases (Python 303-310). */
   private void checkAnalyzerCoverage(List<JsonNode> analyzerResults) {
     Set<String> requiredQuarkusCases = fieldTextSet(
         documents.matrix().path("cases"), "id");
@@ -153,12 +159,6 @@ final class SpikeContractObservationChecks {
     require(idSet(elements(documents.codeqlFsi().path("observations")), "caseId")
         .equals(REQUIRED_FSI_CASES),
         "CodeQL FSI observation coverage is incomplete");
-    Set<String> fixtureFrameworks = new HashSet<>();
-    for (JsonNode result : analyzerResults) {
-      fixtureFrameworks.add(text(result.path("fixture"), "framework"));
-    }
-    require(fixtureFrameworks.equals(Set.of("quarkus", "spring-boot")),
-        "analyzer results must cover both frameworks");
   }
 
   /** SootUp version, coverage, and measurement pins (Python 312-320). */
@@ -239,6 +239,10 @@ final class SpikeContractObservationChecks {
     for (JsonNode cell : cells) {
       checkJavacCell(cell);
     }
+    // Python keyed the recomputed map off the document's own totals, so an extra
+    // javacTotals key failed the equality; reject unknown keys explicitly.
+    require(fieldNames(javacTotals).equals(Set.copyOf(JAVAC_METRICS)),
+        "javac resolver totals must equal the per-cell sum");
     require(recomputeTotals(javacResolver).equals(totalsAsLongMap(javacTotals)),
         "javac resolver totals must equal the per-cell sum");
     require(!javacContainsHostPath(javacResolver),

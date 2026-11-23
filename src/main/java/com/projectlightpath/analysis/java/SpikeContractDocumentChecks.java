@@ -63,8 +63,9 @@ final class SpikeContractDocumentChecks {
     require(eq(text(fixture, "framework"), "quarkus"),
         "primary fixture must identify Quarkus");
     String productionProfile = text(fixture, "productionProfile");
-    require(productionProfile != null
-        && !productionProfile.equals(text(fixture, "testProfile")),
+    String testProfile = text(fixture, "testProfile");
+    require(productionProfile != null && testProfile != null
+        && !productionProfile.equals(testProfile),
         "profiles must differ");
     require(textSet(matrix.path("requiredEvidence")).containsAll(REQUIRED_EVIDENCE),
         "framework enrichment evidence requirements are missing");

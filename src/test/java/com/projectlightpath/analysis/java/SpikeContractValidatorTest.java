@@ -161,6 +161,30 @@ class SpikeContractValidatorTest {
     }), "profiles must differ");
   }
 
+  /**
+   * A deleted test profile must fail loudly (Python raised KeyError, exit 1; the port
+   * must not silently accept an absent field as "different").
+   */
+  @Test
+  void deletedTestProfileIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree("spike/capability-matrix.json",
+        document -> ((ObjectNode) document.path("fixture")).remove("testProfile")),
+        "profiles must differ");
+  }
+
+  /**
+   * An extra key in the javac totals block must fail the totals check (Python keyed the
+   * recomputed map off the document and failed the equality; the port rejects unknown
+   * metric keys explicitly).
+   */
+  @Test
+  void extraJavacTotalsKeyIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/javac-symbol-resolver-observation.json",
+        document -> ((ObjectNode) document.path("javacTotals")).put("bogusMetric", 0)),
+        "javac resolver totals must equal the per-cell sum");
+  }
+
   /** Python message parity: required framework-enrichment evidence is a subset check. */
   @Test
   void missingRequiredEvidenceIsRejected() throws IOException {
