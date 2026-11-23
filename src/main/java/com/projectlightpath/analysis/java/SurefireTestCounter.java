@@ -1,33 +1,127 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.xml.sax.SAXException;
 
-/** Behavior-neutral compile stub for the RED commit; implementation lands in GREEN. */
+/**
+ * Surefire test-count gate (#45 step 1, ported from
+ * spike/scripts/check_test_count.py).
+ *
+ * <p>The adapter suite runs in three surefire executions (default, a large-archive
+ * execution, and a sootup execution), each with its own reports directory. {@code mvn
+ * test} prints one "Tests run" line per execution and neither line is the gate total,
+ * so this gate sums the report files and enforces the recorded baseline.
+ */
 public final class SurefireTestCounter {
+  private static final int DEFAULT_MINIMUM = 302;
+
   private SurefireTestCounter() {}
 
-  /** Sums the tests attribute over every TEST-*.xml in the directory. */
-  static int count(java.nio.file.Path directory) {
-    return 0;
+  /**
+   * Sums the tests attribute over every TEST-*.xml in the directory.
+   *
+   * @param directory surefire reports directory; missing counts as zero
+   * @return total tests recorded in the reports
+   * @throws IllegalStateException if a report exists but cannot be parsed — a malformed
+   *     report must fail loudly instead of silently undercounting
+   */
+  static int count(Path directory) {
+    if (!Files.isDirectory(directory)) {
+      return 0;
+    }
+    int total = 0;
+    List<Path> reports = new ArrayList<>();
+    try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory, "TEST-*.xml")) {
+      entries.forEach(reports::add);
+    } catch (IOException error) {
+      throw new IllegalStateException("cannot list surefire reports: " + directory, error);
+    }
+    reports.sort(Path::compareTo);
+    for (Path report : reports) {
+      total += testsAttribute(report);
+    }
+    return total;
   }
 
   /** Summary lines reporting every lane and the baseline. */
   static List<String> summaryLines(int defaultCount, int largeCount, int sootupCount,
       int minimum) {
-    return List.of();
+    return List.of("surefire tests: default=" + defaultCount + " large=" + largeCount
+        + " sootup=" + sootupCount + " total=" + (defaultCount + largeCount + sootupCount)
+        + " (recorded baseline " + minimum + ")");
   }
 
-  /** Error lines for empty lanes or a total below the baseline; empty means pass. */
+  /**
+   * Error lines for empty lanes or a total below the baseline; an empty list means the
+   * gate passes.
+   */
   static List<String> verifyLines(int defaultCount, int largeCount, int sootupCount,
       int minimum) {
-    return List.of();
+    List<String> errors = new ArrayList<>();
+    if (largeCount < 1) {
+      errors.add("ERROR: large-archive execution ran no tests");
+    }
+    if (sootupCount < 1) {
+      errors.add("ERROR: sootup execution ran no tests");
+    }
+    if (defaultCount + largeCount + sootupCount < minimum) {
+      errors.add("ERROR: test count decreased below the recorded baseline");
+    }
+    return errors;
   }
 
   /** Maps error lines to a process exit code: 0 clean, 1 any error. */
   static int exitCode(List<String> errorLines) {
-    return 0;
+    return errorLines.isEmpty() ? 0 : 1;
   }
 
-  /** Counts the three surefire lanes and enforces the baseline. */
-  public static void main(String[] args) {}
+  /**
+   * Counts the three surefire lanes and enforces the baseline.
+   *
+   * @param args optionally one argument: the recorded baseline (defaults to
+   *     {@value #DEFAULT_MINIMUM})
+   */
+  public static void main(String[] args) {
+    System.exit(run(args, Path.of("target")));
+  }
+
+  /**
+   * Counts the three surefire lanes and enforces the baseline, returning the exit code.
+   *
+   * @param args optionally one argument: the recorded baseline (defaults to
+   *     {@value #DEFAULT_MINIMUM})
+   * @param base directory holding the three surefire report directories
+   * @return 0 when the gate passes, 1 otherwise
+   */
+  static int run(String[] args, Path base) {
+    int minimum = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_MINIMUM;
+    int defaultCount = count(base.resolve("surefire-reports"));
+    int largeCount = count(base.resolve("surefire-reports-large"));
+    int sootupCount = count(base.resolve("surefire-reports-sootup"));
+    summaryLines(defaultCount, largeCount, sootupCount, minimum)
+        .forEach(System.out::println);
+    List<String> errors = verifyLines(defaultCount, largeCount, sootupCount, minimum);
+    errors.forEach(System.err::println);
+    return exitCode(errors);
+  }
+
+  private static int testsAttribute(Path report) {
+    try {
+      Document document =
+          DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(report.toFile());
+      Element root = document.getDocumentElement();
+      return Integer.parseInt(root.getAttribute("tests"));
+    } catch (IOException | ParserConfigurationException | SAXException error) {
+      throw new IllegalStateException("cannot parse surefire report: " + report, error);
+    }
+  }
 }

@@ -93,20 +93,26 @@ class SurefireTestCounterTest {
         "a total below the baseline fails");
   }
 
-  /** Exit code is 0 with no error lines and 1 with any, and main never throws. */
+  /** Exit code is 0 with no error lines and 1 with any; run never throws. */
   @Test
-  void exitCodeMapsErrorLinesAndMainNeverThrows() throws IOException {
+  void exitCodeMapsErrorLinesAndRunNeverThrows() throws IOException {
     assertEquals(0, SurefireTestCounter.exitCode(List.of()));
     assertEquals(1, SurefireTestCounter.exitCode(List.of("ERROR: anything")));
 
-    Path reports = temp.resolve("reports");
-    Files.createDirectories(reports);
-    Files.writeString(reports.resolve("TEST-one.xml"), """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <testsuite name="one" tests="2" failures="0" errors="0" skipped="0">
-        </testsuite>
-        """);
-    assertDoesNotThrow(() -> SurefireTestCounter.main(new String[] {"1"}));
-    assertDoesNotThrow(() -> SurefireTestCounter.main(new String[] {}));
+    // run() is exercised against a temp base, never the live target/ directory:
+    // surefire writes those reports concurrently with this parallel suite, and a
+    // half-written report would turn the test into a flake.
+    Path base = temp.resolve("base");
+    for (String lane : new String[] {"surefire-reports", "surefire-reports-large",
+        "surefire-reports-sootup"}) {
+      Files.createDirectories(base.resolve(lane));
+      Files.writeString(base.resolve(lane + "/TEST-one.xml"), """
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuite name="one" tests="2" failures="0" errors="0" skipped="0">
+          </testsuite>
+          """);
+    }
+    assertEquals(0, SurefireTestCounter.run(new String[] {"1"}, base));
+    assertEquals(1, SurefireTestCounter.run(new String[] {}, temp.resolve("empty-base")));
   }
 }
