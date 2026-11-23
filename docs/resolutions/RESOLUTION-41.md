@@ -106,6 +106,21 @@ All items complete; post-implementation review loop next.
 - Gates: adapter-test 569 executions, java-lint 0 new, evidence-validate
   pass.
 
+## Post-implementation review loop
+
+- Round 1 (full, code): 11 findings (3 HIGH). Fixed in 8b216ed —
+  version-pinned JPA table, all-occurrence base-class reading, bare-name
+  join grammar + end-to-end join test, import-aware fragment/base-class
+  resolution, signature-keyed fragment routing, Impl-must-implement check,
+  classpath-aware scope, redeclaration downgrade, dead-gate deletion,
+  formatting, constructor-side diagnostic sorting.
+- Round 2 (delta): 9 findings (3 HIGH). Fixed — strict implementsFragment,
+  corrected JPA version gates (since-2.5/since-2.7), @Query redeclarations
+  kept as override evidence, signature-shape-aware downgrade matching,
+  unresolved-fragment/base-class diagnostics, overload join cell,
+  diagnostic dedupe; PMD placement split (configuration layer).
+- Round 3 (delta, termination check): in flight.
+
 ## Reverse chain delivered (issue #41 acceptance)
 
 `SimpleJpaRepository#save` (dependency public symbol)
