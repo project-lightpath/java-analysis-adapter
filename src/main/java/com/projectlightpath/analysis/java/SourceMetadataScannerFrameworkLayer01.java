@@ -160,4 +160,14 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
     }
     return List.copyOf(result.values());
   }
+
+  /** Returns the repository fragment compositions visible in application source. */
+  List<RepositoryFragment> springRepositoryFragments() {
+    return List.of();
+  }
+
+  /** Returns the configured repository base class, when one is present. */
+  Optional<RepositoryBaseClass> springRepositoryBaseClass() {
+    return Optional.empty();
+  }
 }

@@ -366,7 +366,13 @@ Cells (each = one test method):
     (signature-suffixed identity), exact-boundary receiver names.
 
 Existing tests are not edited; new cells go into new test methods (the plan
-sanctions zero edits to existing tests).
+sanctions zero edits to existing tests) — with **one explicit exception**:
+`JavaAnalysisAdapterTest.springRepositoryFactsRequireCanonicalContractsAndKnownMethods`
+pins the total count of `generated_implementation` facts (`assertEquals(9,
+repositoryFacts.size())`), a characterization that Item 0 deliberately
+extends (guaranteed CRUD methods add facts for Crud/Jpa/Paging-extending
+fixtures). The plan sanctions updating that count (and only that count) in
+GREEN_00; every other assertion in that test must keep passing unmodified.
 
 ## TDD sequencing (RED/GREEN/EVIDENCE triples, gates after every item)
 
