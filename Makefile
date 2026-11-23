@@ -4,10 +4,12 @@
 # The default lane is lightweight: SootUp scene tests are tagged 'sootup' and
 # run in their own bounded execution (like large-archive) with a fixed 6 GB
 # heap and parallelism 2, sized for the 16 GB CI runner. The default pool is
-# capped by CPU count and at 8; the heap is 1 GB per slot (the lane runs
-# in-JVM javac compilations; measured: 512 MB per slot OOMs under four
-# parallel javac initializations). Override with
-# ADAPTER_TEST_PARALLELISM=N (heap follows at 1 GB per slot).
+# capped by CPU count and at 8; the heap is 1.5 GB per slot (the lane runs
+# in-JVM javac compilations; re-measured 2026-11 after issue #41 grew the
+# suite past 590 executions with more concurrent javac-backed analyses:
+# 1 GB per slot OOMs intermittently at four parallel slots, 512 MB per slot
+# OOMs under four parallel javac initializations). Override with
+# ADAPTER_TEST_PARALLELISM=N (heap follows at 1.5 GB per slot).
 ADAPTER_TEST_PARALLELISM ?= $(shell sh -c '\
 	n=$$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4); \
 	p=$$n; [ "$$p" -gt 8 ] && p=8; \
@@ -17,7 +19,7 @@ adapter-test:
 	rm -rf target/surefire-reports target/surefire-reports-large target/surefire-reports-sootup
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
 	JAVA_TOOL_OPTIONS="$${JAVA_TOOL_OPTIONS:-} -Djunit.jupiter.execution.parallel.config.fixed.parallelism=$(ADAPTER_TEST_PARALLELISM)" \
-	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 1024))m
+	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 1536))m
 	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-$${JAVA_HOME:+$${JAVA_HOME}/bin/}java}}" && \
 	"$${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 534
 e2e-test:

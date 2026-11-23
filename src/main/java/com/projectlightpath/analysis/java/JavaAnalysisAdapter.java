@@ -72,7 +72,8 @@ public final class JavaAnalysisAdapter {
           graph,
           facts.providerFacts(),
           facts.frameworkFacts(),
-          facts.links());
+          facts.links(),
+          facts.diagnostics());
     }
   }
 
@@ -160,8 +161,9 @@ public final class JavaAnalysisAdapter {
     FrameworkModel selectedModel = frameworkModel == null
         ? FrameworkModels.forContext(context.framework())
         : frameworkModel;
+    List<SemanticCallFacts.Diagnostic> diagnostics = springDataDiagnostics(context);
     List<SemanticCallFacts.Fact> providerFacts = new ArrayList<>(
-        ProviderFactNormalizer.normalize(context, graph, dependencies));
+        ProviderFactNormalizer.normalize(context, graph, dependencies, diagnostics));
     List<SemanticCallFacts.Fact> frameworkFacts = attachExactProviderIdentities(
         selectedModel.enrich(context, graph), providerFacts);
     return new SemanticCallFacts(
@@ -169,7 +171,65 @@ public final class JavaAnalysisAdapter {
         graph,
         providerFacts,
         frameworkFacts,
-        links(providerFacts, frameworkFacts));
+        links(providerFacts, frameworkFacts),
+        diagnostics);
+  }
+
+  /**
+   * Computes the Spring Data scan-global diagnostics once, from the (derived)
+   * context: an out-of-scope repository base class blocks DEFINITE promotion
+   * for the whole scan and must stay visible on the facts output.
+   */
+  private static List<SemanticCallFacts.Diagnostic> springDataDiagnostics(
+      AnalysisContext context) {
+    if (context.framework() != AnalysisContext.Framework.SPRING_BOOT) {
+      return List.of();
+    }
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
+        scanner.springRepositoryBaseClasses();
+    List<SemanticCallFacts.Diagnostic> result = new ArrayList<>();
+    for (SourceMetadataScannerState.RepositoryBaseClass baseClass : baseClasses) {
+      if (!baseClass.referenceResolved()) {
+        result.add(new SemanticCallFacts.Diagnostic(
+            "spring_data_repository_base_class_unresolved",
+            baseClass.sourcePath(),
+            "repositoryBaseClass reference " + baseClass.sourceSpelling()
+                + " cannot be resolved from the analyzed sources"));
+      } else if (!baseClass.applicationScoped()) {
+        result.add(new SemanticCallFacts.Diagnostic(
+            "spring_data_backing_selection_out_of_scope",
+            baseClass.sourcePath(),
+            "repositoryBaseClass " + baseClass.configuredType()
+                + " is outside the analysis scope"));
+      }
+    }
+    for (Map.Entry<String, String> unresolved : scanner.unresolvedRepositoryExtensions()) {
+      result.add(new SemanticCallFacts.Diagnostic(
+          "spring_data_repository_fragment_unresolved",
+          unresolved.getKey(),
+          "repository extends-clause reference " + unresolved.getValue()
+              + " resolves to no type"));
+    }
+    for (Map.Entry<String, String> unconfirmed : scanner.unconfirmedFragmentImplementations()) {
+      result.add(new SemanticCallFacts.Diagnostic(
+          "spring_data_repository_fragment_impl_unconfirmed",
+          unconfirmed.getKey(),
+          "the conventional Impl class does not name fragment interface "
+              + unconfirmed.getValue() + " in its implements clause"));
+    }
+    if (baseClasses.stream()
+        .map(SourceMetadataScannerState.RepositoryBaseClass::configuredType)
+        .distinct().count() > 1) {
+      result.add(new SemanticCallFacts.Diagnostic(
+          "spring_data_backing_selection_ambiguous",
+          baseClasses.get(0).sourcePath(),
+          "multiple repositoryBaseClass values are configured: "
+              + baseClasses.stream()
+                  .map(SourceMetadataScannerState.RepositoryBaseClass::configuredType)
+                  .distinct().toList()));
+    }
+    return result;
   }
 
   /** Abstains open-world dynamic evidence and attaches identities for eligible targets. */

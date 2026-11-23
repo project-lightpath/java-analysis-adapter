@@ -202,16 +202,69 @@ static final Set<String> SPRING_PROXY_ANNOTATIONS =
       Set.copyOf(SPRING_PROXY_ANNOTATION_TYPES.keySet());
 static final String SPRING_COMMAND_LINE_RUNNER =
       "org.springframework.boot.CommandLineRunner";
-static final Map<String, String> SPRING_DATA_REPOSITORY_CONTRACTS = Map.of(
-      "org.springframework.data.repository.Repository", "Repository",
-      "org.springframework.data.repository.CrudRepository", "CrudRepository",
-      "org.springframework.data.jpa.repository.JpaRepository", "JpaRepository",
-      "org.springframework.data.repository.PagingAndSortingRepository", "PagingAndSortingRepository",
-      "org.springframework.data.repository.ListCrudRepository", "ListCrudRepository",
-      "org.springframework.data.repository.ListPagingAndSortingRepository", "ListPagingAndSortingRepository");
-static final Set<String> SPRING_DATA_FIND_BY_ID_CONTRACTS = Set.of(
-      "CrudRepository", "JpaRepository", "PagingAndSortingRepository", "ListCrudRepository",
-      "ListPagingAndSortingRepository");
+static final Map<String, String> SPRING_DATA_REPOSITORY_CONTRACTS = Map.ofEntries(
+      Map.entry("org.springframework.data.repository.Repository", "Repository"),
+      Map.entry("org.springframework.data.repository.CrudRepository", "CrudRepository"),
+      Map.entry("org.springframework.data.jpa.repository.JpaRepository", "JpaRepository"),
+      Map.entry("org.springframework.data.repository.PagingAndSortingRepository", "PagingAndSortingRepository"),
+      Map.entry("org.springframework.data.repository.ListCrudRepository", "ListCrudRepository"),
+      Map.entry("org.springframework.data.repository.ListPagingAndSortingRepository", "ListPagingAndSortingRepository"),
+      Map.entry("org.springframework.data.repository.reactive.ReactiveCrudRepository", "ReactiveCrudRepository"),
+      Map.entry("org.springframework.data.repository.reactive.ReactiveSortingRepository", "ReactiveSortingRepository"),
+      Map.entry("org.springframework.data.repository.reactive.RxJava2CrudRepository", "RxJava2CrudRepository"),
+      Map.entry("org.springframework.data.repository.reactive.RxJava3CrudRepository", "RxJava3CrudRepository"));
+static final List<String> SPRING_DATA_CRUD_METHODS = List.of(
+      "save", "saveAll", "findById", "existsById", "findAll", "findAllById", "count",
+      "deleteById", "delete", "deleteAllById", "deleteAll");
+static final List<String> SPRING_DATA_JPA_METHODS = List.of(
+      "save", "saveAll", "findById", "existsById", "findAll", "findAllById", "count",
+      "deleteById", "delete", "deleteAllById", "deleteAll", "flush", "saveAndFlush",
+      "saveAllAndFlush", "deleteAllInBatch", "deleteAllByIdInBatch", "getOne", "getById",
+      "getReferenceById");
+static final Set<String> SPRING_DATA_JPA_METHODS_REMOVED_IN_BOOT_3 = Set.of(
+      "getOne", "getById");
+static final Set<String> SPRING_DATA_JPA_METHODS_ADDED_IN_2_5 = Set.of(
+      "getById", "saveAllAndFlush", "deleteAllByIdInBatch");
+static final Set<String> SPRING_DATA_JPA_METHODS_ADDED_IN_2_7 = Set.of(
+      "getReferenceById");
+static final Map<String, List<String>> SPRING_DATA_GUARANTEED_CONTRACT_METHODS = Map.ofEntries(
+      Map.entry("CrudRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("ListCrudRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("ReactiveCrudRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("RxJava2CrudRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("RxJava3CrudRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("PagingAndSortingRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("ListPagingAndSortingRepository", SPRING_DATA_CRUD_METHODS),
+      Map.entry("JpaRepository", SPRING_DATA_JPA_METHODS));
+static final Set<String> SPRING_DATA_REPOSITORY_CONFIGURATION_ANNOTATIONS = Set.of(
+      "org.springframework.data.jpa.repository.config.EnableJpaRepositories");
+static final Set<String> SPRING_DATA_QUERY_ANNOTATIONS = Set.of(
+      "org.springframework.data.jpa.repository.Query");
+static final Map<String, Set<Integer>> SPRING_DATA_CONTRACT_METHOD_ARITIES = Map.ofEntries(
+      Map.entry("save", Set.of(1)),
+      Map.entry("saveAll", Set.of(1)),
+      Map.entry("findById", Set.of(1)),
+      Map.entry("existsById", Set.of(1)),
+      Map.entry("findAll", Set.of(0)),
+      Map.entry("findAllById", Set.of(1)),
+      Map.entry("count", Set.of(0)),
+      Map.entry("deleteById", Set.of(1)),
+      Map.entry("delete", Set.of(1)),
+      Map.entry("deleteAllById", Set.of(1)),
+      Map.entry("deleteAll", Set.of(0, 1)),
+      Map.entry("flush", Set.of(0)),
+      Map.entry("saveAndFlush", Set.of(1)),
+      Map.entry("saveAllAndFlush", Set.of(1)),
+      Map.entry("deleteAllInBatch", Set.of(1)),
+      Map.entry("deleteAllByIdInBatch", Set.of(1)),
+      Map.entry("getOne", Set.of(1)),
+      Map.entry("getById", Set.of(1)),
+      Map.entry("getReferenceById", Set.of(1)));
+
+  /** Returns the contract parameter-count shapes for one guaranteed method name. */
+  static Set<Integer> springDataContractMethodArities(String methodName) {
+    return SPRING_DATA_CONTRACT_METHOD_ARITIES.getOrDefault(methodName, Set.of());
+  }
 static final List<String> SUPPORTED_HTTP_METHODS =
       List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
@@ -458,6 +511,21 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       return guaranteed ? name : signature;
     }
   }
+
+  /** A configured repository base class, with its analysis-scope resolution. */
+  record RepositoryBaseClass(
+      String configuredType,
+      boolean applicationScoped,
+      boolean referenceResolved,
+      String sourcePath,
+      String sourceSpelling) {}
+
+  /** A repository fragment composition: custom interface plus its Impl class. */
+  record RepositoryFragment(
+      String repositoryType,
+      String fragmentType,
+      String implementationType,
+      List<RepositoryMethod> methods) {}
 
   record AnnotationOccurrence(String arguments, String source) {}
 

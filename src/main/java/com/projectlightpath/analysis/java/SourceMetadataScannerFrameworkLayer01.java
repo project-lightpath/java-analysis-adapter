@@ -19,6 +19,11 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
 
   /** Resolves the ID type from the first supported Spring Data contract declaration. */
   Optional<String> springRepositoryIdType(SourceFile file) {
+    return springRepositoryTypeArgument(file, 1);
+  }
+
+  /** Resolves one type argument of the first supported Spring Data contract declaration. */
+  Optional<String> springRepositoryTypeArgument(SourceFile file, int argumentIndex) {
     String header = maskStringLiterals(typeHeader(file));
     int extendsIndex = topLevelKeywordIndex(header, "extends");
     if (extendsIndex < 0) {
@@ -33,8 +38,8 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
       }
       String arguments = genericArguments(type);
       List<String> parameters = splitArguments(arguments);
-      if (parameters.size() >= 2) {
-        Optional<String> resolved = repositoryTypeToken(parameters.get(1), file);
+      if (parameters.size() > argumentIndex) {
+        Optional<String> resolved = repositoryTypeToken(parameters.get(argumentIndex), file);
         if (resolved.isPresent()) {
           return resolved;
         }
@@ -88,21 +93,6 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
     return springRepositoryContracts(file).stream().findFirst();
   }
 
-  /** Detects a source declaration that exactly redeclares the repository ID contract. */
-  boolean redeclaresInheritedFindById(SourceFile file, MethodInfo method) {
-    if (!method.name().equals("findById")) {
-      return false;
-    }
-    Optional<String> repositoryIdType = springRepositoryIdType(file);
-    List<Parameter> methodParameters = parameters(method.parameters());
-    if (repositoryIdType.isEmpty() || methodParameters.size() != 1) {
-      return false;
-    }
-    return repositoryTypeToken(methodParameters.get(0).type(), file)
-        .filter(repositoryIdType.get()::equals)
-        .isPresent();
-  }
-
   /** Scans Spring @Bean and bounded CommandLineRunner lifecycle callbacks. */
   List<LifecycleMethod> springLifecycleMethods() {
     List<LifecycleMethod> result = new ArrayList<>();
@@ -137,27 +127,5 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
       }
     }
     return List.copyOf(result);
-  }
-
-  /** Returns repository methods guaranteed by the contract or declared by the source interface. */
-  List<RepositoryMethod> springRepositoryMethods(SourceFile file) {
-    List<String> contracts = springRepositoryContracts(file);
-    if (contracts.isEmpty()) {
-      return List.of();
-    }
-    Map<String, RepositoryMethod> result = new LinkedHashMap<>();
-    if (contracts.stream().anyMatch(this::guaranteedFindByIdContract)) {
-      result.put("findById", new RepositoryMethod("findById", "findById", true));
-    }
-    for (MethodInfo method : methods(file)) {
-      if (typeContaining(file, declarationStart(file, method.start())).equals(file.typeName())
-          && abstractInstanceRepositoryMethod(method)
-          && (!redeclaresInheritedFindById(file, method) || !result.containsKey("findById"))) {
-        RepositoryMethod repositoryMethod = new RepositoryMethod(
-            method.name(), repositoryMethodSignature(method), false);
-        result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
-      }
-    }
-    return List.copyOf(result.values());
   }
 }

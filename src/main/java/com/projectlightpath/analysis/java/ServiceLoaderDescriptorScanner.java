@@ -255,6 +255,15 @@ final class ServiceLoaderDescriptorScanner {
     Scan(List<Descriptor> descriptors) {
       this(descriptors, List.of(), List.of());
     }
+
+    /** Returns a copy with additional scan-global diagnostics appended. */
+    Scan withAdditionalDiagnostics(List<Diagnostic> additional) {
+      return new Scan(descriptors,
+          java.util.stream.Stream.concat(
+              diagnostics.stream(),
+              (additional == null ? List.<Diagnostic>of() : additional).stream()).toList(),
+          limitations);
+    }
   }
 
   record Diagnostic(String code, String path, String detail) {}

@@ -65,6 +65,14 @@ final class SootUpCallGraphExtractor {
       applicationCall(context, view, call, applicationClasses, scanner, dependencyEntries)
           .ifPresent(result::add);
     }
+    result.addAll(SootUpRepositoryDeclaredInvokes.edges(
+        context, view, applicationClasses, scanner));
+    return sorted(result);
+  }
+
+  /** Returns the deterministic provider edge order. */
+  static List<CallEdge> sorted(List<CallEdge> edges) {
+    List<CallEdge> result = new ArrayList<>(edges);
     result.sort(Comparator.comparing((CallEdge edge) -> edge.caller().displayName())
         .thenComparing(edge -> edge.caller().descriptor())
         .thenComparing(edge -> edge.callee().displayName())
@@ -242,7 +250,7 @@ final class SootUpCallGraphExtractor {
         sourcePath);
   }
 
-  private static String sourcePath(AnalysisContext context, String owner) {
+  static String sourcePath(AnalysisContext context, String owner) {
     String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
     String relative = topLevel.replace('.', '/') + ".java";
     for (AnalysisContext.SourceRoot root :

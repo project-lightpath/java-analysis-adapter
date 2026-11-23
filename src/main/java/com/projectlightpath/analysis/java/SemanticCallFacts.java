@@ -553,6 +553,10 @@ public final class SemanticCallFacts {
   private final List<Link> links;
   private final MergePolicy mergePolicy;
   private final RunMetadata runMetadata;
+  private final List<Diagnostic> diagnostics;
+
+  /** One scan-global diagnostic carried on the facts output. */
+  public record Diagnostic(String code, String path, String detail) {}
 
   public SemanticCallFacts(
       AnalysisContext context,
@@ -568,6 +572,16 @@ public final class SemanticCallFacts {
       List<Fact> providerFacts,
       List<Fact> frameworkFacts,
       List<Link> links) {
+    this(context, graph, providerFacts, frameworkFacts, links, List.of());
+  }
+
+  public SemanticCallFacts(
+      AnalysisContext context,
+      AnalysisGraph graph,
+      List<Fact> providerFacts,
+      List<Fact> frameworkFacts,
+      List<Link> links,
+      List<Diagnostic> diagnostics) {
     contextId = context.id();
     framework = context.framework();
     this.providerFacts = immutableFacts(providerFacts, FactSet.PROVIDER);
@@ -575,6 +589,12 @@ public final class SemanticCallFacts {
     this.links = List.copyOf(links == null ? List.of() : links);
     mergePolicy = MergePolicy.contract();
     runMetadata = RunMetadata.from(context, graph);
+    this.diagnostics = (diagnostics == null ? List.<Diagnostic>of() : diagnostics).stream()
+        .sorted(java.util.Comparator.comparing(Diagnostic::code)
+            .thenComparing(Diagnostic::path)
+            .thenComparing(Diagnostic::detail))
+        .distinct()
+        .toList();
     validateLinks();
   }
 
@@ -592,6 +612,11 @@ public final class SemanticCallFacts {
 
   public List<Fact> frameworkFacts() {
     return frameworkFacts;
+  }
+
+  /** Returns the scan-global diagnostics, sorted by (code, path, detail). */
+  public List<Diagnostic> diagnostics() {
+    return diagnostics;
   }
 
   public List<Link> links() {
