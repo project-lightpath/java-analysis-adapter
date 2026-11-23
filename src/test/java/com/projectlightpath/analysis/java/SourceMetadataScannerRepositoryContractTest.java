@@ -148,11 +148,68 @@ class SourceMetadataScannerRepositoryContractTest {
     assertEquals("demo.FragmentedRepository", fragment.repositoryType());
     assertEquals("demo.CustomAccountFragment", fragment.fragmentType());
     assertEquals("demo.CustomAccountFragmentImpl", fragment.implementationType());
-    assertEquals(List.of("refresh"), fragment.methodNames());
+    assertEquals(1, fragment.methods().size());
+    assertEquals("refresh", fragment.methods().get(0).name());
+    assertEquals("refresh(Account)", fragment.methods().get(0).identity());
   }
 
   @Test
-  void enableJpaRepositoriesBaseClassIsRead() throws IOException {
+  void implWithoutFragmentInterfaceIsNotABacking() throws IOException {
+    Path sourceRoot = temp.resolve("impl-negative/src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/CustomFragment.java", """
+        package demo;
+        public interface CustomFragment {
+          void refresh(Account account);
+        }
+        """);
+    write(sourceRoot, "demo/CustomFragmentImpl.java", """
+        package demo;
+        public class CustomFragmentImpl { }
+        """);
+    write(sourceRoot, "demo/FragmentedRepository.java", """
+        package demo;
+        public interface FragmentedRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            CustomFragment { }
+        """);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context(sourceRoot, "2.7.18"));
+    assertTrue(scanner.springRepositoryFragments().isEmpty());
+  }
+
+  @Test
+  void crossPackageFragmentResolvesThroughImports() throws IOException {
+    Path sourceRoot = temp.resolve("cross-package/src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "shared/SharedFragment.java", """
+        package shared;
+        public interface SharedFragment {
+          void refresh(demo.Account account);
+        }
+        """);
+    write(sourceRoot, "shared/SharedFragmentImpl.java", """
+        package shared;
+        import demo.Account;
+        public class SharedFragmentImpl implements SharedFragment {
+          public void refresh(Account account) { }
+        }
+        """);
+    write(sourceRoot, "demo/FragmentedRepository.java", """
+        package demo;
+        import shared.SharedFragment;
+        public interface FragmentedRepository extends
+            org.springframework.data.repository.CrudRepository<Account, Long>,
+            SharedFragment { }
+        """);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context(sourceRoot, "2.7.18"));
+    List<SourceMetadataScannerState.RepositoryFragment> fragments = scanner.springRepositoryFragments();
+    assertEquals(1, fragments.size());
+    assertEquals("shared.SharedFragment", fragments.get(0).fragmentType());
+    assertEquals("shared.SharedFragmentImpl", fragments.get(0).implementationType());
+  }
+
+  @Test
+  void enableJpaRepositoriesBaseClassesAreAllRead() throws IOException {
     Path sourceRoot = temp.resolve("src/main/java");
     write(sourceRoot, "demo/AuditedRepositoryImpl.java", """
         package demo;
@@ -161,15 +218,21 @@ class SourceMetadataScannerRepositoryContractTest {
     write(sourceRoot, "demo/AppConfig.java", """
         package demo;
         import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-        @EnableJpaRepositories(repositoryBaseClass = AuditedRepositoryImpl.class)
+        @EnableJpaRepositories
         public class AppConfig { }
         """);
+    write(sourceRoot, "demo/RepositoryConfig.java", """
+        package demo;
+        import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+        @EnableJpaRepositories(repositoryBaseClass = AuditedRepositoryImpl.class)
+        public class RepositoryConfig { }
+        """);
     SourceMetadataScanner scanner = new SourceMetadataScanner(context(sourceRoot, "2.7.18"));
-    Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass =
-        scanner.springRepositoryBaseClass();
-    assertTrue(baseClass.isPresent());
-    assertEquals("demo.AuditedRepositoryImpl", baseClass.get().configuredType());
-    assertTrue(baseClass.get().applicationScoped());
+    List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
+        scanner.springRepositoryBaseClasses();
+    assertEquals(1, baseClasses.size());
+    assertEquals("demo.AuditedRepositoryImpl", baseClasses.get(0).configuredType());
+    assertTrue(baseClasses.get(0).applicationScoped());
 
     Path outOfScopeRoot = temp.resolve("out-of-scope/src/main/java");
     write(outOfScopeRoot, "demo/AppConfig.java", """
@@ -180,16 +243,80 @@ class SourceMetadataScannerRepositoryContractTest {
         """);
     SourceMetadataScanner outOfScope =
         new SourceMetadataScanner(context(outOfScopeRoot, "2.7.18"));
-    Optional<SourceMetadataScannerState.RepositoryBaseClass> missing =
-        outOfScope.springRepositoryBaseClass();
-    assertTrue(missing.isPresent());
-    assertEquals("com.example.MissingBase", missing.get().configuredType());
-    assertFalse(missing.get().applicationScoped());
+    List<SourceMetadataScannerState.RepositoryBaseClass> missing =
+        outOfScope.springRepositoryBaseClasses();
+    assertEquals(1, missing.size());
+    assertEquals("com.example.MissingBase", missing.get(0).configuredType());
+    assertFalse(missing.get(0).applicationScoped());
 
     Path plainRoot = temp.resolve("plain/src/main/java");
     write(plainRoot, "demo/AppConfig.java", "package demo; public class AppConfig { }\n");
     assertTrue(new SourceMetadataScanner(context(plainRoot, "2.7.18"))
-        .springRepositoryBaseClass().isEmpty());
+        .springRepositoryBaseClasses().isEmpty());
+  }
+
+  @Test
+  void dependencyProvidedBaseClassIsInAnalysisScope() throws IOException {
+    Path sourceRoot = temp.resolve("classpath-scope/src/main/java");
+    write(sourceRoot, "demo/AppConfig.java", """
+        package demo;
+        import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+        @EnableJpaRepositories(
+            repositoryBaseClass = org.springframework.data.jpa.repository.support.SimpleJpaRepository.class)
+        public class AppConfig { }
+        """);
+    Path dependency = temp.resolve("classpath-scope/deps/base.jar");
+    writeArchive(dependency,
+        "org/springframework/data/jpa/repository/support/SimpleJpaRepository.class",
+        "not real bytecode but presence is what the scope check reads");
+    AnalysisContext context = AnalysisContext.builder()
+        .id("spring-boot-production")
+        .framework(AnalysisContext.Framework.SPRING_BOOT)
+        .frameworkVersion("2.7.18")
+        .fixtureId("fsi-spring-boot")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of(dependency))
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
+        new SourceMetadataScanner(context).springRepositoryBaseClasses();
+    assertEquals(1, baseClasses.size());
+    assertTrue(baseClasses.get(0).applicationScoped(),
+        "a classpath-resolvable base class is a bounded in-scope candidate");
+  }
+
+  @Test
+  void jpaRepositoryGuaranteesFollowBootVersion() throws IOException {
+    Path sourceRoot = temp.resolve("jpa-version/src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/JpaAccountRepository.java", """
+        package demo;
+        public interface JpaAccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> { }
+        """);
+    SourceMetadataScannerState.SourceFile file = file(
+        new SourceMetadataScanner(context(sourceRoot, "2.7.18")),
+        "demo.JpaAccountRepository");
+    List<String> boot2 = guaranteedNames(
+        new SourceMetadataScanner(context(sourceRoot, "2.7.18")).springRepositoryMethods(file));
+    assertTrue(boot2.contains("getOne"));
+    assertTrue(boot2.contains("saveAllAndFlush"));
+    List<String> boot3 = guaranteedNames(
+        new SourceMetadataScanner(context(sourceRoot, "3.2.0")).springRepositoryMethods(file));
+    assertFalse(boot3.contains("getOne"));
+    assertFalse(boot3.contains("getById"));
+    assertTrue(boot3.contains("getReferenceById"));
+    List<String> unparsable = guaranteedNames(
+        new SourceMetadataScanner(context(sourceRoot, "custom")).springRepositoryMethods(file));
+    assertFalse(unparsable.contains("getOne"));
+    assertFalse(unparsable.contains("flush"));
+    assertTrue(unparsable.contains("save"));
   }
 
   @Test
@@ -248,5 +375,17 @@ class SourceMetadataScannerRepositoryContractTest {
     Path path = root.resolve(relative);
     Files.createDirectories(path.getParent());
     Files.writeString(path, source);
+  }
+
+  /** Writes one placeholder zip entry for classpath-presence probes. */
+  private static void writeArchive(Path archive, String entryName, String value)
+      throws IOException {
+    Files.createDirectories(archive.getParent());
+    try (java.util.zip.ZipOutputStream output =
+        new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
+      output.putNextEntry(new java.util.zip.ZipEntry(entryName));
+      output.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      output.closeEntry();
+    }
   }
 }

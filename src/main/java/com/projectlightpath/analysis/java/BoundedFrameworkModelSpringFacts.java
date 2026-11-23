@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Shared bounded source model for the two first-class framework inputs.
@@ -43,11 +44,15 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
           : SemanticCallFacts.Certainty.UNRESOLVED;
       String repositoryContract = scanner.springRepositoryContract(candidate.file()).orElse("Repository");
       Map<String, String> fragmentTargets = fragmentTargets(scanner, candidate);
-      Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass =
-          scanner.springRepositoryBaseClass();
+      List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
+          scanner.springRepositoryBaseClasses();
+      Set<String> redeclaredNames = scanner.springRepositoryMethods(candidate.file()).stream()
+          .filter(method -> !method.guaranteed())
+          .map(SourceMetadataScannerState.RepositoryMethod::name)
+          .collect(Collectors.toCollection(LinkedHashSet::new));
       for (SourceMetadataScannerState.RepositoryMethod repositoryMethod
           : scanner.springRepositoryMethods(candidate.file())) {
-        if (fragmentTargets.containsKey(repositoryMethod.name())) {
+        if (fragmentTargets.containsKey(repositoryMethod.identity())) {
           continue;
         }
         String methodName = repositoryMethod.name();
@@ -80,7 +85,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
         facts.add(delegationFact(
             context, scanner, candidates,
             new DelegationContext(candidate, repositoryMethod, repositoryContract,
-                metadataAvailable, fragmentTargets, baseClass)));
+                metadataAvailable, fragmentTargets, baseClasses,
+                redeclaredNames.contains(repositoryMethod.name()))));
       }
       for (Map.Entry<String, String> fragment : fragmentTargets.entrySet()) {
         facts.add(fragmentDelegationFact(
@@ -100,7 +106,10 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       String repositoryContract,
       boolean metadataAvailable,
       Map.Entry<String, String> fragment) {
-    String caller = candidate.file().typeName() + "#" + fragment.getKey();
+    String methodName = fragment.getKey().contains("(")
+        ? fragment.getKey().substring(0, fragment.getKey().indexOf('('))
+        : fragment.getKey();
+    String caller = candidate.file().typeName() + "#" + methodName;
     String target = fragment.getValue();
     return SemanticCallFacts.Fact.framework(
         delegationFactId(scanner, candidates, candidate, fragment.getKey(), target),
@@ -133,7 +142,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       String repositoryContract,
       boolean metadataAvailable,
       Map<String, String> fragmentTargets,
-      Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass) {}
+      List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses,
+      boolean redeclared) {}
 
   /** The selected backing target and its certainty-ladder outcome. */
   private record DelegationSelection(
@@ -150,7 +160,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       DelegationContext delegation) {
     SourceMetadataScannerState.RepositoryMethod repositoryMethod = delegation.repositoryMethod();
     String methodIdentity = repositoryMethod.identity();
-    String caller = delegation.candidate().file().typeName() + "#" + methodIdentity;
+    String caller = delegation.candidate().file().typeName() + "#" + repositoryMethod.name();
     DelegationSelection selection = selectBacking(delegation);
     Map<String, String> attributes = new HashMap<>(Map.of(
         "repositoryContract", delegation.repositoryContract(),
@@ -186,7 +196,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
   /** Applies the FLPATH-5075 ladder to one repository method. */
   private DelegationSelection selectBacking(DelegationContext delegation) {
     String fragmentImplementation = delegation.fragmentTargets()
-        .get(delegation.repositoryMethod().name());
+        .get(delegation.repositoryMethod().identity());
     if (fragmentImplementation != null) {
       return new DelegationSelection(fragmentImplementation,
           delegation.metadataAvailable()
@@ -199,7 +209,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
     if (reactiveContract(delegation.repositoryContract())) {
       return new DelegationSelection(
           "spring-data-proxy:" + delegation.candidate().file().typeName()
-              + "#" + delegation.repositoryMethod().identity(),
+              + "#" + delegation.repositoryMethod().name(),
           SemanticCallFacts.Certainty.UNRESOLVED,
           "Reactive repository backing is module-specific and outside"
               + " the analyzed dependencies; no backing class can be selected.",
@@ -221,7 +231,17 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
   /** Selects the backing for a guaranteed CRUD method under override evidence. */
   private DelegationSelection crudBacking(DelegationContext delegation) {
     String method = delegation.repositoryMethod().name();
-    if (delegation.baseClass().isEmpty()) {
+    if (delegation.redeclared()) {
+      return new DelegationSelection(
+          "org.springframework.data.jpa.repository.support.SimpleJpaRepository#" + method,
+          delegation.metadataAvailable()
+              ? SemanticCallFacts.Certainty.POSSIBLE
+              : SemanticCallFacts.Certainty.UNRESOLVED,
+          "A source redeclaration of the contract method is override evidence;"
+              + " the runtime backing is not proven to be the default.",
+          null);
+    }
+    if (delegation.baseClasses().isEmpty()) {
       return new DelegationSelection(
           "org.springframework.data.jpa.repository.support.SimpleJpaRepository#" + method,
           delegation.metadataAvailable()
@@ -230,7 +250,19 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
           null,
           null);
     }
-    SourceMetadataScannerState.RepositoryBaseClass baseClass = delegation.baseClass().get();
+    List<String> configuredTypes = delegation.baseClasses().stream()
+        .map(SourceMetadataScannerState.RepositoryBaseClass::configuredType)
+        .distinct()
+        .toList();
+    SourceMetadataScannerState.RepositoryBaseClass baseClass = delegation.baseClasses().get(0);
+    if (configuredTypes.size() > 1) {
+      return new DelegationSelection(
+          baseClass.configuredType() + "#" + method,
+          SemanticCallFacts.Certainty.UNRESOLVED,
+          "Multiple repository base classes are configured; the active"
+              + " selection cannot be determined.",
+          "spring_data_backing_selection_ambiguous");
+    }
     if (baseClass.applicationScoped()) {
       return new DelegationSelection(
           baseClass.configuredType() + "#" + method,
@@ -249,7 +281,7 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
         "spring_data_backing_selection_out_of_scope");
   }
 
-  /** Maps fragment method names to their application Impl target for one repository. */
+  /** Maps fragment method identities to their application Impl target for one repository. */
   private Map<String, String> fragmentTargets(
       SourceMetadataScanner scanner, SourceMetadataScannerState.BeanCandidate candidate) {
     Map<String, String> result = new HashMap<>();
@@ -257,8 +289,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
       if (!fragment.repositoryType().equals(candidate.file().typeName())) {
         continue;
       }
-      for (String methodName : fragment.methodNames()) {
-        result.put(methodName, fragment.implementationType() + "#" + methodName);
+      for (SourceMetadataScannerState.RepositoryMethod method : fragment.methods()) {
+        result.put(method.identity(), fragment.implementationType() + "#" + method.name());
       }
     }
     return result;

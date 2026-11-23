@@ -589,7 +589,11 @@ public final class SemanticCallFacts {
     this.links = List.copyOf(links == null ? List.of() : links);
     mergePolicy = MergePolicy.contract();
     runMetadata = RunMetadata.from(context, graph);
-    this.diagnostics = List.copyOf(diagnostics == null ? List.of() : diagnostics);
+    this.diagnostics = (diagnostics == null ? List.<Diagnostic>of() : diagnostics).stream()
+        .sorted(java.util.Comparator.comparing(Diagnostic::code)
+            .thenComparing(Diagnostic::path)
+            .thenComparing(Diagnostic::detail))
+        .toList();
     validateLinks();
   }
 

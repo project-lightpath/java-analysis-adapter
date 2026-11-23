@@ -23,7 +23,8 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
   }
 
   /** Resolves one type argument of the first supported Spring Data contract declaration. */
-  Optional<String> springRepositoryTypeArgument(SourceFile file, int argumentIndex) {    String header = maskStringLiterals(typeHeader(file));
+  Optional<String> springRepositoryTypeArgument(SourceFile file, int argumentIndex) {
+    String header = maskStringLiterals(typeHeader(file));
     int extendsIndex = topLevelKeywordIndex(header, "extends");
     if (extendsIndex < 0) {
       return Optional.empty();
@@ -90,21 +91,6 @@ abstract class SourceMetadataScannerFrameworkLayer01 extends SourceMetadataScann
   /** Finds bounded Spring Data repository interfaces, including annotated repositories. */
   Optional<String> springRepositoryContract(SourceFile file) {
     return springRepositoryContracts(file).stream().findFirst();
-  }
-
-  /** Detects a source declaration that exactly redeclares the repository ID contract. */
-  boolean redeclaresInheritedFindById(SourceFile file, MethodInfo method) {
-    if (!method.name().equals("findById")) {
-      return false;
-    }
-    Optional<String> repositoryIdType = springRepositoryIdType(file);
-    List<Parameter> methodParameters = parameters(method.parameters());
-    if (repositoryIdType.isEmpty() || methodParameters.size() != 1) {
-      return false;
-    }
-    return repositoryTypeToken(methodParameters.get(0).type(), file)
-        .filter(repositoryIdType.get()::equals)
-        .isPresent();
   }
 
   /** Scans Spring @Bean and bounded CommandLineRunner lifecycle callbacks. */

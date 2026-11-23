@@ -167,16 +167,6 @@ static boolean springBeanAnnotation(SourceFile file, String block) {
         .toList();
   }
 
-  /** Returns whether the selected Spring Data contract guarantees findById. */
-  boolean guaranteedFindByIdContract(String contract) {
-    if (!SPRING_DATA_FIND_BY_ID_CONTRACTS.contains(contract)) {
-      return false;
-    }
-    boolean pagingContract = contract.equals("PagingAndSortingRepository")
-        || contract.equals("ListPagingAndSortingRepository");
-    return !pagingContract || springBootMajorVersion().map(major -> major < 3).orElse(false);
-  }
-
   /** Returns the contract-guaranteed method names for one Spring Data contract. */
   List<String> guaranteedContractMethods(String contract) {
     List<String> methods = SPRING_DATA_GUARANTEED_CONTRACT_METHODS.get(contract);
@@ -185,8 +175,46 @@ static boolean springBeanAnnotation(SourceFile file, String block) {
     }
     boolean pagingContract = contract.equals("PagingAndSortingRepository")
         || contract.equals("ListPagingAndSortingRepository");
-    return !pagingContract || springBootMajorVersion().map(major -> major < 3).orElse(false)
-        ? methods
-        : List.of();
+    if (pagingContract) {
+      return springBootMajorVersion().map(major -> major < 3).orElse(false)
+          ? methods
+          : List.of();
+    }
+    if (contract.equals("JpaRepository")) {
+      return guaranteedJpaMethods();
+    }
+    return methods;
+  }
+
+  /**
+   * Version-pins the JPA-specific guarantees: getOne/getById were removed in
+   * Spring Data 3, and saveAllAndFlush/deleteAllByIdInBatch only exist from
+   * 2.7. An unparsable version keeps only the version-stable CRUD baseline
+   * (the safe abstention direction).
+   */
+  private List<String> guaranteedJpaMethods() {
+    Optional<Integer> major = springBootMajorVersion();
+    if (major.isEmpty()) {
+      return SPRING_DATA_CRUD_METHODS;
+    }
+    return SPRING_DATA_JPA_METHODS.stream()
+        .filter(name -> !(major.get() >= 3
+            && SPRING_DATA_JPA_METHODS_REMOVED_IN_BOOT_3.contains(name)))
+        .filter(name -> !(major.get() < 3
+            && !springBootVersionAtLeast(2, 7)
+            && SPRING_DATA_JPA_METHODS_ADDED_IN_2_7.contains(name)))
+        .toList();
+  }
+
+  /** Reads whether the Spring Boot version is at least the given release. */
+  boolean springBootVersionAtLeast(int requiredMajor, int requiredMinor) {
+    Matcher matcher = Pattern.compile("^\\D*(\\d+)\\.(\\d+)")
+        .matcher(context.frameworkVersion());
+    if (!matcher.find()) {
+      return false;
+    }
+    int major = Integer.parseInt(matcher.group(1));
+    int minor = Integer.parseInt(matcher.group(2));
+    return major > requiredMajor || (major == requiredMajor && minor >= requiredMinor);
   }
 }

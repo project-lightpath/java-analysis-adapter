@@ -242,6 +242,40 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
             + " not classified, no declared edges emitted");
   }
 
+  @Test
+  void declaredEdgesJoinDelegationFactsOnNodeIdentity() throws IOException {
+    Path fixture = fixture("derived");
+    SemanticCallFacts facts = analyze(fixture, fixture.resolve("src/main/java"));
+
+    SemanticCallFacts.Fact crudEdge = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("declared_invokes"))
+        .filter(item -> item.callee().equals("demo.AccountRepository#save"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    SemanticCallFacts.Fact crudDelegation = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("delegated_implementation"))
+        .filter(item -> item.caller().equals(crudEdge.callee()))
+        .filter(item -> item.callee().equals(
+            "org.springframework.data.jpa.repository.support.SimpleJpaRepository#save"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, crudDelegation.certainty());
+
+    SemanticCallFacts.Fact derivedEdge = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("declared_invokes"))
+        .filter(item -> item.callee().equals("demo.AccountRepository#findByAccountNumber"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    SemanticCallFacts.Fact derivedDelegation = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("delegated_implementation"))
+        .filter(item -> item.caller().equals(derivedEdge.callee()))
+        .filter(item -> item.callee().equals(
+            "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, derivedDelegation.certainty());
+  }
+
   /** Builds the shared derived-query fixture and returns its root. */
   private Path fixture(String name) throws IOException {
     Path root = temp.resolve(name);
@@ -311,6 +345,12 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
         .analysisScope(AnalysisContext.Scope.PRODUCTION)
         .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
         .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-data-repository-contract", "source_interface_metadata",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
         .provenance(AnalysisContext.Provenance.forTesting())
         .build());
   }

@@ -221,6 +221,10 @@ static final List<String> SPRING_DATA_JPA_METHODS = List.of(
       "deleteById", "delete", "deleteAllById", "deleteAll", "flush", "saveAndFlush",
       "saveAllAndFlush", "deleteAllInBatch", "deleteAllByIdInBatch", "getOne", "getById",
       "getReferenceById");
+static final Set<String> SPRING_DATA_JPA_METHODS_REMOVED_IN_BOOT_3 = Set.of(
+      "getOne", "getById");
+static final Set<String> SPRING_DATA_JPA_METHODS_ADDED_IN_2_7 = Set.of(
+      "saveAllAndFlush", "deleteAllByIdInBatch");
 static final Map<String, List<String>> SPRING_DATA_GUARANTEED_CONTRACT_METHODS = Map.ofEntries(
       Map.entry("CrudRepository", SPRING_DATA_CRUD_METHODS),
       Map.entry("ListCrudRepository", SPRING_DATA_CRUD_METHODS),
@@ -230,9 +234,6 @@ static final Map<String, List<String>> SPRING_DATA_GUARANTEED_CONTRACT_METHODS =
       Map.entry("PagingAndSortingRepository", SPRING_DATA_CRUD_METHODS),
       Map.entry("ListPagingAndSortingRepository", SPRING_DATA_CRUD_METHODS),
       Map.entry("JpaRepository", SPRING_DATA_JPA_METHODS));
-static final Set<String> SPRING_DATA_FIND_BY_ID_CONTRACTS = Set.of(
-      "CrudRepository", "JpaRepository", "PagingAndSortingRepository", "ListCrudRepository",
-      "ListPagingAndSortingRepository");
 static final Set<String> SPRING_DATA_REPOSITORY_CONFIGURATION_ANNOTATIONS = Set.of(
       "org.springframework.data.jpa.repository.config.EnableJpaRepositories");
 static final List<String> SUPPORTED_HTTP_METHODS =
@@ -482,12 +483,15 @@ static final List<String> SUPPORTED_HTTP_METHODS =
     }
   }
 
-  /** A configured repository base class, with its application-scope resolution. */
+  /** A configured repository base class, with its analysis-scope resolution. */
   record RepositoryBaseClass(String configuredType, boolean applicationScoped, String sourcePath) {}
 
   /** A repository fragment composition: custom interface plus its Impl class. */
   record RepositoryFragment(
-      String repositoryType, String fragmentType, String implementationType, List<String> methodNames) {}
+      String repositoryType,
+      String fragmentType,
+      String implementationType,
+      List<RepositoryMethod> methods) {}
 
   record AnnotationOccurrence(String arguments, String source) {}
 

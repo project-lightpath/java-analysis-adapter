@@ -39,8 +39,57 @@ class SpringDataDelegationLadderTest {
         "org.springframework.data.jpa.repository.support.SimpleJpaRepository#save",
         save.callee());
     SemanticCallFacts.Fact derived = delegationFact(
-        facts, "demo.AccountRepository#findByAccountNumber(String)");
+        facts, "demo.AccountRepository#findByAccountNumber");
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, derived.certainty());
+    assertTrue(derived.evidence().stream().anyMatch(evidence ->
+        "findByAccountNumber(String)".equals(evidence.attributes().get("repositoryMethod"))),
+        "the source signature stays on the evidence for overload-aware joins");
+  }
+
+  @Test
+  void redeclaredCrudMethodStaysPossible() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.Query;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, findAll.certainty(),
+        "a source redeclaration of a contract method is override evidence");
+  }
+
+  @Test
+  void multipleDistinctBaseClassesAbstainAsAmbiguous() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public class FirstBase<T> { }
+        """, """
+        package demo;
+        public class SecondBase<T> { }
+        """, """
+        package demo;
+        import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+        @EnableJpaRepositories(repositoryBaseClass = FirstBase.class)
+        public class FirstConfig { }
+        """, """
+        package demo;
+        import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+        @EnableJpaRepositories(repositoryBaseClass = SecondBase.class)
+        public class SecondConfig { }
+        """, """
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> { }
+        """));
+    SemanticCallFacts.Fact save = delegationFact(facts, "demo.AccountRepository#save");
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, save.certainty());
+    assertTrue(facts.diagnostics().stream()
+        .anyMatch(item -> item.code().equals("spring_data_backing_selection_ambiguous")),
+        facts.diagnostics().toString());
   }
 
   @Test

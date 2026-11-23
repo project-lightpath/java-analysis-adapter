@@ -205,7 +205,8 @@ abstract class BoundedFrameworkModelIdentity extends BoundedFrameworkModelUtilit
       SourceMetadataScanner scanner,
       List<SourceMetadataScannerState.BeanCandidate> candidates,
       SourceMetadataScannerState.BeanCandidate candidate,
-      String repositoryMethod) {    boolean uniqueLegacyRepository = repositoryMethod.equals("findById")
+      String repositoryMethod) {
+    boolean uniqueLegacyRepository = repositoryMethod.equals("findById")
         && candidate.file().simpleTypeName().equals("AccountRepository")
         && uniqueSimpleType(scanner, candidate.file().simpleTypeName())
         && candidates.stream()

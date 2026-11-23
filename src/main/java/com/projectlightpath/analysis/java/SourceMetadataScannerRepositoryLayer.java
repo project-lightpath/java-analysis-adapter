@@ -1,17 +1,21 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Responsibility layer for Spring Data repository composition metadata:
  * fragment interfaces, their backing Impl classes, and the configured
- * repository base class.
+ * repository base classes.
  */
 abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScannerFrameworkLayer01 {
 
@@ -30,7 +34,7 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
     if (contracts.isEmpty()) {
       return List.of();
     }
-    Map<String, RepositoryMethod> result = new LinkedHashMap<>();
+    Map<String, RepositoryMethod> result = new java.util.LinkedHashMap<>();
     for (String contract : contracts) {
       for (String name : guaranteedContractMethods(contract)) {
         result.putIfAbsent(name, new RepositoryMethod(name, name, true));
@@ -72,32 +76,58 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
         continue;
       }
       for (String fragmentType : extendedFragmentInterfaces(file)) {
-        String implementationType = fragmentType + "Impl";
-        SourceFile implementation = files().stream()
-            .filter(candidate -> candidate.typeName().equals(implementationType))
-            .filter(this::isConcreteClass)
-            .findFirst()
-            .orElse(null);
-        if (implementation == null) {
-          continue;
-        }
         SourceFile fragmentFile = files().stream()
             .filter(candidate -> candidate.typeName().equals(fragmentType))
             .findFirst()
             .orElseThrow();
-        List<String> methodNames = methods(fragmentFile).stream()
+        SourceFile implementation = fragmentImplementation(fragmentFile);
+        if (implementation == null) {
+          continue;
+        }
+        List<RepositoryMethod> fragmentMethods = methods(fragmentFile).stream()
             .filter(method -> typeContaining(
                 fragmentFile, declarationStart(fragmentFile, method.start()))
                 .equals(fragmentFile.typeName()))
             .filter(method -> abstractInstanceRepositoryMethod(method))
-            .map(method -> method.name())
-            .distinct()
+            .map(method -> new RepositoryMethod(
+                method.name(), repositoryMethodSignature(method), false))
             .toList();
         result.add(new RepositoryFragment(
-            file.typeName(), fragmentType, implementationType, methodNames));
+            file.typeName(), fragmentType, implementation.typeName(), fragmentMethods));
       }
     }
     return List.copyOf(result);
+  }
+
+  /** Returns the Impl class that actually implements one fragment interface. */
+  private SourceFile fragmentImplementation(SourceFile fragmentFile) {
+    String implementationName = fragmentFile.simpleTypeName() + "Impl";
+    return files().stream()
+        .filter(candidate -> candidate.simpleTypeName().equals(implementationName))
+        .filter(this::isConcreteClass)
+        .filter(candidate -> implementsFragment(candidate, fragmentFile))
+        .findFirst()
+        .orElse(null);
+  }
+
+  /** Checks that one concrete class names the fragment interface in its implements clause. */
+  private boolean implementsFragment(SourceFile candidate, SourceFile fragmentFile) {
+    String header = maskStringLiterals(typeHeader(candidate));
+    int implementsIndex = topLevelKeywordIndex(header, "implements");
+    if (implementsIndex < 0) {
+      return false;
+    }
+    int extendsIndex = topLevelKeywordIndex(header, "extends");
+    int clauseStart = implementsIndex + "implements".length();
+    int openBrace = header.indexOf('{', clauseStart);
+    String clause = header.substring(clauseStart, openBrace < 0 ? header.length() : openBrace);
+    for (String type : typeNames(clause)) {
+      Optional<String> resolved = resolveReferenceType(type, candidate);
+      if (resolved.isPresent() && resolved.get().equals(fragmentFile.typeName())) {
+        return true;
+      }
+    }
+    return extendsIndex < 0 || implementsIndex < extendsIndex;
   }
 
   /** Returns app-declared interfaces extended by one repository, excluding Spring contracts. */
@@ -116,12 +146,16 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
           .isPresent()) {
         continue;
       }
-      String qualified = qualify(type, file.packageName());
-      boolean isAppInterface = files().stream()
-          .filter(candidate -> candidate.typeName().equals(qualified))
-          .anyMatch(this::isInterfaceFile);
+      Optional<String> resolved = type.contains(".")
+          ? Optional.of(type)
+          : resolveReferenceType(type, file);
+      boolean isAppInterface = resolved
+          .map(qualified -> files().stream()
+              .filter(candidate -> candidate.typeName().equals(qualified))
+              .anyMatch(this::isInterfaceFile))
+          .orElse(false);
       if (isAppInterface) {
-        result.add(qualified);
+        result.add(resolved.orElseThrow());
       }
     }
     return result;
@@ -137,10 +171,14 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
         && !header.matches("(?s).*\\babstract\\s+class\\s+\\w+\\b.*");
   }
 
-  /** Returns the configured repository base class, when one is present. */
-  Optional<RepositoryBaseClass> springRepositoryBaseClass() {
+  /**
+   * Returns every configured repository base class, from all
+   * {@code @EnableJpaRepositories} occurrences in application source.
+   */
+  List<RepositoryBaseClass> springRepositoryBaseClasses() {
     Pattern attribute = Pattern.compile(
         "repositoryBaseClass\\s*=\\s*([\\w.]+)\\.class");
+    List<RepositoryBaseClass> result = new ArrayList<>();
     for (SourceFile file : files()) {
       String block = file.classAnnotationBlock();
       for (AnnotationOccurrence occurrence : canonicalAnnotationOccurrences(
@@ -149,16 +187,50 @@ abstract class SourceMetadataScannerRepositoryLayer extends SourceMetadataScanne
         Matcher matcher = attribute.matcher(occurrence.source());
         if (matcher.find()) {
           String configured = matcher.group(1);
-          String qualified = configured.contains(".")
-              ? configured
-              : qualify(configured, file.packageName());
-          boolean applicationScoped = files().stream()
-              .anyMatch(candidate -> candidate.typeName().equals(qualified));
-          return Optional.of(new RepositoryBaseClass(
-              qualified, applicationScoped, file.displayPath()));
+          Optional<String> resolved = configured.contains(".")
+              ? Optional.of(configured)
+              : resolveReferenceType(configured, file);
+          String qualified = resolved.orElseGet(() -> qualify(configured, file.packageName()));
+          result.add(new RepositoryBaseClass(
+              qualified, typeInAnalysisScope(qualified), file.displayPath()));
         }
       }
     }
-    return Optional.empty();
+    return List.copyOf(result);
+  }
+
+  /**
+   * Checks whether one type is application source, or resolvable on the
+   * analysis classpath (the spring-data jars carry the default backing
+   * classes, and a dependency-provided base class is a bounded candidate).
+   */
+  private boolean typeInAnalysisScope(String qualifiedType) {
+    if (files().stream().anyMatch(candidate -> candidate.typeName().equals(qualifiedType))) {
+      return true;
+    }
+    String relative = qualifiedType.replace('.', '/') + ".class";
+    for (Path entry : context.dependencyClasspath()) {
+      if (dependencyContains(entry, relative)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean dependencyContains(Path entry, String relative) {
+    if (!Files.exists(entry)) {
+      return false;
+    }
+    if (Files.isDirectory(entry)) {
+      return Files.isRegularFile(entry.resolve(relative));
+    }
+    if (!entry.toString().endsWith(".jar")) {
+      return false;
+    }
+    try (ZipFile archive = new ZipFile(entry.toFile())) {
+      return archive.getEntry(relative) != null;
+    } catch (IOException error) {
+      return false;
+    }
   }
 }

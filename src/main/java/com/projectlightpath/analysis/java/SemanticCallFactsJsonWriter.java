@@ -61,7 +61,8 @@ public final class SemanticCallFactsJsonWriter {
     return result;
   }
 
-  private static Map<String, Object> runMetadata(SemanticCallFacts.RunMetadata metadata) {    Map<String, Object> result = new LinkedHashMap<>();
+  private static Map<String, Object> runMetadata(SemanticCallFacts.RunMetadata metadata) {
+    Map<String, Object> result = new LinkedHashMap<>();
     result.put("contextId", metadata.contextId());
     result.put("framework", metadata.framework());
     result.put("frameworkVersion", metadata.frameworkVersion());
