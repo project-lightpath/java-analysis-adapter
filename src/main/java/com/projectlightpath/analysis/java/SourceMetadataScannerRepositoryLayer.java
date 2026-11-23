@@ -125,12 +125,18 @@ abstract class SourceMetadataScannerRepositoryLayer
     }
     // A bare @Query spelling can also be canonically supplied by an
     // on-demand import of the annotation's package — the weakest
-    // declaration form (JLS 6.4.1). A single-type import of another Query,
-    // or a same-package Query type, shadows it and must reject.
+    // declaration form (JLS 6.4.1). Every stronger declaration of a Query
+    // type shadows it and must reject: a single-type import, a same-package
+    // type, a type declared in the same compilation unit, or an inherited
+    // member type of an app-declared extended interface.
     if (!bareQuerySpelling(method.annotationBlock())) {
       return false;
     }
     if (!importedTypes("Query", file).isEmpty()) {
+      return false;
+    }
+    String masked = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
+    if (declaresQueryType(masked)) {
       return false;
     }
     boolean samePackageQuery = files().stream()
@@ -139,10 +145,37 @@ abstract class SourceMetadataScannerRepositoryLayer
     if (samePackageQuery) {
       return false;
     }
-    String masked = SourceMetadataScannerFileExtracts.of(file).literalMaskedSource();
+    if (inheritedQueryMemberType(file)) {
+      return false;
+    }
     for (String canonical : SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS) {
       String packageName = canonical.substring(0, canonical.lastIndexOf('.'));
       if (masked.contains("import " + packageName + ".*;")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Checks one masked compilation unit for any type declaration named Query. */
+  private static boolean declaresQueryType(String maskedSource) {
+    return java.util.regex.Pattern
+        .compile("\\b(?:@?interface|class|enum|record)\\s+Query\\b")
+        .matcher(maskedSource).find();
+  }
+
+  /**
+   * Checks whether an app-declared extended interface supplies Query as an
+   * inherited member type (single level, per the AGENTS site-filter rule).
+   */
+  private boolean inheritedQueryMemberType(SourceFile file) {
+    for (String superType : extendedFragmentInterfaces(file)) {
+      Optional<SourceFile> superFile = files().stream()
+          .filter(candidate -> candidate.typeName().equals(superType))
+          .findFirst();
+      if (superFile.isPresent()
+          && declaresQueryType(
+              SourceMetadataScannerFileExtracts.of(superFile.get()).literalMaskedSource())) {
         return true;
       }
     }

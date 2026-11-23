@@ -472,6 +472,44 @@ class SpringDataDelegationLadderTest {
         "a single-type import of another Query shadows the on-demand import (JLS 6.4.1)");
   }
 
+  @Test
+  void sameCompilationUnitQueryTypeShadowsTheWildcardImport() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.data.jpa.repository.*;
+        public interface AccountRepository
+            extends org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @interface Query { String value(); }
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findAll.certainty(),
+        "a same-compilation-unit Query type shadows the on-demand import (JLS 6.4.1)");
+  }
+
+  @Test
+  void inheritedQueryMemberTypeShadowsTheWildcardImport() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public interface BaseRepository {
+          @interface Query { String value(); }
+        }
+        """, """
+        package demo;
+        import org.springframework.data.jpa.repository.*;
+        public interface AccountRepository extends BaseRepository,
+            org.springframework.data.jpa.repository.JpaRepository<Account, Long> {
+          @Query("select a from Account a")
+          java.util.List<Account> findAll();
+        }
+        """));
+    SemanticCallFacts.Fact findAll = delegationFact(facts, "demo.AccountRepository#findAll");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, findAll.certainty(),
+        "an inherited member type Query shadows the on-demand import (JLS 6.4.1)");
+  }
+
   private SemanticCallFacts.Fact delegationFact(SemanticCallFacts facts, String caller) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("delegated_implementation"))

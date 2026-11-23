@@ -153,7 +153,7 @@ abstract class SourceMetadataScannerFragmentLayer
   }
 
   /** Returns app-declared interfaces extended by one repository, excluding Spring contracts. */
-  private List<String> extendedFragmentInterfaces(SourceFile file) {
+  List<String> extendedFragmentInterfaces(SourceFile file) {
     String header = maskStringLiterals(typeHeader(file));
     int extendsIndex = topLevelKeywordIndex(header, "extends");
     if (extendsIndex < 0) {
