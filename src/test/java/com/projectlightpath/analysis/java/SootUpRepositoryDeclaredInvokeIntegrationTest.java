@@ -27,7 +27,7 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
   @Test
   void derivedQueryInvokeEmitsDeclaredTargetEdge() throws IOException {
     Path fixture = fixture("derived");
-    SemanticCallFacts facts = analyze(fixture, true);
+    SemanticCallFacts facts = analyze(fixture, fixture.resolve("src/main/java"));
 
     SemanticCallFacts.Fact fact = facts.providerFacts().stream()
         .filter(item -> item.caller().equals("demo.AccountService#create"))
@@ -43,7 +43,7 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
   @Test
   void inheritedCrudInvokeEmitsDeclaredTargetEdge() throws IOException {
     Path fixture = fixture("derived");
-    SemanticCallFacts facts = analyze(fixture, true);
+    SemanticCallFacts facts = analyze(fixture, fixture.resolve("src/main/java"));
 
     SemanticCallFacts.Fact fact = facts.providerFacts().stream()
         .filter(item -> item.caller().equals("demo.AccountService#create"))
@@ -92,8 +92,7 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
         """);
     compile(sourceRoot, stubs, classes);
 
-    SemanticCallFacts facts = analyze(
-        temp.resolve("fragment"), sourceRoot, classes, true);
+    SemanticCallFacts facts = analyze(temp.resolve("fragment"), sourceRoot);
 
     SemanticCallFacts.Fact fact = facts.providerFacts().stream()
         .filter(item -> item.caller().equals("demo.AccountService#create"))
@@ -131,7 +130,7 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
         """);
     compile(sourceRoot, stubs, classes);
 
-    SemanticCallFacts facts = analyze(temp.resolve("plain"), sourceRoot, classes, true);
+    SemanticCallFacts facts = analyze(temp.resolve("plain"), sourceRoot);
     assertTrue(facts.providerFacts().stream()
         .noneMatch(item -> item.relationshipType().equals("declared_invokes")),
         facts.providerFacts().toString());
@@ -140,7 +139,7 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
   @Test
   void repositoryDefaultMethodKeepsInterfaceDispatchAndLegacyIds() throws IOException {
     Path fixture = fixture("default-method");
-    SemanticCallFacts facts = analyze(fixture, true);
+    SemanticCallFacts facts = analyze(fixture, fixture.resolve("src/main/java"));
 
     List<SemanticCallFacts.Fact> auditFacts = facts.providerFacts().stream()
         .filter(item -> item.caller().equals("demo.AccountService#create"))
@@ -164,14 +163,16 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
   }
 
   @Test
-  void missingSourceRootsSkipsDeclaredEdgesDifferentially() throws IOException {
+  void emptySourceRootRunsPassAndEmitsNothingDifferentially() throws IOException {
     Path fixture = fixture("derived");
-    SemanticCallFacts withoutSources = analyze(fixture, false);
+    Path emptyRoot = fixture.resolve("empty-src/main/java");
+    Files.createDirectories(emptyRoot);
+    SemanticCallFacts withoutSources = analyze(fixture, emptyRoot);
     assertTrue(withoutSources.providerFacts().stream()
         .noneMatch(item -> item.relationshipType().equals("declared_invokes")),
         withoutSources.providerFacts().toString());
 
-    SemanticCallFacts withSources = analyze(fixture, true);
+    SemanticCallFacts withSources = analyze(fixture, fixture.resolve("src/main/java"));
     assertTrue(withSources.providerFacts().stream()
         .anyMatch(item -> item.relationshipType().equals("declared_invokes")
             && item.callee().equals("demo.AccountRepository#save")),
@@ -210,7 +211,7 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
         """);
     compile(sourceRoot, stubs, classes);
 
-    SemanticCallFacts facts = analyze(temp.resolve("nested"), sourceRoot, classes, true);
+    SemanticCallFacts facts = analyze(temp.resolve("nested"), sourceRoot);
     List<SemanticCallFacts.Fact> declared = facts.providerFacts().stream()
         .filter(item -> item.caller().equals("demo.AccountService#create"))
         .filter(item -> item.relationshipType().equals("declared_invokes"))
@@ -282,29 +283,21 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
     return root;
   }
 
-  private SemanticCallFacts analyze(Path root, boolean withSources) throws IOException {
-    return analyze(root, root.resolve("src/main/java"), root.resolve("target/classes"),
-        withSources);
-  }
-
-  private SemanticCallFacts analyze(Path root, Path sourceRoot, Path classes,
-      boolean withSources) {
-    AnalysisContext.Builder builder = AnalysisContext.builder()
+  private SemanticCallFacts analyze(Path root, Path sourceRoot) {
+    return new JavaAnalysisAdapter().analyze(AnalysisContext.builder()
         .id("repository-declared-invoke")
         .framework(AnalysisContext.Framework.SPRING_BOOT)
         .frameworkVersion("2.7.18")
         .fixtureId("fsi-spring-boot")
         .javaRelease(17)
         .repositoryRoot(root)
-        .applicationClasses(classes)
+        .applicationClasses(root.resolve("target/classes"))
         .selectedProfile("production")
         .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
         .dependencyClasspathRequired(false)
-        .provenance(AnalysisContext.Provenance.forTesting());
-    if (withSources) {
-      builder.sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true);
-    }
-    return new JavaAnalysisAdapter().analyze(builder.build());
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build());
   }
 
   private static void writeStubs(Path stubs) throws IOException {
@@ -323,7 +316,10 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
 
   private static void compile(Path sourceRoot, Path stubs, Path classes) throws IOException {
     Path stubClasses = classes.resolveSibling("stub-classes");
-    compile(List.of(stubs), null, stubClasses);
+    compile(Files.walk(stubs)
+        .filter(path -> path.toString().endsWith(".java"))
+        .sorted()
+        .toList(), null, stubClasses);
     compile(Files.walk(sourceRoot)
         .filter(path -> path.toString().endsWith(".java"))
         .sorted()

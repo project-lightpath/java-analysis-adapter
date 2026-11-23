@@ -105,15 +105,19 @@ Emission site: `SootUpCallGraphExtractor` (src/main/java/.../SootUpCallGraphExtr
 - New bounded `relationshipType` value: `declared_invokes`, NOT added to
   `DynamicCertaintyPolicy.isOpenWorldProviderRelationship` (declared
   bytecode fact, not open-world).
-- **Skip visibility (round-1 finding 8):** the repository set comes from
-  source scanning. If the context is SPRING_BOOT, compiled application code
-  is present, but **no source roots are available** (repository interfaces
-  unidentifiable), emit the scan-global diagnostic
-  `spring_data_repository_sources_unavailable` (channel below) and skip the
-  pass. If source roots exist and simply contain no repository interfaces,
-  that is genuine absence — no diagnostic. This mirrors the repo's
-  fail-visible rule without a whole-scan certainty downgrade for the mere
-  absence of Spring Data usage.
+- **Skip visibility (superseded by implementation finding, RED_01):** the
+  original design (skip + `spring_data_repository_sources_unavailable`
+  diagnostic when no source roots are available) is **structurally
+  unreachable**: `AnalysisContextInputModeValidator.requireRequiredSourceRoot`
+  rejects context construction without a required production source root, so
+  a valid analysis always has included source roots — the missing-sources
+  condition already fails visibly at input validation, before any scan. The
+  Edge-1 pass therefore has **no skip branch and no source-availability
+  diagnostic**: the repository-interface set comes from source scanning, an
+  empty set is genuine absence, and an empty source root directory simply
+  yields no `declared_invokes` edges (covered by the differential pair in
+  cell 10). The `spring_data_repository_sources_unavailable` code is dropped
+  from Item 3's scope.
 
 ### Edge 2 — framework-model delegation ladder
 
@@ -359,8 +363,11 @@ Cells (each = one test method):
    pre-existing edges at the same site are byte-stable (no legacy-ID flip).
 9. Negative pairwise: lookalike `@Repository` interface extending a
    non-Spring `Repository` (existing guard) — no new edges.
-10. No-source-roots SPRING_BOOT compiled input: Edge-1 skip +
-    `spring_data_repository_sources_unavailable` diagnostic.
+10. Empty-source-root SPRING_BOOT compiled input (differential pair with a
+   populated control): the pass runs and emits no `declared_invokes` edges
+   when the repository-interface set is empty (genuine absence; the
+   no-source-roots configuration is rejected by input validation — see the
+   superseded skip-visibility note).
 11. Boundary probes (empirical, per AGENTS.md): empty/simple method names,
     `$`-nested repository interfaces, overload-colliding derived methods
     (signature-suffixed identity), exact-boundary receiver names.
