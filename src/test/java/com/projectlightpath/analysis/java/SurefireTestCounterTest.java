@@ -1,6 +1,5 @@
 package com.projectlightpath.analysis.java;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,30 +17,35 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>The adapter suite runs in three surefire executions (default, large-archive, sootup),
  * each with its own reports directory; the gate sums them and enforces the recorded
- * baseline. These cells pin the counting and the lane/baseline rules.
+ * baseline. These cells pin the counting, the lane/baseline rules, and every malformed
+ * input shape.
  */
 class SurefireTestCounterTest {
   @TempDir Path temp;
 
-  private void report(String name, int tests) throws IOException {
-    Path directory = temp.resolve(name).getParent() == null
-        ? temp : temp.resolve(name).getParent();
+  private Path lane(String name) throws IOException {
+    Path directory = temp.resolve(name);
     Files.createDirectories(directory);
-    Files.writeString(temp.resolve(name), """
+    return directory;
+  }
+
+  private void report(Path directory, String file, String tests) throws IOException {
+    Files.writeString(directory.resolve(file), """
         <?xml version="1.0" encoding="UTF-8"?>
-        <testsuite name="%s" tests="%d" failures="0" errors="0" skipped="0">
+        <testsuite name="%s" tests="%s" failures="0" errors="0" skipped="0">
         </testsuite>
-        """.formatted(name, tests));
+        """.formatted(file, tests));
   }
 
   /** Count sums the tests attribute over every TEST-*.xml in the directory. */
   @Test
   void countSumsTestsAttributesAcrossReports() throws IOException {
-    report("a/TEST-one.xml", 3);
-    report("a/TEST-two.xml", 4);
-    report("a/ignore.txt", 0);
+    Path directory = lane("a");
+    report(directory, "TEST-one.xml", "3");
+    report(directory, "TEST-two.xml", "4");
+    Files.writeString(directory.resolve("ignore.txt"), "not a report");
 
-    assertEquals(7, SurefireTestCounter.count(temp.resolve("a")));
+    assertEquals(7, SurefireTestCounter.count(directory));
   }
 
   /** A missing or empty reports directory counts as zero, never an error. */
@@ -50,20 +54,61 @@ class SurefireTestCounterTest {
     assertEquals(0, SurefireTestCounter.count(temp.resolve("absent")));
   }
 
-  /** A malformed report fails loudly instead of silently undercounting. */
+  /** Counting uses long arithmetic; two huge reports must not wrap. */
   @Test
-  void malformedReportFailsLoudly() throws IOException {
-    Files.writeString(temp.resolve("TEST-broken.xml"), "not xml");
+  void countSumsBeyondIntRangeWithoutWrapping() throws IOException {
+    Path directory = lane("huge");
+    report(directory, "TEST-one.xml", "2000000000");
+    report(directory, "TEST-two.xml", "2000000000");
 
-    assertThrows(
-        IllegalStateException.class, () -> SurefireTestCounter.count(temp));
+    assertEquals(4_000_000_000L, SurefireTestCounter.count(directory));
+  }
+
+  /** A malformed report fails loudly, naming the file. */
+  @Test
+  void malformedReportFailsLoudlyNamingTheFile() throws IOException {
+    Path directory = lane("broken");
+    Files.writeString(directory.resolve("TEST-broken.xml"), "not xml");
+
+    IllegalStateException error =
+        assertThrows(IllegalStateException.class, () -> SurefireTestCounter.count(directory));
+    assertTrue(error.getMessage().contains("TEST-broken.xml"));
+  }
+
+  /** A report without a numeric tests attribute fails loudly, naming the file. */
+  @Test
+  void missingOrNonNumericTestsAttributeFailsLoudlyNamingTheFile() throws IOException {
+    Path missing = lane("missing-attr");
+    Files.writeString(missing.resolve("TEST-missing.xml"), """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <testsuite name="missing"></testsuite>
+        """);
+    IllegalStateException error = assertThrows(IllegalStateException.class,
+        () -> SurefireTestCounter.count(missing));
+    assertTrue(error.getMessage().contains("TEST-missing.xml"));
+
+    Path nonNumeric = lane("non-numeric");
+    report(nonNumeric, "TEST-nonnumeric.xml", "7x");
+    error = assertThrows(IllegalStateException.class,
+        () -> SurefireTestCounter.count(nonNumeric));
+    assertTrue(error.getMessage().contains("TEST-nonnumeric.xml"));
+  }
+
+  /** A directory named TEST-*.xml is not a report and fails loudly, naming it. */
+  @Test
+  void directoryNamedLikeAReportFailsLoudlyNamingIt() throws IOException {
+    Path directory = lane("dir-report");
+    Files.createDirectories(directory.resolve("TEST-dir.xml"));
+
+    IllegalStateException error =
+        assertThrows(IllegalStateException.class, () -> SurefireTestCounter.count(directory));
+    assertTrue(error.getMessage().contains("TEST-dir.xml"));
   }
 
   /** The summary line reports every lane and the baseline. */
   @Test
   void summaryReportsEveryLaneAndBaseline() {
-    List<String> summary =
-        SurefireTestCounter.summaryLines(377, 1, 70, 448);
+    List<String> summary = SurefireTestCounter.summaryLines(377, 1, 70, 448);
 
     assertTrue(String.join("\n", summary).contains("default=377"));
     assertTrue(String.join("\n", summary).contains("large=1"));
@@ -93,26 +138,38 @@ class SurefireTestCounterTest {
         "a total below the baseline fails");
   }
 
-  /** Exit code is 0 with no error lines and 1 with any; run never throws. */
+  /**
+   * The no-argument baseline defaults to exactly 302: a total of 302 with all lanes
+   * non-empty passes, and a total of 301 fails on the baseline rule.
+   */
   @Test
-  void exitCodeMapsErrorLinesAndRunNeverThrows() throws IOException {
-    assertEquals(0, SurefireTestCounter.exitCode(List.of()));
-    assertEquals(1, SurefireTestCounter.exitCode(List.of("ERROR: anything")));
-
-    // run() is exercised against a temp base, never the live target/ directory:
-    // surefire writes those reports concurrently with this parallel suite, and a
-    // half-written report would turn the test into a flake.
-    Path base = temp.resolve("base");
+  void noArgumentBaselineDefaultsToExactly302() throws IOException {
+    Path baseAtBoundary = lane("base-302");
+    Path baseBelow = lane("base-301");
     for (String lane : new String[] {"surefire-reports", "surefire-reports-large",
         "surefire-reports-sootup"}) {
-      Files.createDirectories(base.resolve(lane));
-      Files.writeString(base.resolve(lane + "/TEST-one.xml"), """
-          <?xml version="1.0" encoding="UTF-8"?>
-          <testsuite name="one" tests="2" failures="0" errors="0" skipped="0">
-          </testsuite>
-          """);
+      report(Files.createDirectories(baseAtBoundary.resolve(lane)),
+          "TEST-one.xml", "100");
+      report(Files.createDirectories(baseBelow.resolve(lane)),
+          "TEST-one.xml", "100");
     }
-    assertEquals(0, SurefireTestCounter.run(new String[] {"1"}, base));
-    assertEquals(1, SurefireTestCounter.run(new String[] {}, temp.resolve("empty-base")));
+    report(baseAtBoundary.resolve("surefire-reports"), "TEST-two.xml", "2");
+    report(baseBelow.resolve("surefire-reports"), "TEST-two.xml", "1");
+
+    assertEquals(0, SurefireTestCounter.run(new String[] {}, baseAtBoundary));
+    assertEquals(1, SurefireTestCounter.run(new String[] {}, baseBelow));
+  }
+
+  /** A non-numeric baseline argument is an error line and exit 1, never a crash. */
+  @Test
+  void nonNumericBaselineArgumentIsAnErrorLineNotACrash() throws IOException {
+    assertEquals(1, SurefireTestCounter.run(new String[] {"abc"}, temp.resolve("absent")));
+  }
+
+  /** Exit code is 0 with no error lines and 1 with any; run never throws. */
+  @Test
+  void exitCodeMapsErrorLines() {
+    assertEquals(0, SurefireTestCounter.exitCode(List.of()));
+    assertEquals(1, SurefireTestCounter.exitCode(List.of("ERROR: anything")));
   }
 }
