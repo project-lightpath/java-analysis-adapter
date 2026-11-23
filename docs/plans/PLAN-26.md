@@ -67,12 +67,9 @@ are pinned as evidence, not fixed here.
     `SourceMetadataScannerTextLayer02.parameterType`), replicated in the
     harness with a sync comment; the textual answer is the unqualified
     token.
-  - `ANNOTATION_ARGUMENT`: raw argument text between the parentheses,
-    whitespace-collapsed — what the textual families actually retain.
-  - `TYPE_SHAPE` member signatures: name + "(" + parameterType-joined
-    parameter renderings + ")" — the shape
-    `SourceMetadataScannerFrameworkLayer00.repositoryMethodSignature`
-    produces textually.
+  - `ANNOTATION_ARGUMENT`: raw argument text between the matching
+    parentheses, whitespace-collapsed — what the textual families actually
+    retain.
   - `REFLECTION_SOURCE_BOUND`: NONE — the textual reflection scanner
     (`reflectionSites`) requires a full `AnalysisContext`/`SourceFile`
     pipeline; reflection parity is #25's scope. Documented residual.
@@ -96,8 +93,10 @@ same task-global ERROR downgrade to POSSIBLE):
 - `TYPE_SHAPE` (member selection): one fact per method invocation and
   `new` expression in the site file, value =
   `owner.<name>(erasedParamTypes)` or `owner.<init>(…)`; one return-type
-  fact per probe-class method with no parameters, at the method tree
-  position.
+  fact per probe-class method with a non-void return, at the method tree
+  position. Constructors contribute no parameter facts and `super()` /
+  `this()` invocations are skipped, so javac's synthesized default
+  constructors contribute nothing.
 - `ANNOTATION_NAME`: one fact per annotation tree on probe-class
   members and their parameters (declaration and type-use), value =
   qualified annotation name. Unresolved annotation types are emitted
@@ -143,9 +142,10 @@ same task-global ERROR downgrade to POSSIBLE):
 | TS9 | return type `List<String> audit()` | DEFINITE `java.util.List` |
 | R1 | `Class.forName("demo.Present")`, source present | DEFINITE `demo.Present` |
 | R2 | `Class.forName("java.lang.String")`, runtime-only | POSSIBLE `java.lang.String` |
-| R3 | `Class.forName("missing.Absent")` | MISSING_INPUT (POSSIBLE + diagnostic) |
+| R3 | task error (missing import) + source-bound forName | MISSING_INPUT (POSSIBLE + diagnostic) |
+| R4 | `Class.forName("no.such.Type")`, unresolvable | POSSIBLE `no.such.Type` |
 
-25 cells; 71 + 25 = 96 in the observation.
+26 cells; 71 + 26 = 97 in the observation.
 
 ### 5. Gates
 
