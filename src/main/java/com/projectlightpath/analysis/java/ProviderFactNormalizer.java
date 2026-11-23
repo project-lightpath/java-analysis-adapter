@@ -48,14 +48,18 @@ final class ProviderFactNormalizer {
   private static CallReferences collectCallReferences(AnalysisGraph graph) {
     List<EdgeRef> edgeRefs = new ArrayList<>();
     Map<String, Integer> applicationBaseIdCounts = new HashMap<>();
+    Map<String, Integer> declaredBaseIdCounts = new HashMap<>();
     for (int index = 0; index < graph.calls().size(); index++) {
       CallEdge edge = graph.calls().get(index);
       edgeRefs.add(new EdgeRef(index, edge, edgeIdentity(edge)));
-      if (isApplicationEdge(edge)) {
+      if (isDeclaredInvoke(edge)) {
+        declaredBaseIdCounts.merge(declaredCallId(edge), 1, Integer::sum);
+      } else if (isApplicationEdge(edge)) {
         applicationBaseIdCounts.merge(legacyCallId(edge), 1, Integer::sum);
       }
     }
-    return new CallReferences(List.copyOf(edgeRefs), Map.copyOf(applicationBaseIdCounts));
+    return new CallReferences(
+        List.copyOf(edgeRefs), Map.copyOf(applicationBaseIdCounts), Map.copyOf(declaredBaseIdCounts));
   }
 
   /** Assigns deterministic IDs without changing the graph's output order. */
@@ -64,13 +68,24 @@ final class ProviderFactNormalizer {
     references.edges().stream()
         .sorted(Comparator.comparing(EdgeRef::identity).thenComparingInt(EdgeRef::index))
         .forEach(ref -> idsByIndex.put(
-            ref.index(), callId(ref, references.applicationBaseIdCounts(), ids)));
+            ref.index(), callId(ref, references.applicationBaseIdCounts(),
+                references.declaredBaseIdCounts(), ids)));
     return idsByIndex;
   }
 
   /** Selects the origin-aware ID namespace for one call edge. */
   private static String callId(
-      EdgeRef ref, Map<String, Integer> applicationBaseIdCounts, Set<String> ids) {
+      EdgeRef ref,
+      Map<String, Integer> applicationBaseIdCounts,
+      Map<String, Integer> declaredBaseIdCounts,
+      Set<String> ids) {
+    if (isDeclaredInvoke(ref.edge())) {
+      String baseId = declaredCallId(ref.edge());
+      if (declaredBaseIdCounts.get(baseId) == 1) {
+        return uniqueId(ids, baseId, ref.identity());
+      }
+      return uniqueId(ids, baseId + "-" + sha256(ref.identity()), ref.identity());
+    }
     if (!isApplicationEdge(ref.edge())) {
       return uniqueId(ids, dependencyCallId(ref.edge()), ref.identity());
     }
@@ -79,6 +94,10 @@ final class ProviderFactNormalizer {
       return uniqueId(ids, baseId, ref.identity());
     }
     return uniqueId(ids, baseId + "-" + sha256(ref.identity()), ref.identity());
+  }
+
+  private static boolean isDeclaredInvoke(CallEdge edge) {
+    return edge.relationshipType().equals("declared_invokes");
   }
 
   /** Normalizes ordinary call edges in their original provider order. */
@@ -128,7 +147,9 @@ final class ProviderFactNormalizer {
         edge.relationshipType(),
         certainty,
         List.copyOf(evidence),
-        serviceResolution == null ? limitation(openWorldDynamic, certainty) : serviceResolution.limitation());
+        serviceResolution == null
+            ? limitation(openWorldDynamic, certainty, edge.relationshipType())
+            : serviceResolution.limitation());
   }
 
   /** Normalizes source-backed dynamic observations after ordinary call IDs exist. */
@@ -176,9 +197,14 @@ final class ProviderFactNormalizer {
   }
 
   /** Applies open-world abstention and bounded-candidate limitations. */
-  private static String limitation(boolean openWorldDynamic, SemanticCallFacts.Certainty certainty) {
+  private static String limitation(
+      boolean openWorldDynamic, SemanticCallFacts.Certainty certainty, String relationshipType) {
     if (openWorldDynamic) {
       return DynamicCertaintyPolicy.LIMITATION;
+    }
+    if (relationshipType.equals("declared_invokes")) {
+      return "Declared interface-method target at the call site; runtime dispatch"
+          + " resolution is carried by the spring-data framework facts.";
     }
     return certainty == SemanticCallFacts.Certainty.POSSIBLE
         ? "CHA exposes a bounded implementation/callback candidate; runtime selection is not unique."
@@ -211,6 +237,12 @@ final class ProviderFactNormalizer {
   /** Gives dependency targets an origin-aware ID namespace without changing application IDs. */
   private static String dependencyCallId(CallEdge edge) {
     return "sootup-dependency-call-" + sha256(dependencyCallIdentity(edge));
+  }
+
+  /** Gives declared repository invokes their own ID namespace, outside the legacy counts. */
+  private static String declaredCallId(CallEdge edge) {
+    return "sootup-declared-" + Integer.toHexString(
+        (edge.caller().descriptor() + "->" + edge.callee().descriptor() + "@" + edge.line()).hashCode());
   }
 
   /** Retains the pre-existing identity string for application call edges. */
@@ -323,5 +355,7 @@ final class ProviderFactNormalizer {
   private record EdgeRef(int index, CallEdge edge, String identity) {}
 
   private record CallReferences(
-      List<EdgeRef> edges, Map<String, Integer> applicationBaseIdCounts) {}
+      List<EdgeRef> edges,
+      Map<String, Integer> applicationBaseIdCounts,
+      Map<String, Integer> declaredBaseIdCounts) {}
 }

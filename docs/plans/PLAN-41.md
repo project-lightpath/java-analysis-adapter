@@ -368,9 +368,13 @@ Cells (each = one test method):
    when the repository-interface set is empty (genuine absence; the
    no-source-roots configuration is rejected by input validation — see the
    superseded skip-visibility note).
-11. Boundary probes (empirical, per AGENTS.md): empty/simple method names,
-    `$`-nested repository interfaces, overload-colliding derived methods
-    (signature-suffixed identity), exact-boundary receiver names.
+11. Boundary probes (empirical, per AGENTS.md): overload-colliding derived
+    methods on one repository (signature-distinct declared edges), and
+    `$`-nested repository interfaces — implementation finding (RED_01):
+    bean candidates are top-level-type-based, so nested repository
+    interfaces are NOT classified (no declared edges, no framework facts);
+    a documented scanner residual (same class as FLPATH-5124), asserted as
+    an explicit bounded cell rather than silently passing.
 
 Existing tests are not edited; new cells go into new test methods (the plan
 sanctions zero edits to existing tests) — with **one explicit exception**:

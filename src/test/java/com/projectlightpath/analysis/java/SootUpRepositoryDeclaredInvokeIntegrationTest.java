@@ -180,32 +180,43 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
   }
 
   @Test
-  void nestedAndOverloadedRepositoryIdentitiesStayDistinct() throws IOException {
+  void overloadedRepositoryIdentitiesStayDistinctAndNestedInterfacesAreBounded() throws IOException {
     Path sourceRoot = temp.resolve("nested/src/main/java");
     Path stubs = temp.resolve("nested/stubs");
     Path classes = temp.resolve("nested/target/classes");
     writeStubs(stubs);
     write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/OverloadRepository.java", """
+        package demo;
+        public interface OverloadRepository
+            extends org.springframework.data.repository.CrudRepository<Account, Long> {
+          Account findByNumber(String number);
+          Account findByNumber(int number);
+        }
+        """);
     write(sourceRoot, "demo/Repositories.java", """
         package demo;
         public final class Repositories {
           public interface NestedRepository
               extends org.springframework.data.repository.CrudRepository<Account, Long> {
             Account findByNumber(String number);
-            Account findByNumber(int number);
           }
         }
         """);
     write(sourceRoot, "demo/AccountService.java", """
         package demo;
         public class AccountService {
-          private final Repositories.NestedRepository repository;
-          public AccountService(Repositories.NestedRepository repository) {
+          private final OverloadRepository repository;
+          private final Repositories.NestedRepository nested;
+          public AccountService(OverloadRepository repository, Repositories.NestedRepository nested) {
             this.repository = repository;
+            this.nested = nested;
           }
           public Account create(Account account) {
             repository.findByNumber("x");
-            return repository.findByNumber(1);
+            repository.findByNumber(1);
+            nested.findByNumber("y");
+            return account;
           }
         }
         """);
@@ -218,13 +229,17 @@ class SootUpRepositoryDeclaredInvokeIntegrationTest {
         .toList();
     assertEquals(2, declared.size(), facts.providerFacts().toString());
     assertTrue(declared.stream().anyMatch(item ->
-        item.callee().equals("demo.Repositories$NestedRepository#findByNumber")
+        item.callee().equals("demo.OverloadRepository#findByNumber")
             && "(Ljava/lang/String;)Ldemo/Account;".equals(
                 item.evidence().get(0).attributes().get("calleeSignature"))));
     assertTrue(declared.stream().anyMatch(item ->
-        item.callee().equals("demo.Repositories$NestedRepository#findByNumber")
+        item.callee().equals("demo.OverloadRepository#findByNumber")
             && "(I)Ldemo/Account;".equals(
                 item.evidence().get(0).attributes().get("calleeSignature"))));
+    assertTrue(declared.stream().noneMatch(item ->
+        item.callee().startsWith("demo.Repositories$")),
+        "nested repository interfaces are a documented scanner residual:"
+            + " not classified, no declared edges emitted");
   }
 
   /** Builds the shared derived-query fixture and returns its root. */
