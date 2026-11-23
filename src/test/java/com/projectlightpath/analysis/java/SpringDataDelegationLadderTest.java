@@ -15,12 +15,20 @@ import java.util.zip.ZipOutputStream;
 import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 /**
  * Equivalence-class tests for the Spring Data delegation promotion ladder
  * (issue #41 Edge 2, FLPATH-5075 rule) and the scan-global diagnostics
  * surface on SemanticCallFacts.
+ *
+ * <p>The methods share a resource lock: each runs a full adapter analysis
+ * with an in-JVM javac index, and the default surefire lane's heap budget
+ * (1 GB per parallel slot, four slots) was measured before this class
+ * existed — serializing the class's javac load keeps the lane's peak
+ * concurrent-javac footprint at its measured level.
  */
+@ResourceLock("javac-adapter-analysis")
 class SpringDataDelegationLadderTest {
   @TempDir Path temp;
 

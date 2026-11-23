@@ -10,12 +10,17 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 /**
  * Equivalence-class tests for the Spring Data delegation framework facts
  * (issue #41 Edge 2): repository interface method -> runtime backing
  * implementation, default certainty possible, reactive contracts abstaining.
+ *
+ * <p>Shares the javac-adapter-analysis resource lock with the other issue-41
+ * test classes (see {@link SpringDataDelegationLadderTest}).
  */
+@ResourceLock("javac-adapter-analysis")
 class BoundedFrameworkModelSpringDelegationTest {
   @TempDir Path temp;
 

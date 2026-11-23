@@ -35,6 +35,10 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
     boolean metadataAvailable = context.metadataObserved("spring-data-repository-contract");
     List<SourceMetadataScannerState.BeanCandidate> candidates = scanner.beanCandidates(framework);
+    List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
+        scanner.springRepositoryBaseClasses();
+    Map<String, Map<String, String>> fragmentTargetsByRepository =
+        fragmentTargetsByRepository(scanner);
     for (SourceMetadataScannerState.BeanCandidate candidate : candidates) {
       if (!candidate.kind().equals("repository_interface")) {
         continue;
@@ -43,9 +47,8 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
           ? SemanticCallFacts.Certainty.POSSIBLE
           : SemanticCallFacts.Certainty.UNRESOLVED;
       String repositoryContract = scanner.springRepositoryContract(candidate.file()).orElse("Repository");
-      Map<String, String> fragmentTargets = fragmentTargets(scanner, candidate);
-      List<SourceMetadataScannerState.RepositoryBaseClass> baseClasses =
-          scanner.springRepositoryBaseClasses();
+      Map<String, String> fragmentTargets = fragmentTargetsByRepository.getOrDefault(
+          candidate.file().typeName(), Map.of());
       Set<String> queryOverriddenNames = scanner.queryOverriddenGuaranteedNames(candidate.file());
       Set<String> queryAnnotatedIdentities = scanner.queryAnnotatedMethodIdentities(candidate.file());
       for (SourceMetadataScannerState.RepositoryMethod repositoryMethod
@@ -289,16 +292,15 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
         "spring_data_backing_selection_out_of_scope");
   }
 
-  /** Maps fragment method identities to their application Impl target for one repository. */
-  private Map<String, String> fragmentTargets(
-      SourceMetadataScanner scanner, SourceMetadataScannerState.BeanCandidate candidate) {
-    Map<String, String> result = new HashMap<>();
+  /** Maps fragment method identities to their application Impl target, per repository. */
+  private Map<String, Map<String, String>> fragmentTargetsByRepository(
+      SourceMetadataScanner scanner) {
+    Map<String, Map<String, String>> result = new HashMap<>();
     for (SourceMetadataScannerState.RepositoryFragment fragment : scanner.springRepositoryFragments()) {
-      if (!fragment.repositoryType().equals(candidate.file().typeName())) {
-        continue;
-      }
+      Map<String, String> targets = result.computeIfAbsent(
+          fragment.repositoryType(), repository -> new HashMap<>());
       for (SourceMetadataScannerState.RepositoryMethod method : fragment.methods()) {
-        result.put(method.identity(), fragment.implementationType() + "#" + method.name());
+        targets.put(method.identity(), fragment.implementationType() + "#" + method.name());
       }
     }
     return result;

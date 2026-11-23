@@ -11,13 +11,18 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 /**
  * Equivalence-class tests for the Spring Data repository scanner substrate:
  * per-contract guaranteed-method tables (versioned), reactive contract
  * classification, fragment composition, and {@code @EnableJpaRepositories}
  * repository base-class reading.
+ *
+ * <p>Shares the javac-adapter-analysis resource lock with the other issue-41
+ * test classes (see {@link SpringDataDelegationLadderTest}).
  */
+@ResourceLock("javac-adapter-analysis")
 class SourceMetadataScannerRepositoryContractTest {
   @TempDir Path temp;
 
