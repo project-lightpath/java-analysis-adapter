@@ -406,6 +406,16 @@ class ManualIntegrationValidatorTest {
     assertEquals(1, runValidator(context(), facts, output));
   }
 
+  /** A null coverage count renders as Python's None. */
+  @Test
+  void nullCoverageCountRendersAsNone() throws IOException {
+    ObjectNode facts = facts();
+    ((ObjectNode) facts.path("coverage")).putNull("frameworkFactCount");
+    Path output = temp.resolve("evidence.json");
+    assertEquals(0, runValidator(context(), facts, output));
+    assertTrue(Files.readString(output).contains("\"frameworkFactCount\": null"));
+  }
+
   /** A null certainty with definite and possible present rejects with the Python message. */
   @Test
   void missingCertaintyRejectsWithDiagnostic() {

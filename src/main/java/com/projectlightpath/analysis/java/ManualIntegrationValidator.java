@@ -36,8 +36,9 @@ import java.util.function.Predicate;
  *       before different side effects; the port rejects them before writing the output
  *       (same exit code 1, the output file may differ in the crash window);
  *   <li>safe-direction strictness the Python original accepted by accident: non-string
- *       truthy context ids and classpath arrays, boolean graph counts, and links pairing
- *       two id-less facts all reject here.
+ *       truthy context ids and classpath arrays, boolean graph counts, links pairing
+ *       two id-less facts, and container-valued coverage counts all reject here (null
+ *       counts render as Python's None; booleans as True/False).
  * </ul>
  */
 public final class ManualIntegrationValidator {
@@ -232,6 +233,9 @@ public final class ManualIntegrationValidator {
     }
     if (node.isBoolean()) {
       return node.asBoolean() ? "True" : "False";
+    }
+    if (node.isNull()) {
+      return "None";
     }
     if (node.isMissingNode()) {
       return "0";
