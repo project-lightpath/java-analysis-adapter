@@ -105,6 +105,9 @@ All items complete; post-implementation review loop next.
   differential control in `diagnosticsBlockServiceLoaderDefinitePromotion`.
 - Gates: adapter-test 569 executions, java-lint 0 new, evidence-validate
   pass.
+- Gates (final, at review-loop termination): `make adapter-test` 595
+  executions (baseline 534), `make java-lint` 0 new findings, `make
+  evidence-validate` pass — re-verified after every review round.
 
 ## Post-implementation review loop
 
@@ -119,7 +122,28 @@ All items complete; post-implementation review loop next.
   kept as override evidence, signature-shape-aware downgrade matching,
   unresolved-fragment/base-class diagnostics, overload join cell,
   diagnostic dedupe; PMD placement split (configuration layer).
-- Round 3 (delta, termination check): in flight.
+- Round 3 (delta): 6 findings (1 HIGH). Fixed — canonical
+  hasAnnotation("Query"), query-overridden slots skip delegation with the
+  @Query method's own AbstractStringBasedJpaQuery fact, wildcard-import
+  classpath probing before unresolved diagnostics, 2.4/2.6 boundary cells,
+  unconfirmed-fragment-impl diagnostic, source-spelling diagnostics;
+  fragment layer split.
+- Round 4 (delta): 3 findings. Fixed — arity-gated slot suppression,
+  canonical-only query annotation, one-level transitive fragment
+  composition.
+- Round 5 (delta): 1 finding. Fixed — wildcard-imported bare @Query
+  accepted as canonical.
+- Round 6 (delta, probe-reproduced): 2 findings. Fixed — JLS 6.4.1
+  shadowing guards (single-type import, same-package type); void
+  @Queries-container branch deleted.
+- Round 7 (delta): 1 finding. Fixed — remaining shadowing cells
+  (same-compilation-unit type, inherited member type from an app-declared
+  extended interface).
+- Round 8 (delta, termination check): **0 addressable findings** — loop
+  terminated. (Two behavior-neutral NITs dispositioned: whole-file
+  Query-declaration regex over-rejects sibling/local-class Query types —
+  the AGENTS-safe abstention direction; per-call Pattern compilation —
+  style only.)
 
 ## Reverse chain delivered (issue #41 acceptance)
 
