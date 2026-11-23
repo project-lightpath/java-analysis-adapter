@@ -13,8 +13,8 @@
       "offset" : 64
     } ],
     "baseline" : {
-      "wallMillis" : 87,
-      "peakHeapBytes" : 21405648,
+      "wallMillis" : 94,
+      "peakHeapBytes" : 21680416,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -45,8 +45,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 272,
-      "peakHeapBytes" : 22081992,
+      "wallMillis" : 282,
+      "peakHeapBytes" : 22052392,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -88,7 +88,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 24976528,
+      "peakHeapBytes" : 25294552,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -105,7 +105,7 @@
     },
     "javac" : {
       "wallMillis" : 37,
-      "peakHeapBytes" : 24976528,
+      "peakHeapBytes" : 25294552,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -139,7 +139,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 36510864,
+      "peakHeapBytes" : 36828888,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -171,7 +171,7 @@
     },
     "javac" : {
       "wallMillis" : 22,
-      "peakHeapBytes" : 36510864,
+      "peakHeapBytes" : 36828888,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -213,7 +213,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 48045200,
+      "peakHeapBytes" : 48363224,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -229,8 +229,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 48045200,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 48363224,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -264,7 +264,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 60628112,
+      "peakHeapBytes" : 60946136,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -280,8 +280,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 60628112,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 60946136,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -315,7 +315,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 72162448,
+      "peakHeapBytes" : 72480472,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -332,7 +332,7 @@
     },
     "javac" : {
       "wallMillis" : 18,
-      "peakHeapBytes" : 72162448,
+      "peakHeapBytes" : 72480472,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -366,7 +366,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 83696784,
+      "peakHeapBytes" : 85063384,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -382,8 +382,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 83696784,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 85063384,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -417,7 +417,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 65536000,
+      "peakHeapBytes" : 66060288,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -434,7 +434,7 @@
     },
     "javac" : {
       "wallMillis" : 29,
-      "peakHeapBytes" : 83696784,
+      "peakHeapBytes" : 85063384,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -468,7 +468,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 41933928,
+      "peakHeapBytes" : 42439648,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -484,8 +484,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 23,
-      "peakHeapBytes" : 65536000,
+      "wallMillis" : 25,
+      "peakHeapBytes" : 66060288,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -525,7 +525,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 53468264,
+      "peakHeapBytes" : 53973984,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -542,7 +542,7 @@
     },
     "javac" : {
       "wallMillis" : 14,
-      "peakHeapBytes" : 53468264,
+      "peakHeapBytes" : 53973984,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -582,7 +582,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 66051176,
+      "peakHeapBytes" : 66556896,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -598,8 +598,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 66051176,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 66556896,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -639,7 +639,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 77585512,
+      "peakHeapBytes" : 59768832,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -655,8 +655,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 77585512,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 73896928,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -696,7 +696,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 67633152,
+      "peakHeapBytes" : 71303168,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -712,8 +712,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 77585512,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 71303168,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -753,7 +753,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 78118912,
+      "peakHeapBytes" : 82837504,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -769,8 +769,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 78118912,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 82837504,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -810,7 +810,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 90701824,
+      "peakHeapBytes" : 95420416,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -826,8 +826,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 90701824,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 95420416,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -867,7 +867,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 78118912,
+      "peakHeapBytes" : 89128960,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -884,7 +884,7 @@
     },
     "javac" : {
       "wallMillis" : 22,
-      "peakHeapBytes" : 98041856,
+      "peakHeapBytes" : 95420416,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -918,7 +918,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 85863152,
+      "peakHeapBytes" : 90104512,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -949,8 +949,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 85863152,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 90104512,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -992,7 +992,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 58277840,
+      "peakHeapBytes" : 59555904,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1024,7 +1024,7 @@
     },
     "javac" : {
       "wallMillis" : 18,
-      "peakHeapBytes" : 85863152,
+      "peakHeapBytes" : 91013184,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1066,7 +1066,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 69812176,
+      "peakHeapBytes" : 71090240,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1083,7 +1083,7 @@
     },
     "javac" : {
       "wallMillis" : 13,
-      "peakHeapBytes" : 69812176,
+      "peakHeapBytes" : 71090240,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1121,7 +1121,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 81346512,
+      "peakHeapBytes" : 82624576,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1152,8 +1152,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 81346512,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 82624576,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1206,7 +1206,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 92880848,
+      "peakHeapBytes" : 94158912,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1237,8 +1237,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 92880848,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 94158912,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1291,7 +1291,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 76174464,
+      "peakHeapBytes" : 79606368,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1322,8 +1322,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 100220880,
+      "wallMillis" : 22,
+      "peakHeapBytes" : 94158912,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1388,7 +1388,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 89805952,
+      "peakHeapBytes" : 93237856,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1420,7 +1420,7 @@
     },
     "javac" : {
       "wallMillis" : 14,
-      "peakHeapBytes" : 89805952,
+      "peakHeapBytes" : 93237856,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1481,7 +1481,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 101340288,
+      "peakHeapBytes" : 104772192,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1497,8 +1497,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 101340288,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 104772192,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1532,7 +1532,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 112874624,
+      "peakHeapBytes" : 116306528,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1548,8 +1548,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 112874624,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 116306528,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1583,7 +1583,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 124408960,
+      "peakHeapBytes" : 127840864,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1599,8 +1599,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 124408960,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 127840864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1634,7 +1634,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 104857600,
+      "peakHeapBytes" : 65739392,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1650,8 +1650,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 132797568,
+      "wallMillis" : 23,
+      "peakHeapBytes" : 127840864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1685,7 +1685,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 69710432,
+      "peakHeapBytes" : 77273728,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1701,8 +1701,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 20,
-      "peakHeapBytes" : 104857600,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 77273728,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1736,7 +1736,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 82293344,
+      "peakHeapBytes" : 88808064,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1752,8 +1752,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 82293344,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 88808064,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1795,7 +1795,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 93827680,
+      "peakHeapBytes" : 100342400,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1811,8 +1811,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 93827680,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 100342400,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1846,7 +1846,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 105362016,
+      "peakHeapBytes" : 111876736,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1863,7 +1863,7 @@
     },
     "javac" : {
       "wallMillis" : 14,
-      "peakHeapBytes" : 105362016,
+      "peakHeapBytes" : 111876736,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1903,7 +1903,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 116896352,
+      "peakHeapBytes" : 123411072,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1934,8 +1934,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 116896352,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 123411072,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -1977,7 +1977,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 128430688,
+      "peakHeapBytes" : 104333312,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -1993,8 +1993,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 128430688,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 131799680,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2036,7 +2036,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 108003328,
+      "peakHeapBytes" : 115867648,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2052,8 +2052,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 135770720,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 115867648,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2087,7 +2087,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 119537664,
+      "peakHeapBytes" : 127401984,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2119,7 +2119,7 @@
     },
     "javac" : {
       "wallMillis" : 12,
-      "peakHeapBytes" : 119537664,
+      "peakHeapBytes" : 127401984,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2153,7 +2153,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 131072000,
+      "peakHeapBytes" : 138936320,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2169,8 +2169,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 131072000,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 138936320,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2204,7 +2204,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 142606336,
+      "peakHeapBytes" : 150470656,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2235,8 +2235,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 142606336,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 150470656,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2270,7 +2270,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 154140672,
+      "peakHeapBytes" : 162004992,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2287,7 +2287,7 @@
     },
     "javac" : {
       "wallMillis" : 14,
-      "peakHeapBytes" : 154140672,
+      "peakHeapBytes" : 162004992,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2329,7 +2329,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 165675008,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2345,8 +2345,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 165675008,
+      "wallMillis" : 20,
+      "peakHeapBytes" : 170393600,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2386,7 +2386,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 131072000,
+      "peakHeapBytes" : 74448896,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2403,7 +2403,7 @@
     },
     "javac" : {
       "wallMillis" : 19,
-      "peakHeapBytes" : 173015040,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2437,7 +2437,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 72337152,
+      "peakHeapBytes" : 87031808,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2453,8 +2453,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 131072000,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 87031808,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2496,7 +2496,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 83871488,
+      "peakHeapBytes" : 98566144,
       "selectedPath" : "a/Bridge.java",
       "selectedTopLevel" : "a.Bridge",
       "metrics" : {
@@ -2512,8 +2512,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 83871488,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 98566144,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2553,7 +2553,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 96454400,
+      "peakHeapBytes" : 110100480,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2584,8 +2584,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 96454400,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 110100480,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2627,7 +2627,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 107988736,
+      "peakHeapBytes" : 121634816,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2644,7 +2644,7 @@
     },
     "javac" : {
       "wallMillis" : 12,
-      "peakHeapBytes" : 107988736,
+      "peakHeapBytes" : 121634816,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2686,7 +2686,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 119523072,
+      "peakHeapBytes" : 134217728,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2702,8 +2702,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 14,
-      "peakHeapBytes" : 119523072,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 134217728,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2751,7 +2751,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 103284736,
+      "peakHeapBytes" : 114294784,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2782,8 +2782,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 126863104,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 134217728,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2831,7 +2831,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 114819072,
+      "peakHeapBytes" : 125829120,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2862,8 +2862,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 114819072,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 125829120,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2903,7 +2903,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 126353408,
+      "peakHeapBytes" : 138412032,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -2934,8 +2934,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 126353408,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 138412032,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -2983,7 +2983,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 137887744,
+      "peakHeapBytes" : 149946368,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3015,7 +3015,7 @@
     },
     "javac" : {
       "wallMillis" : 13,
-      "peakHeapBytes" : 137887744,
+      "peakHeapBytes" : 149946368,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3057,7 +3057,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 149422080,
+      "peakHeapBytes" : 161480704,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3089,7 +3089,7 @@
     },
     "javac" : {
       "wallMillis" : 12,
-      "peakHeapBytes" : 149422080,
+      "peakHeapBytes" : 161480704,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3129,7 +3129,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 160956416,
+      "peakHeapBytes" : 173015040,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3160,8 +3160,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 160956416,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 173015040,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3201,7 +3201,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 173539328,
+      "peakHeapBytes" : 184549376,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3232,8 +3232,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 173539328,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 184549376,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3281,7 +3281,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 184025088,
+      "peakHeapBytes" : 135266304,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3312,8 +3312,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 184025088,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 184549376,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3355,7 +3355,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 135266304,
+      "peakHeapBytes" : 77070336,
       "selectedPath" : "a/Bridge.java",
       "selectedTopLevel" : "a.Bridge",
       "metrics" : {
@@ -3387,7 +3387,7 @@
     },
     "javac" : {
       "wallMillis" : 17,
-      "peakHeapBytes" : 184025088,
+      "peakHeapBytes" : 135266304,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3427,7 +3427,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 72090904,
+      "peakHeapBytes" : 89653248,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3458,8 +3458,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 21,
-      "peakHeapBytes" : 135266304,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 89653248,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3499,7 +3499,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 83625240,
+      "peakHeapBytes" : 101187584,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3530,8 +3530,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 83625240,
+      "wallMillis" : 14,
+      "peakHeapBytes" : 101187584,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3571,7 +3571,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 95159576,
+      "peakHeapBytes" : 112721920,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3603,7 +3603,7 @@
     },
     "javac" : {
       "wallMillis" : 13,
-      "peakHeapBytes" : 95159576,
+      "peakHeapBytes" : 112721920,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3645,7 +3645,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 106693912,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "demo/Cash.java",
       "selectedTopLevel" : "demo.Cash",
       "metrics" : {
@@ -3661,8 +3661,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 106693912,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 124256256,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3704,7 +3704,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 118228248,
+      "peakHeapBytes" : 109576192,
       "selectedPath" : "demo/Outer.java",
       "selectedTopLevel" : "demo.Outer",
       "metrics" : {
@@ -3735,8 +3735,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 118228248,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 131596288,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3778,7 +3778,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 103809024,
+      "peakHeapBytes" : 121110528,
       "selectedPath" : "demo/Outer.java",
       "selectedTopLevel" : "demo.Outer",
       "metrics" : {
@@ -3794,8 +3794,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 125568280,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 121110528,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3837,7 +3837,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 115343360,
+      "peakHeapBytes" : 132644864,
       "selectedPath" : "a.java",
       "selectedTopLevel" : "a",
       "metrics" : {
@@ -3854,7 +3854,7 @@
     },
     "javac" : {
       "wallMillis" : 11,
-      "peakHeapBytes" : 115343360,
+      "peakHeapBytes" : 132644864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3896,7 +3896,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 126877696,
+      "peakHeapBytes" : 144179200,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -3928,7 +3928,7 @@
     },
     "javac" : {
       "wallMillis" : 11,
-      "peakHeapBytes" : 126877696,
+      "peakHeapBytes" : 144179200,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3970,7 +3970,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 138412032,
+      "peakHeapBytes" : 155713536,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -3986,8 +3986,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 138412032,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 155713536,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4029,7 +4029,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 149946368,
+      "peakHeapBytes" : 167247872,
       "selectedPath" : "demo/Cash.java",
       "selectedTopLevel" : "demo.Cash",
       "metrics" : {
@@ -4046,7 +4046,7 @@
     },
     "javac" : {
       "wallMillis" : 12,
-      "peakHeapBytes" : 149946368,
+      "peakHeapBytes" : 167247872,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4088,7 +4088,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 161480704,
+      "peakHeapBytes" : 128450560,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4104,8 +4104,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 161480704,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 174587904,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4147,7 +4147,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 124256256,
+      "peakHeapBytes" : 139984896,
       "selectedPath" : "a.java",
       "selectedTopLevel" : "a",
       "metrics" : {
@@ -4163,8 +4163,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 169869312,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 139984896,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4206,7 +4206,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 119269928,
+      "peakHeapBytes" : 132914048,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4237,8 +4237,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 13,
-      "peakHeapBytes" : 124256256,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 139984896,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4286,7 +4286,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 131852840,
+      "peakHeapBytes" : 64652704,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4317,8 +4317,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 131852840,
+      "wallMillis" : 17,
+      "peakHeapBytes" : 133962624,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4366,7 +4366,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 72750672,
+      "peakHeapBytes" : 77235616,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4397,8 +4397,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 131852840,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 77235616,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4446,7 +4446,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 85333584,
+      "peakHeapBytes" : 88769952,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4462,8 +4462,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 85333584,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 88769952,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4511,7 +4511,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 95819344,
+      "peakHeapBytes" : 100304288,
       "selectedPath" : "demo/Bridge.java",
       "selectedTopLevel" : "demo.Bridge",
       "metrics" : {
@@ -4542,8 +4542,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 95819344,
+      "wallMillis" : 12,
+      "peakHeapBytes" : 100304288,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4590,8 +4590,8 @@
       "offset" : 30
     } ],
     "baseline" : {
-      "wallMillis" : 8,
-      "peakHeapBytes" : 108402256,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 111838624,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4623,7 +4623,7 @@
     },
     "javac" : {
       "wallMillis" : 10,
-      "peakHeapBytes" : 107353680,
+      "peakHeapBytes" : 110790048,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4665,7 +4665,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 119936592,
+      "peakHeapBytes" : 89895104,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4696,8 +4696,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 119936592,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 120227232,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4739,7 +4739,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 130422352,
+      "peakHeapBytes" : 100380864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4770,8 +4770,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 130422352,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 100380864,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4813,7 +4813,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 97872192,
+      "peakHeapBytes" : 110866624,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4844,8 +4844,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 15,
-      "peakHeapBytes" : 130422352,
+      "wallMillis" : 8,
+      "peakHeapBytes" : 110866624,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4887,7 +4887,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 109406528,
+      "peakHeapBytes" : 122400960,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4919,7 +4919,7 @@
     },
     "javac" : {
       "wallMillis" : 10,
-      "peakHeapBytes" : 109406528,
+      "peakHeapBytes" : 122400960,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4956,6 +4956,154 @@
       "abstentions" : [ ]
     }
   }, {
+    "id" : "AN6",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Param",
+      "offset" : 41
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 133935296,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "Param",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 133935296,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 3,
+        "column" : 14,
+        "offset" : 41,
+        "serviceType" : "demo.Param",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Param",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "AN7",
+    "family" : "ANNOTATION_NAME",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Marker",
+      "offset" : 82
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 144421056,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 1,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 24,
+        "offset" : 82,
+        "serviceType" : "Marker",
+        "owner" : "textual",
+        "member" : "ANNOTATION_NAME_TOKEN",
+        "accessibility" : "",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 144421056,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 24,
+        "offset" : 82,
+        "serviceType" : "demo.Marker",
+        "owner" : "demo.Probe",
+        "member" : "shape",
+        "accessibility" : "PACKAGE",
+        "certainty" : "DEFINITE",
+        "promotion" : "",
+        "annotationName" : "demo.Marker",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
     "id" : "AA1",
     "family" : "ANNOTATION_ARGUMENT",
     "release" : 17,
@@ -4967,7 +5115,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 120940864,
+      "peakHeapBytes" : 154906816,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -4998,8 +5146,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 120940864,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 154906816,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5041,7 +5189,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 133523776,
+      "peakHeapBytes" : 166441152,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5072,8 +5220,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 12,
-      "peakHeapBytes" : 132475200,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 166441152,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5115,7 +5263,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 145058112,
+      "peakHeapBytes" : 123731968,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5146,8 +5294,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 145058112,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 166441152,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5193,7 +5341,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 155543872,
+      "peakHeapBytes" : 115904736,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5239,8 +5387,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 155543872,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 123731968,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5297,7 +5445,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 167078208,
+      "peakHeapBytes" : 127439072,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5328,8 +5476,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 166029632,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 127439072,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5371,7 +5519,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 121634816,
+      "peakHeapBytes" : 77040784,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5402,8 +5550,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 18,
-      "peakHeapBytes" : 174418240,
+      "wallMillis" : 16,
+      "peakHeapBytes" : 127439072,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5445,7 +5593,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 75250024,
+      "peakHeapBytes" : 88575120,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5476,8 +5624,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 121634816,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 88575120,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5519,7 +5667,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 85735784,
+      "peakHeapBytes" : 99060880,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5550,8 +5698,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 85735784,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 99060880,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5593,7 +5741,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 97270120,
+      "peakHeapBytes" : 110595216,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5624,8 +5772,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 97270120,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 110595216,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5667,7 +5815,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 108804456,
+      "peakHeapBytes" : 122129552,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5698,8 +5846,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 108804456,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 122129552,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5741,7 +5889,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 120338792,
+      "peakHeapBytes" : 132615312,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5772,8 +5920,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 120338792,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 132615312,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5815,7 +5963,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 130824552,
+      "peakHeapBytes" : 102152576,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5846,8 +5994,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 130824552,
+      "wallMillis" : 15,
+      "peakHeapBytes" : 141003920,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5889,7 +6037,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 141310312,
+      "peakHeapBytes" : 113686912,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5921,7 +6069,7 @@
     },
     "javac" : {
       "wallMillis" : 9,
-      "peakHeapBytes" : 141310312,
+      "peakHeapBytes" : 113686912,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5963,7 +6111,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 152844648,
+      "peakHeapBytes" : 123124096,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -5995,7 +6143,7 @@
     },
     "javac" : {
       "wallMillis" : 9,
-      "peakHeapBytes" : 152844648,
+      "peakHeapBytes" : 123124096,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6049,7 +6197,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 127401984,
+      "peakHeapBytes" : 134658432,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6095,8 +6243,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 17,
-      "peakHeapBytes" : 152844648,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 134658432,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6187,7 +6335,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 138936320,
+      "peakHeapBytes" : 145144192,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6203,8 +6351,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 138936320,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 145144192,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6261,7 +6409,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 150470656,
+      "peakHeapBytes" : 157727104,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6292,8 +6440,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 150470656,
+      "wallMillis" : 9,
+      "peakHeapBytes" : 157727104,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6335,7 +6483,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 162004992,
+      "peakHeapBytes" : 169261440,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6352,7 +6500,7 @@
     },
     "javac" : {
       "wallMillis" : 11,
-      "peakHeapBytes" : 162004992,
+      "peakHeapBytes" : 169261440,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6394,7 +6542,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 173539328,
+      "peakHeapBytes" : 179747200,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6410,8 +6558,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 9,
-      "peakHeapBytes" : 173539328,
+      "wallMillis" : 10,
+      "peakHeapBytes" : 179747200,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6453,7 +6601,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 185073664,
+      "peakHeapBytes" : 125304832,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6469,8 +6617,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 10,
-      "peakHeapBytes" : 185073664,
+      "wallMillis" : 18,
+      "peakHeapBytes" : 180795776,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6518,7 +6666,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 197656576,
+      "peakHeapBytes" : 79663136,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6534,8 +6682,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 11,
-      "peakHeapBytes" : 197656576,
+      "wallMillis" : 19,
+      "peakHeapBytes" : 125304832,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6577,7 +6725,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 149946368,
+      "peakHeapBytes" : 92246048,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6593,8 +6741,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 19,
-      "peakHeapBytes" : 197656576,
+      "wallMillis" : 13,
+      "peakHeapBytes" : 92246048,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6628,7 +6776,7 @@
     } ],
     "baseline" : {
       "wallMillis" : 0,
-      "peakHeapBytes" : 84681992,
+      "peakHeapBytes" : 103780384,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6644,8 +6792,8 @@
       "abstentions" : [ ]
     },
     "javac" : {
-      "wallMillis" : 16,
-      "peakHeapBytes" : 149946368,
+      "wallMillis" : 11,
+      "peakHeapBytes" : 103780384,
       "selectedPath" : "",
       "selectedTopLevel" : "",
       "metrics" : {
@@ -6673,10 +6821,128 @@
         } ]
       } ]
     }
+  }, {
+    "id" : "R7",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "POSSIBLE",
+      "serviceType" : "demo.Outer.Inner",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 115314720,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 10,
+      "peakHeapBytes" : 115314720,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "demo.Outer.Inner",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "POSSIBLE",
+        "promotion" : "binary-name-mismatch",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
+  }, {
+    "id" : "R8",
+    "family" : "REFLECTION_SOURCE_BOUND",
+    "release" : 17,
+    "blocked" : false,
+    "expected" : [ {
+      "expectation" : "DEFINITE",
+      "serviceType" : "demo.Outer$Inner",
+      "offset" : 79
+    } ],
+    "baseline" : {
+      "wallMillis" : 0,
+      "peakHeapBytes" : 127897632,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ ],
+      "abstentions" : [ ]
+    },
+    "javac" : {
+      "wallMillis" : 11,
+      "peakHeapBytes" : 127897632,
+      "selectedPath" : "",
+      "selectedTopLevel" : "",
+      "metrics" : {
+        "wrongDefinite" : 0,
+        "wrongServiceType" : 0,
+        "lost" : 0,
+        "downgraded" : 0,
+        "added" : 0,
+        "unexpectedFact" : 0,
+        "abstentionMismatch" : 0
+      },
+      "facts" : [ {
+        "path" : "demo/Probe.java",
+        "topLevel" : "demo.Probe",
+        "line" : 4,
+        "column" : 5,
+        "offset" : 79,
+        "serviceType" : "demo.Outer$Inner",
+        "owner" : "java.lang.Class",
+        "member" : "forName",
+        "accessibility" : "PUBLIC_STATIC",
+        "certainty" : "DEFINITE",
+        "promotion" : "source-bound",
+        "annotationName" : "",
+        "annotationValue" : "",
+        "diagnostics" : [ ]
+      } ],
+      "abstentions" : [ ]
+    }
   } ],
   "baselineTotals" : {
     "wrongDefinite" : 18,
-    "wrongServiceType" : 20,
+    "wrongServiceType" : 22,
     "lost" : 14,
     "downgraded" : 0,
     "added" : 8,

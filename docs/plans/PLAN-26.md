@@ -123,6 +123,8 @@ same task-global ERROR downgrade to POSSIBLE):
 | AN3 | Unicode annotation name | DEFINITE `demo.Über` |
 | AN4 | qualified `@demo.Outer.Inner` | DEFINITE `demo.Outer.Inner` |
 | AN5 | unresolved annotation type | MISSING_INPUT (POSSIBLE + diagnostic) |
+| AN6 | parameter declaration annotation `@Param String p` | DEFINITE `demo.Param` |
+| AN7 | type-use annotation in a parameter type tree (`java.lang.@Marker String p`) | DEFINITE `demo.Marker` |
 | AA1 | class-literal array argument | DEFINITE canonical rendering |
 | AA2 | enum constant argument | DEFINITE canonical rendering |
 | AA3 | nested annotation argument | DEFINITE canonical rendering |
@@ -144,9 +146,13 @@ same task-global ERROR downgrade to POSSIBLE):
 | R2 | `Class.forName("java.lang.String")`, runtime-only | POSSIBLE `java.lang.String` |
 | R3 | task error (missing import) + source-bound forName | MISSING_INPUT (POSSIBLE + diagnostic) |
 | R4 | `Class.forName("no.such.Type")`, unresolvable | POSSIBLE `no.such.Type` |
+| R7 | `Class.forName("demo.Outer.Inner")`, canonical spelling of a nested source type | POSSIBLE, promotion `binary-name-mismatch` |
+| R8 | `Class.forName("demo.Outer$Inner")`, binary spelling | DEFINITE `demo.Outer$Inner` |
 
 26 cells + R5 (non-literal forName abstention pin) + R6 (unattributed
-forName abstention pin) = 28; 71 + 28 = 99 in the observation.
+forName abstention pin) + AN6 (parameter annotation pin) + AN7 (type-use
+annotation pin) + R7/R8 (binary-name pins) = 32; 71 + 32 = 103 in the
+observation.
 
 ### 5. Gates
 
@@ -161,7 +167,7 @@ forName abstention pin) = 28; 71 + 28 = 99 in the observation.
 - Flag-off default-output guard: the harness run leaves
   `flpath.java.resolver` untouched and the production default selection
   is unchanged before/after a harness run (test-scope-only change).
-- `spike/scripts/validate_spike.py` becomes family-aware: 96 cells,
+- `spike/scripts/validate_spike.py` becomes family-aware: 103 cells,
   new-family cell ids required, per-family fact invariants (owner is the
   probe class for shape families, `java.lang.Class.forName` member for
   reflection), textual baseline metrics explicitly NOT required zero

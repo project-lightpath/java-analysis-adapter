@@ -39,14 +39,15 @@ class JavacResolverAccuracyTest {
       Set.of(JavacResolverCell.Family.PRECEDENCE, JavacResolverCell.Family.STATIC_OWNER,
           JavacResolverCell.Family.DOLLAR_OWNER, JavacResolverCell.Family.INCOMPLETE);
   private static final Set<String> NEW_BASELINE_WRONG_TYPE = Set.of(
-      "AN1", "AN2", "AN3", "AA1", "AA2", "AA3", "AA4", "TU1", "TU2", "TU3", "TU4",
+      "AN1", "AN2", "AN3", "AN6", "AN7", "AA1", "AA2", "AA3", "AA4",
+      "TU1", "TU2", "TU3", "TU4",
       "TS1", "TS2", "TS3", "TS4", "TS6", "TS7", "TS9");
   private static final Set<String> NEW_BASELINE_WRONG_DEFINITE = Set.of("AN5");
   private static final Set<String> NEW_BASELINE_LOST = Set.of("TS7");
   private static final Set<String> NEW_FAMILIES_ALL_ZERO = Set.of(
-      "AN1", "AN2", "AN3", "AN4", "AN5", "AA1", "AA2", "AA3", "AA4",
+      "AN1", "AN2", "AN3", "AN4", "AN5", "AN6", "AN7", "AA1", "AA2", "AA3", "AA4",
       "TU1", "TU2", "TU3", "TU4", "TS1", "TS2", "TS3", "TS4", "TS5", "TS6", "TS7",
-      "TS8", "TS9", "R1", "R2", "R3", "R4", "R5", "R6");
+      "TS8", "TS9", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8");
 
   private static boolean isNewFamily(JavacResolverCell.Family family) {
     return !SERVICE_LOADER_FAMILIES.contains(family);
@@ -289,6 +290,19 @@ class JavacResolverAccuracyTest {
     assertTrue(unattributed.javac().abstentions().stream()
         .anyMatch(item -> "UNRESOLVED_FORNAME".equals(item.reason())),
         "R6 must abstain visibly when forName attribution fails");
+    JavacResolverAccuracyHarness.CellReport canonical = cell(report, "R7");
+    assertTrue(canonical.javac().facts().stream()
+        .noneMatch(fact -> "DEFINITE".equals(fact.certainty())),
+        "R7 must not emit DEFINITE for a canonical-spelled nested target");
+    assertTrue(canonical.javac().facts().stream()
+        .anyMatch(fact -> "binary-name-mismatch".equals(fact.promotion())),
+        "R7 must record the binary-name mismatch");
+    JavacResolverAccuracyHarness.CellReport binary = cell(report, "R8");
+    assertTrue(binary.javac().facts().stream()
+        .anyMatch(fact -> "DEFINITE".equals(fact.certainty())
+            && "demo.Outer$Inner".equals(fact.serviceType())
+            && "source-bound".equals(fact.promotion())),
+        "R8 must bind the binary-spelled nested target DEFINITE");
   }
 
   @Test
@@ -538,6 +552,8 @@ class JavacResolverAccuracyTest {
         item.put("accessibility", site.get("accessibility").asText());
         item.put("certainty", site.get("certainty").asText());
         item.put("promotion", site.get("promotion").asText());
+        item.put("annotationName", site.get("annotationName").asText());
+        item.put("annotationValue", site.get("annotationValue").asText());
       } else {
         item.put("reason", site.get("reason").asText());
       }

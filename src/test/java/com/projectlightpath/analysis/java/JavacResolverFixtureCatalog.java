@@ -121,7 +121,26 @@ final class JavacResolverFixtureCatalog {
             }
             """,
             List.of(probe(ANNOTATION_NAME_TOKEN, "@missing.Route void audit()")),
-            site(MISSING_INPUT, "missing.Route")));
+            site(MISSING_INPUT, "missing.Route")),
+        shapeCell("AN6", ANNOTATION_NAME, """
+            package demo;
+            class Probe {
+              void shape(@Param String p) { }
+            }
+            @interface Param { }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "@Param String p")),
+            site(DEFINITE, "demo.Param")),
+        shapeCell("AN7", ANNOTATION_NAME, """
+            package demo;
+            import java.lang.annotation.*;
+            class Probe {
+              void shape(java.lang.@Marker String p) { }
+            }
+            @Target(ElementType.TYPE_USE) @interface Marker { }
+            """,
+            List.of(probe(ANNOTATION_NAME_TOKEN, "java.lang.@Marker String p")),
+            site(DEFINITE, "demo.Marker")));
   }
 
   private static List<JavacResolverCell> annotationArgumentCells() {
@@ -369,7 +388,29 @@ final class JavacResolverFixtureCatalog {
             class Present { }
             """,
             List.of(),
-            site(UNRESOLVED_FORNAME, "")));
+            site(UNRESOLVED_FORNAME, "")),
+        shapeCell("R7", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName("demo.Outer.Inner");
+              }
+            }
+            class Outer { static class Inner { } }
+            """,
+            List.of(),
+            site(POSSIBLE, "demo.Outer.Inner")),
+        shapeCell("R8", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName("demo.Outer$Inner");
+              }
+            }
+            class Outer { static class Inner { } }
+            """,
+            List.of(),
+            site(DEFINITE, "demo.Outer$Inner")));
   }
 
   private static List<JavacResolverCell> precedenceCells() {

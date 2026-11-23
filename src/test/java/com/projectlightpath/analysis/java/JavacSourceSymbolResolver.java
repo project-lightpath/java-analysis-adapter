@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -164,6 +165,7 @@ final class JavacSourceSymbolResolver {
     private final boolean taskHasError;
     private final List<Path> unitRoots;
     private final Path siteFile;
+    private final Map<String, TypeElement> binaryNames;
     private final List<JavacResolverFact> facts = new ArrayList<>();
     private final List<JavacResolverAbstention> abstentions = new ArrayList<>();
 
@@ -185,6 +187,45 @@ final class JavacSourceSymbolResolver {
       this.taskHasError = taskHasError;
       this.unitRoots = unitRoots;
       this.siteFile = siteFile;
+      this.binaryNames = cell.family() == JavacResolverCell.Family.REFLECTION_SOURCE_BOUND
+          ? indexBinaryNames(parsed, trees, elements)
+          : Map.of();
+    }
+
+    /**
+     * Binary names of every type the parsed units declare, keyed exactly as
+     * {@code Class.forName(String)} would spell them. Canonical-name lookup
+     * ({@code Elements.getTypeElement}) is not sufficient for source binding
+     * because reflection resolves binary names: {@code demo.Outer.Inner} is
+     * the canonical spelling of {@code demo.Outer$Inner}, and only the binary
+     * spelling loads.
+     */
+    private static Map<String, TypeElement> indexBinaryNames(
+        Iterable<? extends CompilationUnitTree> parsed,
+        Trees trees,
+        javax.lang.model.util.Elements elements) {
+      Map<String, TypeElement> index = new java.util.HashMap<>();
+      for (CompilationUnitTree unit : parsed) {
+        List<ClassTree> declared = new ArrayList<>();
+        new com.sun.source.util.TreeScanner<Void, Void>() {
+          @Override
+          public Void visitClass(ClassTree node, Void unused) {
+            declared.add(node);
+            return super.visitClass(node, unused);
+          }
+        }.scan(unit, null);
+        for (ClassTree node : declared) {
+          TreePath path = TreePath.getPath(unit, node);
+          if (path == null) {
+            continue;
+          }
+          Element element = trees.getElement(path);
+          if (element instanceof TypeElement type) {
+            index.put(elements.getBinaryName(type).toString(), type);
+          }
+        }
+      }
+      return Map.copyOf(index);
     }
 
     JavacResolverResult result() {
@@ -387,17 +428,25 @@ final class JavacSourceSymbolResolver {
         return;
       }
       String target = (String) literal.getValue();
-      TypeElement bound = elements.getTypeElement(target);
-      boolean sourceBound = bound != null && trees.getPath(bound) != null;
-      boolean resolvable = bound != null;
+      boolean sourceBound = binaryNames.containsKey(target);
+      TypeElement canonical = elements.getTypeElement(target);
+      boolean canonicalInSources = canonical != null && trees.getPath(canonical) != null;
       String certainty = sourceBound && !taskHasError ? "DEFINITE" : "POSSIBLE";
       int line = lineNumber(invocationPath, position);
       int column = columnNumber(invocationPath, position);
+      String promotion = sourceBound
+          ? "source-bound"
+          : canonicalInSources
+              // The string names a parsed source type by its canonical
+              // spelling, but Class.forName resolves binary names — the
+              // canonical spelling of a nested type cannot load.
+              ? "binary-name-mismatch"
+              : canonical != null ? "runtime-only" : "unresolved-target";
       facts.add(new JavacResolverFact(
           cell.id(), cell.siteFile(), topLevelName(invocationPath), line, column,
           (int) position, target, "java.lang.Class", "forName",
           accessibility(method), certainty,
-          sourceBound ? "source-bound" : resolvable ? "runtime-only" : "unresolved-target",
+          promotion,
           diagnosticsFor(line), "", ""));
     }
 
@@ -453,13 +502,9 @@ final class JavacSourceSymbolResolver {
       if (!(methodPath.getLeaf() instanceof com.sun.source.tree.MethodTree node)) {
         return;
       }
-      for (int index = 0; index < node.getModifiers().getAnnotations().size(); index++) {
+      for (TreePath annotationPath : annotationSites(methodPath, node)) {
         com.sun.source.tree.AnnotationTree annotation =
-            node.getModifiers().getAnnotations().get(index);
-        TreePath annotationPath = TreePath.getPath(methodPath, annotation);
-        if (annotationPath == null) {
-          continue;
-        }
+            (com.sun.source.tree.AnnotationTree) annotationPath.getLeaf();
         long position = startPosition(annotationPath);
         if (position < 0) {
           continue;
@@ -483,6 +528,49 @@ final class JavacSourceSymbolResolver {
             certainty, resolved ? "" : "error-type",
             resolved ? List.of() : diagnosticsFor(line),
             annotationName, annotationValue));
+      }
+    }
+
+    /**
+     * Every annotation site on one probe-class method: the method's own
+     * modifiers, its parameters' declaration modifiers, and type-use
+     * annotations inside the parameter type trees. All three locations feed
+     * the same position, resolution, and rendering path — none is skipped.
+     */
+    private static List<TreePath> annotationSites(
+        TreePath methodPath, com.sun.source.tree.MethodTree node) {
+      List<TreePath> sites = new ArrayList<>();
+      for (com.sun.source.tree.AnnotationTree annotation :
+          node.getModifiers().getAnnotations()) {
+        addAnnotationSite(sites, methodPath, annotation);
+      }
+      for (com.sun.source.tree.VariableTree parameter : node.getParameters()) {
+        for (com.sun.source.tree.AnnotationTree annotation :
+            parameter.getModifiers().getAnnotations()) {
+          addAnnotationSite(sites, methodPath, annotation);
+        }
+        List<com.sun.source.tree.AnnotationTree> typeUse = new ArrayList<>();
+        parameter.getType().accept(new com.sun.source.util.TreeScanner<Void, Void>() {
+          @Override
+          public Void visitAnnotation(
+              com.sun.source.tree.AnnotationTree annotation, Void unused) {
+            typeUse.add(annotation);
+            return null;
+          }
+        }, null);
+        for (com.sun.source.tree.AnnotationTree annotation : typeUse) {
+          addAnnotationSite(sites, methodPath, annotation);
+        }
+      }
+      return sites;
+    }
+
+    private static void addAnnotationSite(
+        List<TreePath> sites, TreePath methodPath,
+        com.sun.source.tree.AnnotationTree annotation) {
+      TreePath path = TreePath.getPath(methodPath, annotation);
+      if (path != null) {
+        sites.add(path);
       }
     }
 

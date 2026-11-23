@@ -2,7 +2,8 @@
 
 Issue: project-lightpath/java-analysis-adapter#26 (parent #20).
 Branch: `issue-26-annotation-type-shape-parity`.
-Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1, REVIEW_26_1.
+Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1,
+REVIEW_26_1..26_4, REFACTOR_26.
 
 ## Review rounds
 
@@ -60,6 +61,33 @@ Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1, REVIEW_26_1.
   still returns silently — proven out of contract. One NIT (the defensive
   UNRESOLVED arm invents position 0) dispositioned: fail-visible by
   design (abstentionMismatch + validator rejection).
+- **Round 5** (CodeRabbit on PR #57, re-verified by an Engram-grounded
+  subagent): 2 Major findings plus 3 documentation findings, all
+  addressed in REVIEW_26_4:
+  1. Reflection source-binding keyed on canonical-name lookup —
+     `Class.forName("demo.Outer.Inner")` received a false source-bound
+     DEFINITE although reflection resolves binary names
+     (`demo.Outer$Inner`) and the canonical spelling cannot load.
+     Source binding now matches the literal against an exact binary-name
+     index of the parsed units (`Elements.getBinaryName`); R7 (canonical
+     spelling of a nested target) abstains at POSSIBLE with promotion
+     binary-name-mismatch, and R8 (binary spelling) is the DEFINITE
+     control.
+  2. `emitAnnotationFacts` read only method modifiers — annotations on
+     parameters and type-use annotations inside parameter type trees
+     produced neither facts nor abstentions while PLAN-26 claimed them.
+     Collection now covers method modifiers, parameter declaration
+     modifiers, and parameter type trees through one shared path; AN6
+     (parameter declaration annotation) and AN7 (type-use annotation,
+     JLS 9.7.4 post-qualifier form) pin both sites.
+  3. The committed-observation freshness view ignored the new
+     annotationName/annotationValue fields — now included in stableSites.
+  4. Stale cell counts in this document (26/97 → final 32/103) and the
+     commit list; corrected.
+  5. The "cross-referenced at both sites" claim overstated: only the
+     harness copy references the production sites. Corrected wording;
+     the real safeguard is the pinned-defect sets, which fail when a
+     production regex change shifts the baseline values.
 
 
 ## What changed
@@ -71,8 +99,8 @@ on the same cell/fact model — no fork:
 - `JavacResolverCell`: five new families (ANNOTATION_NAME,
   ANNOTATION_ARGUMENT, TYPE_USE, TYPE_SHAPE, REFLECTION_SOURCE_BOUND) and
   `BaselineMode {FROZEN, LIVE_TEXTUAL, NONE}` replacing the
-  baselineAvailable boolean. 26 new cells (AN1-5, AA1-4, TU1-4, TS1-9,
-  R1-4); 71 + 26 = 97 in the observation.
+  baselineAvailable boolean. 32 new cells (AN1-7, AA1-4, TU1-4, TS1-9,
+  R1-8); 71 + 32 = 103 in the observation.
 - `JavacResolverFact`: additive `annotationName`/`annotationValue`
   observation fields; `serviceType` carries the canonical observed value
   for the new families.
@@ -84,14 +112,14 @@ on the same cell/fact model — no fork:
 - The javac path stays the single `JavacSourceSymbolResolver.resolve`
   entry point; emitters are family-keyed tree scanners with the same
   task-global ERROR downgrade.
-- `spike/scripts/validate_spike.py` is family-aware (97 cells, new-family
+- `spike/scripts/validate_spike.py` is family-aware (103 cells, new-family
   ids and invariants, textual baseline metrics explicitly not zeroed for
   the new families — they are the #23 evidence).
 
 ## GO evidence (committed observation, deterministic, JDK 27 local)
 
 - javacTotals: wrongDefinite 0, wrongServiceType 0, lost 0, downgraded 0,
-  added 0, unexpectedFact 0, abstentionMismatch 0 — over all 97 cells.
+  added 0, unexpectedFact 0, abstentionMismatch 0 — over all 103 cells.
 - Pinned live-textual defects on the new cells (baseline metrics,
   non-zero by design):
   - wrongServiceType: AN1-3 (unqualified or regex-blind `$`/Unicode
@@ -144,9 +172,11 @@ on the same cell/fact model — no fork:
   annotation-name pattern (capture site:
   `JavacFrameworkQualifierFamilies.TEXTUAL_ANNOTATION_NAME`; strip site:
   `SourceMetadataScannerTextLayer02.parameterType`); argument text now
-  comes from the production parser itself. A drift between the replicated
-  pattern and the production capture site is a documented sync risk
-  (cross-referenced at both sites).
+  comes from the production parser itself. The reference is one-directional
+  (the harness copy cites the production sites; the production sites carry
+  no back-reference): the practical drift detector is the pinned-defect
+  sets, which fail when a production regex change shifts the baseline
+  values.
 - Reflection textual parity is deferred to #25 (the textual
   `reflectionSites` scanner needs the full AnalysisContext pipeline);
   R cells gate the javac side only, with BaselineMode.NONE. Uncovered

@@ -345,10 +345,10 @@ def main() -> None:
         "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A16b A17 A20 A21 "
         "D1 D2 D3 D4 D5 D6 D7 D8 D9 I1 I2 I3 I4 I5").split())
     required_javac_cells |= set((
-        "AN1 AN2 AN3 AN4 AN5 AA1 AA2 AA3 AA4 TU1 TU2 TU3 TU4 "
-        "TS1 TS2 TS3 TS4 TS5 TS6 TS7 TS8 TS9 R1 R2 R3 R4 R5 R6").split())
+        "AN1 AN2 AN3 AN4 AN5 AN6 AN7 AA1 AA2 AA3 AA4 TU1 TU2 TU3 TU4 "
+        "TS1 TS2 TS3 TS4 TS5 TS6 TS7 TS8 TS9 R1 R2 R3 R4 R5 R6 R7 R8").split())
     require(javac_cells == required_javac_cells, "javac resolver observation cell set is incomplete or has drifted")
-    require(len(javac_resolver["cells"]) == 99, "javac resolver observation must have 99 cells")
+    require(len(javac_resolver["cells"]) == 103, "javac resolver observation must have 103 cells")
     service_loader_families = {"PRECEDENCE", "STATIC_OWNER", "DOLLAR_OWNER", "INCOMPLETE"}
     new_families = {"ANNOTATION_NAME", "ANNOTATION_ARGUMENT", "TYPE_USE", "TYPE_SHAPE", "REFLECTION_SOURCE_BOUND"}
     for cell in javac_resolver["cells"]:
