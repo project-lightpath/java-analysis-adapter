@@ -18,8 +18,8 @@ adapter-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && \
 	JAVA_TOOL_OPTIONS="$${JAVA_TOOL_OPTIONS:-} -Djunit.jupiter.execution.parallel.config.fixed.parallelism=$(ADAPTER_TEST_PARALLELISM)" \
 	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 1024))m
-	python3 spike/scripts/check_test_count.py 534
-
+	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-$${JAVA_HOME:+$${JAVA_HOME}/bin/}java}}" && \
+	"$${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 534
 e2e-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=ServiceLoaderEndToEndTest test -f pom.xml
 
@@ -30,7 +30,7 @@ manual-analysis:
 	@test -n "$(CONTEXT)" || (echo 'CONTEXT is required' >&2; exit 2)
 	@test -n "$(OUTPUT)" || (echo 'OUTPUT is required' >&2; exit 2)
 	MAVEN_BIN="$${MAVEN_BIN:-$$(bash spike/scripts/bootstrap-maven.sh)}" && \
-	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-java}}" && \
+	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-$${JAVA_HOME:+$${JAVA_HOME}/bin/}java}}" && \
 	"$${MAVEN_BIN}" -B -ntp package -DskipTests -f pom.xml && \
 	"$${MAVEN_BIN}" -B -ntp -q dependency:build-classpath -Dmdep.outputFile=target/manual-analysis-classpath.txt -DincludeScope=runtime -f pom.xml && \
 	"$${JAVA_BIN}" -cp "target/classes:$$(cat target/manual-analysis-classpath.txt)" com.projectlightpath.analysis.java.ManualAnalysisMain --context="$(CONTEXT)" --output="$(OUTPUT)"
