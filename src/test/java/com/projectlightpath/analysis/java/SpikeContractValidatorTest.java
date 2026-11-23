@@ -45,9 +45,10 @@ class SpikeContractValidatorTest {
     Path root = temp.resolve("root");
     Files.createDirectories(root);
     Path spike = repoRoot().resolve("spike");
+    Path repository = spike.getParent();
     try (Stream<Path> files = Files.walk(spike)) {
       for (Path file : files.filter(Files::isRegularFile).toList()) {
-        Path target = root.resolve(spike.relativize(file).toString());
+        Path target = root.resolve(repository.relativize(file).toString());
         Files.createDirectories(target.getParent());
         Files.copy(file, target);
       }
@@ -277,20 +278,20 @@ class SpikeContractValidatorTest {
    */
   @Test
   void truthinessMirrorsPython() {
-    assertFalse(SpikeContractValidator.truthy(MAPPER.missingNode()));
-    assertFalse(SpikeContractValidator.truthy(MAPPER.nullNode()));
-    assertFalse(SpikeContractValidator.truthy(MAPPER_BOOLEAN(false)));
-    assertFalse(SpikeContractValidator.truthy(
+    assertFalse(SpikeContractSemantics.truthy(MAPPER.missingNode()));
+    assertFalse(SpikeContractSemantics.truthy(MAPPER.nullNode()));
+    assertFalse(SpikeContractSemantics.truthy(MAPPER_BOOLEAN(false)));
+    assertFalse(SpikeContractSemantics.truthy(
         MAPPER.createObjectNode().put("v", 0).path("v")));
-    assertFalse(SpikeContractValidator.truthy(
+    assertFalse(SpikeContractSemantics.truthy(
         MAPPER.createObjectNode().put("v", "").path("v")));
-    assertFalse(SpikeContractValidator.truthy(MAPPER.createArrayNode()));
-    assertTrue(SpikeContractValidator.truthy(MAPPER_BOOLEAN(true)));
-    assertTrue(SpikeContractValidator.truthy(
+    assertFalse(SpikeContractSemantics.truthy(MAPPER.createArrayNode()));
+    assertTrue(SpikeContractSemantics.truthy(MAPPER_BOOLEAN(true)));
+    assertTrue(SpikeContractSemantics.truthy(
         MAPPER.createObjectNode().put("v", 1).path("v")));
-    assertTrue(SpikeContractValidator.truthy(
+    assertTrue(SpikeContractSemantics.truthy(
         MAPPER.createObjectNode().put("v", "x").path("v")));
-    assertTrue(SpikeContractValidator.truthy(MAPPER.createArrayNode().add(1)));
+    assertTrue(SpikeContractSemantics.truthy(MAPPER.createArrayNode().add(1)));
   }
 
   private static JsonNode MAPPER_BOOLEAN(boolean value) {
@@ -303,15 +304,15 @@ class SpikeContractValidatorTest {
    */
   @Test
   void analyzerHostPathWalkRejectsPosixShapes() {
-    assertTrue(SpikeContractValidator.containsHostPath(
+    assertTrue(SpikeContractJavacRules.containsHostPath(
         textNode("/absolute/path.java")));
-    assertTrue(SpikeContractValidator.containsHostPath(
+    assertTrue(SpikeContractJavacRules.containsHostPath(
         textNode("nested/Users/leak")));
-    assertTrue(SpikeContractValidator.containsHostPath(
+    assertTrue(SpikeContractJavacRules.containsHostPath(
         textNode("nested/private/var/folders")));
-    assertFalse(SpikeContractValidator.containsHostPath(
+    assertFalse(SpikeContractJavacRules.containsHostPath(
         textNode("relative/path.java")));
-    assertTrue(SpikeContractValidator.containsHostPath(
+    assertTrue(SpikeContractJavacRules.containsHostPath(
         MAPPER.createArrayNode().add(MAPPER.createObjectNode().put("note", "/Users/x"))));
   }
 
@@ -321,26 +322,26 @@ class SpikeContractValidatorTest {
    */
   @Test
   void javacHostPathWalkRejectsWindowsShapes() {
-    assertTrue(SpikeContractValidator.javacContainsHostPath(
+    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
         textNode("\\\\server\\share\\cell.java")));
-    assertTrue(SpikeContractValidator.javacContainsHostPath(
+    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
         textNode("C:\\Users\\leak\\cell.java")));
-    assertTrue(SpikeContractValidator.javacContainsHostPath(
+    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
         textNode("D:/repos/cell.java")));
-    assertTrue(SpikeContractValidator.javacContainsHostPath(
+    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
         textNode("prefix/tmp/scratch")));
-    assertTrue(SpikeContractValidator.javacContainsHostPath(
+    assertTrue(SpikeContractJavacRules.javacContainsHostPath(
         textNode("a\\\\Users\\\\leak")));
-    assertFalse(SpikeContractValidator.javacContainsHostPath(
+    assertFalse(SpikeContractJavacRules.javacContainsHostPath(
         textNode("relative/cell.java")));
-    assertFalse(SpikeContractValidator.javacContainsHostPath(
+    assertFalse(SpikeContractJavacRules.javacContainsHostPath(
         textNode("N24a.java")));
   }
 
   /** The required javac cell inventory parses to exactly 71 ids with the compound labels. */
   @Test
   void requiredJavacCellsParseToExactSet() {
-    Set<String> cells = SpikeContractValidator.requiredJavacCells();
+    Set<String> cells = SpikeContractJavacRules.requiredJavacCells();
     assertEquals(71, cells.size());
     assertTrue(cells.contains("N24a"));
     assertTrue(cells.contains("N24b"));
@@ -357,8 +358,8 @@ class SpikeContractValidatorTest {
   void javacTotalsRecomputeToPerCellSumOnRealObservation() throws IOException {
     JsonNode observation = MAPPER.readTree(
         repoRoot().resolve("spike/results/javac-symbol-resolver-observation.json").toFile());
-    assertEquals(SpikeContractValidator.recomputeTotals(observation),
-        SpikeContractValidator.totalsAsLongMap(observation.path("javacTotals")));
+    assertEquals(SpikeContractJavacRules.recomputeTotals(observation),
+        SpikeContractJavacRules.totalsAsLongMap(observation.path("javacTotals")));
   }
 
   /** The repository root is found by walking up from a nested directory. */
