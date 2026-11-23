@@ -371,8 +371,13 @@ sanctions zero edits to existing tests) — with **one explicit exception**:
 pins the total count of `generated_implementation` facts (`assertEquals(9,
 repositoryFacts.size())`), a characterization that Item 0 deliberately
 extends (guaranteed CRUD methods add facts for Crud/Jpa/Paging-extending
-fixtures). The plan sanctions updating that count (and only that count) in
-GREEN_00; every other assertion in that test must keep passing unmodified.
+fixtures). The plan sanctions updating those counts (and only those counts)
+in GREEN_00 — in
+`springRepositoryFactsRequireCanonicalContractsAndKnownMethods` (9 → 39)
+and in `fixtureSpecificFactIdsRequireUnambiguousFullIdentity` (2 → 38, the
+two JpaRepository fixtures now enumerate the guaranteed JPA method set; the
+distinct-ID invariant the test actually checks still holds); every other
+assertion in those tests must keep passing unmodified.
 
 ## TDD sequencing (RED/GREEN/EVIDENCE triples, gates after every item)
 

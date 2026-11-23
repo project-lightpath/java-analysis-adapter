@@ -1070,8 +1070,8 @@ class JavaAnalysisAdapterTest {
     List<SemanticCallFacts.Fact> repositoryFacts = springFacts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
-    assertEquals(2, repositoryFacts.size());
-    assertEquals(2, repositoryFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
+    assertEquals(38, repositoryFacts.size());
+    assertEquals(38, repositoryFacts.stream().map(SemanticCallFacts.Fact::id).distinct().count());
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.id().equals("spring-data-generated-account-repository")));
 
     List<SemanticCallFacts.Fact> lifecycleFacts = springFacts.frameworkFacts().stream()
