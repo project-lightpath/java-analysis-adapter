@@ -78,8 +78,9 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
                         "repositoryMethod", methodIdentity))),
                 "Spring Data implementation and proxy identity are generated outside application source.")));
         facts.add(delegationFact(
-            context, scanner, candidates, candidate, repositoryMethod,
-            repositoryContract, metadataAvailable, fragmentTargets, baseClass));
+            context, scanner, candidates,
+            new DelegationContext(candidate, repositoryMethod, repositoryContract,
+                metadataAvailable, fragmentTargets, baseClass)));
       }
       for (Map.Entry<String, String> fragment : fragmentTargets.entrySet()) {
         facts.add(fragmentDelegationFact(
@@ -125,94 +126,127 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
                 + " proxy composition order at runtime is not captured."));
   }
 
-  /** Emits the delegation fact from one repository method to its runtime backing. */
-  private SemanticCallFacts.Fact delegationFact(
-      AnalysisContext context,
-      SourceMetadataScanner scanner,
-      List<SourceMetadataScannerState.BeanCandidate> candidates,
+  /** Inputs for one repository method's delegation selection. */
+  private record DelegationContext(
       SourceMetadataScannerState.BeanCandidate candidate,
       SourceMetadataScannerState.RepositoryMethod repositoryMethod,
       String repositoryContract,
       boolean metadataAvailable,
       Map<String, String> fragmentTargets,
-      Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass) {
+      Optional<SourceMetadataScannerState.RepositoryBaseClass> baseClass) {}
+
+  /** The selected backing target and its certainty-ladder outcome. */
+  private record DelegationSelection(
+      String target,
+      SemanticCallFacts.Certainty certainty,
+      String limitation,
+      String diagnosticCode) {}
+
+  /** Emits the delegation fact from one repository method to its runtime backing. */
+  private SemanticCallFacts.Fact delegationFact(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      List<SourceMetadataScannerState.BeanCandidate> candidates,
+      DelegationContext delegation) {
+    SourceMetadataScannerState.RepositoryMethod repositoryMethod = delegation.repositoryMethod();
     String methodIdentity = repositoryMethod.identity();
-    String caller = candidate.file().typeName() + "#" + methodIdentity;
-    String fragmentImplementation = fragmentTargets.get(repositoryMethod.name());
-    boolean reactive = reactiveContract(repositoryContract);
-    String target;
-    SemanticCallFacts.Certainty certainty;
-    String limitation;
-    String diagnosticCode = null;
-    if (fragmentImplementation != null) {
-      target = fragmentImplementation;
-      certainty = metadataAvailable
-          ? SemanticCallFacts.Certainty.POSSIBLE
-          : SemanticCallFacts.Certainty.UNRESOLVED;
-      limitation = "Fragment backing is an application-declared implementation;"
-          + " proxy composition order at runtime is not captured.";
-    } else if (reactive) {
-      target = "spring-data-proxy:" + candidate.file().typeName() + "#" + methodIdentity;
-      certainty = SemanticCallFacts.Certainty.UNRESOLVED;
-      limitation = "Reactive repository backing is module-specific and outside"
-          + " the analyzed dependencies; no backing class can be selected.";
-    } else if (repositoryMethod.guaranteed() && baseClass.isPresent()) {
-      target = baseClass.get().configuredType() + "#" + repositoryMethod.name();
-      if (baseClass.get().applicationScoped()) {
-        certainty = metadataAvailable
-            ? SemanticCallFacts.Certainty.POSSIBLE
-            : SemanticCallFacts.Certainty.UNRESOLVED;
-        limitation = "The configured repository base class overrides the default"
-            + " backing; exact method resolution inside it is not proven.";
-      } else {
-        certainty = SemanticCallFacts.Certainty.UNRESOLVED;
-        diagnosticCode = "spring_data_backing_selection_out_of_scope";
-        limitation = "The configured repository base class is outside the"
-            + " analysis scope; no backing can be selected.";
-      }
-    } else if (repositoryMethod.guaranteed()) {
-      target = "org.springframework.data.jpa.repository.support.SimpleJpaRepository#"
-          + repositoryMethod.name();
-      certainty = metadataAvailable
-          ? SemanticCallFacts.Certainty.DEFINITE
-          : SemanticCallFacts.Certainty.UNRESOLVED;
-      limitation = null;
-    } else {
-      target = "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute";
-      certainty = metadataAvailable
-          ? SemanticCallFacts.Certainty.POSSIBLE
-          : SemanticCallFacts.Certainty.UNRESOLVED;
-      limitation = "Derived query execution goes through the query-derivation"
-          + " machinery; the generated query is not visible statically.";
-    }
+    String caller = delegation.candidate().file().typeName() + "#" + methodIdentity;
+    DelegationSelection selection = selectBacking(delegation);
     Map<String, String> attributes = new HashMap<>(Map.of(
-        "repositoryContract", repositoryContract,
+        "repositoryContract", delegation.repositoryContract(),
         "repositoryMethod", methodIdentity,
-        "backingTarget", target));
-    if (diagnosticCode != null) {
-      attributes.put("diagnosticCode", diagnosticCode);
+        "backingTarget", selection.target()));
+    if (selection.diagnosticCode() != null) {
+      attributes.put("diagnosticCode", selection.diagnosticCode());
     }
     return SemanticCallFacts.Fact.framework(
-        delegationFactId(scanner, candidates, candidate, methodIdentity, target),
+        delegationFactId(scanner, candidates, delegation.candidate(), methodIdentity,
+            selection.target()),
         context,
         new SemanticCallFacts.Fact.FrameworkInput(
             caller,
-            target,
+            selection.target(),
             "delegated_implementation",
-            certainty,
+            selection.certainty(),
             "spring-data-delegation",
             List.of(new SemanticCallFacts.Evidence(
                 "spring_data_backing_selection",
-                candidate.file().displayPath(),
+                delegation.candidate().file().displayPath(),
                 List.copyOf(new LinkedHashSet<>(List.of(
-                    "extends " + repositoryContract,
+                    "extends " + delegation.repositoryContract(),
                     repositoryMethod.guaranteed()
                         ? "CrudRepository#" + repositoryMethod.name()
                         : "declared " + methodIdentity,
-                    "backing " + target))),
+                    "backing " + selection.target()))),
                 null,
                 Map.copyOf(attributes))),
-            limitation));
+            selection.limitation()));
+  }
+
+  /** Applies the FLPATH-5075 ladder to one repository method. */
+  private DelegationSelection selectBacking(DelegationContext delegation) {
+    String fragmentImplementation = delegation.fragmentTargets()
+        .get(delegation.repositoryMethod().name());
+    if (fragmentImplementation != null) {
+      return new DelegationSelection(fragmentImplementation,
+          delegation.metadataAvailable()
+              ? SemanticCallFacts.Certainty.POSSIBLE
+              : SemanticCallFacts.Certainty.UNRESOLVED,
+          "Fragment backing is an application-declared implementation;"
+              + " proxy composition order at runtime is not captured.",
+          null);
+    }
+    if (reactiveContract(delegation.repositoryContract())) {
+      return new DelegationSelection(
+          "spring-data-proxy:" + delegation.candidate().file().typeName()
+              + "#" + delegation.repositoryMethod().identity(),
+          SemanticCallFacts.Certainty.UNRESOLVED,
+          "Reactive repository backing is module-specific and outside"
+              + " the analyzed dependencies; no backing class can be selected.",
+          null);
+    }
+    if (delegation.repositoryMethod().guaranteed()) {
+      return crudBacking(delegation);
+    }
+    return new DelegationSelection(
+        "org.springframework.data.jpa.repository.query.PartTreeJpaQuery#execute",
+        delegation.metadataAvailable()
+            ? SemanticCallFacts.Certainty.POSSIBLE
+            : SemanticCallFacts.Certainty.UNRESOLVED,
+        "Derived query execution goes through the query-derivation"
+            + " machinery; the generated query is not visible statically.",
+        null);
+  }
+
+  /** Selects the backing for a guaranteed CRUD method under override evidence. */
+  private DelegationSelection crudBacking(DelegationContext delegation) {
+    String method = delegation.repositoryMethod().name();
+    if (delegation.baseClass().isEmpty()) {
+      return new DelegationSelection(
+          "org.springframework.data.jpa.repository.support.SimpleJpaRepository#" + method,
+          delegation.metadataAvailable()
+              ? SemanticCallFacts.Certainty.DEFINITE
+              : SemanticCallFacts.Certainty.UNRESOLVED,
+          null,
+          null);
+    }
+    SourceMetadataScannerState.RepositoryBaseClass baseClass = delegation.baseClass().get();
+    if (baseClass.applicationScoped()) {
+      return new DelegationSelection(
+          baseClass.configuredType() + "#" + method,
+          delegation.metadataAvailable()
+              ? SemanticCallFacts.Certainty.POSSIBLE
+              : SemanticCallFacts.Certainty.UNRESOLVED,
+          "The configured repository base class overrides the default"
+              + " backing; exact method resolution inside it is not proven.",
+          null);
+    }
+    return new DelegationSelection(
+        baseClass.configuredType() + "#" + method,
+        SemanticCallFacts.Certainty.UNRESOLVED,
+        "The configured repository base class is outside the"
+            + " analysis scope; no backing can be selected.",
+        "spring_data_backing_selection_out_of_scope");
   }
 
   /** Maps fragment method names to their application Impl target for one repository. */
