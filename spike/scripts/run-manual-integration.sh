@@ -18,8 +18,11 @@ FACTS="${RUN_DIR}/semantic-call-facts.json"
 EVIDENCE="${RUN_DIR}/capability-evidence.json"
 
 echo "[1/4] prepare immutable source, Maven build, and AnalysisContext"
-(
-  cd "${VPE_ROOT}"
+if ! (
+  # The if-condition context suspends errexit inside this subshell, so the cd
+  # must fail loudly itself: otherwise go run would execute from the caller's
+  # directory, possibly against a different VPE checkout.
+  cd "${VPE_ROOT}" || exit 1
   go run ./cmd/analysis-context \
     -mode prepare-manual \
     -profile "${PROFILE}" \
@@ -29,7 +32,20 @@ echo "[1/4] prepare immutable source, Maven build, and AnalysisContext"
     -java-bin "${JAVA_BIN}" \
     -output "${CONTEXT}" \
     -report "${REPORT}"
-)
+); then
+  echo "preparation failed; report: ${REPORT}" >&2
+  if "${MAVEN_BIN}" -B -ntp -q compile -f "${ROOT}/pom.xml" && \
+     "${MAVEN_BIN}" -B -ntp -q dependency:build-classpath \
+       -Dmdep.outputFile=target/manual-analysis-classpath.txt -DincludeScope=runtime \
+       -f "${ROOT}/pom.xml"; then
+    "${JAVA_BIN}" -cp "${ROOT}/target/classes:$(cat "${ROOT}/target/manual-analysis-classpath.txt")" \
+      com.projectlightpath.analysis.java.PrintPreparationDiagnostics "${REPORT}" || true
+  else
+    echo "could not build the diagnostics printer; report: ${REPORT}" >&2
+  fi
+  echo "run directory: ${RUN_DIR}" >&2
+  exit 1
+fi
 
 echo "[2/4] run Java adapter and emit SemanticCallFacts"
 (
