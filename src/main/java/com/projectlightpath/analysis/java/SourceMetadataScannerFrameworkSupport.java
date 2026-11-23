@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /** Responsibility layer for the source-backed Java metadata scanner. */
-abstract class SourceMetadataScannerFrameworkSupport extends SourceMetadataScannerFrameworkLayer01 {
+abstract class SourceMetadataScannerFrameworkSupport extends SourceMetadataScannerRepositoryLayer {
 
   SourceMetadataScannerFrameworkSupport(AnalysisContext context) {
     super(context);

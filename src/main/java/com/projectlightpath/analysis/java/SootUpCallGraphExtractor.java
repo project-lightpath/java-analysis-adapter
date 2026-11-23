@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,7 +65,8 @@ final class SootUpCallGraphExtractor {
       applicationCall(context, view, call, applicationClasses, scanner, dependencyEntries)
           .ifPresent(result::add);
     }
-    result.addAll(repositoryDeclaredInvokes(context, view, applicationClasses, scanner));
+    result.addAll(SootUpRepositoryDeclaredInvokes.edges(
+        context, view, applicationClasses, scanner));
     return sorted(result);
   }
 
@@ -80,63 +80,6 @@ final class SootUpCallGraphExtractor {
         .thenComparingInt(CallEdge::line)
         .thenComparing(CallEdge::relationshipType));
     return List.copyOf(result);
-  }
-
-  /** Emits declared-target edges for invokes on app-declared Spring Data repositories. */
-  static List<CallEdge> repositoryDeclaredInvokes(
-      AnalysisContext context,
-      JavaView view,
-      Set<String> applicationClasses,
-      SourceMetadataScanner scanner) {
-    if (context.framework() != AnalysisContext.Framework.SPRING_BOOT) {
-      return List.of();
-    }
-    Set<String> repositoryInterfaces = scanner
-        .beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
-        .filter(candidate -> candidate.kind().equals("repository_interface"))
-        .map(candidate -> candidate.file().typeName())
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    if (repositoryInterfaces.isEmpty()) {
-      return List.of();
-    }
-    List<CallEdge> result = new ArrayList<>();
-    for (MethodSignature method : applicationMethods(view, applicationClasses)) {
-      view.getMethod(method).ifPresent(sootMethod -> sootMethod.getBody().getStmts()
-          .forEach(stmt -> declaredInvoke(context, method, stmt, repositoryInterfaces)
-              .ifPresent(result::add)));
-    }
-    return result;
-  }
-
-  private static Optional<CallEdge> declaredInvoke(
-      AnalysisContext context,
-      MethodSignature callerSignature,
-      sootup.core.jimple.common.stmt.Stmt stmt,
-      Set<String> repositoryInterfaces) {
-    if (!stmt.isInvokableStmt()) {
-      return Optional.empty();
-    }
-    Optional<sootup.core.jimple.common.expr.AbstractInvokeExpr> invoke =
-        stmt.asInvokableStmt().getInvokeExpr();
-    if (invoke.isEmpty() || !(invoke.get() instanceof JInterfaceInvokeExpr expression)) {
-      return Optional.empty();
-    }
-    MethodSymbol caller = MethodSymbol.fromSootSignature(callerSignature.toString());
-    MethodSymbol callee = MethodSymbol.fromSootSignature(
-        expression.getMethodSignature().toString());
-    if (!repositoryInterfaces.contains(callee.owner())) {
-      return Optional.empty();
-    }
-    int line = stmt.getPositionInfo().getStmtPosition().getFirstLine();
-    return Optional.of(new CallEdge(
-        caller,
-        callee,
-        line,
-        sourcePath(context, caller.owner()),
-        SemanticCallFacts.Certainty.POSSIBLE,
-        "declared_invokes",
-        CallEdge.TargetContext.application(),
-        expression.getBase().getName()));
   }
 
   private static Optional<CallEdge> applicationCall(
@@ -307,7 +250,7 @@ final class SootUpCallGraphExtractor {
         sourcePath);
   }
 
-  private static String sourcePath(AnalysisContext context, String owner) {
+  static String sourcePath(AnalysisContext context, String owner) {
     String topLevel = owner.contains("$") ? owner.substring(0, owner.indexOf('$')) : owner;
     String relative = topLevel.replace('.', '/') + ".java";
     for (AnalysisContext.SourceRoot root :
