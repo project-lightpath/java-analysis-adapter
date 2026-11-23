@@ -26,8 +26,13 @@ final class VpeTreeRules {
 
   /** The manifest's tracked entries keyed by path; rejects empty or unkeyed entries. */
   static Map<String, JsonNode> manifestEntries(JsonNode document) {
+    JsonNode entries = document.path("entries");
+    if (!entries.isMissingNode() && !entries.isArray()) {
+      throw new ContractFixtureValidator.ValidationError(
+          "VPE tree manifest entries must be an array");
+    }
     Map<String, JsonNode> expected = new LinkedHashMap<>();
-    for (JsonNode entry : document.path("entries")) {
+    for (JsonNode entry : entries) {
       if (!entry.isObject()) {
         throw new ContractFixtureValidator.ValidationError(
             "VPE tree manifest entries must be objects");
@@ -52,7 +57,7 @@ final class VpeTreeRules {
       throw new ContractFixtureValidator.ValidationError("VPE tree file is missing: "
           + path);
     }
-    long expectedMode = parseMode(entry.path("mode").asText(null), path);
+    long expectedMode = parseMode(entry.path("mode"), path);
     if (GitTreeFiles.fileType(candidate) != (expectedMode & 0170000L)) {
       throw new ContractFixtureValidator.ValidationError(
           "VPE tree file type mismatch: " + path);
@@ -93,16 +98,17 @@ final class VpeTreeRules {
         GitTreeFiles.sha256(javaBytes), true);
   }
 
-  private static long parseMode(String mode, String path) {
-    if (mode == null) {
+  private static long parseMode(JsonNode modeNode, String path) {
+    if (modeNode == null || !modeNode.isTextual()) {
       throw new ContractFixtureValidator.ValidationError(
-          "VPE tree manifest entry is missing its mode: " + path);
+          "VPE tree manifest entry is missing its textual mode: " + path);
     }
-    try {
-      return Long.parseLong(mode, 8);
-    } catch (NumberFormatException error) {
+    // Python int(s, 8): surrounding whitespace and underscores between digits allowed.
+    String mode = modeNode.asText().strip();
+    if (!mode.matches("[+-]?[0-7]+(_[0-7]+)*")) {
       throw new ContractFixtureValidator.ValidationError(
-          "VPE tree manifest entry has a non-octal mode: " + path + ": " + mode, error);
+          "VPE tree manifest entry has a non-octal mode: " + path + ": " + mode);
     }
+    return Long.parseLong(mode.replace("_", ""), 8);
   }
 }

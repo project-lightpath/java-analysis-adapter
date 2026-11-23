@@ -79,8 +79,8 @@ final class JacocoReportReader {
 
   /** Joins source root, dotted package, and file name, dropping empty parts. */
   static String sourceKey(String pkg, String name, String sourceRoot) {
-    // Python: package.strip("/").replace(".", "/")
-    String stripped = pkg.strip();
+    // Python: package.strip("/").replace(".", "/") — slashes only, no whitespace.
+    String stripped = pkg;
     while (stripped.startsWith("/")) {
       stripped = stripped.substring(1);
     }

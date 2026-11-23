@@ -23,10 +23,13 @@ final class ValidatorCli {
    *
    * @param args command-line arguments
    * @param repeatable flag names (without {@code --}) that collect every occurrence
+   * @param known every flag name (without {@code --}) this command accepts; anything
+   *     else rejects like argparse's invalid-choice error
    * @return the parsed flags, or null on an unknown flag, a non-flag argument, or a
    *     missing value
    */
-  static Map<String, List<String>> parse(String[] args, Set<String> repeatable) {
+  static Map<String, List<String>> parse(String[] args, Set<String> repeatable,
+      Set<String> known) {
     Map<String, List<String>> flags = new LinkedHashMap<>();
     for (int i = 0; i < args.length; i++) {
       String arg = args[i];
@@ -45,6 +48,9 @@ final class ValidatorCli {
           return null;
         }
         value = args[++i];
+      }
+      if (!known.contains(name)) {
+        return null;
       }
       if (repeatable.contains(name)) {
         flags.computeIfAbsent(name, key -> new ArrayList<>()).add(value);

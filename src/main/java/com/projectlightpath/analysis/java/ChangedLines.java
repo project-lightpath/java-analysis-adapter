@@ -42,7 +42,11 @@ final class ChangedLines {
     try {
       return gitChangedLines(root, base, head, suffix);
     } catch (GitUnavailable error) {
-      return sidecarChangedLines(evidence.getParent().resolve("changed-lines.json"),
+      // Python: Path(name).parent is "." for a bare filename — never null.
+      Path parent = evidence.getParent();
+      return sidecarChangedLines(
+          parent == null ? Path.of("changed-lines.json")
+              : parent.resolve("changed-lines.json"),
           base, head);
     }
   }
@@ -118,8 +122,10 @@ final class ChangedLines {
       throw new ChangedCoverageValidator.ValidationError("cannot parse " + sidecar
           + ": " + error.getMessage(), error);
     }
-    if (!raw.isObject() || !base.equals(raw.path("base").asText(null))
-        || !head.equals(raw.path("head").asText(null))) {
+    JsonNode sidecarBase = raw.path("base");
+    JsonNode sidecarHead = raw.path("head");
+    if (!raw.isObject() || !sidecarBase.isTextual() || !sidecarHead.isTextual()
+        || !base.equals(sidecarBase.asText()) || !head.equals(sidecarHead.asText())) {
       throw new ChangedCoverageValidator.ValidationError(
           "changed-line sidecar revisions do not match the requested base and head");
     }

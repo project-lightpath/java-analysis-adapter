@@ -330,13 +330,13 @@ class ChangedCoverageValidatorTest {
   /** Python round(x, 2) is half-even on the binary double; .2f uses the same mode. */
   @Test
   void roundingMatchesPythonHalfEvenOnBinaryDoubles() {
-    assertEquals(2.67, ChangedCoverageValidator.round2(2.675));
-    assertEquals(8.01, ChangedCoverageValidator.round2(8.005));
-    assertEquals(12.35, ChangedCoverageValidator.round2(12.345));
-    assertEquals(0.12, ChangedCoverageValidator.round2(0.125));
-    assertEquals("2.67", ChangedCoverageValidator.format2(2.675));
-    assertEquals("0.12", ChangedCoverageValidator.format2(0.125));
-    assertEquals("90.00", ChangedCoverageValidator.format2(90.0));
+    assertEquals(2.67, PythonNumbers.round2(2.675));
+    assertEquals(8.01, PythonNumbers.round2(8.005));
+    assertEquals(12.35, PythonNumbers.round2(12.345));
+    assertEquals(0.12, PythonNumbers.round2(0.125));
+    assertEquals("2.67", PythonNumbers.format2(2.675));
+    assertEquals("0.12", PythonNumbers.format2(0.125));
+    assertEquals("90.00", PythonNumbers.format2(90.0));
   }
 
   /** The real git path extracts changed lines from a scratch repository. */
@@ -370,6 +370,72 @@ class ChangedCoverageValidatorTest {
     String output = new String(process.getInputStream().readAllBytes());
     process.waitFor();
     return output;
+  }
+
+  /** An unknown flag exits 2, like argparse's invalid-choice error. */
+  @Test
+  void unknownFlagExitsTwo() throws IOException {
+    Path root = scratchRoot();
+    jacocoReport();
+    assertEquals(2, ChangedCoverageValidator.run(new String[] {"--thresold", "50",
+        "--base", "base", "--head", "head", "--report",
+        temp.resolve("jacoco.xml").toString(), "--evidence",
+        root.resolve("coverage.json").toString()}, root));
+  }
+
+  /** A missing required flag exits 2. */
+  @Test
+  void missingRequiredFlagExitsTwo() throws IOException {
+    Path root = scratchRoot();
+    jacocoReport();
+    assertEquals(2, ChangedCoverageValidator.run(new String[] {"--head", "head",
+        "--report", temp.resolve("jacoco.xml").toString(), "--evidence",
+        root.resolve("coverage.json").toString()}, root));
+  }
+
+  /** A non-Python-float threshold exits 2 (argparse type=float parity). */
+  @Test
+  void nonPythonFloatThresholdExitsTwo() throws IOException {
+    Path root = scratchRoot();
+    jacocoReport();
+    for (String bad : new String[] {"x", "90.0d", "0x1p3"}) {
+      assertEquals(2, ChangedCoverageValidator.run(new String[] {"--threshold", bad,
+          "--base", "base", "--head", "head", "--report",
+          temp.resolve("jacoco.xml").toString(), "--evidence",
+          root.resolve("coverage.json").toString()}, root), bad);
+    }
+  }
+
+  /** An infinite threshold renders like Python's f-string and compares like Python. */
+  @Test
+  void infiniteThresholdRendersLikePython() {
+    assertEquals("inf", PythonNumbers.format2(Double.POSITIVE_INFINITY));
+    assertEquals("-inf", PythonNumbers.format2(Double.NEGATIVE_INFINITY));
+    assertEquals("nan", PythonNumbers.format2(Double.NaN));
+  }
+
+  /** A missing sidecar when git is unavailable rejects with the Python message. */
+  @Test
+  void missingSidecarRejectsWhenGitUnavailable() throws IOException {
+    Path root = scratchRoot();
+    ChangedCoverageValidator.ValidationError error = assertThrows(
+        ChangedCoverageValidator.ValidationError.class,
+        () -> ChangedCoverageValidator.changedLines(root, "base", "head", ".java",
+            root.resolve("coverage.json")));
+    assertTrue(error.getMessage().contains("sidecar is missing"));
+  }
+
+  /** Non-textual sidecar revisions reject (Python compares typed values). */
+  @Test
+  void nonTextualSidecarRevisionRejects() throws IOException {
+    Path root = scratchRoot();
+    Files.writeString(root.resolve("changed-lines.json"),
+        "{\"base\": 123, \"head\": \"head\", \"files\": {\"a.java\": [4]}}");
+    ChangedCoverageValidator.ValidationError error = assertThrows(
+        ChangedCoverageValidator.ValidationError.class,
+        () -> ChangedCoverageValidator.changedLines(root, "123", "head", ".java",
+            root.resolve("coverage.json")));
+    assertTrue(error.getMessage().contains("revisions do not match"));
   }
 
   /** sha256 streams the file content. */

@@ -97,7 +97,8 @@ public final class ContractFixtureValidator {
   public static Result validate(Path javaRoot, Path vpeRoot, String vpeSha,
       Path manifest) {
     JsonNode document = readManifest(manifest);
-    if (!vpeSha.equals(document.path("commit").asText(null))) {
+    JsonNode commit = document.path("commit");
+    if (!commit.isTextual() || !vpeSha.equals(commit.asText())) {
       throw new ValidationError("VPE tree manifest commit does not match --vpe-sha");
     }
     Map<String, JsonNode> expected = VpeTreeRules.manifestEntries(document);
@@ -149,7 +150,9 @@ public final class ContractFixtureValidator {
       Path evidenceRoot) {
 
     static Arguments parse(String[] args) {
-      Map<String, List<String>> flags = ValidatorCli.parse(args, Set.of());
+      Map<String, List<String>> flags = ValidatorCli.parse(args, Set.of(),
+          Set.of("java-root", "vpe-root", "vpe-sha", "vpe-tree-manifest",
+              "evidence-root"));
       if (flags == null) {
         return null;
       }

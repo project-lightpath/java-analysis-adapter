@@ -256,6 +256,71 @@ class ContractFixtureValidatorTest {
         ContractFixtureValidator.gitBlob(link));
   }
 
+  /** A non-textual manifest commit rejects (Python compares typed values). */
+  @Test
+  void numericManifestCommitIsRejected() throws IOException {
+    Path[] roots = fixtureRoots(Map.of());
+    Path file = temp.resolve("manifest.json");
+    Files.writeString(file, "{\"commit\": 123, \"entries\": []}");
+    ContractFixtureValidator.ValidationError error = assertThrows(
+        ContractFixtureValidator.ValidationError.class,
+        () -> ContractFixtureValidator.validate(roots[0], roots[1], "123", file));
+    assertTrue(error.getMessage().contains("does not match"), error.getMessage());
+  }
+
+  /** A JSON-object entries field rejects (Python's key iteration crashed). */
+  @Test
+  void objectEntriesAreRejected() throws IOException {
+    Path[] roots = fixtureRoots(Map.of());
+    Path file = temp.resolve("manifest.json");
+    Files.writeString(file, "{\"commit\": \"vpe-commit\", \"entries\": "
+        + "{\"a\": {\"path\": \"x\", \"mode\": \"100644\", \"blob\": \"0\"}}}");
+    ContractFixtureValidator.ValidationError error = assertThrows(
+        ContractFixtureValidator.ValidationError.class,
+        () -> ContractFixtureValidator.validate(roots[0], roots[1], "vpe-commit",
+            file));
+    assertTrue(error.getMessage().contains("must be an array"), error.getMessage());
+  }
+
+  /** A numeric mode rejects; Python's int(mode, 8) took strings only. */
+  @Test
+  void numericModeIsRejected() throws IOException {
+    Path[] roots = fixtureRoots(Map.of("drifted.txt", "x"));
+    Map<String, Object> manifest = new LinkedHashMap<>();
+    manifest.put("commit", "vpe-commit");
+    Map<String, Object> drifted = new LinkedHashMap<>();
+    drifted.put("path", "drifted.txt");
+    drifted.put("mode", 100644);
+    drifted.put("blob", ContractFixtureValidator.gitBlob(roots[1].resolve("drifted.txt")));
+    manifest.put("entries", java.util.List.of(
+        entryFor(roots[1], VPE_FIXTURE), drifted));
+    Path file = temp.resolve("manifest.json");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), manifest);
+    ContractFixtureValidator.ValidationError error = assertThrows(
+        ContractFixtureValidator.ValidationError.class,
+        () -> ContractFixtureValidator.validate(roots[0], roots[1], "vpe-commit",
+            file));
+    assertTrue(error.getMessage().contains("textual mode"), error.getMessage());
+  }
+
+  /** Python int(s, 8) accepted underscores between octal digits; so does the port. */
+  @Test
+  void underscoredOctalModeIsAccepted() throws IOException {
+    Path[] roots = fixtureRoots(Map.of("tracked.txt", "tracked"));
+    Map<String, Object> manifest = new LinkedHashMap<>();
+    manifest.put("commit", "vpe-commit");
+    Map<String, String> underscored = new LinkedHashMap<>();
+    underscored.put("path", "tracked.txt");
+    underscored.put("mode", "100_644");
+    underscored.put("blob", ContractFixtureValidator.gitBlob(roots[1].resolve(
+        "tracked.txt")));
+    manifest.put("entries", java.util.List.of(
+        entryFor(roots[1], VPE_FIXTURE), underscored));
+    Path file = temp.resolve("manifest.json");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), manifest);
+    assertEquals(0, run(roots[0], roots[1], file, temp.resolve("evidence")));
+  }
+
   /** Boundary: a malformed manifest rejects loudly. */
   @Test
   void malformedManifestRejects() throws IOException {

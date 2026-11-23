@@ -6,8 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -193,10 +191,10 @@ public final class ChangedCoverageValidator {
     }
     double percentage = counted.percentage();
     System.out.println("changed executable lines: " + counted.numerator() + "/"
-        + counted.denominator() + " (" + format2(percentage) + "%)");
+        + counted.denominator() + " (" + PythonNumbers.format2(percentage) + "%)");
     if (percentage < arguments.threshold()) {
       System.err.println("coverage below required threshold: "
-          + format2(arguments.threshold()) + "%");
+          + PythonNumbers.format2(arguments.threshold()) + "%");
       return 1;
     }
     return 0;
@@ -225,16 +223,6 @@ public final class ChangedCoverageValidator {
     return path.startsWith(prefix);
   }
 
-  /** Python round(x, 2): half-even on the exact binary double. */
-  public static double round2(double value) {
-    return new BigDecimal(value).setScale(2, RoundingMode.HALF_EVEN).doubleValue();
-  }
-
-  /** Python f"{x:.2f}": correct rounding half-even on the binary double. */
-  public static String format2(double value) {
-    return new BigDecimal(value).setScale(2, RoundingMode.HALF_EVEN).toPlainString();
-  }
-
   // -------------------------------------------------------------- evidence
 
   private static void writeEvidence(Arguments arguments, Path report, Counted counted,
@@ -251,7 +239,7 @@ public final class ChangedCoverageValidator {
     result.put("head", arguments.head());
     ArrayNode missingNode = result.putArray("missingFiles");
     missingFiles.forEach(missingNode::add);
-    result.put("percentage", round2(counted.percentage()));
+    result.put("percentage", PythonNumbers.round2(counted.percentage()));
     result.put("report", report.toString());
     result.put("reportSha256", JacocoReportReader.sha256(report));
     result.put("threshold", arguments.threshold());
@@ -266,7 +254,8 @@ public final class ChangedCoverageValidator {
   // -------------------------------------------------------------- helpers
 
   private static String sourceRoot(String path) {
-    String stripped = path.strip();
+    // Python: args.path.strip("/") — slashes only, no whitespace stripping.
+    String stripped = path;
     while (stripped.startsWith("/")) {
       stripped = stripped.substring(1);
     }
@@ -290,7 +279,10 @@ public final class ChangedCoverageValidator {
       String path, List<String> allowMissing, double threshold) {
 
     static Arguments parse(String[] args) {
-      Map<String, List<String>> flags = ValidatorCli.parse(args, Set.of("allow-missing"));
+      Map<String, List<String>> flags = ValidatorCli.parse(args,
+          Set.of("allow-missing"),
+          Set.of("base", "head", "report", "evidence", "path", "allow-missing",
+              "threshold"));
       if (flags == null) {
         return null;
       }
@@ -304,11 +296,11 @@ public final class ChangedCoverageValidator {
       String thresholdText = ValidatorCli.single(flags, "threshold");
       double threshold = 90.0;
       if (thresholdText != null) {
-        try {
-          threshold = Double.parseDouble(thresholdText);
-        } catch (NumberFormatException error) {
+        Double parsed = PythonNumbers.parsePythonFloat(thresholdText);
+        if (parsed == null) {
           return null;
         }
+        threshold = parsed;
       }
       return new Arguments(base, head, Path.of(report), Path.of(evidence),
           valueOr(flags, "path", ""), flags.getOrDefault("allow-missing", List.of()),
