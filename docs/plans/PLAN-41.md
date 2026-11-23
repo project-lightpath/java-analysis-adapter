@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#41
 Branch: `flpath-5079-repository-reverse-edges` (cut from `origin/main` @ 0297828)
-Status: draft v7 (review rounds 1–6 findings addressed)
+Status: draft v8 (review rounds 1–7 findings addressed)
 
 ## Problem
 
@@ -324,13 +324,15 @@ sanctions zero edits to existing tests).
 - **Item 0 (scanner substrate)**: RED_00 failing tests for the guaranteed
   CRUD/reactive method table, fragment detection, and
   `@EnableJpaRepositories` reading (scanner-level) → GREEN_00 → EVIDENCE_00.
-- **Item 1 (Edge 1)**: RED_01 failing tests for cells 1–5, 7, 8, 10, 11
-  (cell 4's fragment method is an ordinary interface invoke — its
-  `declared_invokes` edge is Item-1 behavior; cell 10's RED_01/GREEN_01
-  scope is the **skip behavior only** — the
-  `spring_data_repository_sources_unavailable` assertion on
-  `SemanticCallFacts.diagnostics` belongs to RED_03/GREEN_03, where the
-  carrier is built) →
+- **Item 1 (Edge 1)**: RED_01 failing tests for cells 1–5, 7, 8, 11 and
+  cell 10 as a **differential pair** — the same compiled fixture run twice,
+  once without source roots (no `declared_invokes` edges) and once with a
+  source-root control (the `declared_invokes` edge DOES appear), so
+  skip-vs-ran-and-found-nothing is observable at Item 1 without the
+  diagnostics carrier; the `spring_data_repository_sources_unavailable`
+  assertion on `SemanticCallFacts.diagnostics` belongs to RED_03/GREEN_03,
+  where the carrier is built (cell 4's fragment method is an ordinary
+  interface invoke — its `declared_invokes` edge is Item-1 behavior) →
   GREEN_01 body-scan pass + `declared_invokes` + `declaredCallId` (with the
   `collectCallReferences` count exclusion) → EVIDENCE_01. Gates:
   `make adapter-test` (floor 534 executions), `make java-lint` (0 new),
@@ -418,3 +420,6 @@ sanctions zero edits to existing tests).
   overload-preserving 4-arg `normalize` addition pinned (existing 2-/3-arg
   overloads delegate with `List.of()`), cell 10 split between Item 1 (skip
   behavior) and Item 3 (diagnostics assertion).
+- Round 8 (delta on v7): 1 finding (1 MEDIUM); addressed in v8 — cell 10's
+  Item-1 test made a differential pair (no-source-roots vs source-root
+  control) so the skip branch is RED-observable without the Item-3 carrier.
