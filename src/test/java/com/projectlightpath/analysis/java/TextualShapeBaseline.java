@@ -74,16 +74,14 @@ final class TextualShapeBaseline {
   /**
    * The production token for the annotation at the head of the raw text, or
    * "" when the production pattern cannot match there ($ and non-ASCII
-   * names). Anchored at the first '@' so a head miss can never silently
-   * return a token from an unrelated later site.
+   * names). The matcher runs over comment-stripped, literal-masked text —
+   * the same pre-processing the production capture site applies — and is
+   * anchored at the first '@' so a head miss can never silently return a
+   * token from an unrelated later site.
    */
   private static String annotationToken(String raw) {
-    int at = raw.indexOf('@');
-    if (at < 0) {
-      return "";
-    }
-    Matcher matcher = ANNOTATION_TOKEN.matcher(raw);
-    if (!matcher.find(at) || matcher.start() != at) {
+    Matcher matcher = headMatcher(raw);
+    if (matcher == null) {
       return "";
     }
     return matcher.group(1);
@@ -91,14 +89,30 @@ final class TextualShapeBaseline {
 
   /** The production parser's argument text for the head annotation. */
   private static String argumentText(String raw) {
-    int at = raw.indexOf('@');
+    String source = SourceMetadataScanner.stripComments(raw);
+    Matcher matcher = headMatcher(raw);
+    if (matcher == null) {
+      return "";
+    }
+    return SourceMetadataScanner.parseAnnotation(source, matcher).arguments();
+  }
+
+  /**
+   * A production-pattern matcher anchored at the head '@' of the
+   * comment-stripped, literal-masked raw text, or null when the production
+   * pattern cannot match there.
+   */
+  private static Matcher headMatcher(String raw) {
+    String masked = SourceMetadataScanner.maskStringLiterals(
+        SourceMetadataScanner.stripComments(raw));
+    int at = masked.indexOf('@');
     if (at < 0) {
-      return "";
+      return null;
     }
-    Matcher matcher = ANNOTATION_TOKEN.matcher(raw);
+    Matcher matcher = ANNOTATION_TOKEN.matcher(masked);
     if (!matcher.find(at) || matcher.start() != at) {
-      return "";
+      return null;
     }
-    return SourceMetadataScanner.parseAnnotation(raw, matcher).arguments();
+    return matcher;
   }
 }

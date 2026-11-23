@@ -28,6 +28,27 @@ Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1, REVIEW_26_1.
      after a harness run and asserts identical default output plus an
      unchanged `flpath.java.resolver` flag.
   One NIT (sync citation pointed at the strip site) was folded into fix 2.
+- **Round 2** (delta-only, on REVIEW_26_1): 5 addressable findings, all
+  addressed in REVIEW_26_2:
+  1. The flag-off canary could pass vacuously on a fail-closed scan — now
+     asserts a non-empty site set.
+  2. The annotation baseline ran the production pattern over raw text while
+     production strips comments and masks string literals first — the
+     baseline now applies the same pre-processing (stripComments then
+     maskStringLiterals), so a comment `@Token` can no longer fabricate a
+     textual value.
+  3. The NON_LITERAL_FORNAME abstention was unpinned — R5 (3-arg
+     non-literal Class.forName) now pins it, with a new
+     Expectation.NON_LITERAL_FORNAME wired through Evaluation and
+     validate_spike.py; deleting the abstention now fails the gate.
+  4. The abstention fired before the java.lang.Class owner check — the
+     owner is now verified first, so a same-named foreign method cannot be
+     mislabeled; a negative position abstains as UNRESOLVED, mirroring the
+     load path.
+  5. Blocked LIVE_TEXTUAL cells would have thrown the probe-count guard —
+     the harness now skips the baseline measurement for blocked cells.
+  Two NITs (constant-folded `"a" + "b"` lands in the abstention arm —
+  safe direction, now commented; documented) were folded into fix 4.
 
 
 ## What changed

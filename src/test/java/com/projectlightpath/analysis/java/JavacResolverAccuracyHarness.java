@@ -32,7 +32,9 @@ final class JavacResolverAccuracyHarness {
           ? new Measured(JavacResolverResult.empty(cell.id()), 0, 0)
           : measure(() -> javac(cell, cellRoot));
       JavacResolverCell scored = blocked ? cell : cell.alignedTo(javac.result());
-      Measured baseline = measure(() -> baseline(scored, cellRoot, javac.result()));
+      Measured baseline = blocked
+          ? new Measured(JavacResolverResult.empty(cell.id()), 0, 0)
+          : measure(() -> baseline(scored, cellRoot, javac.result()));
       reports.add(new CellReport(
           scored,
           baseline.result(),

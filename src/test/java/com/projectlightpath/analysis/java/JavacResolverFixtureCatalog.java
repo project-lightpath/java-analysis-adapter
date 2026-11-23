@@ -3,6 +3,7 @@ package com.projectlightpath.analysis.java;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.AMBIGUOUS;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.DEFINITE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.MISSING_INPUT;
+import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.NON_LITERAL_FORNAME;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.NO_FACT;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.POSSIBLE;
 import static com.projectlightpath.analysis.java.JavacResolverCell.Expectation.SHADOWED;
@@ -345,7 +346,18 @@ final class JavacResolverFixtureCatalog {
             }
             """,
             List.of(),
-            site(POSSIBLE, "no.such.Type")));
+            site(POSSIBLE, "no.such.Type")),
+        shapeCell("R5", REFLECTION_SOURCE_BOUND, """
+            package demo;
+            class Probe {
+              void audit() throws ClassNotFoundException {
+                Class.forName(System.getProperty("probe.target"), true,
+                    getClass().getClassLoader());
+              }
+            }
+            """,
+            List.of(),
+            site(NON_LITERAL_FORNAME, "")));
   }
 
   private static List<JavacResolverCell> precedenceCells() {

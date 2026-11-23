@@ -347,25 +347,30 @@ final class JavacSourceSymbolResolver {
       if (!"forName".equals(selectedName(node.getMethodSelect()))) {
         return;
       }
-      long position = startPosition(invocationPath);
-      if (!(node.getArguments().size() == 1
-          && node.getArguments().get(0) instanceof com.sun.source.tree.LiteralTree literal
-          && literal.getValue() instanceof String target)) {
-        // Uncovered forName shape (3-arg overload, computed name): visible
-        // abstention, never a silent skip.
-        if (position >= 0) {
-          int skipLine = lineNumber(invocationPath, position);
-          addAbstention((int) position, skipLine, columnNumber(invocationPath, position),
-              "NON_LITERAL_FORNAME");
-        }
-        return;
-      }
       Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
       if (method == null || method.getKind() != ElementKind.METHOD
           || !(method.getEnclosingElement() instanceof TypeElement owner)
           || !"java.lang.Class".contentEquals(owner.getQualifiedName())) {
         return;
       }
+      long position = startPosition(invocationPath);
+      if (position < 0) {
+        addAbstention(0, 0, 0, "UNRESOLVED");
+        return;
+      }
+      if (!(node.getArguments().size() == 1
+          && node.getArguments().get(0) instanceof com.sun.source.tree.LiteralTree literal
+          && literal.getValue() instanceof String)) {
+        // Uncovered forName shape (3-arg overload, computed name — javac does
+        // not fold "a" + "b" argument trees into LiteralTree, so folded
+        // concatenations land here too): visible abstention, never a silent
+        // skip. Only genuine java.lang.Class.forName shapes reach this arm.
+        int skipLine = lineNumber(invocationPath, position);
+        addAbstention((int) position, skipLine, columnNumber(invocationPath, position),
+            "NON_LITERAL_FORNAME");
+        return;
+      }
+      String target = (String) literal.getValue();
       TypeElement bound = elements.getTypeElement(target);
       boolean sourceBound = bound != null && trees.getPath(bound) != null;
       boolean resolvable = bound != null;

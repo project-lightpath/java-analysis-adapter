@@ -46,7 +46,7 @@ class JavacResolverAccuracyTest {
   private static final Set<String> NEW_FAMILIES_ALL_ZERO = Set.of(
       "AN1", "AN2", "AN3", "AN4", "AN5", "AA1", "AA2", "AA3", "AA4",
       "TU1", "TU2", "TU3", "TU4", "TS1", "TS2", "TS3", "TS4", "TS5", "TS6", "TS7",
-      "TS8", "TS9", "R1", "R2", "R3", "R4");
+      "TS8", "TS9", "R1", "R2", "R3", "R4", "R5");
 
   private static boolean isNewFamily(JavacResolverCell.Family family) {
     return !SERVICE_LOADER_FAMILIES.contains(family);
@@ -279,6 +279,11 @@ class JavacResolverAccuracyTest {
         || missing.javac().abstentions().stream()
             .anyMatch(item -> !item.diagnostics().isEmpty()),
         "R3 must carry a diagnostic");
+    JavacResolverAccuracyHarness.CellReport nonLiteral = cell(report, "R5");
+    assertTrue(nonLiteral.javac().facts().isEmpty(), "R5 must not emit a fact");
+    assertTrue(nonLiteral.javac().abstentions().stream()
+        .anyMatch(item -> "NON_LITERAL_FORNAME".equals(item.reason())),
+        "R5 must abstain visibly on the non-literal forName shape");
   }
 
   @Test
@@ -300,6 +305,8 @@ class JavacResolverAccuracyTest {
         JavacServiceLoaderSiteResolver.sites(flagGuardScanner("after"));
     assertTrue(before.isPresent() && after.isPresent(),
         "the production default (flag-off) scan must keep answering");
+    assertFalse(canarySites(before).isEmpty(),
+        "the flag-off canary must produce a real site, not a fail-closed empty scan");
     assertEquals(canarySites(before), canarySites(after),
         "the production default output must be identical before and after a harness run");
   }

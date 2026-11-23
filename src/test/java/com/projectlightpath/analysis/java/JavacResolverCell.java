@@ -81,7 +81,9 @@ record JavacResolverCell(
     enum Kind { PARAMETER_TYPE, ANNOTATION_NAME_TOKEN, ANNOTATION_ARGUMENT_TEXT }
   }
 
-  enum Expectation { DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT }
+  enum Expectation {
+    DEFINITE, POSSIBLE, AMBIGUOUS, MISSING_INPUT, SHADOWED, NO_FACT, NON_LITERAL_FORNAME
+  }
 
   /** One expected load site. An offset of -1 is filled from the javac result. */
   record ExpectedSite(Expectation expectation, String serviceType, int offset) {
