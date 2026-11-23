@@ -14,7 +14,11 @@ Plan: `docs/plans/PLAN-41.md` (v10 + implementation amendments)
   java-lint 0 new, evidence-validate pass.
 - Item 2 (Edge 2, delegation facts): DONE — RED_02 (b063cd9 line), GREEN_02.
   Gates: adapter-test 565 ≥ 534, java-lint 0 new, evidence-validate pass.
-- Item 3 (promotion ladder + SemanticCallFacts.diagnostics carrier): in progress.
+- Item 3 (ladder + diagnostics carrier): DONE — RED_03, GREEN_03 (+ PMD
+  selection-split refactor). Gates: adapter-test 569 ≥ 534, java-lint 0
+  new, evidence-validate pass.
+
+All items complete; post-implementation review loop next.
 
 ## Evidence
 
@@ -77,4 +81,38 @@ Plan: `docs/plans/PLAN-41.md` (v10 + implementation amendments)
   double emission).
 - Gates: adapter-test 565 executions, java-lint 0 new, evidence-validate
   pass.
+
+### Item 3 — promotion ladder and diagnostics surface
+
+- FLPATH-5075 ladder on `delegated_implementation` facts: guaranteed CRUD
+  is DEFINITE when `spring-data-repository-contract` metadata is observed
+  and no override mechanism is present; an in-scope `repositoryBaseClass`
+  backs CRUD as POSSIBLE (target = the configured class); an out-of-scope
+  `repositoryBaseClass` abstains UNRESOLVED targeting the configured name.
+  Derived queries stay POSSIBLE (query-lookup strategy not proven);
+  fragments and reactive contracts unchanged from Item 2.
+- `SemanticCallFacts.diagnostics` (new public surface, `Diagnostic(code,
+  path, detail)`, sorted, serialized as an additive `diagnostics` key under
+  schemaVersion 0.1.0, threaded through the SOURCE_ARCHIVE re-wrap):
+  computed once in `enrich` from the derived context
+  (`springDataDiagnostics`); `spring_data_backing_selection_out_of_scope`
+  is the first code.
+- Overload-preserving 4-arg `ProviderFactNormalizer.normalize` appends the
+  diagnostics to the ServiceLoader `Scan` (`withAdditionalDiagnostics`), so
+  `isUnique`'s DEFINITE block is scan-global while service_loader edges
+  exist. Stated blast radius: while the diagnostic is present, ServiceLoader
+  DEFINITE promotion is blocked for the whole scan — asserted by the
+  differential control in `diagnosticsBlockServiceLoaderDefinitePromotion`.
+- Gates: adapter-test 569 executions, java-lint 0 new, evidence-validate
+  pass.
+
+## Reverse chain delivered (issue #41 acceptance)
+
+`SimpleJpaRepository#save` (dependency public symbol)
+←(definite, delegated_implementation) `AccountRepository#save`
+←(possible, declared_invokes) `AccountService#create`
+←(definite, invokes) `AccountController#create`
+←(framework entrypoint) HTTP route — repository symbols are no longer
+dead ends; the attestation-manifest start node (class+method+descriptor,
+ADR-0057 follow-up) can join this grammar without redesign.
 
