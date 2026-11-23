@@ -25,7 +25,10 @@ import org.xml.sax.SAXException;
  *
  * <p>Intentional divergence from the Python original: the Python script printed only
  * the first error and stopped; this gate prints every error line (an empty large lane
- * AND a sub-baseline total are both reported). Stdout and exit codes are identical.
+ * AND a sub-baseline total are both reported). Stdout and exit codes are identical on
+ * well-formed reports with a numeric baseline; the hardened failure paths diverge
+ * deliberately — the Python original silently counted a missing tests attribute as
+ * zero, and this gate fails loudly instead.
  */
 public final class SurefireTestCounter {
   /**
@@ -117,7 +120,9 @@ public final class SurefireTestCounter {
   static int run(String[] args, Path base) {
     long minimum = DEFAULT_MINIMUM;
     List<String> errors = new ArrayList<>();
-    if (args.length > 0) {
+    if (args.length > 1) {
+      errors.add("ERROR: expected at most one baseline argument, got " + args.length);
+    } else if (args.length == 1) {
       try {
         minimum = Long.parseLong(args[0]);
       } catch (NumberFormatException error) {

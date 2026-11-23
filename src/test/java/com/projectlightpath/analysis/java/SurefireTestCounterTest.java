@@ -160,22 +160,30 @@ class SurefireTestCounterTest {
     assertEquals(1, SurefireTestCounter.run(new String[] {}, baseBelow));
   }
 
-  /**
-   * A non-numeric baseline argument is an error line and exit 1, never a crash. The
-   * base would pass the gate on its own (three non-empty lanes totaling exactly 302),
-   * so exit 1 can only come from the argv error — a silent fallback to the default
-   * baseline would make this cell fail.
-   */
+  /** A non-numeric baseline argument is an error line and exit 1, never a crash. */
   @Test
   void nonNumericBaselineArgumentIsAnErrorLineNotACrash() throws IOException {
+    Path base = passingBase();
+
+    assertEquals(1, SurefireTestCounter.run(new String[] {"abc"}, base));
+  }
+
+  /** A stray extra argument is an error line and exit 1, not silently ignored. */
+  @Test
+  void extraBaselineArgumentIsAnErrorLineNotIgnored() throws IOException {
+    Path base = passingBase();
+
+    assertEquals(1, SurefireTestCounter.run(new String[] {"1", "999"}, base));
+  }
+
+  private Path passingBase() throws IOException {
     Path base = temp.resolve("passing-base");
     for (String lane : new String[] {"surefire-reports", "surefire-reports-large",
         "surefire-reports-sootup"}) {
       report(Files.createDirectories(base.resolve(lane)), "TEST-one.xml", "100");
     }
     report(base.resolve("surefire-reports"), "TEST-two.xml", "2");
-
-    assertEquals(1, SurefireTestCounter.run(new String[] {"abc"}, base));
+    return base;
   }
 
   /** Exit code is 0 with no error lines and 1 with any; run never throws. */
