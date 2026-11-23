@@ -21,9 +21,11 @@ final class EvidenceCollections {
    * Prefix marking a set element that is present but non-textual: Python's {@code set()}
    * keeps such elements and counts distinct values distinctly ({@code {17, 18}} has size
    * 2), so the sentinel carries the value's JSON text to preserve both distinctness and
-   * duplicate detection. Residual divergences, both reject-direction: Python collapses
-   * {@code True} with {@code 1}, and {@code 17} with {@code 17.0}, where the JSON texts
-   * differ.
+   * duplicate detection. A textual value starting with the prefix is escaped by doubling
+   * it, so no textual string can collide with a sentinel (non-textual JSON never
+   * serializes to a leading NUL). Residual divergences, both reject-direction: Python
+   * collapses {@code True} with {@code 1}, and {@code 17} with {@code 17.0}, where the
+   * JSON texts differ.
    */
   static final String NON_TEXTUAL_PREFIX = "\u0000";
 
@@ -34,10 +36,16 @@ final class EvidenceCollections {
     Set<String> values = new LinkedHashSet<>();
     if (array != null && array.isArray()) {
       array.forEach(element ->
-          values.add(element.isTextual() ? element.asText()
+          values.add(element.isTextual() ? escape(element.asText())
               : NON_TEXTUAL_PREFIX + element));
     }
     return values;
+  }
+
+  /** Doubles the sentinel prefix so a textual value can never equal a sentinel. */
+  private static String escape(String value) {
+    return value.startsWith(NON_TEXTUAL_PREFIX)
+        ? NON_TEXTUAL_PREFIX + value : value;
   }
 
   /** Elements of an array node, or an empty list for any other shape. */
@@ -89,7 +97,8 @@ final class EvidenceCollections {
     for (JsonNode node : nodes) {
       JsonNode value = node.path(field);
       require(!value.isMissingNode(), "missing " + field + " in a list entry");
-      values.add(value.isTextual() ? value.asText() : NON_TEXTUAL_PREFIX + value);
+      values.add(value.isTextual() ? escape(value.asText())
+          : NON_TEXTUAL_PREFIX + value);
     }
     return values;
   }

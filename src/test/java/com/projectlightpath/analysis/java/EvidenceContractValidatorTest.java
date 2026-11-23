@@ -505,7 +505,13 @@ class EvidenceContractValidatorTest {
         MAPPER.createObjectNode().put("id", 17)), "id").size());
     // A textual "17" and a numeric 17 stay distinct too (Python: "17" != 17).
     assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
-        MAPPER.createObjectNode().put("id", "17"),
+        MAPPER.createObjectNode().put("id", "\u0000" + "17"),
+        MAPPER.createObjectNode().put("id", 17)), "id").size());
+    // A textual value carrying the sentinel's NUL prefix cannot collide with the
+    // sentinel for a numeric value (CodeRabbit's set-parity residual): the escape
+    // doubles the prefix, so the two entries stay distinct like Python's set.
+    assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", "17"),
         MAPPER.createObjectNode().put("id", 17)), "id").size());
   }
 
