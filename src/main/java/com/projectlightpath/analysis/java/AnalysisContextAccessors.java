@@ -20,6 +20,8 @@ abstract class AnalysisContextAccessors {
   final List<AnalysisContext.SourceRoot> generatedSourceRoots;
   final List<Path> dependencyClasspath;
   final boolean dependencyClasspathRequired;
+  final AnalysisContext.InputMode inputMode;
+  final List<Path> sourceArchives;
   final AnalysisContext.DependencyCoordinateManifest dependencyCoordinateManifest;
   final List<AnalysisContext.FrameworkMetadata> frameworkMetadata;
   final AnalysisContext.FrameworkBindingMetadata frameworkBindingMetadata;
@@ -45,6 +47,10 @@ abstract class AnalysisContextAccessors {
         .map(path -> AnalysisContext.normalize(path, "dependency classpath entry"))
         .toList();
     dependencyClasspathRequired = builder.dependencyClasspathRequired;
+    inputMode = builder.inputMode;
+    sourceArchives = builder.sourceArchives.stream()
+        .map(path -> AnalysisContext.normalize(path, "source archive"))
+        .toList();
     dependencyCoordinateManifest = java.util.Objects.requireNonNull(
         builder.dependencyCoordinateManifest, "dependency coordinate manifest");
     frameworkMetadata = List.copyOf(builder.frameworkMetadata);
@@ -118,6 +124,21 @@ abstract class AnalysisContextAccessors {
 
   public boolean dependencyClasspathRequired() {
     return dependencyClasspathRequired;
+  }
+
+  /** Returns the caller-selected input mode; an unset mode reads as SOURCE_TREE. */
+  public AnalysisContext.InputMode inputMode() {
+    return inputMode == null ? AnalysisContext.InputMode.SOURCE_TREE : inputMode;
+  }
+
+  /** Returns the caller-selected mode, or null when the caller left it unset. */
+  AnalysisContext.InputMode explicitInputMode() {
+    return inputMode;
+  }
+
+  /** Returns the source archives selected for SOURCE_ARCHIVE runs. */
+  public List<Path> sourceArchives() {
+    return sourceArchives;
   }
 
   public AnalysisContext.DependencyCoordinateManifest dependencyCoordinateManifest() {

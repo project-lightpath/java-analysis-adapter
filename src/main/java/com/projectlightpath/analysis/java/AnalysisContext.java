@@ -55,6 +55,13 @@ public final class AnalysisContext extends AnalysisContextAccessors {
     NOT_CAPTURED
   }
 
+  /** Explicit input mode selected by the caller/SBOM; never guessed from contents. */
+  public enum InputMode {
+    SOURCE_TREE,
+    SOURCE_ARCHIVE,
+    BINARY_ARCHIVE
+  }
+
   /** Presence state for the optional dependency-coordinate handoff. */
   public enum DependencyCoordinateManifestPresence {
     ABSENT,
@@ -728,9 +735,7 @@ public final class AnalysisContext extends AnalysisContextAccessors {
   private AnalysisContext(Builder builder) {
     super(builder);
 
-    if (sourceRoots.stream().noneMatch(root -> !root.generated() && root.required())) {
-      throw new IllegalArgumentException("at least one required production/source root is required");
-    }
+    AnalysisContextInputModeValidator.validate(this, builder);
     DependencyCoordinateManifestValidator.validate(this);
   }
 
@@ -805,6 +810,9 @@ public final class AnalysisContext extends AnalysisContextAccessors {
     final List<SourceRoot> generatedSourceRoots = new ArrayList<>();
     final List<Path> dependencyClasspath = new ArrayList<>();
     boolean dependencyClasspathRequired = true;
+    AnalysisContext.InputMode inputMode;
+    final List<Path> sourceArchives = new ArrayList<>();
+    boolean extractedSourceRoots;
     DependencyCoordinateManifest dependencyCoordinateManifest =
         DependencyCoordinateManifest.absent();
     final List<FrameworkMetadata> frameworkMetadata = new ArrayList<>();
@@ -902,6 +910,31 @@ public final class AnalysisContext extends AnalysisContextAccessors {
 
     public Builder dependencyClasspathRequired(boolean value) {
       dependencyClasspathRequired = value;
+      return this;
+    }
+
+    /** Sets the explicit caller-selected input mode. */
+    public Builder inputMode(AnalysisContext.InputMode value) {
+      inputMode = java.util.Objects.requireNonNull(value, "input mode");
+      return this;
+    }
+
+    /** Marks the source roots as adapter-extracted archive roots (internal). */
+    Builder extractedSourceRoots() {
+      extractedSourceRoots = true;
+      return this;
+    }
+
+    /** Adds one source archive for a SOURCE_ARCHIVE run. */
+    public Builder sourceArchive(Path path) {
+      sourceArchives.add(path);
+      return this;
+    }
+
+    /** Replaces the source archives for a SOURCE_ARCHIVE run. */
+    public Builder sourceArchives(List<Path> paths) {
+      sourceArchives.clear();
+      sourceArchives.addAll(paths);
       return this;
     }
 

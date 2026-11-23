@@ -46,7 +46,7 @@ final class ServiceLoaderDescriptorScanner {
         new Diagnostic(item.code(), "selected-sources", item.detail())));
     errors.forEach((path, detail) -> diagnostics.add(new Diagnostic(
         "javac_source_error", diagnosticPath(scanner, path), detail)));
-    return new Scan(scan.descriptors(), diagnostics);
+    return new Scan(scan.descriptors(), diagnostics, scan.limitations());
   }
 
   static String diagnosticPath(SourceMetadataScanner scanner, Path path) {
@@ -234,17 +234,26 @@ final class ServiceLoaderDescriptorScanner {
     if (!moduleVisibilityProven) {
       return "module-info provides evidence is possible; selected loader module visibility is not explicit.";
     }
+    if (!scan.limitations().isEmpty()) {
+      return scan.limitations().stream().collect(Collectors.joining(" ")) + ".";
+    }
     return "ServiceLoader registration or runtime classloader selection is not unique.";
   }
 
-  record Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics) {
+  record Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics,
+      List<String> limitations) {
     Scan {
       descriptors = List.copyOf(descriptors);
       diagnostics = List.copyOf(diagnostics == null ? List.of() : diagnostics);
+      limitations = List.copyOf(limitations == null ? List.of() : limitations);
+    }
+
+    Scan(List<Descriptor> descriptors, List<Diagnostic> diagnostics) {
+      this(descriptors, diagnostics, List.of());
     }
 
     Scan(List<Descriptor> descriptors) {
-      this(descriptors, List.of());
+      this(descriptors, List.of(), List.of());
     }
   }
 

@@ -32,16 +32,124 @@ public final class JavaAnalysisAdapter {
   /** Builds the provider graph before applying framework enrichment. */
   public SemanticCallFacts analyze(AnalysisContext context) {
     Objects.requireNonNull(context, "analysis context");
+    if (context.inputMode() == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
+      return analyzeSourceArchive(context);
+    }
     SootUpInputLocationFactory.DependencyResolution dependencies =
         SootUpInputLocationFactory.dependencyResolution(context);
     AnalysisGraph graph = baseGraphProvider.analyze(context, dependencies);
     return enrich(context, graph, () -> dependencies);
   }
 
+  /**
+   * SOURCE_ARCHIVE routing (issue #42): the archives are extracted to one
+   * owner-only temp root, the extracted trees become the run's source roots
+   * for the existing source/javac analysis path, and the descriptor scan
+   * follows the mode routing (no binary scan of the archives themselves).
+   * The final facts carry the caller's original context so the random
+   * extraction root never reaches RunMetadata.
+   */
+  private SemanticCallFacts analyzeSourceArchive(AnalysisContext context) {
+    try (ServiceArchiveExtractor.Extraction extraction =
+        ServiceArchiveExtractor.extract(context.sourceArchives())) {
+      AnalysisContext derived = withExtractedSourceRoots(context, extraction);
+      SootUpInputLocationFactory.DependencyResolution dependencies =
+          SootUpInputLocationFactory.dependencyResolution(derived);
+      // An optional classpath that resolves to nothing (e.g. an empty
+      // deps/* wildcard) must still reach enrichment so the scan emits
+      // descriptor_metadata_unavailable_for_source_archive instead of the
+      // graph provider's "no valid entries" rejection (PR #47 review CR-3).
+      AnalysisContext graphContext = derived;
+      if (dependencies.entries().isEmpty()
+          && !derived.dependencyClasspathRequired()
+          && !derived.dependencyClasspath().isEmpty()) {
+        graphContext = withDependencyClasspath(derived, List.of());
+      }
+      AnalysisGraph graph = baseGraphProvider.analyze(graphContext, dependencies);
+      SemanticCallFacts facts = enrich(derived, graph, () -> dependencies);
+      return new SemanticCallFacts(
+          context,
+          graph,
+          facts.providerFacts(),
+          facts.frameworkFacts(),
+          facts.links());
+    }
+  }
+
+  /** Copies the context with the extracted trees as its required source roots. */
+  private static AnalysisContext withExtractedSourceRoots(
+      AnalysisContext context, ServiceArchiveExtractor.Extraction extraction) {
+    List<AnalysisContext.SourceRoot> roots = new ArrayList<>();
+    for (int index = 0; index < extraction.archiveRoots().size(); index++) {
+      roots.add(AnalysisContext.SourceRoot.source(
+          extraction.declaredPaths().get(index),
+          extraction.archiveRoots().get(index),
+          AnalysisContext.Scope.PRODUCTION,
+          true,
+          null));
+    }
+    return copyContext(context, context.dependencyClasspath(), roots);
+  }
+
+  /** Copies the context with a replaced dependency classpath. */
+  private static AnalysisContext withDependencyClasspath(
+      AnalysisContext context, List<java.nio.file.Path> classpath) {
+    return copyContext(context, classpath, context.sourceRoots());
+  }
+
+  /**
+   * One context copy: the caller names the dependency classpath and the
+   * source roots to install (the extracted trees for a SOURCE_ARCHIVE run,
+   * or the original roots when only the classpath changes).
+   */
+  private static AnalysisContext copyContext(
+      AnalysisContext context,
+      List<java.nio.file.Path> dependencyClasspath,
+      List<AnalysisContext.SourceRoot> sourceRoots) {
+    AnalysisContext.Builder builder = AnalysisContext.builder()
+        .id(context.id())
+        .framework(context.framework())
+        .frameworkVersion(context.frameworkVersion())
+        .fixtureId(context.fixtureId())
+        .javaRelease(context.javaRelease())
+        .repositoryRoot(context.repositoryRoot())
+        .applicationClasses(context.applicationClasses())
+        .selectedProfile(context.selectedProfile())
+        .analysisScope(context.analysisScope())
+        .inputMode(context.inputMode())
+        .sourceArchives(context.sourceArchives())
+        .extractedSourceRoots()
+        .dependencyClasspathRequired(context.dependencyClasspathRequired())
+        .dependencyClasspath(dependencyClasspath)
+        .dependencyCoordinateManifest(context.dependencyCoordinateManifest())
+        .frameworkBindingMetadata(context.frameworkBindingMetadata())
+        .provenance(context.provenance())
+        .handoff(context.handoff());
+    for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
+      builder.frameworkMetadata(metadata);
+    }
+    for (AnalysisContext.SourceRoot root : context.generatedSourceRoots()) {
+      builder.generatedSourceRoot(root.declaredPath(), root.path(), root.scope(),
+          root.included(), root.required(), root.fingerprint());
+    }
+    for (AnalysisContext.SourceRoot root : sourceRoots) {
+      builder.sourceRoot(root.declaredPath(), root.path(), root.scope(), root.required(),
+          root.fingerprint());
+    }
+    return builder.build();
+  }
+
   /** Caller owns graph/input consistency; enrichment uses fresh, lazily resolved inputs. */
   public SemanticCallFacts analyze(AnalysisContext context, AnalysisGraph graph) {
     Objects.requireNonNull(context, "analysis context");
     Objects.requireNonNull(graph, "analysis graph");
+    if (context.inputMode() == AnalysisContext.InputMode.SOURCE_ARCHIVE) {
+      // Fail closed: a prebuilt graph cannot carry the extracted source
+      // roots the single-argument path derives, so silently enriching it
+      // would skip the source/javac half of the run (issue #42 review F1).
+      throw new IllegalArgumentException(
+          "inputMode SOURCE_ARCHIVE requires the single-argument analyze path");
+    }
     return enrich(context, graph, () -> SootUpInputLocationFactory.dependencyResolution(context));
   }
 

@@ -77,6 +77,7 @@ abstract class AnalysisContextLoaderLayer06 extends AnalysisContextLoaderLayer05
     AnalysisContext.Builder builder = baseBuilder(document, inputs);
     addRoots(builder, document, inputs.repositoryRoot());
     addDependencyClasspath(builder, document, documentNode, inputs);
+    addInputMode(builder, document, inputs.repositoryRoot());
     addFrameworkMetadata(builder, document);
     builder.frameworkBindingMetadata(bindingMetadata(document));
     builder.handoff(handoff(document, documentNode, inputs.manifest()));

@@ -85,6 +85,8 @@ abstract class AnalysisContextLoaderSupport {
       List<ResolvedRootDocument> generatedSourceRoots,
       List<String> dependencyClasspath,
       Boolean dependencyClasspathRequired,
+      String inputMode,
+      List<String> sourceArchives,
       String applicationClasses,
       List<FrameworkMetadataDocument> frameworkMetadata,
       @JsonAlias({"bindingMetadata", "frameworkBindings"})
