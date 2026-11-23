@@ -40,10 +40,12 @@ final class PythonJson {
   }
 
   /**
-   * Python's float repr: shortest round-trip digits, positional form for 1e-4 <= |x| <
-   * 1e16 (always with a fractional part), exponent form {@code de+NN} outside that
-   * range. Java's {@code Double.toString} agrees on digits but switches to exponent form
-   * at different thresholds, so the value is re-rendered here.
+   * Python's float repr: the shortest decimal that round-trips to the exact binary
+   * double, positional form for 1e-4 <= |x| < 1e16 (always with a fractional part),
+   * exponent form {@code de+NN} outside that range. The digits come from rounding the
+   * EXACT binary value (BigDecimal) to successive significant-digit counts and checking
+   * the round-trip, never from re-parsing a mantissa: Java's Double.toString digits on
+   * JDK 17 can differ from CPython's shortest repr, and a re-parse loses digits.
    */
   private static String pythonFloat(double value) {
     if (Double.isNaN(value)) {
@@ -55,34 +57,36 @@ final class PythonJson {
     if (value == Double.NEGATIVE_INFINITY) {
       return "-Infinity";
     }
-    String java = Double.toString(value);
-    int exponentMarker = java.indexOf('E');
-    if (exponentMarker < 0) {
-      // Java positional (1e-3 <= |x| < 1e7) is inside Python's positional range.
-      return java;
+    if (value == 0.0) {
+      return 1.0 / value < 0 ? "-0.0" : "0.0";
     }
-    double mantissa = Double.parseDouble(java.substring(0, exponentMarker));
-    int exponent = Integer.parseInt(java.substring(exponentMarker + 1));
-    if (exponent >= 16 || exponent <= -5) {
-      String digits = Double.toString(mantissa);
-      if (digits.endsWith(".0")) {
-        digits = digits.substring(0, digits.length() - 2);
+    String sign = value < 0 ? "-" : "";
+    java.math.BigDecimal exact = new java.math.BigDecimal(value).abs();
+    for (int digits = 1; digits <= 17; digits++) {
+      java.math.BigDecimal candidate = exact.round(
+          new java.math.MathContext(digits, java.math.RoundingMode.HALF_EVEN));
+      String formatted = formatRepr(sign, candidate);
+      if (Double.parseDouble(formatted) == value) {
+        return formatted;
       }
-      return digits + "e" + (exponent < 0 ? "-" : "+")
+    }
+    // Unreachable for finite doubles (17 significant digits always round-trip).
+    return sign + exact.round(new java.math.MathContext(17)).toPlainString();
+  }
+
+  /** Renders a rounded nonzero magnitude in Python's repr positional/exponent form. */
+  private static String formatRepr(String sign, java.math.BigDecimal candidate) {
+    java.math.BigDecimal stripped = candidate.stripTrailingZeros();
+    int exponent = stripped.precision() - stripped.scale() - 1;
+    if (exponent < -4 || exponent > 15) {
+      String digits = stripped.unscaledValue().toString();
+      String mantissa = digits.length() == 1 ? digits
+          : digits.charAt(0) + "." + digits.substring(1);
+      return sign + mantissa + "e" + (exponent < 0 ? "-" : "+")
           + String.format("%02d", Math.abs(exponent));
     }
-    String positional = new java.math.BigDecimal(java.substring(0, exponentMarker))
-        .scaleByPowerOfTen(exponent).toPlainString();
-    if (positional.indexOf('.') < 0) {
-      return positional + ".0";
-    }
-    // BigDecimal keeps the mantissa's trailing zeros; Python's repr drops them.
-    int end = positional.length();
-    while (end > 0 && positional.charAt(end - 1) == '0') {
-      end--;
-    }
-    positional = positional.substring(0, end);
-    return positional.endsWith(".") ? positional + "0" : positional;
+    String positional = stripped.toPlainString();
+    return sign + (positional.indexOf('.') < 0 ? positional + ".0" : positional);
   }
 
   private static void writeObject(JsonNode node, StringBuilder out, int depth) {
