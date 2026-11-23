@@ -30,11 +30,59 @@ final class PythonJson {
       writeArray(node, out, depth);
     } else if (node.isBoolean()) {
       out.append(node.asBoolean() ? "true" : "false");
+    } else if (node.isFloatingPointNumber()) {
+      out.append(pythonFloat(node.doubleValue()));
     } else if (node.isNumber()) {
       out.append(node.asText());
     } else {
       writeString(node.asText(), out);
     }
+  }
+
+  /**
+   * Python's float repr: shortest round-trip digits, positional form for 1e-4 <= |x| <
+   * 1e16 (always with a fractional part), exponent form {@code de+NN} outside that
+   * range. Java's {@code Double.toString} agrees on digits but switches to exponent form
+   * at different thresholds, so the value is re-rendered here.
+   */
+  private static String pythonFloat(double value) {
+    if (Double.isNaN(value)) {
+      return "NaN";
+    }
+    if (value == Double.POSITIVE_INFINITY) {
+      return "Infinity";
+    }
+    if (value == Double.NEGATIVE_INFINITY) {
+      return "-Infinity";
+    }
+    String java = Double.toString(value);
+    int exponentMarker = java.indexOf('E');
+    if (exponentMarker < 0) {
+      // Java positional (1e-3 <= |x| < 1e7) is inside Python's positional range.
+      return java;
+    }
+    double mantissa = Double.parseDouble(java.substring(0, exponentMarker));
+    int exponent = Integer.parseInt(java.substring(exponentMarker + 1));
+    if (exponent >= 16 || exponent <= -5) {
+      String digits = Double.toString(mantissa);
+      if (digits.endsWith(".0")) {
+        digits = digits.substring(0, digits.length() - 2);
+      }
+      return digits + "e" + (exponent < 0 ? "-" : "+")
+          + String.format("%02d", Math.abs(exponent));
+    }
+    String positional = new java.math.BigDecimal(java.substring(0, exponentMarker))
+        .scaleByPowerOfTen(exponent).toPlainString();
+    if (positional.indexOf('.') < 0) {
+      return positional + ".0";
+    }
+    // BigDecimal keeps the mantissa's trailing zeros; Python's repr drops them.
+    int end = positional.length();
+    while (end > 0 && positional.charAt(end - 1) == '0') {
+      end--;
+    }
+    positional = positional.substring(0, end);
+    return positional.endsWith(".") ? positional + "0" : positional;
   }
 
   private static void writeObject(JsonNode node, StringBuilder out, int depth) {

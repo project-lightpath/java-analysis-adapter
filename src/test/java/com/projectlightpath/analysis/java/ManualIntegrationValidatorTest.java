@@ -338,6 +338,131 @@ class ManualIntegrationValidatorTest {
     assertEquals(REVISION, ManualIntegrationValidator.DEFAULT_SOURCE_REVISION);
   }
 
+  /** Python float repr shapes in the passthrough writer. */
+  @Test
+  void writerMatchesPythonFloatRepr() {
+    assertEquals("10000000000.0", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 1e10).path("v")));
+    assertEquals("10000000.0", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 1e7).path("v")));
+    assertEquals("1e+22", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 1e22).path("v")));
+    assertEquals("1e+16", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 1e16).path("v")));
+    assertEquals("0.0001", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 0.0001).path("v")));
+    assertEquals("1e-05", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 1e-5).path("v")));
+    assertEquals("1.5e-05", ManualIntegrationValidator.pythonJson(
+        MAPPER.createObjectNode().put("v", 1.5e-5).path("v")));
+  }
+
+  /** Absent coverage and limitations default to {} and [], never empty strings. */
+  @Test
+  void absentCoverageAndLimitationsDefaultToEmptyContainers() throws IOException {
+    ObjectNode facts = facts();
+    facts.remove("coverage");
+    ((ObjectNode) facts.path("runMetadata").path("handoff")).remove("limitations");
+    Path output = temp.resolve("out").resolve("evidence.json");
+    assertEquals(0, runValidator(context(), facts, output));
+    String written = Files.readString(output);
+    assertTrue(written.contains("\"coverage\": {}"),
+        "coverage must render as an empty object: " + written);
+    assertTrue(written.contains("\"limitations\": []"),
+        "limitations must render as an empty array: " + written);
+  }
+
+  /** A missing fact id rejects at the capability-evidence boundary, like Python's KeyError. */
+  @Test
+  void missingFactIdIsRejected() {
+    ObjectNode facts = facts();
+    ((ObjectNode) facts.path("frameworkFacts").get(4)).remove("id");
+    assertMessage(context(), facts, "capability evidence is missing: startup-callback");
+  }
+
+  /** A non-string caller rejects up front, where Python's substring test crashed. */
+  @Test
+  void nonStringCallerIsRejected() {
+    ObjectNode facts = facts();
+    ((ObjectNode) facts.path("providerFacts").get(0)).put("caller", 5);
+    assertMessage(context(), facts, "fact caller must be a string when present");
+  }
+
+  /** A non-object coverage rejects before the output is written. */
+  @Test
+  void nonObjectCoverageIsRejected() {
+    ObjectNode facts = facts();
+    facts.put("coverage", "oops");
+    assertMessage(context(), facts, "facts coverage must be an object when present");
+  }
+
+  /** A null certainty with definite and possible present rejects with the Python message. */
+  @Test
+  void missingCertaintyRejectsWithDiagnostic() {
+    ObjectNode facts = facts();
+    ObjectNode extra = facts.putArray("providerFacts").addObject();
+    extra.put("id", "p-null");
+    extra.put("factSet", "provider");
+    extra.put("contextId", "fsi-spring-boot-production");
+    extra.put("relationshipType", "invokes");
+    extra.put("caller", "X#a");
+    extra.put("callee", "Y#b");
+    extra.putArray("evidence").add("edge");
+    assertMessage(context(), facts, "unknown certainty state was emitted");
+  }
+
+  /** A non-array links field rejects (absent stays valid, like Python's .get default). */
+  @Test
+  void nonArrayLinksAreRejected() {
+    ObjectNode facts = facts();
+    facts.put("links", "oops");
+    assertMessage(context(), facts, "facts links must be an array");
+  }
+
+  /** A missing framework on both documents rejects instead of emitting null. */
+  @Test
+  void missingFrameworkIsRejected() {
+    ObjectNode context = context();
+    ObjectNode facts = facts();
+    context.remove("framework");
+    facts.remove("framework");
+    assertMessage(context, facts, "facts/context frameworks differ");
+  }
+
+  /** Trailing JSON content after a valid input is rejected. */
+  @Test
+  void trailingJsonContentIsRejected() throws IOException {
+    Path contextFile = temp.resolve("context.json");
+    Path factsFile = temp.resolve("facts.json");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(contextFile.toFile(), context());
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(factsFile.toFile(), facts());
+    Files.writeString(factsFile, Files.readString(factsFile) + "\n{\"extra\": 1}\n");
+    assertEquals(1, ManualIntegrationValidator.run(new String[] {"--context",
+        contextFile.toString(), "--facts", factsFile.toString(), "--output",
+        temp.resolve("evidence.json").toString()}, temp));
+  }
+
+  /** A directory at an input path exits 1. */
+  @Test
+  void directoryAtPathExitsOne() throws IOException {
+    Path directory = Files.createDirectories(temp.resolve("not-a-file.json"));
+    assertEquals(1, ManualIntegrationValidator.run(new String[] {"--context",
+        directory.toString(), "--facts", directory.toString(), "--output",
+        temp.resolve("evidence.json").toString()}, temp));
+  }
+
+  /** An empty input file exits 1. */
+  @Test
+  void emptyInputFileExitsOne() throws IOException {
+    Path contextFile = temp.resolve("empty.json");
+    Path factsFile = temp.resolve("facts.json");
+    Files.writeString(contextFile, "");
+    MAPPER.writerWithDefaultPrettyPrinter().writeValue(factsFile.toFile(), facts());
+    assertEquals(1, ManualIntegrationValidator.run(new String[] {"--context",
+        contextFile.toString(), "--facts", factsFile.toString(), "--output",
+        temp.resolve("evidence.json").toString()}, temp));
+  }
+
   private static void assertMessage(ObjectNode context, ObjectNode facts,
       String fragment) {
     ManualIntegrationValidator.ValidationError error = assertThrows(

@@ -1,5 +1,11 @@
 package com.projectlightpath.analysis.java;
 
+import static com.projectlightpath.analysis.java.ManualIntegrationJson.elements;
+import static com.projectlightpath.analysis.java.ManualIntegrationJson.idSet;
+import static com.projectlightpath.analysis.java.ManualIntegrationJson.positive;
+import static com.projectlightpath.analysis.java.ManualIntegrationJson.text;
+import static com.projectlightpath.analysis.java.ManualIntegrationJson.truthy;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -75,6 +81,9 @@ final class ManualIntegrationRules {
     require("SemanticCallFacts".equals(text(facts, "artifact")),
         "unexpected facts artifact");
     require(contextId.equals(text(facts, "contextId")), "facts/context IDs differ");
+    // Python crashed on a missing framework when building the evidence document; the
+    // port rejects here instead, with the same exit code.
+    require(text(facts, "framework") != null, "facts/context frameworks differ");
     require(java.util.Objects.equals(text(facts, "framework"),
         text(context, "framework")), "facts/context frameworks differ");
     JsonNode metadata = facts.path("runMetadata");
@@ -111,6 +120,15 @@ final class ManualIntegrationRules {
     require(!frameworkFacts.isEmpty(), "framework facts are empty");
     List<JsonNode> allFacts = new ArrayList<>(providerFacts);
     allFacts.addAll(frameworkFacts);
+    // Python's substring predicates crashed on non-string caller/callee/id values; the
+    // port rejects those shapes up front instead of skipping them.
+    for (JsonNode fact : allFacts) {
+      for (String field : List.of("caller", "callee", "id")) {
+        JsonNode value = fact.path(field);
+        require(value.isMissingNode() || value.isTextual(),
+            "fact " + field + " must be a string when present");
+      }
+    }
     for (JsonNode fact : providerFacts) {
       require("provider".equals(text(fact, "factSet")), "provider fact set was mixed");
     }
@@ -127,7 +145,10 @@ final class ManualIntegrationRules {
     }
     require(certaintyStates.containsAll(Set.of("definite", "possible")),
         "definite/possible certainty states were not preserved");
-    require(Set.of("definite", "possible", "unresolved").containsAll(certaintyStates),
+    // A HashSet (not Set.of) tolerates a null member: a missing certainty must reject
+    // with the diagnostic, not throw before require can report.
+    require(new LinkedHashSet<>(Set.of("definite", "possible", "unresolved"))
+        .containsAll(certaintyStates),
         "unknown certainty state was emitted");
     for (JsonNode fact : allFacts) {
       if ("unresolved".equals(text(fact, "certainty"))) {
@@ -138,9 +159,13 @@ final class ManualIntegrationRules {
   }
 
   private void requireLinks(List<JsonNode> providerFacts, List<JsonNode> frameworkFacts) {
+    // Python used facts.get("links", []): absent is fine, but a non-array crashes its
+    // iteration.
+    JsonNode links = facts.path("links");
+    require(links.isMissingNode() || links.isArray(), "facts links must be an array");
     Set<String> providerIds = idSet(providerFacts);
     Set<String> frameworkIds = idSet(frameworkFacts);
-    for (JsonNode link : elements(facts.path("links"))) {
+    for (JsonNode link : elements(links)) {
       require(frameworkIds.contains(text(link, "frameworkFactId")),
           "link points to an unknown framework fact");
       require(providerIds.contains(text(link, "providerFactId")),
@@ -193,55 +218,5 @@ final class ManualIntegrationRules {
     if (!condition) {
       throw new ManualIntegrationValidator.ValidationError(message);
     }
-  }
-
-  private static String text(JsonNode parent, String field) {
-    if (parent == null) {
-      return null;
-    }
-    JsonNode node = parent.path(field);
-    return node.isTextual() ? node.asText() : null;
-  }
-
-  private static List<JsonNode> elements(JsonNode array) {
-    List<JsonNode> values = new ArrayList<>();
-    if (array != null && array.isArray()) {
-      array.forEach(values::add);
-    }
-    return values;
-  }
-
-  private static Set<String> idSet(List<JsonNode> nodes) {
-    Set<String> ids = new LinkedHashSet<>();
-    for (JsonNode node : nodes) {
-      String id = text(node, "id");
-      if (id != null) {
-        ids.add(id);
-      }
-    }
-    return ids;
-  }
-
-  private static boolean truthy(JsonNode node) {
-    if (node == null || node.isMissingNode() || node.isNull()) {
-      return false;
-    }
-    if (node.isBoolean()) {
-      return node.asBoolean();
-    }
-    if (node.isNumber()) {
-      return node.doubleValue() != 0.0;
-    }
-    if (node.isTextual()) {
-      return !node.asText().isEmpty();
-    }
-    if (node.isArray() || node.isObject()) {
-      return !node.isEmpty();
-    }
-    return true;
-  }
-
-  private static boolean positive(JsonNode node) {
-    return node != null && node.isNumber() && node.doubleValue() > 0;
   }
 }

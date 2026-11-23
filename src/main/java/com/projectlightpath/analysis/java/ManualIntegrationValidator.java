@@ -29,8 +29,15 @@ import java.util.function.Predicate;
  *   <li>argument errors print a short usage line instead of argparse's usage block — exit
  *       code 2 either way; both {@code --flag value} and {@code --flag=value} forms are
  *       accepted (argparse abbreviation prefixes are not, matching every live caller);
- *   <li>a missing id inside an otherwise-valid fact serializes as null where Python raised
- *       KeyError — reject-direction rules fire first in every reachable path.
+ *   <li>a missing id inside an otherwise-valid fact rejects at the capability-evidence
+ *       boundary (Python raised KeyError there) instead of serializing {@code null};
+ *   <li>fact caller/callee/id fields must be strings when present, and coverage must be
+ *       an object when present — Python crashed on those shapes mid-validation, after or
+ *       before different side effects; the port rejects them before writing the output
+ *       (same exit code 1, the output file may differ in the crash window);
+ *   <li>safe-direction strictness the Python original accepted by accident: non-string
+ *       truthy context ids and classpath arrays, boolean graph counts, and links pairing
+ *       two id-less facts all reject here.
  * </ul>
  */
 public final class ManualIntegrationValidator {
@@ -38,7 +45,9 @@ public final class ManualIntegrationValidator {
   public static final String DEFAULT_SOURCE_REVISION =
       "01a18a1b40e151ffcc1d7bef86bf335f87999750";
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper()
+      .enable(com.fasterxml.jackson.databind.DeserializationFeature
+          .FAIL_ON_TRAILING_TOKENS);
 
   /** Thrown for any failed rule; the run boundary renders it as exit code 1. */
   public static final class ValidationError extends RuntimeException {
@@ -133,7 +142,13 @@ public final class ManualIntegrationValidator {
     ObjectNode provider = evidence.putObject("provider");
     provider.put("name", text(metadata, "providerName"));
     provider.put("version", text(metadata, "providerVersion"));
-    evidence.set("coverage", facts.path("coverage").deepCopy());
+    // Python used facts.get("coverage", {}) — an absent field defaults to an empty
+    // object, never an empty string. A present non-object crashes Python's summary
+    // print after writing the file; the port rejects before writing (same exit code).
+    JsonNode coverageField = facts.path("coverage");
+    require(coverageField.isMissingNode() || coverageField.isObject(),
+        "facts coverage must be an object when present");
+    evidence.set("coverage", objectOrDefault(facts, "coverage"));
     ArrayNode capabilityEvidence = evidence.putArray("capabilityEvidence");
     capabilityEvidence.add(capability("spring-mvc-entrypoint", handoff.springRoute(),
         "Spring MVC route annotations produced the exact framework-owned"
@@ -171,7 +186,11 @@ public final class ManualIntegrationValidator {
       require(!item.path("factIds").isEmpty(),
           "capability evidence is missing: " + text(item, "caseId"));
     }
-    evidence.set("limitations", metadata.path("handoff").path("limitations").deepCopy());
+    // Python used handoff.get("limitations", []) — an absent field defaults to an empty
+    // array, never an empty string.
+    JsonNode limitations = metadata.path("handoff").path("limitations");
+    evidence.set("limitations", limitations.isMissingNode()
+        ? MAPPER.createArrayNode() : limitations.deepCopy());
     return evidence;
   }
 
@@ -182,20 +201,36 @@ public final class ManualIntegrationValidator {
     item.put("status", "observed");
     ArrayNode factIds = item.putArray("factIds");
     for (JsonNode fact : matched) {
+      // Python read fact["id"] directly; a missing id is a validation failure, not a
+      // null entry in the evidence document.
+      require(text(fact, "id") != null,
+          "capability evidence is missing: " + caseId);
       factIds.add(text(fact, "id"));
     }
     item.put("basis", basis);
     return item;
   }
 
+  /** The field's value, or an empty object when absent (Python .get default). */
+  private static JsonNode objectOrDefault(ObjectNode parent, String field) {
+    JsonNode value = parent.path(field);
+    return value.isMissingNode() ? MAPPER.createObjectNode() : value.deepCopy();
+  }
+
   private static String summaryLine(ObjectNode evidence) {
     JsonNode coverage = evidence.path("coverage");
     return "validated manual integration: " + text(evidence, "contextId") + ", "
-        + (coverage.path("providerFactCount").isNumber()
-            ? coverage.path("providerFactCount").asLong() : 0) + " provider facts, "
-        + (coverage.path("frameworkFactCount").isNumber()
-            ? coverage.path("frameworkFactCount").asLong() : 0) + " framework facts, "
+        + countText(coverage.path("providerFactCount")) + " provider facts, "
+        + countText(coverage.path("frameworkFactCount")) + " framework facts, "
         + evidence.path("capabilityEvidence").size() + " capability cases";
+  }
+
+  /** Python printed the coverage counts via f-string: raw text, 0 when missing. */
+  private static String countText(JsonNode node) {
+    if (node.isNumber() || node.isTextual()) {
+      return node.asText();
+    }
+    return node.isMissingNode() ? "0" : String.valueOf(node);
   }
 
   // -------------------------------------------------------------- helpers
