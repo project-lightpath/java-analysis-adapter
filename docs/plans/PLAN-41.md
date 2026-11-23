@@ -2,7 +2,7 @@
 
 Issue: project-lightpath/java-analysis-adapter#41
 Branch: `flpath-5079-repository-reverse-edges` (cut from `origin/main` @ 0297828)
-Status: draft v5 (review rounds 1–4 findings addressed)
+Status: draft v6 (review rounds 1–5 findings addressed)
 
 ## Problem
 
@@ -202,28 +202,46 @@ Emission site: `BoundedFrameworkModelSpringFacts.springRepositoryFacts`
   validates the spike observation artifact, not this document).
   Plumbing (round-4 findings 1–3): the codes are computed **exactly once in
   `enrich`**, by a helper that constructs its own `SourceMetadataScanner`
-  from the (derived) context at the surface site — mirroring how
-  `normalize` constructs `new SourceMetadataScanner(context)` — so no
-  `FrameworkModel.enrich` API change is needed and no scanner state has to
-  escape `BoundedFrameworkModelSpringFacts`. The helper's result (a) is
-  passed as a constructor parameter into the `SemanticCallFacts` built in
-  `enrich`, and **threaded through the `analyzeSourceArchive` re-wrap as a
-  constructor parameter** (same as `providerFacts`) — never re-derived from
-  the caller's original context, whose `sourceRoots` shape differs and
-  would fabricate or drop codes. The Edge-1 skip predicate is pinned and
-  shared verbatim by the extractor and the helper:
+  from the (derived) context at the surface site — mirroring the
+  unconditional scanner construction in `BoundedFrameworkModel.enrich:731`
+  (`normalize`'s own scanner is conditional on service_loader edges, so it
+  is not the mirror). Cost is bounded: the scanner constructor only stores
+  the context, and the javac index is cached per `AnalysisContext` in
+  `JavacSourceSymbolIndex`'s context-keyed cache — the second instance adds
+  one `files()` re-walk, not a second compilation. No
+  `FrameworkModel.enrich` API change. `JavaAnalysisAdapter.enrich` invokes
+  the helper once and passes the result **down into
+  `ProviderFactNormalizer.normalize` as a new parameter**, consumed where
+  the ServiceLoader `Scan` is assembled (a `ProviderFactNormalizer`
+  signature change — distinct from, and compatible with, avoiding the
+  `FrameworkModel.enrich` change). The helper's result (a) is passed as a
+  constructor parameter into the `SemanticCallFacts` built in `enrich`
+  — a **new constructor arity; the existing two arities default
+  `diagnostics` to `List.of()`**, keeping the public surface additive and
+  the zero-test-edits sanction intact — and **threaded through the
+  `analyzeSourceArchive` re-wrap as a constructor parameter** (same as
+  `providerFacts`), never re-derived from the caller's original context,
+  whose `sourceRoots` shape differs and would fabricate or drop codes. The
+  Edge-1 skip predicate is pinned and shared verbatim by the extractor and
+  the helper:
   `context.framework() == SPRING_BOOT &&
   Files.exists(context.applicationClasses()) &&
   context.includedSourceRoots().isEmpty()` — both sites use
-  `includedSourceRoots()` (the extractor's repository-interface set is
-  empty exactly when this holds, since bean candidates come from included
-  source roots). Additionally the same codes are appended to the
-  ServiceLoader `Scan` at the normalize site; that `isUnique` DEFINITE
+  `includedSourceRoots()`. The two scanner instances (the extractor's, from
+  `SootUpBaseGraphProvider.analyze` on `graphContext`, and the helper's,
+  from `derived`) are intentionally unshared: the predicate's inputs are
+  invariant across `graphContext`/`derived` (the copy changes only the
+  classpath), so the skip decision cannot diverge and no cross-boundary
+  scanner sharing is needed. Additionally the same codes are appended to
+  the ServiceLoader `Scan` at the normalize site; that `isUnique` DEFINITE
   block fires only when service_loader edges exist (**opportunistic side
   effect**, stated as such — in the no-ServiceLoader scenario the new
   `SemanticCallFacts.diagnostics` field is the visibility mechanism).
   Edge-2 visibility rides on the abstaining facts' evidence in the enrich
-  lane plus the same code in the new diagnostics field. New codes:
+  lane plus the same code in the new diagnostics field. The output surface
+  (field + getter + `SemanticCallFactsJsonWriter.toDocument` key + re-wrap
+  threading) is owned by Item 3's GREEN scope, with RED cell 5/10 asserting
+  on `SemanticCallFacts.diagnostics`. New codes:
   `spring_data_backing_selection_out_of_scope` (Edge-2 abstain) and
   `spring_data_repository_sources_unavailable` (Edge-1 skip). Cell 10 and
   cell 5 assert on `SemanticCallFacts.diagnostics`, independent of
@@ -312,9 +330,12 @@ sanctions zero edits to existing tests).
   `make evidence-validate`.
 - **Item 2 (Edge 2 default)**: RED_02 failing tests for cells 1–4, 6, 9 →
   GREEN_02 delegation facts (possible) → EVIDENCE_02.
-- **Item 3 (ladder)**: RED_03 failing tests for cell 5 (promotion + abstain
-  diagnostic) → GREEN_03 ladder + diagnostic (blast radius in the commit
-  message) → EVIDENCE_03.
+- **Item 3 (ladder + diagnostics surface)**: RED_03 failing tests for cell 5
+  (promotion + abstain diagnostic) and the diagnostics carrier (cells 5/10
+  asserting on `SemanticCallFacts.diagnostics`) → GREEN_03 ladder + codes +
+  `SemanticCallFacts.diagnostics` field/getter/JsonWriter key/constructor
+  arity + re-wrap threading + normalize parameter (blast radius in the
+  commit message) → EVIDENCE_03.
 - Resolution record: `docs/resolutions/RESOLUTION-41.md`.
 
 ## Risks / residuals
@@ -342,7 +363,7 @@ sanctions zero edits to existing tests).
 
 ## Confidence score
 
-**0.82 (review rounds 1–4 findings addressed; implementable as planned).**
+**0.84 (review rounds 1–5 findings addressed; implementable as planned).**
 - High (≥0.9): Edge 1 emission path (body-scan pass, declared-signature
   access, POSSIBLE certainty, distinct ID namespace), test harness shape,
   negative cells, diagnostic channel (PLAN-42 precedent).
@@ -379,3 +400,10 @@ sanctions zero edits to existing tests).
   scanner at the surface site (no enrich API change), skip predicate pinned
   to `includedSourceRoots()` + `Files.exists(applicationClasses())`,
   deterministic ordering and schemaVersion additivity stated.
+- Round 6 (delta on v5): 5 findings (2 MEDIUM, 3 LOW); addressed in v6 —
+  normalize-site transport pinned (helper result passed as a new
+  `ProviderFactNormalizer.normalize` parameter), constructor arity
+  strategy pinned (new arity, existing two default to `List.of()`),
+  correct mirror cited (`BoundedFrameworkModel.enrich:731`) with scanner
+  cost/consistency facts recorded, cross-context scanner invariance
+  argument stated, diagnostics output surface assigned to Item 3.
