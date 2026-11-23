@@ -37,7 +37,7 @@ final class EvidenceCollections {
     if (array != null && array.isArray()) {
       array.forEach(element ->
           values.add(element.isTextual() ? escape(element.asText())
-              : NON_TEXTUAL_PREFIX + element));
+              : sentinel(element)));
     }
     return values;
   }
@@ -46,6 +46,30 @@ final class EvidenceCollections {
   private static String escape(String value) {
     return value.startsWith(NON_TEXTUAL_PREFIX)
         ? NON_TEXTUAL_PREFIX + value : value;
+  }
+
+  /**
+   * Sentinel for a non-textual set member. Containers reject outright (Python's set
+   * finds lists and dicts unhashable); scalars keep Python's numeric equality —
+   * {@code 17 == 17.0} and {@code True == 1} are the same set member — so integral
+   * numbers collapse onto their long form and booleans onto 1/0. A residual
+   * divergence remains for out-of-range big integers versus numerically equal floats
+   * (Python's cross-type equality collapses them; the value texts stay distinct).
+   */
+  private static String sentinel(JsonNode value) {
+    require(!value.isArray() && !value.isObject(),
+        "set member must be a scalar, not a container: " + value);
+    if (value.isBoolean()) {
+      return NON_TEXTUAL_PREFIX + (value.asBoolean() ? "1" : "0");
+    }
+    if (value.isNumber()) {
+      double number = value.doubleValue();
+      if (number == Math.floor(number) && number >= Long.MIN_VALUE
+          && number <= Long.MAX_VALUE) {
+        return NON_TEXTUAL_PREFIX + (long) number;
+      }
+    }
+    return NON_TEXTUAL_PREFIX + value;
   }
 
   /** Elements of an array node, or an empty list for any other shape. */
@@ -97,20 +121,23 @@ final class EvidenceCollections {
     for (JsonNode node : nodes) {
       JsonNode value = node.path(field);
       require(!value.isMissingNode(), "missing " + field + " in a list entry");
-      values.add(value.isTextual() ? escape(value.asText())
-          : NON_TEXTUAL_PREFIX + value);
+      values.add(value.isTextual() ? escape(value.asText()) : sentinel(value));
     }
     return values;
   }
 
-  /** Maps a list by one text field; later entries overwrite, like Python dict build. */
+  /**
+   * Maps a list by one field; later entries overwrite, like Python's dict build. A
+   * missing key rejects loudly (Python raised KeyError reading it); a non-textual key
+   * surfaces as a sentinel so the downstream key-set comparison rejects it, matching
+   * Python's typed set comparison.
+   */
   static Map<String, JsonNode> byField(List<JsonNode> nodes, String field) {
     Map<String, JsonNode> byField = new LinkedHashMap<>();
     for (JsonNode node : nodes) {
-      String key = EvidenceSemantics.text(node, field);
-      if (key != null) {
-        byField.put(key, node);
-      }
+      JsonNode key = node.path(field);
+      require(!key.isMissingNode(), "missing " + field + " in a list entry");
+      byField.put(key.isTextual() ? escape(key.asText()) : sentinel(key), node);
     }
     return byField;
   }

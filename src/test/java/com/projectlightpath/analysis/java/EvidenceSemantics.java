@@ -29,9 +29,13 @@ final class EvidenceSemantics {
     return node.isTextual() ? node.asText() : null;
   }
 
-  /** Null-safe string equality with Python's {@code ==} outcome for present values. */
+  /**
+   * Null-safe string equality with Python's {@code ==} outcome for present values: a
+   * null on either side is inequality, so the enclosing requirement fails with its
+   * own diagnostic instead of a NullPointerException.
+   */
   static boolean eq(String actual, String expected) {
-    return expected.equals(actual);
+    return expected != null && expected.equals(actual);
   }
 
   /**

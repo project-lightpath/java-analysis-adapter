@@ -573,6 +573,62 @@ class EvidenceContractValidatorTest {
             "18446744073709551680")).path("v")));
   }
 
+  /** A container set member rejects, like Python's unhashable-list TypeError. */
+  @Test
+  void containerSetMemberIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree("spike/contracts/framework-model.json",
+        document -> document.withArray("edgeTypes").addObject()
+            .set("id", MAPPER.createArrayNode())),
+        "set member must be a scalar");
+  }
+
+  /** Python numeric set equality: 17 and 17.0 (and true and 1) are the same member. */
+  @Test
+  void numericSetEqualityCollapsesDuplicates() throws IOException {
+    assertEquals(1, EvidenceCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", 17),
+        MAPPER.createObjectNode().put("id", 17.0)), "id").size());
+    assertEquals(1, EvidenceCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", true),
+        MAPPER.createObjectNode().put("id", 1)), "id").size());
+    // Distinct values stay distinct, and a textual "17" stays distinct from numeric 17.
+    assertEquals(2, EvidenceCollections.idSet(java.util.List.of(
+        MAPPER.createObjectNode().put("id", 17),
+        MAPPER.createObjectNode().put("id", 18)), "id").size());
+    // End to end: two relationships whose ids are 17 and 17.0 are duplicates.
+    assertFailsWith(mutatedSpikeTree("spike/contracts/expected-call-facts.json",
+        document -> {
+          ArrayNode relationships = document.withArray("relationships");
+          ((ObjectNode) relationships.get(0)).put("id", 17);
+          ((ObjectNode) relationships.get(1)).put("id", 17.0);
+        }), "expected relationship ids must be unique");
+  }
+
+  /** A context without a textual id rejects, matching Python's KeyError. */
+  @Test
+  void contextWithoutIdIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree("spike/contracts/analysis-context.json",
+        document -> document.withArray("contexts").addObject()),
+        "missing id in a list entry");
+  }
+
+  /** A missing expected serviceType fails its requirement, never a null dereference. */
+  @Test
+  void missingExpectedServiceTypeFailsWithDiagnostic() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/javac-symbol-resolver-observation.json", document -> {
+          for (JsonNode javacCell : document.path("cells")) {
+            for (JsonNode site : javacCell.path("expected")) {
+              if ("DEFINITE".equals(site.path("expectation").asText())) {
+                ((ObjectNode) site).remove("serviceType");
+                return;
+              }
+            }
+          }
+          throw new IllegalStateException("no DEFINITE site found to mutate");
+        }), "service type mismatch at");
+  }
+
   private static JsonNode textNode(String value) {
     return MAPPER.createObjectNode().put("v", value).path("v");
   }
