@@ -1,0 +1,113 @@
+package com.projectlightpath.analysis.java;
+
+import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Collection helpers shared by the spike-contract rule classes (#45 step 2): array/object
+ * traversal and text-field lookups that reproduce Python's iteration semantics, with
+ * non-textual set elements kept visible as a sentinel (Python's {@code set()} keeps them).
+ */
+final class SpikeContractCollections {
+  /**
+   * Sentinel added to set-valued collections when an element is present but non-textual:
+   * Python's {@code set()} keeps such elements (breaking equality, preserving subset
+   * checks), so the port must keep them visible instead of silently dropping them.
+   */
+  static final String NON_TEXTUAL = "\u0000non-textual";
+
+  private SpikeContractCollections() {}
+
+  /** Text values of an array field; non-textual elements surface as the sentinel. */
+  static Set<String> textSet(JsonNode array) {
+    Set<String> values = new LinkedHashSet<>();
+    if (array != null && array.isArray()) {
+      array.forEach(element ->
+          values.add(element.isTextual() ? element.asText() : NON_TEXTUAL));
+    }
+    return values;
+  }
+
+  /** Elements of an array node, or an empty list for any other shape. */
+  static List<JsonNode> elements(JsonNode array) {
+    List<JsonNode> values = new ArrayList<>();
+    if (array != null && array.isArray()) {
+      array.forEach(values::add);
+    }
+    return values;
+  }
+
+  /** Field names of an object node, or an empty set for any other shape. */
+  static Set<String> fieldNames(JsonNode object) {
+    Set<String> names = new LinkedHashSet<>();
+    if (object != null && object.isObject()) {
+      object.fieldNames().forEachRemaining(names::add);
+    }
+    return names;
+  }
+
+  /** Field values of an object node, or an empty list for any other shape. */
+  static List<JsonNode> fieldValues(JsonNode object) {
+    List<JsonNode> values = new ArrayList<>();
+    if (object != null && object.isObject()) {
+      object.forEach(values::add);
+    }
+    return values;
+  }
+
+  /** The first element of an array, or a missing node when absent. */
+  static JsonNode first(JsonNode array) {
+    return array != null && array.isArray() && !array.isEmpty() ? array.get(0)
+        : MissingNode.getInstance();
+  }
+
+  /** Text values of one field across array elements. */
+  static Set<String> fieldTextSet(JsonNode array, String field) {
+    return idSet(elements(array), field);
+  }
+
+  /**
+   * Text values of one field across a node list. A missing field rejects loudly (Python
+   * raised KeyError reading it); a non-textual value surfaces as the sentinel, breaking
+   * equality comparisons exactly like Python's set of mixed elements.
+   */
+  static Set<String> idSet(List<JsonNode> nodes, String field) {
+    Set<String> values = new LinkedHashSet<>();
+    for (JsonNode node : nodes) {
+      JsonNode value = node.path(field);
+      require(!value.isMissingNode(), "missing " + field + " in a list entry");
+      values.add(value.isTextual() ? value.asText() : NON_TEXTUAL);
+    }
+    return values;
+  }
+
+  /** Maps a list by one text field; later entries overwrite, like Python dict build. */
+  static Map<String, JsonNode> byField(List<JsonNode> nodes, String field) {
+    Map<String, JsonNode> byField = new LinkedHashMap<>();
+    for (JsonNode node : nodes) {
+      String key = SpikeContractSemantics.text(node, field);
+      if (key != null) {
+        byField.put(key, node);
+      }
+    }
+    return byField;
+  }
+
+  /** The first node whose text field equals the value, or null. */
+  static JsonNode findByText(List<JsonNode> nodes, String field, String value) {
+    for (JsonNode node : nodes) {
+      if (SpikeContractSemantics.eq(SpikeContractSemantics.text(node, field), value)) {
+        return node;
+      }
+    }
+    return null;
+  }
+}

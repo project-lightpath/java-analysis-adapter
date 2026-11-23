@@ -39,7 +39,8 @@ class SpikeContractValidatorTest {
 
   /**
    * Copies the real checked-in spike tree into a scratch root so one field can be mutated
-   * without touching the repository.
+   * without touching the repository. Disposable analyzer output (spike/runs, spike/.cache)
+   * is excluded: it is untracked and can be large when an analyzer run was reproduced.
    */
   private Path copiedSpikeTree() throws IOException {
     Path root = temp.resolve("root");
@@ -48,7 +49,12 @@ class SpikeContractValidatorTest {
     Path repository = spike.getParent();
     try (Stream<Path> files = Files.walk(spike)) {
       for (Path file : files.filter(Files::isRegularFile).toList()) {
-        Path target = root.resolve(repository.relativize(file).toString());
+        Path relative = repository.relativize(file);
+        if (relative.startsWith(spike.getFileName().resolve("runs"))
+            || relative.startsWith(spike.getFileName().resolve(".cache"))) {
+          continue;
+        }
+        Path target = root.resolve(relative.toString());
         Files.createDirectories(target.getParent());
         Files.copy(file, target);
       }
@@ -402,17 +408,73 @@ class SpikeContractValidatorTest {
     assertTrue(error.getMessage().contains("repository root"));
   }
 
-  /** Boundary: an empty component (empty cells array) must not satisfy the blocked-cell rule. */
+  /** Boundary: an empty cells array must fail the cell-set rule. */
   @Test
-  void emptyCellsArrayIsRejectedByTheCellCountRule() throws IOException {
+  void emptyCellsArrayIsRejectedByTheCellSetRule() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/javac-symbol-resolver-observation.json",
+        document -> document.withArray("cells").removeAll()),
+        "cell set is incomplete");
+  }
+
+  /** Boundary: a duplicate cell id keeps the id set at 71 but fails the count rule. */
+  @Test
+  void duplicateJavacCellFailsTheCountRule() throws IOException {
     assertFailsWith(mutatedSpikeTree(
         "spike/results/javac-symbol-resolver-observation.json",
         document -> {
           ArrayNode cells = document.withArray("cells");
-          while (cells.size() > 1) {
-            cells.remove(cells.size() - 1);
-          }
-        }), "cell set is incomplete");
+          cells.add(cells.get(0).deepCopy());
+        }), "must have 71 cells");
+  }
+
+  /** A non-textual element in a set-valued field breaks equality, like Python's set. */
+  @Test
+  void nonTextualCertaintyStateIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree("spike/contracts/framework-model.json", document -> {
+      ArrayNode states = (ArrayNode) ((ObjectNode) document.path("certaintyPolicy"))
+          .withArray("states");
+      states.add(17);
+    }), "framework model certainty states changed");
+  }
+
+  /** Trailing JSON content after a document is rejected (Python json.load rejects it). */
+  @Test
+  void trailingJsonContentIsRejected() throws IOException {
+    Path root = copiedSpikeTree();
+    String content = Files.readString(root.resolve("spike/capability-matrix.json"));
+    Files.writeString(root.resolve("spike/capability-matrix.json"),
+        content + "\n{\"extra\": 1}\n");
+
+    assertFailsWith(root, "spike/capability-matrix.json");
+  }
+
+  /** A non-object document is rejected at the load boundary, naming the path. */
+  @Test
+  void nonObjectDocumentIsRejectedAtLoad() throws IOException {
+    Path root = copiedSpikeTree();
+    Files.writeString(root.resolve("spike/acceptance-criteria.json"), "[]");
+
+    assertFailsWith(root, "expected a single JSON object");
+  }
+
+  /** A missing semantic links array is rejected (Python read the key directly). */
+  @Test
+  void missingSemanticLinksAreRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/semantic-call-facts-spike-observation.json",
+        document -> document.remove("links")),
+        "semantic facts links are missing");
+  }
+
+  /** A missing certainty on one analyzer observation is rejected. */
+  @Test
+  void missingAnalyzerCertaintyIsRejected() throws IOException {
+    assertFailsWith(mutatedSpikeTree(
+        "spike/results/sootup-3.0.1-java21-quarkus-observation.json",
+        document -> ((ObjectNode) document.path("observations").get(0)).remove(
+            "certainty")),
+        "observation certainty is missing");
   }
 
   private static JsonNode textNode(String value) {

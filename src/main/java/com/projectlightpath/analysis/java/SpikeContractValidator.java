@@ -1,8 +1,9 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.elements;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.idSet;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -54,7 +55,8 @@ import java.util.Set;
  * eleven mutated trees and two malformed-shape trees, identical stdout and exit codes).
  */
 public final class SpikeContractValidator {
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper()
+      .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   static final Set<String> CERTAINTY_STATES =
       Set.of("definite", "possible", "unresolved");
@@ -208,7 +210,11 @@ public final class SpikeContractValidator {
     }
     try {
       JsonNode node = MAPPER.readTree(file.toFile());
-      return node == null ? MAPPER.createObjectNode() : node;
+      if (node == null || !node.isObject()) {
+        throw new ValidationError("cannot read " + relative
+            + ": expected a single JSON object");
+      }
+      return node;
     } catch (IOException error) {
       throw new ValidationError("cannot parse " + relative + ": " + error.getMessage(),
           error);

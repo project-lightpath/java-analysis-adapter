@@ -1,19 +1,19 @@
 package com.projectlightpath.analysis.java;
 
-import static com.projectlightpath.analysis.java.SpikeContractValidator.CERTAINTY_STATES;
-import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_EDGE_TYPES;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.byField;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.elements;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.byField;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldNames;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldTextSet;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.findByText;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.textSet;
 import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.fieldNames;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.fieldTextSet;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.findByText;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.idSet;
 import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
 import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
 import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.textSet;
 import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
+import static com.projectlightpath.analysis.java.SpikeContractValidator.CERTAINTY_STATES;
+import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_EDGE_TYPES;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
@@ -251,6 +251,8 @@ final class SpikeContractFactChecks {
         .equals(Set.of("quarkus", "spring-boot")),
         "semantic facts provider results must cover both frameworks");
     for (JsonNode result : providerResults) {
+      require(result.path("observations").isArray(),
+          "semantic facts provider observations are missing");
       checkProviderResult(result);
     }
     for (JsonNode item : frameworkFacts) {
@@ -269,6 +271,8 @@ final class SpikeContractFactChecks {
         "semantic facts emitted framework count is incorrect");
     require(numEquals(coverage.path("frameworkAbstainedFacts"), 1),
         "semantic facts abstention count is incorrect");
+    require(semanticFacts.path("links").isArray(),
+        "semantic facts links are missing");
     for (JsonNode link : elements(semanticFacts.path("links"))) {
       require(eq(text(link, "relation"), "enriches_without_replacing")
           && truthy(link.path("certaintyPreserved")),

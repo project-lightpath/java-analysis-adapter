@@ -1,23 +1,23 @@
 package com.projectlightpath.analysis.java;
 
+import static com.projectlightpath.analysis.java.SpikeContractCollections.byField;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldNames;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldTextSet;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.fieldValues;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.first;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.idSet;
+import static com.projectlightpath.analysis.java.SpikeContractCollections.textSet;
+import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
+import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
+import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
+import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
+import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.CERTAINTY_STATES;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.MANDATORY_CRITERIA;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.PINNED_BASELINE_COMMIT;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_CASES;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_EVIDENCE;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.byField;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.elements;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.eq;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.fieldNames;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.fieldTextSet;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.fieldValues;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.first;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.idSet;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.numEquals;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.require;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.text;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.textSet;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.truthy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
@@ -129,14 +129,17 @@ final class SpikeContractDocumentChecks {
   /** One framework model entry: fixture, sources, rules, abstentions (Python 91-100). */
   private void checkFrameworkEntry(JsonNode framework, Set<String> edgeTypes) {
     String id = text(framework, "id");
-    require(Set.of("java21-quarkus", "fsi-spring-boot")
-        .contains(text(framework, "fixtureId")),
+    String fixtureId = text(framework, "fixtureId");
+    require(fixtureId != null
+        && Set.of("java21-quarkus", "fsi-spring-boot").contains(fixtureId),
         "unknown fixture in " + id + " framework model");
     require(truthy(framework.path("metadataSources")),
         id + " framework metadata sources are missing");
-    require(truthy(framework.path("resolutionRules")),
+    require(framework.path("resolutionRules").isArray()
+        && truthy(framework.path("resolutionRules")),
         id + " framework resolution rules are missing");
-    require(truthy(framework.path("abstentions")),
+    require(framework.path("abstentions").isArray()
+        && truthy(framework.path("abstentions")),
         id + " framework abstentions are missing");
     for (JsonNode rule : elements(framework.path("resolutionRules"))) {
       require(edgeTypes.contains(text(rule, "edgeType")),
@@ -169,7 +172,16 @@ final class SpikeContractDocumentChecks {
         "analysis context must cover both framework inputs");
     Set<String> modelFrameworks = fieldTextSet(
         documents.frameworkModel().path("frameworks"), "id");
-    require(frameworkIds(contextDocument.path("contexts")).equals(modelFrameworks),
+    // Python built this set from the deduplicated context map's values, so a shadowed
+    // duplicate row must not leak its framework id into the comparison.
+    Set<String> effectiveFrameworkIds = new LinkedHashSet<>();
+    for (JsonNode context : contextById.values()) {
+      String frameworkId = text(context.path("framework"), "id");
+      if (frameworkId != null) {
+        effectiveFrameworkIds.add(frameworkId);
+      }
+    }
+    require(effectiveFrameworkIds.equals(modelFrameworks),
         "analysis contexts must match framework model");
     Set<String> requiredFields = textSet(contextDocument.path("requiredFields"));
     for (JsonNode context : contextById.values()) {
@@ -258,12 +270,14 @@ final class SpikeContractDocumentChecks {
       require(outcomes.contains(value.isTextual() ? value.asText() : null),
           "invalid acceptance outcome for " + id);
     }
-    require(truthy(candidate.path("gaps")), id + " must identify closure gaps");
+    require(candidate.path("gaps").isArray() && truthy(candidate.path("gaps")),
+        id + " must identify closure gaps");
     for (JsonNode gap : elements(candidate.path("gaps"))) {
       require(truthy(gap.path("estimate")) && truthy(gap.path("closure")),
           id + " gaps need closure estimates");
     }
   }
+
 
   /** FSI baseline pin and recorded Spring gaps (Python 142-149). */
   private void checkBaseline() {
@@ -325,18 +339,6 @@ final class SpikeContractDocumentChecks {
       }
     }
     return false;
-  }
-
-  /** Framework ids referenced by analysis-context entries. */
-  private Set<String> frameworkIds(JsonNode contexts) {
-    Set<String> ids = new LinkedHashSet<>();
-    for (JsonNode context : elements(contexts)) {
-      String id = text(context.path("framework"), "id");
-      if (id != null) {
-        ids.add(id);
-      }
-    }
-    return ids;
   }
 
   /** Per-framework case-id coverage, later entries overwriting like Python. */

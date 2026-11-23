@@ -1,8 +1,8 @@
 package com.projectlightpath.analysis.java;
 
+import static com.projectlightpath.analysis.java.SpikeContractCollections.elements;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.JAVAC_METRICS;
 import static com.projectlightpath.analysis.java.SpikeContractValidator.REQUIRED_JAVAC_CELLS;
-import static com.projectlightpath.analysis.java.SpikeContractSemantics.elements;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
