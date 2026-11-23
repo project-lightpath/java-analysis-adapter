@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.TreeSet;
@@ -282,19 +283,62 @@ class JavacResolverAccuracyTest {
 
   @Test
   void harnessRunLeavesResolverFlagAndDefaultSelectionUnchanged() throws IOException {
-    String before = System.getProperty("flpath.java.resolver");
+    SourceMetadataScanner canary = flagGuardScanner("before");
+    Optional<Map<Path, List<ServiceLoaderCallSite>>> before =
+        JavacServiceLoaderSiteResolver.sites(canary);
+    String flagBefore = System.getProperty("flpath.java.resolver");
     try {
       JavacResolverAccuracyHarness.run(temp.resolve("flag-guard-work"),
           JavacResolverFixtureCatalog.cells().stream()
               .filter(item -> isNewFamily(item.family()))
               .toList());
     } finally {
-      assertEquals(before, System.getProperty("flpath.java.resolver"),
+      assertEquals(flagBefore, System.getProperty("flpath.java.resolver"),
           "the harness must not touch the production resolver flag");
     }
-    assertTrue(new java.io.File("src/main/java/com/projectlightpath/analysis/java/"
-        + "JavacServiceLoaderSiteResolver.java").isFile(),
-        "flag-off default-output guard: production sources are untouched by this change");
+    Optional<Map<Path, List<ServiceLoaderCallSite>>> after =
+        JavacServiceLoaderSiteResolver.sites(flagGuardScanner("after"));
+    assertTrue(before.isPresent() && after.isPresent(),
+        "the production default (flag-off) scan must keep answering");
+    assertEquals(canarySites(before), canarySites(after),
+        "the production default output must be identical before and after a harness run");
+  }
+
+  private SourceMetadataScanner flagGuardScanner(String id) throws IOException {
+    Path root = temp.resolve("flag-guard-" + id);
+    Path sourceRoot = root.resolve("src/main/java");
+    Path bridge = sourceRoot.resolve("demo/Bridge.java");
+    Files.createDirectories(bridge.getParent());
+    Files.writeString(bridge, """
+        package demo;
+        import java.util.ServiceLoader;
+        class Bridge { void audit() { ServiceLoader.load(Object.class); } }
+        """);
+    AnalysisContext context = AnalysisContext.builder()
+        .id("flag-guard-" + id)
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("javac-resolver-accuracy-test")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    return new SourceMetadataScanner(context);
+  }
+
+  /** Position-independent canary view: one entry per site, no absolute paths. */
+  private static List<String> canarySites(
+      Optional<Map<Path, List<ServiceLoaderCallSite>>> sites) {
+    return sites.orElseThrow().values().stream()
+        .flatMap(List::stream)
+        .map(site -> site.serviceType() + "|" + site.explicitClassLoader())
+        .sorted()
+        .toList();
   }
 
   private static Set<String> cellsWithMetrics(

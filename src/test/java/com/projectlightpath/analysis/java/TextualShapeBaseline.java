@@ -11,25 +11,36 @@ import java.util.regex.Pattern;
  * emits one fact per probe, anchored to the javac facts' offsets in ordinal
  * order so {@link Evaluation} pairs both paths with the same expected sites.
  *
- * <p>The annotation token pattern is replicated from
- * {@code SourceMetadataScannerTextLayer02.parameterType}; the two sites must
- * stay in sync (documented residual in PLAN-26).
+ * <p>Annotation names and arguments are parsed with the production
+ * machinery, not a reimplementation: the token pattern replicates
+ * {@code JavacFrameworkQualifierFamilies.TEXTUAL_ANNOTATION_NAME} (the
+ * production capture site; {@code SourceMetadataScannerTextLayer02
+ * .parameterType} strips with the same character class) and argument text
+ * comes from {@code SourceMetadataScanner.parseAnnotation}, whose delimiter
+ * matching is string-literal aware. The replicated pattern must stay in sync
+ * with both production sites (documented residual in PLAN-26).
  */
 final class TextualShapeBaseline {
   /**
-   * The exact annotation-token regex used by the production textual heuristic.
-   * Keep in sync with SourceMetadataScannerTextLayer02.parameterType.
+   * The exact annotation-name pattern the production textual families use.
+   * Keep in sync with JavacFrameworkQualifierFamilies.TEXTUAL_ANNOTATION_NAME
+   * and SourceMetadataScannerTextLayer02.parameterType.
    */
-  private static final Pattern ANNOTATION_TOKEN = Pattern.compile("@[A-Za-z_][\\w.]*");
+  private static final Pattern ANNOTATION_TOKEN = Pattern.compile("@([A-Za-z_][\\w.]*)");
 
   private TextualShapeBaseline() {}
 
   static JavacResolverResult run(JavacResolverCell cell, JavacResolverResult javacResult) {
     List<JavacResolverFact> anchors = javacResult.facts();
+    if (cell.textualProbes().size() > anchors.size()) {
+      // A probe without a javac anchor means an emitter silently dropped a
+      // site the fixture promised; that must be loud, not truncated.
+      throw new IllegalStateException(
+          "cell " + cell.id() + " has " + cell.textualProbes().size()
+              + " textual probes but only " + anchors.size() + " javac facts");
+    }
     List<JavacResolverFact> facts = new ArrayList<>();
-    for (int index = 0;
-        index < cell.textualProbes().size() && index < anchors.size();
-        index++) {
+    for (int index = 0; index < cell.textualProbes().size(); index++) {
       JavacResolverFact anchor = anchors.get(index);
       JavacResolverCell.TextualProbe probe = cell.textualProbes().get(index);
       facts.add(new JavacResolverFact(
@@ -60,31 +71,34 @@ final class TextualShapeBaseline {
     };
   }
 
+  /**
+   * The production token for the annotation at the head of the raw text, or
+   * "" when the production pattern cannot match there ($ and non-ASCII
+   * names). Anchored at the first '@' so a head miss can never silently
+   * return a token from an unrelated later site.
+   */
   private static String annotationToken(String raw) {
-    Matcher matcher = ANNOTATION_TOKEN.matcher(raw);
-    if (!matcher.find()) {
+    int at = raw.indexOf('@');
+    if (at < 0) {
       return "";
     }
-    return matcher.group().substring(1);
+    Matcher matcher = ANNOTATION_TOKEN.matcher(raw);
+    if (!matcher.find(at) || matcher.start() != at) {
+      return "";
+    }
+    return matcher.group(1);
   }
 
+  /** The production parser's argument text for the head annotation. */
   private static String argumentText(String raw) {
-    int open = raw.indexOf('(');
-    if (open < 0) {
+    int at = raw.indexOf('@');
+    if (at < 0) {
       return "";
     }
-    int depth = 0;
-    for (int index = open; index < raw.length(); index++) {
-      char character = raw.charAt(index);
-      if (character == '(') {
-        depth++;
-      } else if (character == ')') {
-        depth--;
-        if (depth == 0) {
-          return raw.substring(open + 1, index).replaceAll("\\s+", "");
-        }
-      }
+    Matcher matcher = ANNOTATION_TOKEN.matcher(raw);
+    if (!matcher.find(at) || matcher.start() != at) {
+      return "";
     }
-    return "";
+    return SourceMetadataScanner.parseAnnotation(raw, matcher).arguments();
   }
 }

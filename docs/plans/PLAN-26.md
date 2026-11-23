@@ -193,11 +193,26 @@ suite heap at `ADAPTER_TEST_PARALLELISM=4`.
 
 ## Residuals / risks
 
-- The ANNOTATION_NAME textual baseline replicates the production regex;
-  a drift between the copy and `SourceMetadataScannerTextLayer02` is a
-  documented sync risk (comment cross-references both sites).
+- The textual baselines for annotation names replicate the production
+  annotation-name pattern (capture site:
+  `JavacFrameworkQualifierFamilies.TEXTUAL_ANNOTATION_NAME`, strip site:
+  `SourceMetadataScannerTextLayer02.parameterType`) and argument text now
+  comes from the production parser itself
+  (`SourceMetadataScanner.parseAnnotation`); a drift between the replicated
+  pattern and the production capture site is a documented sync risk
+  (cross-referenced at both sites).
+- Textual probes anchor to javac facts by ordinal; a probe count exceeding
+  the javac fact count fails loudly (IllegalStateException), but ordinal
+  misalignment inside the list would surface as javac `lost` (a dropped
+  fact fails its expected site) — the gate cannot false-pass on a dropped
+  emitter site. TS9 deliberately anchors a PARAMETER_TYPE probe to the
+  return-type fact (the same heuristic measures both declarations).
 - Reflection textual parity is deferred to #25 (AnalysisContext
-  pipeline); R cells gate the javac side only.
+  pipeline); R cells gate the javac side only. Uncovered `Class.forName`
+  shapes (3-arg overload, computed names) abstain visibly
+  (`NON_LITERAL_FORNAME`); `ClassLoader.loadClass` and explicit
+  `super(...)` constructor-chain invocations remain silent skips outside
+  the family contract — documented, not claimed as covered.
 - Argument canonical rendering is a harness-local convention (tree
   order, qualified names); #23 owns the production TypeMirror contract.
 - Member-shape emission covers direct invocations and `new` expressions

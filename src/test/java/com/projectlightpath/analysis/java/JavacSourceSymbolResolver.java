@@ -344,10 +344,20 @@ final class JavacSourceSymbolResolver {
     }
 
     private void emitReflectionFact(TreePath invocationPath, MethodInvocationTree node) {
-      if (!"forName".equals(selectedName(node.getMethodSelect()))
-          || node.getArguments().size() != 1
-          || !(node.getArguments().get(0) instanceof com.sun.source.tree.LiteralTree literal)
-          || !(literal.getValue() instanceof String target)) {
+      if (!"forName".equals(selectedName(node.getMethodSelect()))) {
+        return;
+      }
+      long position = startPosition(invocationPath);
+      if (!(node.getArguments().size() == 1
+          && node.getArguments().get(0) instanceof com.sun.source.tree.LiteralTree literal
+          && literal.getValue() instanceof String target)) {
+        // Uncovered forName shape (3-arg overload, computed name): visible
+        // abstention, never a silent skip.
+        if (position >= 0) {
+          int skipLine = lineNumber(invocationPath, position);
+          addAbstention((int) position, skipLine, columnNumber(invocationPath, position),
+              "NON_LITERAL_FORNAME");
+        }
         return;
       }
       Element method = trees.getElement(new TreePath(invocationPath, node.getMethodSelect()));
@@ -356,19 +366,17 @@ final class JavacSourceSymbolResolver {
           || !"java.lang.Class".contentEquals(owner.getQualifiedName())) {
         return;
       }
-      long position = startPosition(invocationPath);
-      if (position < 0) {
-        return;
-      }
       TypeElement bound = elements.getTypeElement(target);
       boolean sourceBound = bound != null && trees.getPath(bound) != null;
+      boolean resolvable = bound != null;
       String certainty = sourceBound && !taskHasError ? "DEFINITE" : "POSSIBLE";
       int line = lineNumber(invocationPath, position);
       int column = columnNumber(invocationPath, position);
       facts.add(new JavacResolverFact(
           cell.id(), cell.siteFile(), topLevelName(invocationPath), line, column,
           (int) position, target, "java.lang.Class", "forName",
-          accessibility(method), certainty, sourceBound ? "source-bound" : "runtime-only",
+          accessibility(method), certainty,
+          sourceBound ? "source-bound" : resolvable ? "runtime-only" : "unresolved-target",
           diagnosticsFor(line), "", ""));
     }
 

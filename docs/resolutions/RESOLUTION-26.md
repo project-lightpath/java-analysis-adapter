@@ -2,7 +2,33 @@
 
 Issue: project-lightpath/java-analysis-adapter#26 (parent #20).
 Branch: `issue-26-annotation-type-shape-parity`.
-Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1 (this commit).
+Commits: RED_26_1 `39c065c`, GREEN_26_1 `1d87320`, EVIDENCE_26_1, REVIEW_26_1.
+
+## Review rounds
+
+- **Round 1** (subagent, CodeRabbit-style, Engram-grounded, full): 6
+  addressable findings, all addressed in REVIEW_26_1:
+  1. Textual-probe/javac-fact ordinal anchoring could silently truncate —
+     now fails loudly when probes exceed javac facts; misalignment inside
+     the list surfaces as javac `lost`.
+  2. `argumentText` was a naive reimplementation — the baseline now runs
+     the production parser (`SourceMetadataScanner.parseAnnotation`),
+     whose delimiter matching is string-literal aware; the pinned AA
+     defects are re-measured against real production output
+     (`value = 1` with source spacing, `"x"` with quotes).
+  3. `annotationToken` could return a token from an unrelated later site
+     — now anchored at the head `@`.
+  4. Uncovered `Class.forName` shapes skipped silently — now a visible
+     `NON_LITERAL_FORNAME` abstention.
+  5. R4's promotion mislabeled an unresolvable target as `runtime-only` —
+     now `unresolved-target` (resolvable non-source targets keep
+     `runtime-only`).
+  6. The flag-off default-output guard was vacuous — now runs the
+     production `JavacServiceLoaderSiteResolver.sites` canary before and
+     after a harness run and asserts identical default output plus an
+     unchanged `flpath.java.resolver` flag.
+  One NIT (sync citation pointed at the strip site) was folded into fix 2.
+
 
 ## What changed
 
@@ -82,13 +108,19 @@ on the same cell/fact model — no fork:
 
 ## Residuals
 
-- The ANNOTATION_NAME textual baseline replicates the production
-  annotation-token regex; a drift between the copy and
-  `SourceMetadataScannerTextLayer02.parameterType` is a documented sync
-  risk (cross-referenced at both sites).
+- The textual baselines for annotation names replicate the production
+  annotation-name pattern (capture site:
+  `JavacFrameworkQualifierFamilies.TEXTUAL_ANNOTATION_NAME`; strip site:
+  `SourceMetadataScannerTextLayer02.parameterType`); argument text now
+  comes from the production parser itself. A drift between the replicated
+  pattern and the production capture site is a documented sync risk
+  (cross-referenced at both sites).
 - Reflection textual parity is deferred to #25 (the textual
   `reflectionSites` scanner needs the full AnalysisContext pipeline);
-  R cells gate the javac side only, with BaselineMode.NONE.
+  R cells gate the javac side only, with BaselineMode.NONE. Uncovered
+  `Class.forName` shapes abstain visibly (`NON_LITERAL_FORNAME`);
+  `ClassLoader.loadClass` and explicit `super(...)` constructor chains
+  remain silent skips outside the family contract.
 - TS8 (constructor selection) has no textual probes: the textual path
   cannot represent constructor selection, so it is BaselineMode.NONE
   rather than a contrived lost-metrics cell.
