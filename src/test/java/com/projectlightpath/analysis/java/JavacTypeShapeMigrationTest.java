@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -276,6 +277,51 @@ class JavacTypeShapeMigrationTest {
         .anyMatch(candidate -> candidate.producerMethod().equals("clean")
             && candidate.candidateType().equals("java.lang.String")),
         on.toString());
+  }
+
+  @Test
+  void producerOverloadDescriptorsDifferentiateByType() throws IOException {
+    AnalysisContext context = context("producer-overloads", Map.of(
+        "demo/Producer.java", """
+            package demo;
+            import jakarta.enterprise.inject.Produces;
+            public class Producer {
+              @Produces public String make(String seed) { return seed; }
+              @Produces public Integer make(Integer seed) { return seed; }
+            }
+            """));
+    System.clearProperty(FLAG);
+    List<SourceMetadataScannerState.BeanCandidate> off =
+        new SourceMetadataScanner(context).beanCandidates(
+            AnalysisContext.Framework.QUARKUS);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner onScanner = new SourceMetadataScanner(context);
+    List<SourceMetadataScannerState.BeanCandidate> on =
+        onScanner.beanCandidates(AnalysisContext.Framework.QUARKUS);
+    // Flag-off golden: two same-arity producer candidates exist.
+    assertEquals(2, off.stream()
+        .filter(candidate -> candidate.producerMethod().equals("make")).count());
+    // Flag-on: the bijection correlates each overload and each candidate
+    // renders ITS OWN JVM descriptor — never the other overload's. The
+    // candidates are told apart by their canonical bean types.
+    assertEquals(2, on.stream()
+        .filter(candidate -> candidate.producerMethod().equals("make")).count());
+    for (SourceMetadataScannerState.BeanCandidate candidate : on) {
+      if (!candidate.producerMethod().equals("make")) {
+        continue;
+      }
+      Optional<String> descriptor =
+          BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, candidate);
+      if (candidate.candidateType().equals("java.lang.String")) {
+        assertEquals(Optional.of("(Ljava/lang/String;)Ljava/lang/String;"), descriptor,
+            "the String overload must carry its own descriptor");
+      } else if (candidate.candidateType().equals("java.lang.Integer")) {
+        assertEquals(Optional.of("(Ljava/lang/Integer;)Ljava/lang/Integer;"), descriptor,
+            "the Integer overload must carry its own descriptor");
+      } else {
+        throw new AssertionError("unexpected producer type: " + candidate.candidateType());
+      }
+    }
   }
 
   @Test

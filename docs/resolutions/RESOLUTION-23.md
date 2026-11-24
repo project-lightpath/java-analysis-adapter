@@ -32,7 +32,14 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
   types. The index compiles per-file, so cross-file returns are ERROR
   types; previously an unresolved return surfaced as an unqualified
   "canonical" spelling (probe: `returnType=Inner`, `errorType=false`).
-  Unproven returns now abstain. Blast radius: flag-on consumers only.
+  Unproven returns now abstain. Blast radius: ALL flag-on consumers of
+  member error-typing — the new shape consumers AND the #22/#24
+  annotation-mirror seam (`JavacAnnotationAccess.member`,
+  `JavacFrameworkAnnotations.member`): a method whose return type is
+  declared in another file now abstains to textual for annotation repair
+  too. Safe direction (no fabricated facts), but a real flag-on coverage
+  cost; a follow-up could let the index compile with the full selected
+  source set so cross-file returns resolve.
 - **Dead code deleted**: `methodSource` and its only helper
   `descriptorParameterCount` (zero callers, exhaustively verified).
 
@@ -57,6 +64,32 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
   producer type, repository signatures, reflection matching).
 - Gates: `make adapter-test` 607 executions (floor 534), zero failures;
   `make java-lint` PASS (0 new findings); `make evidence-validate` pass.
+
+## Change-review record
+
+- **Round 1** (Engram-grounded subagent, full change): 5 addressable
+  findings, all addressed in REVIEW_23_1:
+  1. CRITICAL — `producerJvmDescriptorFromIndex` matched producer
+     methods by name+arity only, attributing the first same-arity
+     overload's descriptor to every candidate (probe-confirmed false
+     DEFINITE). Fixed: the candidate's own parameter text identifies its
+     overload; pinned by `producerOverloadDescriptorsDifferentiate
+     ByType` (each candidate renders ITS OWN JVM descriptor).
+  2. HIGH — flag-on `parameterMatchesType` compared canonical index
+     types against the simple names production callers actually pass,
+     flipping true answers to false. Fixed: the canonical comparison is
+     an ADDITIONAL match source (canonical or simple spelling); the
+     textual ladder always runs, so no true answer is lost.
+  3. MEDIUM — the plan's `redeclaresGuaranteedContractMethod` clause was
+     not implemented. Fixed: the correlated member's canonical
+     parameter-0 type compares against the entity/id types flag-on,
+     OR'd after the textual token path.
+  4. MEDIUM — no positive flag-on producer differential test. Fixed by
+     the round-1 finding-1 pin (see 1); the abstention cell stays.
+  5. LOW — the return-type fix's blast radius was understated;
+     RESOLUTION corrected (see the index-defect entry above).
+  NITs (duplicate `of(scanner)` construction, stray blank lines,
+  fully-qualified collections) fixed.
 
 ## Plan-review record
 

@@ -66,8 +66,17 @@ abstract class SourceMetadataScannerRepositoryLayer
       return false;
     }
     String parameterType = repositoryTypeToken(methodParameters.get(0).type(), file).orElse("");
-    return parameterType.equals(springRepositoryEntityType(file).orElse("\u0000"))
-        || parameterType.equals(springRepositoryIdType(file).orElse("\u0000"));
+    String entityType = springRepositoryEntityType(file).orElse("\u0000");
+    String idType = springRepositoryIdType(file).orElse("\u0000");
+    if (parameterType.equals(entityType) || parameterType.equals(idType)) {
+      return true;
+    }
+    // Flag-on: the correlated member's canonical parameter-0 type matches
+    // even when the textual token is corrupted or unqualified; the textual
+    // token comparison above still runs, so no true answer is lost.
+    return JavacSourceSymbolIndex.enabled()
+        && JavacMemberCorrelation.of((SourceMetadataScanner) this)
+            .correlatedFirstParameterIs(file, method, Set.of(entityType, idType));
   }
 
   /**

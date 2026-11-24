@@ -27,7 +27,6 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
     super(framework);
   }
 
-
   /** Finds metadata rows belonging to one source candidate. */
   List<AnalysisContext.BindingCandidateMetadata> matchingCandidateMetadata(
       AnalysisContext context,

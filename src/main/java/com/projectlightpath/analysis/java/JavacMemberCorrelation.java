@@ -1,7 +1,10 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * javac member correlation for one scanner's context: maps textual
@@ -27,6 +30,23 @@ final class JavacMemberCorrelation {
   /** Returns the correlation bound to one scanner's context. */
   static JavacMemberCorrelation of(SourceMetadataScanner scanner) {
     return new JavacMemberCorrelation(scanner);
+  }
+
+  /**
+   * Whether the correlated member's canonical parameter-0 type is one of
+   * the expected canonical types (repository contract matching); false
+   * when the member does not correlate or has no parameters.
+   */
+  boolean correlatedFirstParameterIs(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.MethodInfo method,
+      Set<String> expected) {
+    String ownerType = scanner.typeContaining(file,
+        SourceMetadataScanner.declarationStart(file, method.start()));
+    return correlatedMethod(file, ownerType, method)
+        .filter(member -> !member.parameterTypes().isEmpty())
+        .map(member -> expected.contains(member.parameterTypes().get(0)))
+        .orElse(false);
   }
 
   /** Reports whether the correlation guards block one file and parameter list. */
@@ -149,7 +169,7 @@ final class JavacMemberCorrelation {
     if (siblings.size() != group.size()) {
       return Optional.empty();
     }
-    List<List<String>> textualVectors = new java.util.ArrayList<>();
+    List<List<String>> textualVectors = new ArrayList<>();
     for (SourceMetadataScannerState.MethodInfo sibling : siblings) {
       List<String> vector = resolvedParameterVector(file, sibling);
       if (vector.isEmpty()) {
@@ -162,7 +182,7 @@ final class JavacMemberCorrelation {
         .toList();
     if (textualVectors.stream().distinct().count() != textualVectors.size()
         || indexVectors.stream().distinct().count() != indexVectors.size()
-        || !new java.util.HashSet<>(textualVectors).equals(new java.util.HashSet<>(indexVectors))) {
+        || !new HashSet<>(textualVectors).equals(new HashSet<>(indexVectors))) {
       return Optional.empty();
     }
     List<String> queried = resolvedParameterVector(file, declaration);
@@ -182,7 +202,7 @@ final class JavacMemberCorrelation {
   private List<String> resolvedParameterVector(
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo declaration) {
-    List<String> vector = new java.util.ArrayList<>();
+    List<String> vector = new ArrayList<>();
     for (SourceMetadataScannerState.Parameter parameter
         : SourceMetadataScanner.parameters(declaration.parameters())) {
       String textual = SourceMetadataScanner.parameterType(
@@ -200,25 +220,29 @@ final class JavacMemberCorrelation {
     return vector;
   }
 
-  private static final java.util.Set<String> PRIMITIVE_TYPES = java.util.Set.of(
+  private static final Set<String> PRIMITIVE_TYPES = Set.of(
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
 
   /** The index-rendered producer descriptor, matching the producer method by name and arity. */
   Optional<String> producerJvmDescriptorFromIndex(
       SourceMetadataScannerState.BeanCandidate candidate) {
     int arity = SourceMetadataScanner.parameters(candidate.producerParameters()).size();
+    String candidateParameters = candidate.producerParameters()
+        .replaceAll("\\s+", " ").trim();
     for (SourceMetadataScannerState.MethodInfo method
         : SourceMetadataScanner.methods(candidate.file())) {
+      // The candidate's own parameter text identifies its overload: with
+      // same-arity producer overloads the name+arity alone would attribute
+      // the first overload's descriptor to every candidate.
       if (method.name().equals(candidate.producerMethod())
+          && method.parameters().replaceAll("\\s+", " ").trim()
+              .equals(candidateParameters)
           && SourceMetadataScanner.parameters(method.parameters()).size() == arity) {
-        Optional<String> fromIndex = correlatedJvmDescriptor(
+        return correlatedJvmDescriptor(
             candidate.file(),
             scanner.typeContaining(candidate.file(),
                 SourceMetadataScanner.declarationStart(candidate.file(), method.start())),
             method);
-        if (fromIndex.isPresent()) {
-          return fromIndex;
-        }
       }
     }
     return Optional.empty();

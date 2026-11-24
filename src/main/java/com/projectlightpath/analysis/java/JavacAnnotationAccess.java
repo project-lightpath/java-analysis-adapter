@@ -102,8 +102,9 @@ final class JavacAnnotationAccess {
   String methodDescriptor(
       SourceMetadataScannerState.MethodInfo method, String ownerType,
       SourceMetadataScannerState.SourceFile file) {
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
     Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
-        JavacMemberCorrelation.of(scanner).correlatedMethod(file, ownerType, method);
+        correlation.correlatedMethod(file, ownerType, method);
     if (correlated.isPresent()) {
       return "(" + String.join(",", correlated.orElseThrow().parameterTypes()) + ")";
     }
@@ -111,7 +112,7 @@ final class JavacAnnotationAccess {
     if (parameters.isEmpty()) {
       return "()";
     }
-    if (JavacMemberCorrelation.of(scanner).blocked(file, parameters)) {
+    if (correlation.blocked(file, parameters)) {
       return textualDescriptor(parameters);
     }
     List<String> split = SourceMetadataScannerTextLayer06.splitTopLevelArguments(parameters);
