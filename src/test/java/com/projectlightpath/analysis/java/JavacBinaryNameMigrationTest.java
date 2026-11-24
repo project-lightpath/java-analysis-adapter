@@ -137,6 +137,11 @@ class JavacBinaryNameMigrationTest {
     System.clearProperty(FLAG);
     SourceMetadataScanner offScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate off = producer(offScanner, "entry");
+    // The flag-off descriptor must be computed while the flag is CLEAR:
+    // producerDescriptor reads the flag at call time, not scanner-creation
+    // time.
+    Optional<String> offDescriptor =
+        BoundedFrameworkModelCandidateMetadata.producerDescriptor(offScanner, off);
     System.setProperty(FLAG, "true");
     SourceMetadataScanner onScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate on = producer(onScanner, "entry");
@@ -145,7 +150,7 @@ class JavacBinaryNameMigrationTest {
     // diverge.
     assertEquals(
         Optional.of("()Ljava/util/Map$Entry;"),
-        BoundedFrameworkModelCandidateMetadata.producerDescriptor(offScanner, off));
+        offDescriptor);
     assertEquals(
         Optional.of("()Ljava/util/Map$Entry;"),
         BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, on));
