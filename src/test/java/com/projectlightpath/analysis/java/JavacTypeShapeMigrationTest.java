@@ -787,6 +787,94 @@ class JavacTypeShapeMigrationTest {
     }
   }
 
+  @Test
+  void nestedParenthesisAnnotationArgumentBeforeClauseAbstains() throws IOException {
+    AnalysisContext context = context("nested-paren-annotation", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            public @interface B { int value(); }
+            public @interface A { B value(); }
+            """,
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              @A(@B(1))
+              public <X extends java.util.Set<String>, List extends java.util.Set>
+                  String pick(List p) { return null; }
+              @A(@B(1))
+              public <Y extends java.util.Set<String>, Set extends java.util.List>
+                  Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("nested-paren-annotation"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // The annotation argument has NESTED parentheses (@A(@B(1))): a flat
+    // [^)]* annotation pattern cannot consume it, the clause after it goes
+    // unrecognized, and the mirrored overloads correlate to each other's
+    // members. The prefix parser consumes balanced annotation arguments,
+    // so the clause is found and both abstain.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the nested-paren annotation mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
+  @Test
+  void boundAnnotationArgumentBracketsDoNotCloseClause() throws IOException {
+    AnalysisContext context = context("bound-annotation-brackets", Map.of(
+        "demo/A.java", """
+            package demo;
+            import java.lang.annotation.ElementType;
+            import java.lang.annotation.Target;
+            @Target(ElementType.TYPE_USE)
+            public @interface A { boolean value(); }
+            """,
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              public <X extends @A(1 > 0) Number, List extends java.util.Set>
+                  String pick(List p) { return null; }
+              public <Y extends @A(1 > 0) Number, Set extends java.util.List>
+                  Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("bound-annotation-brackets"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // The bound annotation argument contains '>' (@A(1 > 0)): counting it
+    // as an angle bracket closes the clause before the second name, so
+    // List/Set resolve through imports and the mirrored overloads
+    // correlate to each other's members. Parenthesis contents are
+    // shielded from the bracket count, so both abstain.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the bound-annotation mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);
