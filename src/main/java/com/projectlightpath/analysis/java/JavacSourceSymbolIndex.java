@@ -640,10 +640,12 @@ final class JavacSourceSymbolIndex {
   private static final class ElementReader {
     private final Elements elements;
     private final Types types;
+    private final MemberTypeShapes shapes;
 
     ElementReader(Elements elements, Types types) {
       this.elements = elements;
       this.types = types;
+      this.shapes = new MemberTypeShapes(elements, types);
     }
 
     PackageElement packageElement(String name) {
@@ -675,14 +677,19 @@ final class JavacSourceSymbolIndex {
           memberKind(element),
           element.getAnnotationMirrors().stream()
               .map(AnnotationRenderer::info).toList(),
-          parameters.stream()
-              .map(variable -> canonicalType(variable.asType()))
-              .toList(),
+          new MemberTypes(
+              parameters.stream()
+                  .map(variable -> shapes.canonicalType(variable.asType()))
+                  .toList(),
+              memberReturnType(element),
+              parameters.stream()
+                  .map(variable -> shapes.binaryType(variable.asType()))
+                  .toList(),
+              memberBinaryReturnType(element)),
           parameters.stream()
               .map(variable -> variable.getAnnotationMirrors().stream()
                   .map(AnnotationRenderer::info).toList())
               .toList(),
-          memberReturnType(element),
           memberHasErrorType(element, executable));
     }
 
@@ -716,7 +723,17 @@ final class JavacSourceSymbolIndex {
         return "void";
       }
       if (element.getKind() == ElementKind.METHOD) {
-        return canonicalType(((ExecutableElement) element).getReturnType());
+        return shapes.canonicalType(((ExecutableElement) element).getReturnType());
+      }
+      return "";
+    }
+
+    private String memberBinaryReturnType(Element element) {
+      if (element.getKind() == ElementKind.CONSTRUCTOR) {
+        return "void";
+      }
+      if (element.getKind() == ElementKind.METHOD) {
+        return shapes.binaryType(((ExecutableElement) element).getReturnType());
       }
       return "";
     }
@@ -727,9 +744,13 @@ final class JavacSourceSymbolIndex {
       }
       if (executable) {
         // The return type is part of the member's shape: an unresolved
-        // return (per-file index isolation makes cross-file references
-        // error types) must not surface as an unqualified "canonical"
-        // spelling, so it blocks the member like an unresolved parameter.
+        // return must not surface as an unqualified "canonical" spelling,
+        // so it blocks the member like an unresolved parameter. The
+        // residual unresolved shapes are SCOPING failures (JLS 6.5.5.1 —
+        // e.g. an unqualified sibling nested type) or genuinely missing
+        // classpath types, never joint-compilation gaps: the index compiles
+        // the full selected source set in one task, so cross-file
+        // references among selected files resolve.
         // The ERASED return is checked too: a type variable with an
         // unresolved bound (e.g. <T extends missing.Thing>) has a non-error
         // declared mirror but erases to an error type, whose rendered
@@ -767,8 +788,23 @@ final class JavacSourceSymbolIndex {
       return mirror.getKind() == TypeKind.ARRAY
           && isError(((ArrayType) mirror).getComponentType());
     }
+  }
 
-    private String canonicalType(TypeMirror mirror) {
+  /**
+   * Canonical and binary type-spelling rendering for member shapes. Split
+   * from {@code ElementReader} for PMD's GodClass threshold; behavior is
+   * identical to the inlined form.
+   */
+  private static final class MemberTypeShapes {
+    private final Elements elements;
+    private final Types types;
+
+    MemberTypeShapes(Elements elements, Types types) {
+      this.elements = elements;
+      this.types = types;
+    }
+
+    String canonicalType(TypeMirror mirror) {
       TypeMirror erased = types.erasure(mirror);
       return switch (erased.getKind()) {
         case ARRAY -> canonicalType(((ArrayType) erased).getComponentType()) + "[]";
@@ -784,6 +820,32 @@ final class JavacSourceSymbolIndex {
         return qualified.isEmpty() ? named.getSimpleName().toString() : qualified;
       }
       return erased.toString();
+    }
+
+    /**
+     * The binary spelling of one mirror ({@code Elements.getBinaryName}),
+     * mirroring {@link #canonicalType}: erasure first, arrays append
+     * {@code []}, primitives keep their spelling. An ERROR mirror renders
+     * blank — unreachable in practice because {@code memberHasErrorType}
+     * blocks the member, kept for defensive parity with the canonical
+     * blank rule.
+     */
+    String binaryType(TypeMirror mirror) {
+      TypeMirror erased = types.erasure(mirror);
+      return switch (erased.getKind()) {
+        case ARRAY -> binaryType(((ArrayType) erased).getComponentType()) + "[]";
+        case DECLARED -> declaredBinaryName(erased);
+        case ERROR -> "";
+        default -> erased.toString();
+      };
+    }
+
+    private String declaredBinaryName(TypeMirror erased) {
+      if (erased instanceof DeclaredType declared
+          && declared.asElement() instanceof TypeElement named) {
+        return elements.getBinaryName(named).toString();
+      }
+      return "";
     }
   }
   /** Annotation mirrors rendered to canonical names and stable value strings. */
@@ -860,10 +922,37 @@ final class JavacSourceSymbolIndex {
       String name,
       String kind,
       List<AnnotationInfo> annotations,
-      List<String> parameterTypes,
+      MemberTypes types,
       List<List<AnnotationInfo>> parameterAnnotations,
+      boolean errorType) {
+
+    /** Canonical erased parameter spellings ({@code java.lang.String[]}). */
+    List<String> parameterTypes() {
+      return types.parameterTypes();
+    }
+
+    /** Canonical erased return spelling; {@code void} for constructors. */
+    String returnType() {
+      return types.returnType();
+    }
+
+    /** Binary parameter spellings ({@code java.lang.String[]}). */
+    List<String> parameterBinaryTypes() {
+      return types.parameterBinaryTypes();
+    }
+
+    /** Binary return spelling; {@code void} for constructors. */
+    String returnBinaryType() {
+      return types.returnBinaryType();
+    }
+  }
+
+  /** Canonical and binary type shapes of one member, kept in one fold. */
+  record MemberTypes(
+      List<String> parameterTypes,
       String returnType,
-      boolean errorType) {}
+      List<String> parameterBinaryTypes,
+      String returnBinaryType) {}
 
   /** One annotation with its rendered element values. */
   record AnnotationInfo(String canonicalName, Map<String, String> values) {}

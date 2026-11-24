@@ -262,10 +262,14 @@ class JavacTypeShapeMigrationTest {
         .anyMatch(candidate -> candidate.producerMethod().equals("clean")
             && candidate.candidateType().equals("java.lang.String")),
         off.toString());
-    // Flag-on: the index is per-file, so the cross-file nested return is an
-    // ERROR type — the correlated member must abstain (never surface the
-    // unqualified error spelling "Inner" as a canonical answer) and the
-    // textual answer survives; the clean producer keeps its canonical type.
+    // Flag-on: the unqualified nested spelling is out of scope in
+    // Producer.java (JLS 6.5.5.1 — a sibling class's nested type is not in
+    // scope by package membership; the index compiles the full selected
+    // source set jointly, so this is a scoping error, not an isolation
+    // gap), so the member is an ERROR type — it must abstain (never
+    // surface the unqualified error spelling "Inner" as a canonical
+    // answer) and the textual answer survives; the clean producer keeps
+    // its canonical type.
     assertTrue(on.stream()
         .anyMatch(candidate -> candidate.producerMethod().equals("make")
             && candidate.candidateType().isEmpty()),

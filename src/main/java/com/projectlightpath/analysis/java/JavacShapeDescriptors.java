@@ -4,42 +4,43 @@ import java.util.Optional;
 
 /**
  * Renders correlated index member shapes into the consumer dialects: the
- * bounded-model JVM descriptor ({@code Ljava/lang/String;}) from canonical
- * parameter and return types. Canonical names render directly — no
- * resolution step — and any blank component abstains so matching falls
- * back rather than fabricating.
+ * bounded-model JVM descriptor ({@code Ljava/lang/String;}) from binary
+ * parameter and return types ({@code demo.Outer$Inner} for nested types —
+ * the JVM descriptor requires the binary name, never the canonical dotted
+ * spelling). Binary names render directly — no resolution step — and any
+ * blank component abstains so matching falls back rather than fabricating.
  */
 final class JavacShapeDescriptors {
   private JavacShapeDescriptors() {}
 
-  /** Builds a JVM descriptor from one correlated index member's canonical
-   * shapes (bounded-model dialect). Canonical names render directly — no
+  /** Builds a JVM descriptor from one correlated index member's binary
+   * shapes (bounded-model dialect). Binary names render directly — no
    * resolution step — and any blank component abstains (Optional.empty)
    * so matching falls back rather than fabricating.
    */
   static Optional<String> jvmDescriptorFromMember(
       JavacSourceSymbolIndex.MemberInfo member) {
     StringBuilder descriptor = new StringBuilder("(");
-    for (String parameter : member.parameterTypes()) {
-      Optional<String> part = canonicalJvmDescriptor(parameter);
+    for (String parameter : member.parameterBinaryTypes()) {
+      Optional<String> part = binaryJvmDescriptor(parameter);
       if (part.isEmpty()) {
         return Optional.empty();
       }
       descriptor.append(part.orElseThrow());
     }
     descriptor.append(')');
-    return canonicalJvmDescriptor(member.returnType())
+    return binaryJvmDescriptor(member.returnBinaryType())
         .map(value -> descriptor.append(value).toString());
   }
 
-  /** Renders one canonical (already qualified or primitive) type spelling. */
-  private static Optional<String> canonicalJvmDescriptor(String canonical) {
-    String normalized = canonical == null ? "" : canonical.trim();
+  /** Renders one binary (already qualified or primitive) type spelling. */
+  private static Optional<String> binaryJvmDescriptor(String binary) {
+    String normalized = binary == null ? "" : binary.trim();
     if (normalized.isEmpty()) {
       return Optional.empty();
     }
     if (normalized.endsWith("[]")) {
-      return canonicalJvmDescriptor(
+      return binaryJvmDescriptor(
           normalized.substring(0, normalized.length() - 2)).map(value -> "[" + value);
     }
     return switch (normalized) {
