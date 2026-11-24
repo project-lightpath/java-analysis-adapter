@@ -62,7 +62,7 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
 - Default output unchanged with the flag off: pinned textual goldens for
   every wired surface (proxy descriptors, bounded-model descriptors,
   producer type, repository signatures, reflection matching).
-- Gates: `make adapter-test` 608 executions (floor 534), zero failures;
+- Gates: `make adapter-test` 610 executions (floor 534), zero failures;
   `make java-lint` PASS (0 new findings); `make evidence-validate` pass.
 
 ## Change-review record
@@ -109,7 +109,11 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
   1. The crash fix was unpinned —
      `sameEntityIdRepositoryContractCheckDoesNotCrash` now pins
      `CrudRepository<User, User>` (equal entity/id types) through the
-     flag-on contract check.
+     flag-on contract check. Round 4 found the first pin vacuous
+     (deleteByName is not a guaranteed contract name, so the check never
+     ran); the pin now declares `delete` (a contract name whose single
+     parameter differs from the entity/id types), which the round-4
+     mutation probe showed reaches the expected-types collection.
   2. The shadow fix was unpinned —
      `reflectionParameterMatchingDoesNotMatchShadowedSimpleNames` pins a
      sibling `demo.Class` shadowing `java.lang.Class`: the simple-name

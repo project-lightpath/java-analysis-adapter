@@ -395,7 +395,7 @@ class JavacTypeShapeMigrationTest {
         package demo;
         public interface UserRepository
             extends org.springframework.data.repository.CrudRepository<User, User> {
-          void deleteByName(String name);
+          void delete(String name);
         }
         """);
     AnalysisContext context = context(sourceRoot, "2.7.18",
@@ -405,11 +405,14 @@ class JavacTypeShapeMigrationTest {
     SourceMetadataScannerState.SourceFile repository =
         file(scanner, sourceRoot, "demo/UserRepository.java");
     // CrudRepository<User, User> makes the entity and id types equal; the
-    // contract check must not crash on the duplicate (the expected-types
-    // collection is a List, not a Set).
+    // guaranteed-contract redeclaration check (delete is a contract name,
+    // its single parameter differs from the entity/id types) must reach
+    // the expected-types collection and not crash on the duplicate (a
+    // List, not a Set).
     assertDoesNotThrow(() -> scanner.springRepositoryMethods(repository));
     assertTrue(scanner.springRepositoryMethods(repository).stream()
-        .anyMatch(method -> method.name().equals("deleteByName")));
+        .anyMatch(method -> method.name().equals("delete")
+            && !method.guaranteed()));
   }
 
   @Test
