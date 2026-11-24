@@ -636,6 +636,62 @@ class JavacTypeShapeMigrationTest {
             + repositorySignature + " vs " + fragmentSignature);
   }
 
+  @Test
+  void nestedTypeParameterBoundsYieldEveryName() throws IOException {
+    AnalysisContext context = context("nested-clause", Map.of(
+        "demo/Nested.java", """
+            package demo;
+            public class Nested {
+              public <X extends java.util.Set<String>, Y extends java.util.List>
+                  String pick(X p) { return null; }
+              public <Y extends java.util.List, X extends java.util.Set<String>>
+                  Integer pick(Y p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("nested-clause"), "demo/Nested.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    for (SourceMetadataScannerState.MethodInfo method
+        : SourceMetadataScanner.methods(file)) {
+      // The nested bound (Set<String>) contains an inner '>'; a parser that
+      // stops at the first '>' would miss the second type parameter and
+      // let the mirrored overloads correlate to each other's members. The
+      // balanced parse yields every name, so both abstain.
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Nested", method).isEmpty(),
+          "the nested-bound mirrored overload must abstain: " + method.parameters());
+    }
+  }
+
+  @Test
+  void unresolvedTypeVariableBoundParameterAbstains() throws IOException {
+    AnalysisContext context = context("unresolved-bound-param", Map.of(
+        "demo/Bound.java", """
+            package demo;
+            public class Bound {
+              public void run(T value) { }
+              public <T extends missing.Thing> void declare() { }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("unresolved-bound-param"), "demo/Bound.java");
+    SourceMetadataScannerState.MethodInfo run = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("run"))
+        .findFirst().orElseThrow();
+    // The parameter's declared mirror is a TYPEVAR (not an error), but its
+    // erasure is an error type (the bound is declared later in the file and
+    // unresolved): the member must abstain rather than publish the erased
+    // error spelling in parameterTypes.
+    assertTrue(JavacMemberCorrelation.of(scanner)
+            .correlatedMethod(file, "demo.Bound", run).isEmpty(),
+        "an unresolved type-variable bound parameter must abstain");
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);

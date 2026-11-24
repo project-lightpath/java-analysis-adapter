@@ -191,6 +191,34 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      regression, recorded here.
   Thread r4675771826 (JVM descriptor binary names) remains the
   agreed documented follow-up from CR-1.
+- **Round CR-3** (CodeRabbit re-review of 58a8369; 3 findings — 1 Major
+  and 1 Minor fixed in REVIEW_23_8, 1 Minor dispositioned):
+  1. Major (r4681365981) — `methodTypeParameters` stopped at the first
+     `>`, so a nested bound (`<X extends Set<Bar>, Y ...>`) hid later
+     type-parameter names and reopened the mirrored-overload derangement
+     window; an incomplete parse returning an empty set did NOT abstain
+     (indistinguishable from no clause). Fixed: the clause is balanced
+     with depth counting, split on top-level commas only, annotations
+     stripped from names, and any unparseable clause abstains via a
+     three-state result (none / parsed names / abstain). Pinned by
+     `nestedTypeParameterBoundsYieldEveryName`.
+  2. Minor (r4681366003) — parameters whose declared mirror is a type
+     variable with an unresolved bound slipped through `memberHasError
+     Type` (TYPEVAR is not an error kind) and published the erased error
+     spelling with `errorType=false`. Fixed: parameters get the same
+     declared-or-erased check the return type has. Pinned by
+     `unresolvedTypeVariableBoundParameterAbstains`.
+  3. Minor (r4681365963) — index diagnostics (javac errors behind
+     flag-on abstentions) do not reach the scan output. DISPOSITIONED:
+     routing index diagnostics into `scan.diagnostics()` would block
+     DEFINITE promotion for the WHOLE scan (`ServiceLoaderDescriptor
+     Scanner.isUnique`), a blast radius this change must not take; the
+     plan's certainty model (reviewed through six plan rounds)
+     deliberately specifies silent-textual fallback with zero new scan
+     diagnostics. A blast-radius-safe visibility channel (per-member
+     evidence rather than scan diagnostics) is the follow-up, recorded
+     here; #60 (index shape fidelity) removes most of the abstentions
+     this would surface.
 
 ## Plan-review record
 

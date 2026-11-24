@@ -203,7 +203,15 @@ final class JavacMemberCorrelation {
   private List<String> resolvedParameterVector(
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo declaration) {
-    Set<String> typeParameters = methodTypeParameters(file, declaration);
+    JavacTypeParameterClause clause = JavacTypeParameterClause.parse(file, declaration);
+    if (clause.abstain()) {
+      // An unparseable type-parameter clause leaves the parameter names
+      // unknown, reopening the mirrored-overload derangement window: the
+      // group must abstain rather than correlate on possibly-swapped
+      // vectors.
+      return List.of();
+    }
+    Set<String> typeParameters = clause.names();
     List<String> vector = new ArrayList<>();
     for (SourceMetadataScannerState.Parameter parameter
         : SourceMetadataScanner.parameters(declaration.parameters())) {
@@ -227,42 +235,6 @@ final class JavacMemberCorrelation {
       vector.add(canonical.get() + (array ? "[]" : ""));
     }
     return vector;
-  }
-
-  /**
-   * The type-parameter names declared by one method's own
-   * {@code <...>} clause, extracted from the declaration header (the
-   * region between the declaration start and its parameter list).
-   */
-  private static Set<String> methodTypeParameters(
-      SourceMetadataScannerState.SourceFile file,
-      SourceMetadataScannerState.MethodInfo declaration) {
-    String source = file.source();
-    int parametersAt = source.indexOf(declaration.parameters(), declaration.start());
-    if (declaration.parameters().isEmpty() || parametersAt < 0) {
-      return Set.of();
-    }
-    String header = source.substring(declaration.start(), parametersAt);
-    // The clause must be the FIRST thing after modifiers, annotations, and
-    // any preceding declaration delimiter ({, }, ;) that the extraction
-    // start includes — a generic RETURN type (List<String> pick) also
-    // contains angle brackets but never starts the header.
-    java.util.regex.Matcher matcher = java.util.regex.Pattern
-        .compile("^(?:\\s|[{};]|@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?|public|protected|private|"
-            + "static|final|synchronized|abstract|default|strictfp|native)*"
-            + "\\s*<([^>]*)>")
-        .matcher(header);
-    if (!matcher.find()) {
-      return Set.of();
-    }
-    Set<String> names = new HashSet<>();
-    for (String segment : matcher.group(1).split(",")) {
-      String[] words = segment.trim().split("\\s+");
-      if (words.length > 0 && !words[0].isBlank()) {
-        names.add(words[0]);
-      }
-    }
-    return names;
   }
 
   private static final Set<String> PRIMITIVE_TYPES = Set.of(

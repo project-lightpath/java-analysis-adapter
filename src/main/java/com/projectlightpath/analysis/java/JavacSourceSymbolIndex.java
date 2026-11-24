@@ -742,7 +742,8 @@ final class JavacSourceSymbolIndex {
           }
         }
         return ((ExecutableElement) element).getParameters().stream()
-            .anyMatch(variable -> isError(variable.asType()));
+            .anyMatch(variable -> isError(variable.asType())
+                || isError(types.erasure(variable.asType())));
       }
       return false;
     }
