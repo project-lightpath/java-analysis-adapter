@@ -1030,6 +1030,120 @@ class JavacTypeShapeMigrationTest {
     }
   }
 
+  @Test
+  void classTypeParametersShadowingImportsAbstain() throws IOException {
+    AnalysisContext context = context("class-type-params", Map.of(
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example<List extends java.util.Set, Set extends java.util.List> {
+              public String pick(List p) { return null; }
+              public Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("class-type-params"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // A CLASS type parameter that shadows an imported type resolves
+    // through the import textually while javac erases it to its bound,
+    // so the mirrored overloads can swap vectors and correlate to each
+    // other's members. Parameters naming a type parameter of the
+    // enclosing class must abstain, like method type parameters do.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the class-type-parameter mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
+  @Test
+  void classTypeParameterTokenKeepsDistinctOverloadIdentities() throws IOException {
+    Path sourceRoot = temp.resolve("class-token-overloads").resolve("src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/AccountRepository.java", """
+        package demo;
+        public interface AccountRepository<String extends Number>
+            extends org.springframework.data.repository.CrudRepository<Account, Long> {
+          Object find(String key);
+          Object find(java.lang.String key);
+        }
+        """);
+    AnalysisContext context = context(sourceRoot, "2.7.18",
+        AnalysisContext.Framework.SPRING_BOOT);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile repository =
+        file(scanner, sourceRoot, "demo/AccountRepository.java");
+    // The CLASS-level type parameter String must keep its TOKEN in the
+    // signature identity: resolving it through java.lang would give both
+    // overloads find(java.lang.String) and deduplicate them.
+    List<String> identities = scanner.springRepositoryMethods(repository).stream()
+        .map(SourceMetadataScannerState.RepositoryMethod::identity)
+        .filter(identity -> identity.startsWith("find("))
+        .sorted()
+        .toList();
+    assertEquals(List.of("find(String)", "find(java.lang.String)"), identities,
+        "a class type-variable parameter must keep its token so the two "
+            + "overloads keep distinct identities: " + identities);
+  }
+
+  @Test
+  void qualifiedSimplePrefixSpellingsKeepTokensAcrossImportStyles() throws IOException {
+    Path sourceRoot = temp.resolve("map-entry-styles").resolve("src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/AccountFragment.java", """
+        package demo;
+        import java.util.*;
+        public interface AccountFragment {
+          Map.Entry find(Map.Entry key);
+        }
+        """);
+    write(sourceRoot, "demo/AccountRepository.java", """
+        package demo;
+        import java.util.Map;
+        public interface AccountRepository
+            extends org.springframework.data.repository.CrudRepository<Account, Long>,
+                AccountFragment {
+          Map.Entry find(Map.Entry key);
+        }
+        """);
+    AnalysisContext context = context(sourceRoot, "2.7.18",
+        AnalysisContext.Framework.SPRING_BOOT);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile repository =
+        file(scanner, sourceRoot, "demo/AccountRepository.java");
+    SourceMetadataScannerState.SourceFile fragment =
+        file(scanner, sourceRoot, "demo/AccountFragment.java");
+    // Map.Entry's first segment is a TYPE name, not a package: its
+    // resolution is import-dependent (explicit java.util.Map resolves it,
+    // on-demand does not), so canonicalizing the dotted spelling would
+    // split the identity across the two files. Only package-qualified
+    // spellings (lowercase first segment) are file-independent; Map.Entry
+    // keeps its token on both sides.
+    String repositorySignature = scanner.springRepositoryMethods(repository).stream()
+        .filter(method -> method.name().equals("find"))
+        .map(SourceMetadataScannerState.RepositoryMethod::identity)
+        .findFirst().orElseThrow();
+    SourceMetadataScannerState.MethodInfo fragmentFind = SourceMetadataScanner
+        .methods(fragment).stream()
+        .filter(method -> method.name().equals("find"))
+        .findFirst().orElseThrow();
+    String fragmentSignature = scanner.repositoryMethodSignature(fragment, fragmentFind);
+    assertEquals(repositorySignature, fragmentSignature,
+        "import-style differences must not split the identity: "
+            + repositorySignature + " vs " + fragmentSignature);
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);
