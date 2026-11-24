@@ -305,6 +305,36 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
       name boundary after '@'). Pinned by
       whitespaceBeforeAnnotationArgumentsKeepsClauseVisible (committed
       red first: the fixture correlated at HEAD).
+   9. Follow-up round CR-8 (the four threads left with CodeRabbit's
+      last word; addressed in REVIEW_23_16):
+      a. Thread 4675771816 (comment 4681423578): annotated type
+         parameters (<@Ann List extends java.util.Set>) — the name strip
+         landed in 132a7b1 but the thread was never answered and the
+         case was unpinned. Pinned by annotatedTypeParameterNamesAre
+         Recognized (green characterization pin of the 132a7b1 strip).
+      b. Thread 4675771839 (comment 4681408527):
+         repositoryMethodSignature overload identities for
+         <String extends Number> find(String key) vs
+         find(java.lang.String key) — verified EMPIRICALLY that the
+         132a7b1 token rule already keeps the identities distinct
+         (find(String) vs find(java.lang.String)); pinned by
+         typeVariableTokenKeepsDistinctOverloadIdentities (green
+         characterization pin; the initial run also proved
+         springRepositoryMethods does NOT deduplicate them).
+      c. Thread 4684976467: whitespace around the dots of a qualified
+         annotation name (@java . lang . SuppressWarnings (...)) —
+         qualifiedNameEnd required the '.' immediately after a name
+         segment, so the prefix stopped at the '.' and the clause went
+         unrecognized (none(), non-abstaining). Fixed: the qualified
+         name consumption skips whitespace around dots; a dot not
+         followed by a name segment is unparseable and abstains. Pinned
+         by whitespaceAroundQualifiedNameDotsKeepsClauseVisible
+         (committed red first as RED_23_16: correlated at HEAD).
+      d. Thread 4681365981 (comment 4686083980): the whitespace-before-
+         annotation-arguments case — already fixed in REVIEW_23_15
+         (7f9d904) but the reply was only posted on the 4682526615
+         sub-thread; the main-thread reply is now posted with the same
+         evidence.
   3. Minor (r4681365963) — index diagnostics (javac errors behind
      flag-on abstentions) do not reach the scan output. DISPOSITIONED:
      routing index diagnostics into `scan.diagnostics()` would block

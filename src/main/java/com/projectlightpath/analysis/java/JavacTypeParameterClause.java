@@ -285,18 +285,27 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
     return index;
   }
 
-  /** The index just past a qualified annotation name at {@code from}, or -1. */
+  /**
+   * The index just past a qualified annotation name at {@code from}, or -1.
+   * Whitespace around the dots of a qualified name (@java . lang . Foo) is
+   * legal Java and is skipped; a dot not followed by a name segment is
+   * unparseable, so -1 (the caller abstains).
+   */
   private static int qualifiedNameEnd(String header, int from) {
     int index = identifierEnd(header, from);
     if (index < 0) {
       return -1;
     }
-    while (index + 1 < header.length()
-        && header.charAt(index) == '.'
-        && Character.isJavaIdentifierStart(header.charAt(index + 1))) {
-      index = identifierEnd(header, index + 1);
+    while (true) {
+      int dot = skipWhitespace(header, index);
+      if (dot >= header.length() || header.charAt(dot) != '.') {
+        return index;
+      }
+      index = identifierEnd(header, skipWhitespace(header, dot + 1));
+      if (index < 0) {
+        return -1;
+      }
     }
-    return index;
   }
 
   /** The index just past an identifier at {@code from}, or -1. */
