@@ -132,6 +132,18 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
         candidate.producerSignature());
   }
 
+  /**
+   * Builds a JVM descriptor from one correlated index member's canonical
+   * shapes (bounded-model dialect).
+   *
+   * <p>RED_23 behavior-neutral stub: empty so the failing acceptance test
+   * compiles; the renderer lands in GREEN_23.
+   */
+  static Optional<String> jvmDescriptorFromMember(
+      JavacSourceSymbolIndex.MemberInfo member) {
+    return Optional.empty();
+  }
+
   /** Resolves one Java type to a JVM descriptor without guessing unknown references. */
   static Optional<String> jvmDescriptor(
       String type,

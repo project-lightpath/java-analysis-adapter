@@ -182,6 +182,46 @@ final class JavacAnnotationAccess {
     return separator < 0 ? canonical : canonical.substring(separator + 1);
   }
 
+  /**
+   * Correlates one textual method declaration to its index member through
+   * the group-scoped rule (unique group: owner+name+arity; multi-overload
+   * group: resolved-textual-vector bijection onto the index vectors).
+   *
+   * <p>RED_23 behavior-neutral stub: returns the arity-only result so the
+   * failing acceptance tests compile; the group-scoped rule lands in
+   * GREEN_23. Documented in the RED commit message.
+   */
+  Optional<JavacSourceSymbolIndex.MemberInfo> correlatedMethod(
+      SourceMetadataScannerState.SourceFile file,
+      String ownerType,
+      SourceMetadataScannerState.MethodInfo method) {
+    return member(ownerType, method.name(),
+        SourceMetadataScanner.parameters(method.parameters()).size());
+  }
+
+  /**
+   * Correlates one textual constructor declaration ({@code <init>}) to its
+   * index member, which the index names by the owner's simple name with
+   * kind {@code constructor}, through the same group-scoped rule.
+   *
+   * <p>RED_23 behavior-neutral stub: arity-only, as above.
+   */
+  Optional<JavacSourceSymbolIndex.MemberInfo> correlatedConstructor(
+      SourceMetadataScannerState.SourceFile file,
+      String ownerType,
+      SourceMetadataScannerState.MethodInfo constructor) {
+    String simpleName = ownerType.substring(ownerType.lastIndexOf('.') + 1);
+    return JavacSourceSymbolIndex.of(context)
+        .map(index -> index.members(ownerType, simpleName).stream()
+            .filter(member -> member.kind().equals("constructor")
+                && member.parameterTypes().size()
+                    == SourceMetadataScanner.parameters(constructor.parameters()).size())
+            .toList())
+        .filter(matches -> matches.size() == 1)
+        .map(matches -> matches.get(0))
+        .filter(found -> !found.errorType());
+  }
+
   /** Strips the renderer's surrounding quotes from a string value. */
   static String unquoted(String renderedValue) {
     if (renderedValue != null && renderedValue.length() >= 2
