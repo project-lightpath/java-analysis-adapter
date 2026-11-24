@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -384,6 +385,64 @@ class JavacTypeShapeMigrationTest {
     // erased generic -> java.util.List, varargs -> String[].
     assertEquals("(Ljava/util/List;[Ljava/lang/String;)V",
         JavacShapeDescriptors.jvmDescriptorFromMember(member).orElseThrow());
+  }
+
+  @Test
+  void sameEntityIdRepositoryContractCheckDoesNotCrash() throws IOException {
+    Path sourceRoot = temp.resolve("same-entity-id").resolve("src/main/java");
+    write(sourceRoot, "demo/User.java", "package demo; public class User {}\n");
+    write(sourceRoot, "demo/UserRepository.java", """
+        package demo;
+        public interface UserRepository
+            extends org.springframework.data.repository.CrudRepository<User, User> {
+          void deleteByName(String name);
+        }
+        """);
+    AnalysisContext context = context(sourceRoot, "2.7.18",
+        AnalysisContext.Framework.SPRING_BOOT);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile repository =
+        file(scanner, sourceRoot, "demo/UserRepository.java");
+    // CrudRepository<User, User> makes the entity and id types equal; the
+    // contract check must not crash on the duplicate (the expected-types
+    // collection is a List, not a Set).
+    assertDoesNotThrow(() -> scanner.springRepositoryMethods(repository));
+    assertTrue(scanner.springRepositoryMethods(repository).stream()
+        .anyMatch(method -> method.name().equals("deleteByName")));
+  }
+
+  @Test
+  void reflectionParameterMatchingDoesNotMatchShadowedSimpleNames() throws IOException {
+    AnalysisContext context = context("shadow", Map.of(
+        "demo/Shadow.java", """
+            package demo;
+            class Class { }
+            """,
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit(Class target) {
+                try { Class.forName(target.toString()); }
+                catch (ClassNotFoundException e) { }
+              }
+            }
+            """));
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("shadow"), "demo/Probe.java");
+    SourceMetadataScannerState.MethodInfo audit = SourceMetadataScanner
+        .methods(file).get(0);
+    int offset = audit.start() + 10;
+    System.setProperty(FLAG, "true");
+    // The sibling demo.Class shadows java.lang.Class for this file (JLS
+    // 6.4.1): the parameter's canonical type is demo.Class, and the
+    // simple-name query "Class" must NOT match it — the canonical
+    // comparison only serves exact canonical spellings.
+    assertFalse(scanner.parameterMatchesType(
+        file, audit, "Class", "target", offset));
+    assertTrue(scanner.parameterMatchesType(
+        file, audit, "demo.Class", "target", offset));
   }
 
   private SourceMetadataScannerState.SourceFile file(

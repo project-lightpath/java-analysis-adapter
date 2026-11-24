@@ -62,7 +62,7 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
 - Default output unchanged with the flag off: pinned textual goldens for
   every wired surface (proxy descriptors, bounded-model descriptors,
   producer type, repository signatures, reflection matching).
-- Gates: `make adapter-test` 607 executions (floor 534), zero failures;
+- Gates: `make adapter-test` 608 executions (floor 534), zero failures;
   `make java-lint` PASS (0 new findings); `make evidence-validate` pass.
 
 ## Change-review record
@@ -104,6 +104,24 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      -name queries keep the textual ladder unchanged (no loss, no
      fabrication).
   One NIT (stale producer-descriptor javadoc) fixed.
+- **Round 3** (delta-only, on REVIEW_23_2): 3 addressable findings, all
+  addressed in REVIEW_23_3:
+  1. The crash fix was unpinned —
+     `sameEntityIdRepositoryContractCheckDoesNotCrash` now pins
+     `CrudRepository<User, User>` (equal entity/id types) through the
+     flag-on contract check.
+  2. The shadow fix was unpinned —
+     `reflectionParameterMatchingDoesNotMatchShadowedSimpleNames` pins a
+     sibling `demo.Class` shadowing `java.lang.Class`: the simple-name
+     query does not match, the canonical query does.
+  3. The flag-on canonical disjunct in `parameterMatchesType` is
+     production-dead (every production caller queries simple names; the
+     index stores canonical names, so only exact-canonical queries can
+     fire — currently just the test). Documented here so a future round
+     does not assume live coverage; the direction is conservative either
+     way. The round-2 commit message's sentinel claim was also
+     imprecise (only the entity type is sentinel-guarded; the id
+     sentinel reaches the List harmlessly) — corrected by this record.
 
 ## Plan-review record
 
