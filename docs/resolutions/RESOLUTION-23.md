@@ -275,6 +275,25 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
          `unresolvedTypeVariableBoundParameterAbstains` fail (member
          correlates, `expected: <true> but was: <false>`); restoring the
          check makes it pass. The pin is mutation-sensitive.
+   7. Independent adversarial re-review of the CR-6 changes (Engram
+      grounded, same session): a 20-cell header battery against the
+      compiled parser (wildcard, intersection, and recursive bounds;
+      qualified, nested, array-argument, and brace-nested annotations;
+      unbalanced arguments abstain), the varargs/generic-array cell
+      (isError recurses into ARRAY components, so T.../T[] with an
+      unresolved bound is caught by the erased check), the nested-class
+      constructor indexName cell (canonical dotted spellings, probed in
+      PLAN-21), and the anchor-collision cell (forward search from
+      declaration.start() plus name verification makes a foreign
+      ident(params) anchor impossible in valid Java) — no new findings.
+      Mutation sensitivity of the two CR-6 pins, executed: reverting
+      ONLY the parenthesis shield in clauseEnd makes
+      boundAnnotationArgumentBracketsDoNotCloseClause fail (the
+      nested-paren pin stays green); reverting ONLY the balanced
+      annotation consumption in annotationEnd makes
+      nestedParenthesisAnnotationArgumentBeforeClauseAbstains fail (the
+      bound-annotation pin stays green). The guards are independent and
+      each pin is mutation-sensitive against exactly its own guard.
   3. Minor (r4681365963) — index diagnostics (javac errors behind
      flag-on abstentions) do not reach the scan output. DISPOSITIONED:
      routing index diagnostics into `scan.diagnostics()` would block
