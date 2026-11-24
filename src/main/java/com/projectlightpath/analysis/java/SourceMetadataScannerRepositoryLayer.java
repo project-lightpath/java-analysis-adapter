@@ -76,7 +76,7 @@ abstract class SourceMetadataScannerRepositoryLayer
     // token comparison above still runs, so no true answer is lost.
     return JavacSourceSymbolIndex.enabled()
         && JavacMemberCorrelation.of((SourceMetadataScanner) this)
-            .correlatedFirstParameterIs(file, method, Set.of(entityType, idType));
+            .correlatedFirstParameterIs(file, method, List.of(entityType, idType));
   }
 
   /**

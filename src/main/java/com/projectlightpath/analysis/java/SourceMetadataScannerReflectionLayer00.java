@@ -151,9 +151,10 @@ static boolean hasParameter(MethodInfo owner, String variable) {
     if (JavacSourceSymbolIndex.enabled()) {
       // Flag-on: the correlated member's canonical parameter type adds a
       // match source the textual ladder cannot produce (corrupted
-      // spellings); the textual ladder still runs, so no true answer is
-      // lost. Production callers query simple names ("Class", "Method"),
-      // so both the canonical and the simple spelling compare.
+      // spellings). ONLY the exact canonical spelling compares — a
+      // simple-name disjunct would fabricate matches when a same-simple
+      // name shadows the queried type (JLS 6.4.1) — and the textual
+      // ladder still runs, so no true answer is lost.
       String ownerType = typeContaining(file, owner.start());
       Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
           JavacMemberCorrelation.of((SourceMetadataScanner) this)
@@ -163,8 +164,7 @@ static boolean hasParameter(MethodInfo owner, String variable) {
         List<String> canonical = correlated.orElseThrow().parameterTypes();
         for (int index = 0; index < declared.size() && index < canonical.size(); index++) {
           if (declared.get(index).name().equals(variable)
-              && (canonical.get(index).equals(type)
-                  || simpleNameOf(canonical.get(index)).equals(type))) {
+              && canonical.get(index).equals(type)) {
             return true;
           }
         }
@@ -175,11 +175,6 @@ static boolean hasParameter(MethodInfo owner, String variable) {
         .map(Parameter::type)
         .map(parameterType -> stripBalancedGenericArguments(parameterType).trim())
         .anyMatch(parameterType -> isJdkDeclaredType(file, parameterType, offset, type));
-  }
-
-  private static String simpleNameOf(String canonical) {
-    int separator = canonical.lastIndexOf('.');
-    return separator < 0 ? canonical : canonical.substring(separator + 1);
   }
 
 static Optional<LocalDeclaration> simpleLocalDeclaration(

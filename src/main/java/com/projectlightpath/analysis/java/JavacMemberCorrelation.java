@@ -40,7 +40,7 @@ final class JavacMemberCorrelation {
   boolean correlatedFirstParameterIs(
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo method,
-      Set<String> expected) {
+      List<String> expected) {
     String ownerType = scanner.typeContaining(file,
         SourceMetadataScanner.declarationStart(file, method.start()));
     return correlatedMethod(file, ownerType, method)
@@ -223,7 +223,7 @@ final class JavacMemberCorrelation {
   private static final Set<String> PRIMITIVE_TYPES = Set.of(
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
 
-  /** The index-rendered producer descriptor, matching the producer method by name and arity. */
+  /** The index-rendered producer descriptor, matching the producer method by its own parameter text. */
   Optional<String> producerJvmDescriptorFromIndex(
       SourceMetadataScannerState.BeanCandidate candidate) {
     int arity = SourceMetadataScanner.parameters(candidate.producerParameters()).size();

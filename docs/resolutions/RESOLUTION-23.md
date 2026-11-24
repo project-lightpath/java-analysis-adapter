@@ -90,6 +90,20 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      RESOLUTION corrected (see the index-defect entry above).
   NITs (duplicate `of(scanner)` construction, stray blank lines,
   fully-qualified collections) fixed.
+- **Round 2** (delta-only, on REVIEW_23_1): 2 HIGH findings, both
+  addressed in REVIEW_23_2:
+  1. `Set.of(entityType, idType)` threw IllegalArgumentException for
+     same-entity/id repositories (`CrudRepository<User, User>` is legal
+     Java; probe-confirmed crash). Fixed: the expected types are a List
+     (duplicates legal), and the member check uses contains.
+  2. The round-1 simple-name disjunct in `parameterMatchesType`
+     fabricated matches when a same-simple-name type shadowed the
+     queried JDK name (probe: file with sibling `demo.Class`, parameter
+     `Class`, query "Class" — textual correctly false, flag-on wrongly
+     true). Fixed: ONLY the exact canonical spelling compares; simple
+     -name queries keep the textual ladder unchanged (no loss, no
+     fabrication).
+  One NIT (stale producer-descriptor javadoc) fixed.
 
 ## Plan-review record
 
