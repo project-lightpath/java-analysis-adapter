@@ -748,6 +748,45 @@ class JavacTypeShapeMigrationTest {
     }
   }
 
+  @Test
+  void commentBeforeClauseDoesNotHideTypeParameters() throws IOException {
+    AnalysisContext context = context("comment-before-clause", Map.of(
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              public /* List p */ <X extends java.util.Set<String>, List extends java.util.Set>
+                  String pick(List p) { return null; }
+              public /* Set p */ <Y extends java.util.Set<String>, Set extends java.util.List>
+                  Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("comment-before-clause"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // The comment BEFORE the clause repeats the parameter text verbatim
+    // (public /* List p */ <...>): a raw indexOf for the parameter list
+    // would truncate the header at the comment, hide the clause entirely,
+    // and let the mirrored overloads correlate to each other. The boundary
+    // is located on the comment-masked source, so the clause is found. The
+    // parameters are the SECOND declared names in each clause, after an
+    // actual nested generic bound (Set<String>). Both abstain.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the comment-before-clause mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);
