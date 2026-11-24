@@ -14,14 +14,16 @@ import java.util.Optional;
  */
 final class JavacAnnotationAccess {
   private final AnalysisContext context;
+  private final SourceMetadataScanner scanner;
 
-  private JavacAnnotationAccess(AnalysisContext context) {
-    this.context = context;
+  private JavacAnnotationAccess(SourceMetadataScanner scanner) {
+    this.context = scanner.context;
+    this.scanner = scanner;
   }
 
   /** Returns the accessor bound to one scanner's context. */
   static JavacAnnotationAccess of(SourceMetadataScanner scanner) {
-    return new JavacAnnotationAccess(scanner.context);
+    return new JavacAnnotationAccess(scanner);
   }
 
   /** Reports whether the index seam flag is enabled. */
@@ -89,21 +91,28 @@ final class JavacAnnotationAccess {
   }
 
   /**
-   * Builds a proxy method descriptor, repairing triggered parameters from
-   * the index and keeping the textual spelling for everything else. The
-   * repair only runs when the interface file declares exactly one type:
-   * {@code methods(file)} returns methods of nested and sibling types too,
-   * and a name+arity correlation cannot prove which declaration a textual
-   * method belongs to — ambiguous files fall back to fully textual.
+   * Builds a proxy method descriptor from the index shapes when the member
+   * correlates (either path), falling back to the per-parameter repair and
+   * then the textual spelling. The repair only runs when the interface file
+   * declares exactly one type: {@code methods(file)} returns methods of
+   * nested and sibling types too, and a name+arity correlation cannot prove
+   * which declaration a textual method belongs to — ambiguous files fall
+   * back to fully textual.
    */
   String methodDescriptor(
       SourceMetadataScannerState.MethodInfo method, String ownerType,
       SourceMetadataScannerState.SourceFile file) {
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
+        correlation.correlatedMethod(file, ownerType, method);
+    if (correlated.isPresent()) {
+      return "(" + String.join(",", correlated.orElseThrow().parameterTypes()) + ")";
+    }
     String parameters = method.parameters().trim();
     if (parameters.isEmpty()) {
       return "()";
     }
-    if (!singleTypeFile(file) || hasCommentText(parameters)) {
+    if (correlation.blocked(file, parameters)) {
       return textualDescriptor(parameters);
     }
     List<String> split = SourceMetadataScannerTextLayer06.splitTopLevelArguments(parameters);
@@ -118,29 +127,12 @@ final class JavacAnnotationAccess {
     return descriptor.append(')').toString();
   }
 
-  /**
-   * Reports whether the raw parameter text contains comment markers. A
-   * comment's parentheses distort {@code splitTopLevelArguments} (the split
-   * is not comment-aware), so the derived arity cannot be trusted for
-   * overload selection — such methods keep the textual spelling.
-   */
-  private static boolean hasCommentText(String parameters) {
-    return parameters.contains("/*") || parameters.contains("//");
-  }
-
   /** Returns the fully textual descriptor for files the repair cannot own. */
   private static String textualDescriptor(String parameters) {
     return "(" + String.join(",", SourceMetadataScannerTextLayer06
         .splitTopLevelArguments(parameters).stream()
         .map(SourceMetadataScanner::parameterType)
         .toList()) + ")";
-  }
-
-  /** Reports whether the file declares exactly one indexed type (owner provable). */
-  private boolean singleTypeFile(SourceMetadataScannerState.SourceFile file) {
-    return JavacSourceSymbolIndex.of(context)
-        .map(index -> index.typesIn(file.path()).size() == 1)
-        .orElse(true);
   }
 
   /** Returns the repaired spelling when triggered and unambiguous, else the textual one. */

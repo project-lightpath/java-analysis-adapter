@@ -27,7 +27,6 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
     super(framework);
   }
 
-
   /** Finds metadata rows belonging to one source candidate. */
   List<AnalysisContext.BindingCandidateMetadata> matchingCandidateMetadata(
       AnalysisContext context,
@@ -99,6 +98,18 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
   static Optional<String> methodDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.ProxyTarget target) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      // Flag-on: the correlated member's index shapes render the descriptor
+      // directly; a non-correlating target keeps the textual ladder below.
+      Optional<String> fromIndex = JavacMemberCorrelation.of(scanner)
+          .correlatedJvmDescriptor(target.file(),
+              scanner.typeContaining(target.file(),
+                  SourceMetadataScanner.declarationStart(target.file(), target.method().start())),
+              target.method());
+      if (fromIndex.isPresent()) {
+        return fromIndex;
+      }
+    }
     return methodDescriptor(scanner, target.file(), target.method().parameters(), target.method().returnType());
   }
 
@@ -125,12 +136,23 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
   static Optional<String> producerDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.BeanCandidate candidate) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      // Flag-on: the correlated producer method's index shapes render the
+      // descriptor directly; a non-correlating candidate keeps textual.
+      Optional<String> fromIndex = JavacMemberCorrelation.of(scanner)
+          .producerJvmDescriptorFromIndex(candidate);
+      if (fromIndex.isPresent()) {
+        return fromIndex;
+      }
+    }
     return methodDescriptor(
         scanner,
         candidate.file(),
         candidate.producerParameters(),
         candidate.producerSignature());
   }
+
+
 
   /** Resolves one Java type to a JVM descriptor without guessing unknown references. */
   static Optional<String> jvmDescriptor(

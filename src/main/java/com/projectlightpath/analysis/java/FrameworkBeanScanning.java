@@ -145,6 +145,16 @@ final class FrameworkBeanScanning {
       String candidateId = file.typeName() + "#" + method.name() + "("
           + method.parameters().replaceAll("\\s+", " ").trim() + ")";
       String producerType = scanner.resolveReferenceType(method.returnType(), file).orElse("");
+      if (JavacSourceSymbolIndex.enabled()) {
+        // Flag-on: the correlated member's canonical return type is the
+        // producer bean type; a non-correlating declaration keeps textual.
+        String ownerType = scanner.typeContaining(file, method.start());
+        producerType = JavacMemberCorrelation.of(scanner)
+            .correlatedMethod(file, ownerType, method)
+            .map(member -> member.returnType())
+            .filter(returnType -> !returnType.isBlank() && !returnType.equals("void"))
+            .orElse(producerType);
+      }
       Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> classMirrors =
           javac.typeAnnotations(file);
       Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> methodMirrors =

@@ -148,6 +148,34 @@ static boolean hasParameter(MethodInfo owner, String variable) {
 
   boolean parameterMatchesType(
       SourceFile file, MethodInfo owner, String type, String variable, int offset) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      // Flag-on: the correlated member's canonical parameter type adds a
+      // match source the textual ladder cannot produce (corrupted
+      // spellings). ONLY the exact canonical spelling compares — a
+      // simple-name disjunct would fabricate matches when a same-simple
+      // name shadows the queried type (JLS 6.4.1) — and the textual
+      // ladder still runs, so no true answer is lost.
+      // The owner is resolved from the declaration start, not the raw
+      // extraction start: the extraction can anchor on the closing brace
+      // of a preceding nested type, whose inclusive end would make
+      // typeContaining return that nested type. The same normalization
+      // the repository layer and JavacMemberCorrelation apply.
+      String ownerType = typeContaining(file,
+          declarationStart(file, owner.start()));
+      Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
+          JavacMemberCorrelation.of((SourceMetadataScanner) this)
+              .correlatedMethod(file, ownerType, owner);
+      if (correlated.isPresent()) {
+        List<Parameter> declared = parameters(owner.parameters());
+        List<String> canonical = correlated.orElseThrow().parameterTypes();
+        for (int index = 0; index < declared.size() && index < canonical.size(); index++) {
+          if (declared.get(index).name().equals(variable)
+              && canonical.get(index).equals(type)) {
+            return true;
+          }
+        }
+      }
+    }
     return parameters(owner.parameters()).stream()
         .filter(parameter -> parameter.name().equals(variable))
         .map(Parameter::type)
