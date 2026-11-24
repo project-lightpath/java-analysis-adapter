@@ -1,0 +1,108 @@
+# RESOLUTION-23 — javac TypeMirror parameter/return/type-shape matching
+
+Issue: project-lightpath/java-analysis-adapter#23 (parent #20).
+Branch: `issue-23-typemirror-production`.
+Commits: PLAN-23 `fcaaaa7`, RED_23 `6ab4778`, GREEN_23 `c5e4279`,
+EVIDENCE_23 (this commit).
+
+## What changed
+
+Production parameter/return/type-shape matching now uses javac index
+shapes behind `flpath.java.symbolindex` (default **off** — default output
+byte-identical, pinned by flag-off textual goldens per wired surface):
+
+- **`JavacMemberCorrelation`** (new): maps textual `MethodInfo`
+  declarations to `JavacSourceSymbolIndex` members through the
+  group-scoped rule. Unique name+arity groups correlate directly (the
+  #22 repair path, unchanged); multi-member groups correlate only via a
+  resolved-textual-vector bijection onto the index vectors — any wrong
+  or missing resolution fails the whole group closed to textual.
+  Constructors map `<init>` to the owner-simple-name index member.
+  Shared guards: comment-corrupted parameter lists and multi-type files
+  never correlate.
+- **`JavacShapeDescriptors`** (new): renders correlated shapes into the
+  bounded-model JVM dialect (`Ljava/lang/String;`); blank components
+  abstain so matching falls back rather than fabricating.
+- **Wiring (flag on, textual fallback preserved)**: proxy descriptors
+  (comma-canonical dialect, triggered repair retained as the subset
+  fallback), bounded-model proxy/producer JVM descriptors, producer bean
+  types, repository method signatures (all three callers), and
+  reflection-path `parameterMatchesType`.
+- **Index defect fixed**: `memberHasErrorType` now checks method RETURN
+  types. The index compiles per-file, so cross-file returns are ERROR
+  types; previously an unresolved return surfaced as an unqualified
+  "canonical" spelling (probe: `returnType=Inner`, `errorType=false`).
+  Unproven returns now abstain. Blast radius: flag-on consumers only.
+- **Dead code deleted**: `methodSource` and its only helper
+  `descriptorParameterCount` (zero callers, exhaustively verified).
+
+## Acceptance evidence (issue #23)
+
+- `String @$Ann... args` → `java.lang.String[]` and
+  `@Ann(value = 1) String p` → `java.lang.String`: pinned by the
+  inherited #22 repair cells and the #26 harness; the correlation path
+  preserves them (unique groups).
+- Overloads differing only by parameter type: the bijection correlates
+  both same-arity overloads and the proxy descriptors carry canonical
+  shapes (`multiOverloadProxyDescriptorsCorrelateByType`).
+- Constructor matching: `<init>`-to-simple-name mapping through the
+  reflection path (`constructorCorrelationUsesInitToSimpleNameMapping`).
+- Return type matching: producer bean types from the correlated member
+  (`producerReturnTypeAbstainsOnUnprovableIndexShapes`).
+- Unresolved types: POSSIBLE/abstain — the fail-closed bijection control
+  (`bijectionFailsClosedOnUnresolvableSpelling`), the error-return
+  abstention, and the flag-off goldens.
+- Default output unchanged with the flag off: pinned textual goldens for
+  every wired surface (proxy descriptors, bounded-model descriptors,
+  producer type, repository signatures, reflection matching).
+- Gates: `make adapter-test` 607 executions (floor 534), zero failures;
+  `make java-lint` PASS (0 new findings); `make evidence-validate` pass.
+
+## Plan-review record
+
+Six adversarial plan-review rounds (Engram-grounded subagent):
+8 → 4 → 1 → 4 → 1 → 0 addressable findings. The material design changes
+forced by review: the bijection rule (round 1), its scoping to
+multi-overload groups so the unique-group repair path survives
+(round 2), the constructor name mapping (round 1), per-consumer
+descriptor dialects (round 1), count-form flag-off goldens (rounds 2/5),
+and the retention disposition for the repair seam (round 4).
+
+## Behavior facts discovered at GREEN (probe-verified)
+
+- The textual `MethodInfo` extractor cannot parse annotated return
+  types — the plan's "annotation-corrupted producer return" defect class
+  is unreachable (extraction fails before producerCandidate). The
+  producer wiring remains (canonical when correlated) but its pinned
+  cell asserts abstention on unprovable cross-file returns plus parity
+  for clean producers.
+- The textual `Parameter` splitter strips declaration annotations, so
+  `Parameter::type` is cleaner than `parameterType` — the repository
+  signature defect is unqualified spelling, not annotation corruption.
+- The index collapses same-shape overloads to one member; identical
+  shapes are legitimately unique-group correlates.
+- The index compiles per-file (empty sourcepath): cross-file type
+  references are ERROR types — see the return-type fix above.
+
+## Sanctioned test edits
+
+- `commentTextInParameterListsSkipsIndexedRepair`: the fail-closed
+  control is now a COUNT (exactly one canonical descriptor; the
+  corrupted overload stays textual) because proxy features carry only
+  `owner#name` identity.
+- `sameArityOverloadsFallBackToTextualValues` needed NO edit: the
+  arity-only `member()` API is unchanged; the bijection lives in the
+  correlation path. The plan's conditional sanction was not triggered.
+
+## Residuals
+
+- Flag-on downgrade lands on the existing fallback ladder (textual
+  shapes, then the arity/overload-count heuristic) — unchanged.
+- `BoundedFrameworkModelTypeParsing.canonicalType` and the injection
+  contract type-matching surface remain textual — out of scope,
+  enumerated in PLAN-23; a follow-up issue owns them.
+- Unqualified nested-type parameter spellings fail closed to textual
+  (same-package lookup is top-level only); owner-qualified fallback
+  spellings are a follow-up.
+- The default is not flipped: enabling the flag by default is a
+  follow-up (the ServiceLoader slice's two-step landing pattern).
