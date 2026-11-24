@@ -58,22 +58,27 @@ static String repositoryMethodSignature(MethodInfo method) {
   }
 
   /**
-   * The repository method signature with index shapes when the member
-   * correlates behind the flag; the textual signature otherwise. Consumers
-   * with a file and a scanner route through here so canonical signatures
-   * and textual ones never mix for one declaration.
+   * The repository method signature with canonically resolved parameter
+   * types behind the flag; the textual signature otherwise. The rule is
+   * PER-PARAMETER and deliberately independent of member correlation: the
+   * same method is declared in a repository interface and a fragment
+   * interface (different files), and a member-wide rule (e.g. one blocked
+   * by an unresolved cross-file return type) would give the two
+   * declarations DIFFERENT identities and lose the fragment-backed
+   * attribution. Per-parameter resolution is deterministic for both files;
+   * an unresolvable parameter keeps its textual token so the identity
+   * stays stable on both sides.
    */
   String repositoryMethodSignature(SourceMetadataScannerState.SourceFile file,
       MethodInfo method) {
     if (JavacSourceSymbolIndex.enabled()) {
-      String ownerType = typeContaining(file, declarationStart(file, method.start()));
-      Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
-          JavacMemberCorrelation.of((SourceMetadataScanner) this)
-              .correlatedMethod(file, ownerType, method);
-      if (correlated.isPresent()) {
-        return method.name() + "("
-            + String.join(",", correlated.orElseThrow().parameterTypes()) + ")";
+      List<String> parameterTypes = new ArrayList<>();
+      for (Parameter parameter : parameters(method.parameters())) {
+        String token = parameter.type().replaceAll("\\s+", " ").trim();
+        String element = stripBalancedGenericArguments(token).trim();
+        parameterTypes.add(resolveReferenceType(element, file).orElse(token));
       }
+      return method.name() + "(" + String.join(",", parameterTypes) + ")";
     }
     return repositoryMethodSignature(method);
   }

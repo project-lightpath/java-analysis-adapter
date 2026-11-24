@@ -129,6 +129,43 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      imprecise (only the entity type is sentinel-guarded; the id
      sentinel reaches the List harmlessly) — corrected by this record.
 
+## CodeRabbit round (PR #59)
+
+- **Round CR-1** (CodeRabbit on PR #59, all four findings triaged grounded
+  in facts): 3 fixed in REVIEW_23_6, 1 dispositioned as a follow-up:
+  1. Major — method-scoped type parameters could derange the bijection:
+     `<List extends java.util.Set> run(List p)` next to
+     `<Set extends java.util.List> run(Set p)` resolves the textual vectors
+     through imports while the index erases to the bounds, so the vector
+     sets match and a declaration correlates to the OTHER overload. Fixed:
+     a parameter whose simple name is a type parameter of its own method
+     (extracted from the declaration header, anchored after modifiers so a
+     generic return type cannot false-positive) abstains — the group fails
+     closed. Pinned by `typeVariableParametersFailClosedInTheBijection`.
+  2. Minor — nested reference types render with slashes in the JVM
+     descriptor (canonical dots, not binary `$`). DISPOSITIONED, not
+     fixed: the flag-on renderer is byte-identical to the pre-existing
+     TEXTUAL `jvmDescriptor` dialect (both map canonical dots to slashes),
+     so there is no flag-on/off divergence and no regression from this
+     change; fixing the dialect requires carrying binary names through
+     the index AND the textual path — a cross-cutting follow-up, recorded
+     in Residuals.
+  3. Minor — a type variable with an unresolved bound
+     (`<T extends missing.Thing>`) has a non-error declared return mirror
+     but erases to an error type, whose spelling could be published as a
+     canonical producer bean type. Fixed: `memberHasErrorType` checks the
+     erased return as well (valid bounds like `<T extends Number>` stay
+     eligible). Pinned by `unresolvedTypeVariableBoundReturnAbstains`.
+  4. Major — fragment and repository declarations of the same method
+     could get different signature identities when only one file's member
+     was blocked (unresolved cross-file return), losing the
+     fragment-backed attribution. Fixed: `repositoryMethodSignature`'s
+     flag-on rule is PER-PARAMETER canonicalization through
+     `resolveReferenceType` (deterministic across files; unresolvable
+     parameters keep their textual token so both sides stay identical),
+     deliberately independent of member correlation. Pinned by
+     `fragmentAndRepositorySignaturesShareOneRule`.
+
 ## Plan-review record
 
 Six adversarial plan-review rounds (Engram-grounded subagent):
@@ -177,3 +214,9 @@ and the retention disposition for the repair seam (round 4).
   spellings are a follow-up.
 - The default is not flipped: enabling the flag by default is a
   follow-up (the ServiceLoader slice's two-step landing pattern).
+- The JVM descriptor dialect renders canonical dots as slashes for
+  nested types (`Ljava/util/Map/Entry;` instead of the binary
+  `Ljava/util/Map$Entry;`) — a pre-existing property of the TEXTUAL
+  `jvmDescriptor` that the flag-on renderer matches exactly; fixing it
+  requires binary names through both paths (CodeRabbit CR-1 finding 2,
+  follow-up).

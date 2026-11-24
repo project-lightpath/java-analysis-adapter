@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * javac member correlation for one scanner's context: maps textual
@@ -202,6 +203,7 @@ final class JavacMemberCorrelation {
   private List<String> resolvedParameterVector(
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo declaration) {
+    Set<String> typeParameters = methodTypeParameters(file, declaration);
     List<String> vector = new ArrayList<>();
     for (SourceMetadataScannerState.Parameter parameter
         : SourceMetadataScanner.parameters(declaration.parameters())) {
@@ -209,6 +211,13 @@ final class JavacMemberCorrelation {
           parameter.type() + " " + parameter.name());
       boolean array = textual.endsWith("[]");
       String element = array ? textual.substring(0, textual.length() - 2) : textual;
+      if (typeParameters.contains(element)) {
+        // A method type parameter erases to its BOUND in the index but
+        // resolves through imports textually — the two denotations can
+        // derange across mirrored overloads, so the group must abstain
+        // rather than correlate on swapped vectors.
+        return List.of();
+      }
       Optional<String> canonical = PRIMITIVE_TYPES.contains(element)
           ? Optional.of(element)
           : scanner.resolveReferenceType(element, file);
@@ -218,6 +227,41 @@ final class JavacMemberCorrelation {
       vector.add(canonical.get() + (array ? "[]" : ""));
     }
     return vector;
+  }
+
+  /**
+   * The type-parameter names declared by one method's own
+   * {@code <...>} clause, extracted from the declaration header (the
+   * region between the declaration start and its parameter list).
+   */
+  private static Set<String> methodTypeParameters(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.MethodInfo declaration) {
+    String source = file.source();
+    int parametersAt = source.indexOf(declaration.parameters(), declaration.start());
+    if (declaration.parameters().isEmpty() || parametersAt < 0) {
+      return Set.of();
+    }
+    String header = source.substring(declaration.start(), parametersAt);
+    // The clause must be the FIRST thing after modifiers and annotations —
+    // a generic RETURN type (List<String> pick) also contains angle
+    // brackets but never starts the header.
+    java.util.regex.Matcher matcher = java.util.regex.Pattern
+        .compile("^(?:\\s|@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?|public|protected|private|"
+            + "static|final|synchronized|abstract|default|strictfp|native)*"
+            + "\\s*<([^>]*)>")
+        .matcher(header);
+    if (!matcher.find()) {
+      return Set.of();
+    }
+    Set<String> names = new HashSet<>();
+    for (String segment : matcher.group(1).split(",")) {
+      String[] words = segment.trim().split("\\s+");
+      if (words.length > 0 && !words[0].isBlank()) {
+        names.add(words[0]);
+      }
+    }
+    return names;
   }
 
   private static final Set<String> PRIMITIVE_TYPES = Set.of(

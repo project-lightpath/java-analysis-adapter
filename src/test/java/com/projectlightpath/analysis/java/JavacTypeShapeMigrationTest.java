@@ -448,6 +448,117 @@ class JavacTypeShapeMigrationTest {
         file, audit, "demo.Class", "target", offset));
   }
 
+  @Test
+  void typeVariableParametersFailClosedInTheBijection() throws IOException {
+    AnalysisContext context = context("type-variables", Map.of(
+        "demo/Api.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public interface Api {
+              <List extends java.util.Set> void run(List p);
+              <Set extends java.util.List> void run(Set p);
+            }
+            """,
+        "demo/Main.java", """
+            package demo;
+            public class Main {
+              void audit() {
+                Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[] {Api.class},
+                    (proxyInstance, method, args) -> null);
+              }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    List<DynamicFeature> on = new SourceMetadataScanner(context).dynamicFeatures();
+    // The mirrored type parameters erase to their bounds in the index but
+    // resolve through imports textually — the vectors would derange and
+    // the bijection would correlate a declaration to the OTHER overload.
+    // A method type parameter therefore abstains: both overloads keep
+    // their textual descriptors.
+    assertTrue(on.stream().anyMatch(feature ->
+            feature.target().equals("demo.Api#run")
+                && feature.targetDescriptor().equals("(List)")),
+        on.toString());
+    assertTrue(on.stream().anyMatch(feature ->
+            feature.target().equals("demo.Api#run")
+                && feature.targetDescriptor().equals("(Set)")),
+        on.toString());
+    assertFalse(on.stream().anyMatch(feature ->
+            feature.target().equals("demo.Api#run")
+                && (feature.targetDescriptor().equals("(java.util.List)")
+                    || feature.targetDescriptor().equals("(java.util.Set)"))),
+        on.toString());
+  }
+
+  @Test
+  void unresolvedTypeVariableBoundReturnAbstains() throws IOException {
+    AnalysisContext context = context("unresolved-bound", Map.of(
+        "demo/Producer.java", """
+            package demo;
+            import jakarta.enterprise.inject.Produces;
+            public class Producer {
+              @Produces public <T extends missing.Thing> T make() { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    List<SourceMetadataScannerState.BeanCandidate> on =
+        new SourceMetadataScanner(context).beanCandidates(
+            AnalysisContext.Framework.QUARKUS);
+    // The declared return mirror is a type variable (not an error), but its
+    // erasure IS an error type (unresolved bound): the member must abstain
+    // rather than publish the erased error spelling as the bean type.
+    assertTrue(on.stream()
+        .anyMatch(candidate -> candidate.producerMethod().equals("make")
+            && candidate.candidateType().isEmpty()),
+        on.toString());
+  }
+
+  @Test
+  void fragmentAndRepositorySignaturesShareOneRule() throws IOException {
+    Path sourceRoot = temp.resolve("shared-identity").resolve("src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/Other.java", "package demo; public class Other {}\n");
+    write(sourceRoot, "demo/AccountFragment.java", """
+        package demo;
+        public interface AccountFragment {
+          Other find(String key);
+        }
+        """);
+    write(sourceRoot, "demo/AccountRepository.java", """
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.repository.CrudRepository<Account, Long>,
+                AccountFragment {
+          Other find(String key);
+        }
+        """);
+    AnalysisContext context = context(sourceRoot, "2.7.18",
+        AnalysisContext.Framework.SPRING_BOOT);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile repository =
+        file(scanner, sourceRoot, "demo/AccountRepository.java");
+    SourceMetadataScannerState.SourceFile fragment =
+        file(scanner, sourceRoot, "demo/AccountFragment.java");
+    // The same method declared in two files must get ONE signature identity
+    // even though each file's index member differs (the cross-file Other
+    // return is an error type per-file): the rule is per-parameter and
+    // deterministic, so both sides canonicalize identically.
+    String repositorySignature = scanner.springRepositoryMethods(repository).stream()
+        .filter(method -> method.name().equals("find"))
+        .map(SourceMetadataScannerState.RepositoryMethod::identity)
+        .findFirst().orElseThrow();
+    SourceMetadataScannerState.MethodInfo fragmentFind = SourceMetadataScanner
+        .methods(fragment).stream()
+        .filter(method -> method.name().equals("find"))
+        .findFirst().orElseThrow();
+    String fragmentSignature = scanner.repositoryMethodSignature(fragment, fragmentFind);
+    assertEquals("find(java.lang.String)", repositorySignature);
+    assertEquals(repositorySignature, fragmentSignature);
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);

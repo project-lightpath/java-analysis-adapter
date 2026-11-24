@@ -721,7 +721,7 @@ final class JavacSourceSymbolIndex {
       return "";
     }
 
-    private static boolean memberHasErrorType(Element element, boolean executable) {
+    private boolean memberHasErrorType(Element element, boolean executable) {
       if (isError(element.asType())) {
         return true;
       }
@@ -730,9 +730,16 @@ final class JavacSourceSymbolIndex {
         // return (per-file index isolation makes cross-file references
         // error types) must not surface as an unqualified "canonical"
         // spelling, so it blocks the member like an unresolved parameter.
-        if (element.getKind() == ElementKind.METHOD
-            && isError(((ExecutableElement) element).getReturnType())) {
-          return true;
+        // The ERASED return is checked too: a type variable with an
+        // unresolved bound (e.g. <T extends missing.Thing>) has a non-error
+        // declared mirror but erases to an error type, whose rendered
+        // spelling would otherwise be published as a canonical answer.
+        // Valid bounds (<T extends Number>) stay eligible.
+        if (element.getKind() == ElementKind.METHOD) {
+          TypeMirror returnType = ((ExecutableElement) element).getReturnType();
+          if (isError(returnType) || isError(types.erasure(returnType))) {
+            return true;
+          }
         }
         return ((ExecutableElement) element).getParameters().stream()
             .anyMatch(variable -> isError(variable.asType()));
