@@ -318,7 +318,8 @@ decrease from the current ~628; Makefile floor 534), `make java-lint`
   (`pkg.Outer$X.Inner`): the `$`-passthrough keeps the spelling unchanged
   where the true binary joins the chain (`pkg.Outer$X$Inner`) —
   convention-hostile and unreachable through normal source spellings
-  (implementation-review round 1, finding 3).
+  (implementation-review round 1, finding 3): reachable only through
+  convention-hostile fully-qualified spellings.
 - `BoundedFrameworkModelTypeParsing.canonicalType` / injection contract
   matching remain textual (#61).
 - The index diagnostics visibility follow-up (#62) is unaffected.
