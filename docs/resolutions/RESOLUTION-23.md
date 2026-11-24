@@ -123,7 +123,9 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      index stores canonical names, so only exact-canonical queries can
      fire — currently just the test). Documented here so a future round
      does not assume live coverage; the direction is conservative either
-     way. The round-2 commit message's sentinel claim was also
+     way. The shadow pin's canonical-query assertTrue is likewise
+     non-load-bearing (the textual ladder already answers it); the
+     assertFalse on the simple name is the load-bearing assertion. The round-2 commit message's sentinel claim was also
      imprecise (only the entity type is sentinel-guarded; the id
      sentinel reaches the List harmlessly) — corrected by this record.
 
