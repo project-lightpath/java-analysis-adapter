@@ -56,9 +56,21 @@ source-side `targetDescriptor` evidence is compared against provider facts'
 descriptors (`JavaAnalysisAdapter.targetDescriptorsMatch`; SootUp tests pin
 `(Ljava/lang/String;)Ldemo/Account;`; binding-candidate rows carry real JVM
 descriptors, e.g. `()Ldemo/Token;` in `JavaAnalysisAdapterTest`). The slash
-dialect therefore never matches a nested-type consumer — switching to binary
-names can only create correct matches, and abstaining on unprovable names
-loses no matching power that exists today.
+dialect therefore never matches a nested-type consumer. (A third
+`.replace('.','/')` renderer exists — `MethodSymbol.jvmType` — but it
+consumes Soot-derived, already-binary-shaped spellings, not source
+canonical names; unaffected and out of scope, enumerated for
+exhaustiveness.)
+
+One legal shape DOES render correctly today and abstains after this change:
+a type in an UPPERCASE-LEADING package, explicitly imported
+(`import Com.example.Foo;` + spelling `Foo` resolves through `importedTypes`
+to canonical `Com.example.Foo`, rendered `LCom/example/Foo;` today). Rule c
+cannot distinguish that shape from a default-package nesting
+(`Outer.Inner`, binary `Outer$Inner`) — both have an uppercase first
+segment — so the shape abstains (fail-closed, per AGENTS the safe
+direction). This is a documented, pinned coverage regression for a
+convention-violating name shape, not a silent one.
 
 No existing test pins slash-nested descriptors (exhaustive grep over
 `src/test` for nested JVM descriptor spellings: zero matches; the pinned
@@ -121,8 +133,9 @@ stated per AGENTS).
       the type chain starts there: binary = package prefix (segments before,
       joined with `'.'`) + `"."` + chain (joined with `'$'`). If the boundary
       lands at segment 0 (first segment uppercase: default package or an
-      UPPERCASE PACKAGE — textually indistinguishable) → abstain (kills the
-      `Com.example.Foo` false-DEFINITE window and only loses degenerate
+      UPPERCASE PACKAGE — textually indistinguishable) → abstain (kills
+      the `Com.example.Foo` false-DEFINITE window; the cost is the
+      documented coverage regression above, plus degenerate
       default-package nestings). If NO segment starts uppercase → the
       canonical unchanged (preserves today's rendering for all-lowercase
       verbatim pass-throughs such as `a.b`).
@@ -146,8 +159,9 @@ stated per AGENTS).
 - Unchanged abstention ladder: blank/unprovable components abstain
   (`Optional.empty`), matching falls back rather than fabricating. No member
   that correlates today stops correlating; no descriptor that matches a real
-  consumer today changes (nested slash descriptors never matched anything
-  real — preflight).
+  consumer today changes, with ONE documented exception (preflight): the
+  uppercase-package import shape, which renders correctly today and abstains
+  after this change — fail-closed, pinned by B3.
 - Flag-off default output changes ONLY for nested-type JVM descriptors
   (slashes → `$`, or absent when the boundary rule abstains) — exactly the
   issue's acceptance ("both dialects switch in the SAME change"). All other
@@ -191,10 +205,13 @@ canonical→binary map, plus the two dialects and both flag states:
   spelled fully qualified → `Ldemo/Outer$lower;` (boundary rule chain
   join; RED: `Ldemo/Outer/lower;` today).
 - **B3: boundary-at-0 abstention.** A canonical whose first segment is
-  uppercase (default-package shape `Outer.Inner`, or an uppercase-package
-  import `Com.example.Foo`) → descriptor ABSENT in the textual dialect
-  (abstain, fail closed). Constructed via direct `JvmBinaryNames` call +
-  one end-to-end miss cell.
+  uppercase abstains in the textual dialect (fail closed). The end-to-end
+  RED arm is the UPPERCASE-PACKAGE IMPORT shape: `import Com.example.Foo;`
+  + spelling `Foo` renders `LCom/example/Foo;` today and must come back
+  ABSENT (documented coverage regression, pinned). The default-package
+  shape (`Outer.Inner`) is unreachable through resolution (verbatim needs a
+  lowercase first segment; samePackage matches simple names; default-package
+  types cannot be imported) — direct `JvmBinaryNames` probe only.
 - **B4: `$`-containing non-file-set canonical.** Verbatim spelling
   `com.lib.Cash$Flow` → binary unchanged → `Lcom/lib/Cash$Flow;`
   (characterization of the rule-c `$` passthrough; flag-on the index is
@@ -220,6 +237,12 @@ canonical→binary map, plus the two dialects and both flag states:
   Shapes`'s flag-on comment says "the index is per-file" — factually wrong
   at HEAD (preflight). Corrected to the JLS scoping rationale. Zero edits to
   any other existing test; no existing assertion changes anywhere.
+- **Sanctioned production comment edit (comment only, zero behavior
+  change):** the `memberHasErrorType` comment in
+  `JavacSourceSymbolIndex.java` (~line 729) repeats the same "per-file index
+  isolation makes cross-file references error types" misdiagnosis; corrected
+  to the JLS scoping rationale in GREEN_60 so no future round re-infers the
+  wrong fact from the code being changed.
 
 Pairwise/interaction coverage (AGENTS): nesting × array/varargs (N2),
 nesting × flag state (N5), nesting × resolution route (verbatim N3 vs
@@ -278,12 +301,10 @@ decrease from the current ~628; Makefile floor 534), `make java-lint`
   outer type is reached only through a fully-qualified spelling is rendered
   correctly by the chain-join, but a package segment starting uppercase
   cannot be distinguished from a default-package type — that shape abstains
-  (B3). A lowercase-nested dep type referenced via import-qualified spelling
-  (`Map.Entry`-style) renders correctly. Remaining corruption window: a
-  dependency whose PACKAGE starts uppercase and is imported explicitly —
-  that canonical never reaches rule c through the verbatim route (it
-  requires a lowercase first segment) and rule c abstains at boundary 0, so
-  the window is closed by construction (B3 pins it).
+  (B3), including the UPPERCASE-PACKAGE IMPORT that renders correctly today
+  (the one pinned coverage regression; fail-closed direction). A
+  lowercase-nested dep type referenced via import-qualified spelling
+  (`Map.Entry`-style) renders correctly.
 - Default-package nestings (`Outer.Inner` with no package) now abstain in
   both dialects (previously rendered with slashes — never matched a real
   consumer). Degenerate shape, documented.
@@ -291,9 +312,27 @@ decrease from the current ~628; Makefile floor 534), `make java-lint`
   matching remain textual (#61).
 - The index diagnostics visibility follow-up (#62) is unaffected.
 
-Confidence score: **0.83**. The production change is small and pinned on
-both sides by red-first cells; the main uncertainty is the segment rule's
-interaction with exotic name shapes, contained by the abstention guards and
-the boundary cells, and the possibility that a reviewer surfaces a consumer
-of the slash dialect that the preflight grep missed (mitigated: the consumer
-enumeration followed every reader of both renderers).
+## Plan-review record
+
+Round 1 (Engram-grounded adversarial subagent): 3 addressable findings
+(1 MEDIUM, 2 LOW), all incorporated: (1) the boundary-at-0 abstention's
+coverage loss was understated ("can only create correct matches" was wrong
+for the uppercase-package import shape) — certainty model, rule c text, and
+residuals corrected, the regression is now pinned by B3's end-to-end arm;
+(2) the stale per-file-isolation comment in `JavacSourceSymbolIndex
+.memberHasErrorType` added to the sanctioned comment-only edits; (3) B3's
+default-package end-to-end arm was unreachable through resolution — the
+uppercase-package import shape is the sole end-to-end owner, the
+default-package shape is a direct `JvmBinaryNames` probe. Two NIT
+dispositions: `MethodSymbol.jvmType` enumerated as a third
+slash-renderer (unaffected, Soot-derived input); plan-quality checks
+passed (equivalence classes, boundary probes, mutation pins, blast-radius
+statements).
+
+Confidence score: **0.85** (was 0.83 before plan review). The production
+change is small and pinned on both sides by red-first cells; the main
+uncertainty is the segment rule's interaction with exotic name shapes,
+contained by the abstention guards and the boundary cells, and the
+possibility that a reviewer surfaces a consumer of the slash dialect the
+preflight grep missed (mitigated: the consumer enumeration followed every
+reader of both renderers, plan-review round 1 re-verified it).
