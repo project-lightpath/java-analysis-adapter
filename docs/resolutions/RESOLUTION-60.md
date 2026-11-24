@@ -24,14 +24,16 @@ names in the SAME change so the dialects never diverge"):
   binary shapes: nested types render `Ldemo/Outer$Inner;`, never
   `Ldemo/Outer/Inner;`.
 - **`JvmBinaryNames`** (new): the canonical→binary derivation for the
-  textual dialect, most definite rule first: (a) flag-on index lookup
-  (`Elements.getBinaryName`, DEFINITE, duplicate-flagged collisions fall
-  through), (b) file-set top-level `typeName()` match (binary ==
-  canonical; preserves `$`-in-simple-name top-level types), (c) segment
-  boundary rule — the first uppercase-initial segment starts the
-  `$`-joined type chain; `$`-containing canonicals pass through; boundary
-  at segment 0 (default package vs uppercase package, textually
-  indistinguishable) and empty segments abstain.
+  textual dialect — an EVIDENCE ladder (capitalization is never
+  evidence): (a) flag-on index lookup (`Elements.getBinaryName`,
+  DEFINITE; an ambiguous lookup abstains), (b) file-set declarations
+  (exact top-level name → binary == canonical; extending canonical →
+  exhaustive nested declaration chain walk; multiple distinct chains
+  abstain), (c) type-qualified spellings whose first segment resolves in
+  scope (the source asserts the qualifier is a type), (d) otherwise the
+  JLS-default package reading (binary == canonical) with abstentions for
+  `$` in a pre-last segment and empty segments. See the CodeRabbit round
+  below for why the original capitalization heuristic was replaced.
 - **`BoundedFrameworkModelCandidateMetadata.jvmDescriptor`** wires the
   seam in BOTH flag states (flag-off, and flag-on textual fallback for
   non-correlated members).
@@ -131,21 +133,24 @@ shape; the existing abstention is the correct behavior and stays. What
 ## Behavior facts and residuals
 
 - Flag-off default output changes ONLY for nested-type JVM descriptors
-  (slashes → `$`, or absent when the boundary rule abstains) — exactly the
-  issue's acceptance. Everything else is byte-identical; the full
-  pre-existing suite is green.
-- One documented, pinned coverage regression: the UPPERCASE-PACKAGE
-  IMPORT shape (`import Com.example.Foo;` + spelling `Foo`) renders
-  `LCom/example/Foo;` today and abstains after (textually
-  indistinguishable from a default-package nesting; fail-closed
-  direction per AGENTS).
-- Textual-dialect residual ambiguities (registered in PLAN-60): a
-  lowercase top-level class with nested types (`demo.lower.Inner`) keeps
-  the package reading; a `$`-named segment with further nesting
-  (`pkg.Outer$X.Inner`) passes through unchanged — both
-  convention-hostile, both pinned or registered.
-- Default-package nestings abstain in both dialects (previously rendered
-  with slashes; never matched a real consumer).
+  whose nesting is PROVEN (file-set declarations, type-qualified
+  spellings) — they render `$`; everything else keeps the pre-#60
+  rendering (JLS-default package reading). The full pre-existing suite
+  is green.
+- Fully-qualified nested spellings (`java.util.Map.Entry`) and simple
+  spellings of imported nested types keep the package reading: the
+  spelling carries no boundary evidence (textually indistinguishable
+  from a top-level type in a package named like the outer type). The
+  flag-on index resolves the nested reading for correlated members;
+  non-correlated members keep the package reading — documented residual.
+- `$` in a segment before the last (`pkg.Outer$X.Inner`) abstains
+  (ambiguous between a `$`-named identifier with further nesting and a
+  package segment); a final-segment `$` (`com.lib.Cash$Flow`) passes
+  through (binary == canonical).
+- Ambiguous index lookups (two unflagged entries sharing a canonical,
+  e.g. nested `p.Outer.Inner` next to a top-level type in a package
+  literally named `p.Outer`) abstain.
+- Default-package nestings keep the package reading (degenerate shape).
 - Unqualified sibling nested spellings (`Inner`) still fail closed to
   textual/abstention — JLS 6.5.5.1 scoping; owner-qualified fallback
   spellings remain a follow-up under #20.
@@ -155,3 +160,26 @@ shape; the existing abstention is the correct behavior and stays. What
 - `BoundedFrameworkModelTypeParsing` / injection contract matching remain
   textual (#61); index diagnostic visibility is #62; the flag default
   stays off (umbrella #20's final step).
+
+## CodeRabbit round (PR #63)
+
+CR-1 (full review): 3 findings (1 Major, 2 Minor), all fixed red-first
+in RED_60/GREEN_60 (`381c4f9`/`470b90e`):
+
+1. Minor — the ambiguous index lookup reached `Stream.reduce` with a
+   null-returning accumulator and threw NPE instead of abstaining.
+   Reproduced red (`ambiguousIndexLookupsAbstainInsteadOfThrowing`,
+   NullPointer at the pre-fix head); fixed with a single size-checked
+   lookup.
+2. Minor — `pkg.Outer$X.Inner` passed through and named the wrong class.
+   Pinned red (`dollarSegmentsBeforeTheLastSegmentAbstain`); fixed with
+   the pre-last-segment `$` abstention.
+3. Major — capitalization was treated as proof of a type boundary,
+   fabricating `com.Acme$Widget` for a top-level type in an uppercase
+   non-leading package (JLS 13.1: binary == canonical). Fixed by
+   replacing the heuristic with the evidence ladder (see PLAN-60's
+   CodeRabbit round section): `$` insertion requires index, declaration,
+   or type-qualified-spelling evidence; everything else keeps the
+   JLS-default package reading. The earlier uppercase-package-import
+   "pinned coverage regression" is thereby eliminated — the shape
+   renders correctly again.

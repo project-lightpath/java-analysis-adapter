@@ -324,6 +324,37 @@ decrease from the current ~628; Makefile floor 534), `make java-lint`
   matching remain textual (#61).
 - The index diagnostics visibility follow-up (#62) is unaffected.
 
+## CodeRabbit round (PR #63) — rule c replaced by an evidence ladder
+
+CodeRabbit's full review (CR-1) rejected capitalization as boundary
+evidence (a top-level type in an uppercase non-leading package,
+`com.Acme.Widget`, fabricated `Lcom/Acme$Widget;` against JLS 13.1),
+found the `$`-passthrough naming the wrong class for
+`pkg.Outer$X.Inner`, and found the ambiguous index lookup throwing NPE.
+The segment boundary rule (c) is therefore REPLACED by an evidence
+ladder; a `$` boundary is inserted only where proof exists:
+
+1. Flag-on index lookup (`Elements.getBinaryName`); an ambiguous lookup
+   (two unflagged entries sharing the canonical) abstains.
+2. File-set declarations: exact top-level name → binary == canonical;
+   extending canonical → exhaustive nested declaration chain walk; zero
+   chains falls through, more than one distinct binary abstains.
+3. Type-qualified spellings (`Map.Entry`, `Outer.Inner` with the
+   qualifier resolvable in scope): the source asserts the qualifier is a
+   type; the tail joins the binary chain.
+4. Otherwise the JLS-default package reading: binary == canonical (the
+   pre-#60 rendering for these shapes), with abstentions for `$` in a
+   pre-last segment and empty segments.
+
+Consequences versus the earlier rule c: the uppercase-package import
+shape renders CORRECTLY again (the "pinned coverage regression" is
+gone); fully-qualified nested spellings (`java.util.Map.Entry`) keep the
+package reading — textually indistinguishable from a top-level type in a
+package named like the outer type, a documented residual (the flag-on
+index resolves the nested reading for correlated members); simple
+spellings of imported nested types (`import java.util.Map.Entry;` +
+`Entry e;`) keep the package reading for the same reason.
+
 ## Plan-review record
 
 Round 1 (Engram-grounded adversarial subagent): 3 addressable findings
