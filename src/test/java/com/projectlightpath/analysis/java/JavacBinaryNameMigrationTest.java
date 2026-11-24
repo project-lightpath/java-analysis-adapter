@@ -367,6 +367,58 @@ class JavacBinaryNameMigrationTest {
         "an unresolvable return type must abstain");
   }
 
+  @Test
+  void fileSetTopLevelTypesInUppercasePackagesRender() throws IOException {
+    AnalysisContext context = context("uppercase-file-set", Map.of(
+        "DEMO/Foo.java", "package DEMO; public class Foo {}\n",
+        "DEMO/User.java", """
+            package DEMO;
+            public class User {
+              public Foo foo() { return null; }
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile user =
+        file(scanner, sourceRoot("uppercase-file-set"), "DEMO/User.java");
+    // A file-set TOP-LEVEL type in an uppercase-leading package: the
+    // file-set top-level rule (b) proves binary == canonical, where the
+    // segment rule alone would abstain at boundary 0 (uppercase first
+    // segment). This cell is rule b's mutation pin — deleting the rule
+    // makes the descriptor absent.
+    assertEquals(Optional.of("()LDEMO/Foo;"),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, user, "", "Foo"));
+  }
+
+  @Test
+  void lowercaseTopLevelNestingIsTheDocumentedAmbiguity() throws IOException {
+    AnalysisContext context = context("lowercase-top-level", Map.of(
+        "demo/lower.java", """
+            package demo;
+            public class lower { static class Inner { } }
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              demo.lower.Inner find(demo.lower.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile api =
+        file(scanner, sourceRoot("lowercase-top-level"), "demo/Api.java");
+    // A lowercase TOP-LEVEL class with a nested type (true binary
+    // demo.lower$Inner) is textually indistinguishable from package
+    // demo.lower + class Inner: the segment rule keeps the package
+    // reading and renders the spelling unchanged. This is the documented
+    // residual ambiguity of the textual dialect (PLAN-60 Residuals) —
+    // pinned here so the behavior is visible, not silent.
+    assertEquals(Optional.of("(Ldemo/lower/Inner;)Ldemo/lower/Inner;"),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "demo.lower.Inner key", "demo.lower.Inner"));
+  }
+
   private SourceMetadataScannerState.BeanCandidate producer(
       SourceMetadataScanner scanner, String method) {
     return scanner.beanCandidates(AnalysisContext.Framework.QUARKUS).stream()

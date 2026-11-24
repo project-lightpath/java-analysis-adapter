@@ -308,6 +308,17 @@ decrease from the current ~628; Makefile floor 534), `make java-lint`
 - Default-package nestings (`Outer.Inner` with no package) now abstain in
   both dialects (previously rendered with slashes — never matched a real
   consumer). Degenerate shape, documented.
+- A lowercase TOP-LEVEL class with nested types (`demo.lower.Inner`,
+  true binary `demo.lower$Inner`) is textually indistinguishable from
+  package `demo.lower` + class `Inner`: the segment rule keeps the package
+  reading and renders the spelling unchanged — a documented residual
+  ambiguity of the textual dialect, pinned by a characterization cell
+  (implementation-review round 1, finding 1). The same register entry
+  covers a `$`-named simple identifier with FURTHER nesting
+  (`pkg.Outer$X.Inner`): the `$`-passthrough keeps the spelling unchanged
+  where the true binary joins the chain (`pkg.Outer$X$Inner`) —
+  convention-hostile and unreachable through normal source spellings
+  (implementation-review round 1, finding 3).
 - `BoundedFrameworkModelTypeParsing.canonicalType` / injection contract
   matching remain textual (#61).
 - The index diagnostics visibility follow-up (#62) is unaffected.
