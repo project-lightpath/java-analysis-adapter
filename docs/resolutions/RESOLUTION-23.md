@@ -216,9 +216,9 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      plan's certainty model (reviewed through six plan rounds)
      deliberately specifies silent-textual fallback with zero new scan
      diagnostics. A blast-radius-safe visibility channel (per-member
-     evidence rather than scan diagnostics) is the follow-up, recorded
-     here; #60 (index shape fidelity) removes most of the abstentions
-     this would surface.
+     evidence rather than scan diagnostics) is the follow-up, tracked as
+     **#62**; #60 (index shape fidelity) removes most of the abstentions
+     it would surface.
 
 ## Plan-review record
 
@@ -262,15 +262,17 @@ and the retention disposition for the repair seam (round 4).
   shapes, then the arity/overload-count heuristic) — unchanged.
 - `BoundedFrameworkModelTypeParsing.canonicalType` and the injection
   contract type-matching surface remain textual — out of scope,
-  enumerated in PLAN-23; a follow-up issue owns them.
+  enumerated in PLAN-23; tracked as **#61**.
 - Unqualified nested-type parameter spellings fail closed to textual
   (same-package lookup is top-level only); owner-qualified fallback
-  spellings are a follow-up.
-- The default is not flipped: enabling the flag by default is a
-  follow-up (the ServiceLoader slice's two-step landing pattern).
+  spellings are a follow-up, tracked with **#60** (index shape
+  fidelity).
+- The default is not flipped: enabling the flag by default is the
+  final step of the **#20** umbrella (the ServiceLoader slice's
+  two-step landing pattern), after #25 lands.
 - The JVM descriptor dialect renders canonical dots as slashes for
   nested types (`Ljava/util/Map/Entry;` instead of the binary
   `Ljava/util/Map$Entry;`) — a pre-existing property of the TEXTUAL
   `jvmDescriptor` that the flag-on renderer matches exactly; fixing it
-  requires binary names through both paths (CodeRabbit CR-1 finding 2,
-  follow-up).
+  requires binary names through both paths — tracked as **#60**
+  (CodeRabbit CR-1 finding 2).
