@@ -148,6 +148,24 @@ static boolean hasParameter(MethodInfo owner, String variable) {
 
   boolean parameterMatchesType(
       SourceFile file, MethodInfo owner, String type, String variable, int offset) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      // Flag-on: the correlated member's canonical parameter type decides;
+      // a non-correlating declaration keeps the textual ladder below.
+      String ownerType = typeContaining(file, owner.start());
+      Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
+          JavacMemberCorrelation.of((SourceMetadataScanner) this)
+              .correlatedMethod(file, ownerType, owner);
+      if (correlated.isPresent()) {
+        List<Parameter> declared = parameters(owner.parameters());
+        for (int index = 0; index < declared.size(); index++) {
+          if (declared.get(index).name().equals(variable)
+              && index < correlated.orElseThrow().parameterTypes().size()) {
+            return correlated.orElseThrow().parameterTypes().get(index).equals(type);
+          }
+        }
+        return false;
+      }
+    }
     return parameters(owner.parameters()).stream()
         .filter(parameter -> parameter.name().equals(variable))
         .map(Parameter::type)

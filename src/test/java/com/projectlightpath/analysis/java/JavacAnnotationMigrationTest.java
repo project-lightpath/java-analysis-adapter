@@ -503,11 +503,15 @@ class JavacAnnotationMigrationTest {
     System.setProperty(FLAG, "true");
     List<DynamicFeature> features = new SourceMetadataScanner(context).dynamicFeatures();
     // The comment's '(' hides the separator from the split, so the derived
-    // arity (1) would select the wrong overload: the repair is skipped and
-    // the descriptor stays textual.
-    assertTrue(features.stream().noneMatch(feature ->
-        feature.target().startsWith("demo.Api#")
-            && feature.targetDescriptor().equals("(java.lang.String)")),
+    // arity (1) would select the wrong overload: the corrupted method's
+    // correlation is skipped and its descriptor stays textual. The clean
+    // same-arity sibling (a unique index group) upgrades to the canonical
+    // descriptor, so the fail-closed control is a COUNT: proxy features
+    // carry only owner#name identity.
+    assertEquals(1, features.stream()
+        .filter(feature -> feature.target().startsWith("demo.Api#")
+            && feature.targetDescriptor().equals("(java.lang.String)"))
+        .count(),
         features.toString());
     assertTrue(features.stream().anyMatch(feature ->
         feature.target().startsWith("demo.Api#")

@@ -40,7 +40,7 @@ abstract class SourceMetadataScannerFragmentLayer
                     .equals(fragmentFile.typeName()))
                 .filter(method -> abstractInstanceRepositoryMethod(method))
                 .map(method -> new SourceMetadataScannerState.RepositoryMethod(
-                    method.name(), repositoryMethodSignature(method), false))
+                    method.name(), repositoryMethodSignature(fragmentFile, method), false))
                 .toList();
         result.add(new SourceMetadataScannerState.RepositoryFragment(
             file.typeName(), fragmentType, implementation.typeName(), fragmentMethods));

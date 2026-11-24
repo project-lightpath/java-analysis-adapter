@@ -84,16 +84,15 @@ class JavacTypeShapeMigrationTest {
   @Test
   void bijectionFailsClosedOnUnresolvableSpelling() throws IOException {
     AnalysisContext context = context("fail-closed", Map.of(
-        "demo/Ann.java", """
+        "demo/Outer.java", """
             package demo;
-            import java.lang.annotation.*;
-            @Retention(RetentionPolicy.RUNTIME) @interface Ann { int value() default 0; }
+            class Outer { static class Inner { } }
             """,
         "demo/Api.java", """
             package demo;
             public interface Api {
               void run(String p);
-              void run(@Ann(value = 1) Integer p);
+              void run(Inner p);
             }
             """,
         "demo/Main.java", """
@@ -116,7 +115,7 @@ class JavacTypeShapeMigrationTest {
         on.toString());
     assertTrue(on.stream().anyMatch(feature ->
             feature.target().equals("demo.Api#run")
-                && feature.targetDescriptor().equals("((value=1)Integer)")),
+                && feature.targetDescriptor().equals("(Inner)")),
         on.toString());
     assertFalse(on.stream().anyMatch(feature ->
             feature.target().equals("demo.Api#run")
@@ -181,7 +180,7 @@ class JavacTypeShapeMigrationTest {
         .constructors(file).stream()
         .filter(method -> method.parameters().contains("String"))
         .findFirst().orElseThrow();
-    JavacAnnotationAccess access = JavacAnnotationAccess.of(scanner);
+    JavacMemberCorrelation access = JavacMemberCorrelation.of(scanner);
     // The <init> textual declaration correlates to the index constructor
     // named by the owner's simple name, through the same type bijection.
     assertEquals(List.of("java.lang.String"),
@@ -229,7 +228,7 @@ class JavacTypeShapeMigrationTest {
   }
 
   @Test
-  void producerReturnTypeComesFromIndexShapes() throws IOException {
+  void producerReturnTypeAbstainsOnUnprovableIndexShapes() throws IOException {
     AnalysisContext context = context("producer", Map.of(
         "demo/Outer.java", """
             package demo;
@@ -240,6 +239,7 @@ class JavacTypeShapeMigrationTest {
             import jakarta.enterprise.inject.Produces;
             public class Producer {
               @Produces public Inner make() { return null; }
+              @Produces public String clean() { return null; }
             }
             """));
     System.clearProperty(FLAG);
@@ -250,15 +250,30 @@ class JavacTypeShapeMigrationTest {
     List<SourceMetadataScannerState.BeanCandidate> on =
         new SourceMetadataScanner(context).beanCandidates(
             AnalysisContext.Framework.QUARKUS);
-    // Flag-off golden: the corrupted return type resolves to nothing.
+    // Flag-off golden: the cross-file nested return type resolves to
+    // nothing textually; the clean producer resolves canonically.
     assertTrue(off.stream()
         .anyMatch(candidate -> candidate.producerMethod().equals("make")
             && candidate.candidateType().isEmpty()),
         off.toString());
-    // Flag-on: the correlated member's canonical return type is the
-    // producer bean type.
+    assertTrue(off.stream()
+        .anyMatch(candidate -> candidate.producerMethod().equals("clean")
+            && candidate.candidateType().equals("java.lang.String")),
+        off.toString());
+    // Flag-on: the index is per-file, so the cross-file nested return is an
+    // ERROR type — the correlated member must abstain (never surface the
+    // unqualified error spelling "Inner" as a canonical answer) and the
+    // textual answer survives; the clean producer keeps its canonical type.
     assertTrue(on.stream()
         .anyMatch(candidate -> candidate.producerMethod().equals("make")
+            && candidate.candidateType().isEmpty()),
+        on.toString());
+    assertTrue(on.stream()
+        .anyMatch(candidate -> candidate.producerMethod().equals("make")
+            && !candidate.candidateType().equals("Inner")),
+        on.toString());
+    assertTrue(on.stream()
+        .anyMatch(candidate -> candidate.producerMethod().equals("clean")
             && candidate.candidateType().equals("java.lang.String")),
         on.toString());
   }
@@ -316,13 +331,13 @@ class JavacTypeShapeMigrationTest {
         file(scanner, sourceRoot("jvm-descriptor"), "demo/Probe.java");
     SourceMetadataScannerState.MethodInfo ctor = SourceMetadataScanner
         .constructors(file).get(0);
-    JavacAnnotationAccess access = JavacAnnotationAccess.of(scanner);
+    JavacMemberCorrelation access = JavacMemberCorrelation.of(scanner);
     JavacSourceSymbolIndex.MemberInfo member =
         access.correlatedConstructor(file, "demo.Probe", ctor).orElseThrow();
     // The bounded-model JVM descriptor dialect renders from index shapes:
     // erased generic -> java.util.List, varargs -> String[].
     assertEquals("(Ljava/util/List;[Ljava/lang/String;)V",
-        BoundedFrameworkModelCandidateMetadata.jvmDescriptorFromMember(member).orElseThrow());
+        JavacShapeDescriptors.jvmDescriptorFromMember(member).orElseThrow());
   }
 
   private SourceMetadataScannerState.SourceFile file(

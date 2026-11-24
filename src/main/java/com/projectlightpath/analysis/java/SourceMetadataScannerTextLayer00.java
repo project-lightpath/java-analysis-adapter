@@ -38,36 +38,6 @@ static int lineStartOffset(String source, int line) {
     return currentLine == line ? source.length() : -1;
   }
 
-static int descriptorParameterCount(String descriptor) {
-    if (descriptor == null || descriptor.isBlank() || descriptor.charAt(0) != '(') {
-      return -1;
-    }
-    int close = descriptor.indexOf(')');
-    if (close < 0) {
-      return -1;
-    }
-    int count = 0;
-    for (int index = 1; index < close;) {
-      while (index < close && descriptor.charAt(index) == '[') {
-        index++;
-      }
-      if (index >= close) {
-        return -1;
-      }
-      if (descriptor.charAt(index) == 'L') {
-        int end = descriptor.indexOf(';', index);
-        if (end < 0 || end > close) {
-          return -1;
-        }
-        index = end + 1;
-      } else {
-        index++;
-      }
-      count++;
-    }
-    return count;
-  }
-
 static String packageName(String qualifiedName) {
     int separator = qualifiedName.lastIndexOf('.');
     return separator < 0 ? "" : qualifiedName.substring(0, separator);

@@ -42,7 +42,7 @@ abstract class SourceMetadataScannerRepositoryLayer
           && abstractInstanceRepositoryMethod(method)
           && !redeclaresGuaranteedContractMethod(file, method, result)) {
         RepositoryMethod repositoryMethod = new RepositoryMethod(
-            method.name(), repositoryMethodSignature(method), false);
+            method.name(), repositoryMethodSignature(file, method), false);
         result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
       }
     }
@@ -111,7 +111,7 @@ abstract class SourceMetadataScannerRepositoryLayer
           || !queryAnnotated(file, method)) {
         continue;
       }
-      result.add(repositoryMethodSignature(method));
+      result.add(repositoryMethodSignature(file, method));
     }
     return result;
   }

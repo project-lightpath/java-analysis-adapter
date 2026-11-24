@@ -725,8 +725,19 @@ final class JavacSourceSymbolIndex {
       if (isError(element.asType())) {
         return true;
       }
-      return executable && ((ExecutableElement) element).getParameters().stream()
-          .anyMatch(variable -> isError(variable.asType()));
+      if (executable) {
+        // The return type is part of the member's shape: an unresolved
+        // return (per-file index isolation makes cross-file references
+        // error types) must not surface as an unqualified "canonical"
+        // spelling, so it blocks the member like an unresolved parameter.
+        if (element.getKind() == ElementKind.METHOD
+            && isError(((ExecutableElement) element).getReturnType())) {
+          return true;
+        }
+        return ((ExecutableElement) element).getParameters().stream()
+            .anyMatch(variable -> isError(variable.asType()));
+      }
+      return false;
     }
 
     private static String declarationKind(TypeElement element) {

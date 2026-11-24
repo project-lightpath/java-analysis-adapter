@@ -99,6 +99,18 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
   static Optional<String> methodDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.ProxyTarget target) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      // Flag-on: the correlated member's index shapes render the descriptor
+      // directly; a non-correlating target keeps the textual ladder below.
+      Optional<String> fromIndex = JavacMemberCorrelation.of(scanner)
+          .correlatedJvmDescriptor(target.file(),
+              scanner.typeContaining(target.file(),
+                  SourceMetadataScanner.declarationStart(target.file(), target.method().start())),
+              target.method());
+      if (fromIndex.isPresent()) {
+        return fromIndex;
+      }
+    }
     return methodDescriptor(scanner, target.file(), target.method().parameters(), target.method().returnType());
   }
 
@@ -125,6 +137,15 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
   static Optional<String> producerDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.BeanCandidate candidate) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      // Flag-on: the correlated producer method's index shapes render the
+      // descriptor directly; a non-correlating candidate keeps textual.
+      Optional<String> fromIndex = JavacMemberCorrelation.of(scanner)
+          .producerJvmDescriptorFromIndex(candidate);
+      if (fromIndex.isPresent()) {
+        return fromIndex;
+      }
+    }
     return methodDescriptor(
         scanner,
         candidate.file(),
@@ -132,17 +153,7 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
         candidate.producerSignature());
   }
 
-  /**
-   * Builds a JVM descriptor from one correlated index member's canonical
-   * shapes (bounded-model dialect).
-   *
-   * <p>RED_23 behavior-neutral stub: empty so the failing acceptance test
-   * compiles; the renderer lands in GREEN_23.
-   */
-  static Optional<String> jvmDescriptorFromMember(
-      JavacSourceSymbolIndex.MemberInfo member) {
-    return Optional.empty();
-  }
+
 
   /** Resolves one Java type to a JVM descriptor without guessing unknown references. */
   static Optional<String> jvmDescriptor(

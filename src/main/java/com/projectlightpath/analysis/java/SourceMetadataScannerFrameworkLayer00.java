@@ -57,6 +57,27 @@ static String repositoryMethodSignature(MethodInfo method) {
     return method.name() + "(" + String.join(",", parameterTypes) + ")";
   }
 
+  /**
+   * The repository method signature with index shapes when the member
+   * correlates behind the flag; the textual signature otherwise. Consumers
+   * with a file and a scanner route through here so canonical signatures
+   * and textual ones never mix for one declaration.
+   */
+  String repositoryMethodSignature(SourceMetadataScannerState.SourceFile file,
+      MethodInfo method) {
+    if (JavacSourceSymbolIndex.enabled()) {
+      String ownerType = typeContaining(file, declarationStart(file, method.start()));
+      Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
+          JavacMemberCorrelation.of((SourceMetadataScanner) this)
+              .correlatedMethod(file, ownerType, method);
+      if (correlated.isPresent()) {
+        return method.name() + "("
+            + String.join(",", correlated.orElseThrow().parameterTypes()) + ")";
+      }
+    }
+    return repositoryMethodSignature(method);
+  }
+
   /** Resolves only known framework types, abstaining on ambiguous or unknown imports. */
   Optional<String> resolveKnownFrameworkType(
       String type, SourceFile sourceFile, Set<String> canonicalTypes) {
