@@ -146,7 +146,7 @@ final class JavacMemberCorrelation {
     if (group.size() < 2) {
       return Optional.empty();
     }
-    return correlatedByBijection(file, declaration, declarations, group);
+    return correlatedByBijection(file, declaration, declarations, group, indexName);
   }
 
   /**
@@ -160,7 +160,8 @@ final class JavacMemberCorrelation {
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo declaration,
       List<SourceMetadataScannerState.MethodInfo> declarations,
-      List<JavacSourceSymbolIndex.MemberInfo> group) {
+      List<JavacSourceSymbolIndex.MemberInfo> group,
+      String indexName) {
     List<SourceMetadataScannerState.MethodInfo> siblings = declarations.stream()
         .filter(other -> other.name().equals(declaration.name()))
         .filter(other -> !hasCommentText(other.parameters()))
@@ -172,7 +173,7 @@ final class JavacMemberCorrelation {
     }
     List<List<String>> textualVectors = new ArrayList<>();
     for (SourceMetadataScannerState.MethodInfo sibling : siblings) {
-      List<String> vector = resolvedParameterVector(file, sibling);
+      List<String> vector = resolvedParameterVector(file, sibling, indexName);
       if (vector.isEmpty()) {
         return Optional.empty();
       }
@@ -186,7 +187,7 @@ final class JavacMemberCorrelation {
         || !new HashSet<>(textualVectors).equals(new HashSet<>(indexVectors))) {
       return Optional.empty();
     }
-    List<String> queried = resolvedParameterVector(file, declaration);
+    List<String> queried = resolvedParameterVector(file, declaration, indexName);
     if (queried.isEmpty()) {
       return Optional.empty();
     }
@@ -202,8 +203,10 @@ final class JavacMemberCorrelation {
   /** The canonical parameter vector of one textual declaration, or empty. */
   private List<String> resolvedParameterVector(
       SourceMetadataScannerState.SourceFile file,
-      SourceMetadataScannerState.MethodInfo declaration) {
-    JavacTypeParameterClause clause = JavacTypeParameterClause.parse(file, declaration);
+      SourceMetadataScannerState.MethodInfo declaration,
+      String indexName) {
+    JavacTypeParameterClause clause =
+        JavacTypeParameterClause.parse(file, declaration, indexName);
     if (clause.abstain()) {
       // An unparseable type-parameter clause leaves the parameter names
       // unknown, reopening the mirrored-overload derangement window: the

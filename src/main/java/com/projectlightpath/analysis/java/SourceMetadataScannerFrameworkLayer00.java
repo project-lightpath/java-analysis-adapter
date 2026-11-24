@@ -80,7 +80,8 @@ static String repositoryMethodSignature(MethodInfo method) {
       // with find(java.lang.String key) — distinct overloads that would
       // otherwise share one identity and be deduplicated. An unparseable
       // clause falls back to the fully textual signature (deterministic).
-      JavacTypeParameterClause clause = JavacTypeParameterClause.parse(file, method);
+      JavacTypeParameterClause clause =
+          JavacTypeParameterClause.parse(file, method, method.name());
       if (clause.abstain()) {
         return repositoryMethodSignature(method);
       }

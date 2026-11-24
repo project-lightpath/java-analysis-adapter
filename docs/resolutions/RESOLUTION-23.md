@@ -224,6 +224,35 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
         `<T extends missing.Thing>` (TYPEVAR declared mirror, error
         erasure) with a `T extends Number` control asserting eligibility
         (parameterTypes [java.lang.Number]).
+   5. Follow-up round CR-5 (threads r4681997971 and r4681968872; both
+      residuals addressed in REVIEW_23_12):
+      a. The clause parser located the parameter-list boundary with a raw
+         `source.indexOf(declaration.parameters(), declaration.start())`,
+         which can anchor inside a comment BEFORE the clause that repeats
+         the parameter text (`public /* List p */ <List ...>`) — and a
+         comment before the clause also breaks the method EXTRACTION
+         pattern, pushing `declaration.start()` past the clause entirely
+         (probe-verified: the header window was `String pick(`), so the
+         clause was invisible and the mirrored overloads correlated.
+         Fixed per the reviewer's guidance (use the actual parameter-list
+         boundary): the boundary is located on the whole-file-masked
+         source, verified against the declaration's own name preceding
+         the parameter list (the owner's simple name for `<init>`
+         constructors), and the header window runs from the previous
+         declaration delimiter — tracked at parenthesis depth zero so a
+         delimiter inside an annotation argument (`@Ann({1})`) cannot
+         truncate it — to the method name. An unestablishable boundary
+         abstains (fail closed). Pinned by
+         `commentBeforeClauseDoesNotHideTypeParameters` (comment before
+         the clause repeating the parameter text verbatim; parameters use
+         the SECOND declared name after an actual nested generic bound
+         `Set<String>`; both mirrored overloads found and both abstain).
+      b. The mutation check requested on r4681366003 was executed:
+         reverting ONLY the erased-parameter check in
+         `memberHasErrorType` makes
+         `unresolvedTypeVariableBoundParameterAbstains` fail (member
+         correlates, `expected: <true> but was: <false>`); restoring the
+         check makes it pass. The pin is mutation-sensitive.
   3. Minor (r4681365963) — index diagnostics (javac errors behind
      flag-on abstentions) do not reach the scan output. DISPOSITIONED:
      routing index diagnostics into `scan.diagnostics()` would block
