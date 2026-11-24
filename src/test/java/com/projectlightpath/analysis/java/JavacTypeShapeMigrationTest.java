@@ -559,6 +559,83 @@ class JavacTypeShapeMigrationTest {
     assertEquals(repositorySignature, fragmentSignature);
   }
 
+  @Test
+  void typeVariableAbstentionSurvivesMethodBodies() throws IOException {
+    AnalysisContext context = context("type-variables-bodies", Map.of(
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              public <List extends java.util.Set> String pick(List p) { return null; }
+              public <Set extends java.util.List> Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("type-variables-bodies"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    for (SourceMetadataScannerState.MethodInfo method
+        : SourceMetadataScanner.methods(file)) {
+      // Methods with bodies follow the previous declaration's closing
+      // brace, which the declaration start includes: the type-parameter
+      // clause must still be found, so both mirrored overloads abstain.
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the mirrored type-parameter overload must abstain: " + method.parameters());
+    }
+  }
+
+  @Test
+  void fragmentAndRepositorySignaturesShareOneRuleAcrossImportStyles() throws IOException {
+    Path sourceRoot = temp.resolve("import-styles").resolve("src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/AccountFragment.java", """
+        package demo;
+        import java.util.*;
+        public interface AccountFragment {
+          Date find(Date key);
+        }
+        """);
+    write(sourceRoot, "demo/AccountRepository.java", """
+        package demo;
+        import java.util.Date;
+        public interface AccountRepository
+            extends org.springframework.data.repository.CrudRepository<Account, Long>,
+                AccountFragment {
+          Date find(Date key);
+        }
+        """);
+    AnalysisContext context = context(sourceRoot, "2.7.18",
+        AnalysisContext.Framework.SPRING_BOOT);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile repository =
+        file(scanner, sourceRoot, "demo/AccountRepository.java");
+    SourceMetadataScannerState.SourceFile fragment =
+        file(scanner, sourceRoot, "demo/AccountFragment.java");
+    // Both files declare the SAME spelling (Date) but import it
+    // differently: the repository explicitly (resolves to java.util.Date),
+    // the fragment on-demand (resolves to nothing — probe-verified). An
+    // import-dependent canonical form would split the identity
+    // (find(java.util.Date) vs find(Date)); the stable rule canonicalizes
+    // only file-INDEPENDENT resolutions (primitives, qualified spellings,
+    // java.lang), so both sides keep the token and the identity holds.
+    String repositorySignature = scanner.springRepositoryMethods(repository).stream()
+        .filter(method -> method.name().equals("find"))
+        .map(SourceMetadataScannerState.RepositoryMethod::identity)
+        .findFirst().orElseThrow();
+    SourceMetadataScannerState.MethodInfo fragmentFind = SourceMetadataScanner
+        .methods(fragment).stream()
+        .filter(method -> method.name().equals("find"))
+        .findFirst().orElseThrow();
+    String fragmentSignature = scanner.repositoryMethodSignature(fragment, fragmentFind);
+    assertEquals(repositorySignature, fragmentSignature,
+        "import-style differences must not split the identity: "
+            + repositorySignature + " vs " + fragmentSignature);
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);

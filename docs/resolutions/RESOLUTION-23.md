@@ -166,6 +166,32 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      deliberately independent of member correlation. Pinned by
      `fragmentAndRepositorySignaturesShareOneRule`.
 
+- **Round CR-2** (CodeRabbit follow-ups on the CR-1 threads; 2
+  actionable residuals, both addressed in REVIEW_23_7):
+  1. Thread r4675771816 — the type-parameter clause extraction was
+     anchored at the declaration start, which includes a preceding
+     `{`, `}`, or `;` for methods with bodies, so the clause was not
+     found and the derangement window reopened for concrete classes.
+     Fixed: the anchor tolerates the preceding delimiters. Pinned by
+     `typeVariableAbstentionSurvivesMethodBodies` (a concrete class
+     with bodies; both mirrored overloads abstain).
+  2. Thread r4675771839 — the per-parameter canonicalization still
+     split identities when the same spelling was imported differently
+     (explicit import resolves, on-demand does not — probe-verified:
+     resolveReferenceType returns empty for a single java.util.*
+     on-demand import). Fixed: the signature rule canonicalizes only
+     file-INDEPENDENT resolutions (primitives, already-qualified
+     spellings, java.lang types, which every compilation unit imports
+     implicitly); import-dependent names keep their textual token, so
+     same-spelling declarations get one identity regardless of import
+     style. Pinned by `fragmentAndRepositorySignaturesShareOneRule
+     AcrossImportStyles` (explicit vs on-demand import of the same
+     simple name). Different spellings of the same type (qualified vs
+     simple) keep the pre-existing textual identity split — not a
+     regression, recorded here.
+  Thread r4675771826 (JVM descriptor binary names) remains the
+  agreed documented follow-up from CR-1.
+
 ## Plan-review record
 
 Six adversarial plan-review rounds (Engram-grounded subagent):

@@ -243,11 +243,12 @@ final class JavacMemberCorrelation {
       return Set.of();
     }
     String header = source.substring(declaration.start(), parametersAt);
-    // The clause must be the FIRST thing after modifiers and annotations —
-    // a generic RETURN type (List<String> pick) also contains angle
-    // brackets but never starts the header.
+    // The clause must be the FIRST thing after modifiers, annotations, and
+    // any preceding declaration delimiter ({, }, ;) that the extraction
+    // start includes — a generic RETURN type (List<String> pick) also
+    // contains angle brackets but never starts the header.
     java.util.regex.Matcher matcher = java.util.regex.Pattern
-        .compile("^(?:\\s|@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?|public|protected|private|"
+        .compile("^(?:\\s|[{};]|@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?|public|protected|private|"
             + "static|final|synchronized|abstract|default|strictfp|native)*"
             + "\\s*<([^>]*)>")
         .matcher(header);

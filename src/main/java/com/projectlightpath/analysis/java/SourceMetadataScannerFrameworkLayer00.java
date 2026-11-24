@@ -15,6 +15,9 @@ abstract class SourceMetadataScannerFrameworkLayer00 extends SourceMetadataScann
     super(context);
   }
 
+  private static final java.util.Set<String> PRIMITIVE_TYPE_NAMES = java.util.Set.of(
+      "boolean", "byte", "char", "short", "int", "long", "float", "double");
+
 
 
   /** Reads the Spring Boot major version carried by AnalysisContext.frameworkVersion. */
@@ -76,7 +79,20 @@ static String repositoryMethodSignature(MethodInfo method) {
       for (Parameter parameter : parameters(method.parameters())) {
         String token = parameter.type().replaceAll("\\s+", " ").trim();
         String element = stripBalancedGenericArguments(token).trim();
-        parameterTypes.add(resolveReferenceType(element, file).orElse(token));
+        String canonical = resolveReferenceType(element, file).orElse(token);
+        // Canonicalize ONLY file-INDEPENDENT resolutions: primitives,
+        // already-qualified spellings (deterministic from the spelling
+        // itself), and java.lang types (implicitly imported in every
+        // compilation unit). Import-dependent names keep their textual
+        // token — the same method is declared in a repository interface
+        // and a fragment interface, and the two files can import the same
+        // simple name differently (explicit vs on-demand), so an
+        // import-dependent canonical form would give the declarations
+        // different identities and lose the fragment-backed attribution.
+        boolean stable = PRIMITIVE_TYPE_NAMES.contains(element)
+            || element.contains(".")
+            || canonical.startsWith("java.lang.");
+        parameterTypes.add(stable ? canonical : token);
       }
       return method.name() + "(" + String.join(",", parameterTypes) + ")";
     }
