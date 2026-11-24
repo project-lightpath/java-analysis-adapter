@@ -294,6 +294,17 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
       nestedParenthesisAnnotationArgumentBeforeClauseAbstains fail (the
       bound-annotation pin stays green). The guards are independent and
       each pin is mutation-sensitive against exactly its own guard.
+   8. Follow-up round CR-7 (comments 4686083980 and 4686097522;
+      addressed in REVIEW_23_15): whitespace between an annotation name
+      and its argument list (@A (@B(1))) is legal Java, but annotationEnd
+      required '(' immediately after the name — the annotation looked
+      argument-less, the prefix stopped at '(', and the clause went
+      unrecognized, so none() (non-abstaining) let the mirrored overloads
+      correlate. Fixed: the argument-list boundary skips whitespace
+      (and, closing the same token-boundary cell class, so does the
+      name boundary after '@'). Pinned by
+      whitespaceBeforeAnnotationArgumentsKeepsClauseVisible (committed
+      red first: the fixture correlated at HEAD).
   3. Minor (r4681365963) — index diagnostics (javac errors behind
      flag-on abstentions) do not reach the scan output. DISPOSITIONED:
      routing index diagnostics into `scan.diagnostics()` would block

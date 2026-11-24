@@ -258,20 +258,31 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
    * The index just past an annotation at {@code from}: the qualified name
    * and, when present, its argument list with BALANCED parentheses (a
    * flat [^)]* match cannot consume a nested-parenthesis argument like
-   * @A(@B(1))). Returns -1 when the annotation cannot be parsed — a
-   * malformed name or unbalanced argument could hide a clause, so the
-   * caller abstains.
+   * @A(@B(1))). Whitespace between the annotation's tokens is legal Java
+   * (@A (@B(1))) and is skipped at both boundaries. Returns -1 when the
+   * annotation cannot be parsed — a malformed name or unbalanced argument
+   * could hide a clause, so the caller abstains.
    */
   private static int annotationEnd(String header, int from) {
-    int nameEnd = qualifiedNameEnd(header, from + 1);
+    int nameEnd = qualifiedNameEnd(header, skipWhitespace(header, from + 1));
     if (nameEnd < 0) {
       return -1;
     }
-    if (nameEnd >= header.length() || header.charAt(nameEnd) != '(') {
+    int argumentList = skipWhitespace(header, nameEnd);
+    if (argumentList >= header.length() || header.charAt(argumentList) != '(') {
       return nameEnd;
     }
-    int close = closingParen(header, nameEnd);
+    int close = closingParen(header, argumentList);
     return close < 0 ? -1 : close + 1;
+  }
+
+  /** The first index at or after {@code from} that is not whitespace. */
+  private static int skipWhitespace(String header, int from) {
+    int index = from;
+    while (index < header.length() && Character.isWhitespace(header.charAt(index))) {
+      index++;
+    }
+    return index;
   }
 
   /** The index just past a qualified annotation name at {@code from}, or -1. */
