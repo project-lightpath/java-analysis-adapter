@@ -75,10 +75,23 @@ static String repositoryMethodSignature(MethodInfo method) {
   String repositoryMethodSignature(SourceMetadataScannerState.SourceFile file,
       MethodInfo method) {
     if (JavacSourceSymbolIndex.enabled()) {
+      // A method type parameter must keep its TOKEN: resolving it through
+      // java.lang would conflate <String extends Number> find(String key)
+      // with find(java.lang.String key) — distinct overloads that would
+      // otherwise share one identity and be deduplicated. An unparseable
+      // clause falls back to the fully textual signature (deterministic).
+      JavacTypeParameterClause clause = JavacTypeParameterClause.parse(file, method);
+      if (clause.abstain()) {
+        return repositoryMethodSignature(method);
+      }
       List<String> parameterTypes = new ArrayList<>();
       for (Parameter parameter : parameters(method.parameters())) {
         String token = parameter.type().replaceAll("\\s+", " ").trim();
         String element = stripBalancedGenericArguments(token).trim();
+        if (clause.names().contains(element)) {
+          parameterTypes.add(token);
+          continue;
+        }
         String canonical = resolveReferenceType(element, file).orElse(token);
         // Canonicalize ONLY file-INDEPENDENT resolutions: primitives,
         // already-qualified spellings (deterministic from the spelling

@@ -208,6 +208,22 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
      spelling with `errorType=false`. Fixed: parameters get the same
      declared-or-erased check the return type has. Pinned by
      `unresolvedTypeVariableBoundParameterAbstains`.
+  4. Follow-up round CR-4 (threads r4681605219 and r4681620081; both
+     residuals addressed in REVIEW_23_11):
+     a. The clause parser counted `>` characters in raw comments — a
+        `/* > */` inside a bound ended the clause before later names,
+        and the nested-clause regression used only the FIRST declared
+        name. Fixed: the header is comment- and literal-masked
+        (offset-preserving) before the balanced parse. Pinned by
+        `commentsInsideBoundsAndLaterNamesAreRecognized` (a `>` inside a
+        bound comment; parameters use the SECOND declared name in each
+        clause; both mirrored overloads abstain; both methods found).
+     b. The parameter-bound fixture was vacuous — T was declared on a
+        sibling method, not in scope, so the DECLARED error check fired
+        and the erased check was untested. Fixed: class-scoped
+        `<T extends missing.Thing>` (TYPEVAR declared mirror, error
+        erasure) with a `T extends Number` control asserting eligibility
+        (parameterTypes [java.lang.Number]).
   3. Minor (r4681365963) — index diagnostics (javac errors behind
      flag-on abstentions) do not reach the scan output. DISPOSITIONED:
      routing index diagnostics into `scan.diagnostics()` would block

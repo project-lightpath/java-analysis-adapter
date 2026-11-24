@@ -670,26 +670,82 @@ class JavacTypeShapeMigrationTest {
     AnalysisContext context = context("unresolved-bound-param", Map.of(
         "demo/Bound.java", """
             package demo;
-            public class Bound {
+            public class Bound<T extends missing.Thing> {
               public void run(T value) { }
-              public <T extends missing.Thing> void declare() { }
+            }
+            """,
+        "demo/Valid.java", """
+            package demo;
+            public class Valid<T extends Number> {
+              public void run(T value) { }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile boundFile =
+        file(scanner, sourceRoot("unresolved-bound-param"), "demo/Bound.java");
+    SourceMetadataScannerState.MethodInfo run = SourceMetadataScanner
+        .methods(boundFile).stream()
+        .filter(method -> method.name().equals("run"))
+        .findFirst().orElseThrow();
+    // The parameter's declared mirror is a TYPEVAR (not an error kind), but
+    // its ERASURE is an error type (the class-scoped bound is unresolved):
+    // the member must abstain rather than publish the erased error spelling
+    // in parameterTypes. This pins the erased-parameter check specifically —
+    // the declared check alone does not fire for a TYPEVAR mirror.
+    assertTrue(JavacMemberCorrelation.of(scanner)
+            .correlatedMethod(boundFile, "demo.Bound", run).isEmpty(),
+        "an unresolved type-variable bound parameter must abstain");
+    // Control: a VALID bound (T extends Number, erasure java.lang.Number is
+    // not an error type) stays eligible — the member correlates and its
+    // canonical parameter type is the erased bound.
+    SourceMetadataScannerState.SourceFile validFile =
+        file(scanner, sourceRoot("unresolved-bound-param"), "demo/Valid.java");
+    SourceMetadataScannerState.MethodInfo validRun = SourceMetadataScanner
+        .methods(validFile).stream()
+        .filter(method -> method.name().equals("run"))
+        .findFirst().orElseThrow();
+    assertEquals(List.of("java.lang.Number"),
+        JavacMemberCorrelation.of(scanner)
+            .correlatedMethod(validFile, "demo.Valid", validRun)
+            .orElseThrow().parameterTypes(),
+        "a valid bounded type variable must stay eligible");
+  }
+
+  @Test
+  void commentsInsideBoundsAndLaterNamesAreRecognized() throws IOException {
+    AnalysisContext context = context("comment-in-clause", Map.of(
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              public <X extends /* > */ Number, List extends java.util.Set>
+                  String pick(List p) { return null; }
+              public <Y extends /* > */ Number, Set extends java.util.List>
+                  Integer pick(Set p) { return null; }
             }
             """));
     System.setProperty(FLAG, "true");
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
-        file(scanner, sourceRoot("unresolved-bound-param"), "demo/Bound.java");
-    SourceMetadataScannerState.MethodInfo run = SourceMetadataScanner
+        file(scanner, sourceRoot("comment-in-clause"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
         .methods(file).stream()
-        .filter(method -> method.name().equals("run"))
-        .findFirst().orElseThrow();
-    // The parameter's declared mirror is a TYPEVAR (not an error), but its
-    // erasure is an error type (the bound is declared later in the file and
-    // unresolved): the member must abstain rather than publish the erased
-    // error spelling in parameterTypes.
-    assertTrue(JavacMemberCorrelation.of(scanner)
-            .correlatedMethod(file, "demo.Bound", run).isEmpty(),
-        "an unresolved type-variable bound parameter must abstain");
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // The comment's '>' must not end the balanced clause (the header is
+    // comment-masked before parsing), and the parameters use the SECOND
+    // declared name in each clause (after the nested bound) — proving the
+    // later names are parsed. Both mirrored overloads abstain.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the comment-corrupted mirrored overload must abstain: "
+              + method.parameters());
+    }
   }
 
   private SourceMetadataScannerState.SourceFile file(

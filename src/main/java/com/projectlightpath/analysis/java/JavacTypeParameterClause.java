@@ -24,7 +24,12 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
     if (declaration.parameters().isEmpty() || parametersAt < 0) {
       return none();
     }
-    String header = source.substring(declaration.start(), parametersAt);
+    // Mask comments and string literals (both offset-preserving): a
+    // comment inside a bound can contain '>' or '<' and corrupt the
+    // balanced parse, and an annotation argument can contain either.
+    String header = SourceMetadataScanner.maskStringLiterals(
+        SourceMetadataScanner.stripComments(
+            source.substring(declaration.start(), parametersAt)));
     // The clause must be the FIRST thing after modifiers, annotations, and
     // any preceding declaration delimiter ({, }, ;) that the extraction
     // start includes — a generic RETURN type (List<String> pick) also
