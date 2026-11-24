@@ -1,33 +1,48 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
-import java.util.StringJoiner;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Canonical→binary name derivation for the TEXTUAL JVM-descriptor dialect
  * (issue #60): both dialects render binary names, and the textual path has
- * no javac mirror, so the binary spelling is derived from the resolved
- * canonical name through three rules, most definite first:
+ * no javac mirror, so a {@code '$'} boundary is inserted only where
+ * EVIDENCE proves it — capitalization is never evidence. Most definite
+ * first:
  *
  * <ol>
  * <li>Index lookup (flag-on, DEFINITE): the javac index carries
  *     {@code Elements.getBinaryName} for every indexed type; a canonical
- *     naming exactly one unflagged entry maps to its binary name.
- * <li>File-set top-level (DEFINITE): a canonical equal to one scanned
- *     file's top-level {@code typeName()} is a top-level type — binary
- *     equals canonical (this also preserves {@code $}-in-simple-name
- *     top-level types such as {@code demo.Cash$Flow}).
- * <li>Segment boundary rule (convention-grounded, fail-closed guarded):
- *     the first uppercase-initial segment starts the type chain; the
- *     package prefix keeps dots, the chain joins with {@code '$'}. A
- *     {@code '$'} anywhere in the canonical means a {@code $}-named simple
- *     identifier (source references to nested types use dots), so the
- *     spelling passes through unchanged. A boundary at segment 0 (default
- *     package or an UPPERCASE PACKAGE — textually indistinguishable) and
- *     empty segments abstain.
+ *     naming exactly one unflagged entry maps to its binary name. An
+ *     AMBIGUOUS lookup (two or more unflagged entries sharing the
+ *     canonical, e.g. a nested {@code p.Outer.Inner} next to a top-level
+ *     type in a package literally named {@code p.Outer}) abstains — never
+ *     throws, never picks a side.
+ * <li>File-set declarations (DEFINITE): a canonical equal to a scanned
+ *     file's top-level declaration name is top-level (binary ==
+ *     canonical); a canonical extending it resolves through the nested
+ *     declaration chain (every remaining segment names a type declaration
+ *     contained in the previous one's body, enumerated exhaustively).
+ *     Zero proven chains falls through; more than one DISTINCT binary
+ *     abstains.
+ * <li>Type-qualified spelling (DEFINITE for the qualifier): when the
+ *     ORIGINAL spelling is {@code Qualifier.Member...} with a simple
+ *     first segment that resolves to a type in the referencing file's
+ *     scope, the source itself asserts the qualifier is a type — the
+ *     boundary is proven there and the tail joins with {@code '$'}.
+ * <li>Otherwise the JLS-default package reading keeps binary ==
+ *     canonical (the pre-#60 rendering for these shapes), guarded by two
+ *     abstentions: a {@code '$'} in a segment BEFORE the last is
+ *     ambiguous (a {@code $}-named simple identifier with further nesting
+ *     vs a package segment) and abstains; empty segments abstain.
  * </ol>
  */
 final class JvmBinaryNames {
+  private static final Pattern SIMPLE_NAME = Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]*");
+
   private JvmBinaryNames() {}
 
   /** Returns the binary name of one resolved canonical type spelling. */
@@ -36,86 +51,148 @@ final class JvmBinaryNames {
       String canonical,
       String spelling,
       SourceMetadataScannerState.SourceFile sourceFile) {
-    // RED stub signature extension: spelling and sourceFile are accepted
-    // so the evidence-based cells compile; the v1 behavior (segment
-    // heuristic) is unchanged until GREEN ignores nothing.
-    return binaryName(scanner, canonical);
-  }
-
-  static Optional<String> binaryName(SourceMetadataScanner scanner, String canonical) {
     String normalized = canonical == null ? "" : canonical.trim();
     if (normalized.isEmpty()) {
       return Optional.empty();
     }
-    Optional<String> fromIndex = fromIndex(scanner, normalized);
-    if (fromIndex.isPresent()) {
-      return fromIndex;
-    }
-    if (isFileSetTopLevel(scanner, normalized)) {
-      return Optional.of(normalized);
-    }
-    return segmentRule(normalized);
-  }
-
-  private static Optional<String> fromIndex(
-      SourceMetadataScanner scanner, String canonical) {
-    return JavacSourceSymbolIndex.of(scanner.context)
-        .flatMap(index -> index.type(canonical).stream()
-            .filter(entry -> !entry.shape().duplicateBinaryName())
-            .limit(2)
-            .reduce((left, right) -> null))
-        .map(JavacSourceSymbolIndex.TypeInfo::binaryName);
-  }
-
-  private static boolean isFileSetTopLevel(
-      SourceMetadataScanner scanner, String canonical) {
-    return scanner.files().stream()
-        .map(SourceMetadataScannerState.SourceFile::typeName)
-        .filter(canonical::equals)
-        .count() == 1;
-  }
-
-  private static Optional<String> segmentRule(String canonical) {
-    String[] segments = canonical.split("\\.", -1);
-    int boundary = -1;
-    for (int index = 0; index < segments.length; index++) {
-      if (segments[index].isEmpty()) {
-        return Optional.empty();
-      }
-      if (segments[index].indexOf('$') >= 0) {
-        return Optional.of(canonical);
-      }
-      if (boundary < 0 && startsUppercase(segments[index])) {
-        boundary = index;
-      }
-    }
-    if (boundary < 0) {
-      return Optional.of(canonical);
-    }
-    if (boundary == 0) {
+    List<String> segments = List.of(normalized.split("\\.", -1));
+    if (segments.stream().anyMatch(String::isEmpty)) {
       return Optional.empty();
     }
-    return Optional.of(packagePrefix(segments, boundary)
-        + "." + typeChain(segments, boundary));
-  }
-
-  private static boolean startsUppercase(String segment) {
-    return !segment.isEmpty() && Character.isUpperCase(segment.charAt(0));
-  }
-
-  private static String packagePrefix(String[] segments, int boundary) {
-    StringJoiner prefix = new StringJoiner(".");
-    for (int index = 0; index < boundary; index++) {
-      prefix.add(segments[index]);
+    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(scanner.context);
+    if (index.isPresent()) {
+      List<JavacSourceSymbolIndex.TypeInfo> eligible = index.get().type(normalized).stream()
+          .filter(entry -> !entry.shape().duplicateBinaryName())
+          .toList();
+      if (eligible.size() == 1) {
+        return Optional.of(eligible.get(0).binaryName());
+      }
+      if (eligible.size() > 1) {
+        return Optional.empty();
+      }
     }
-    return prefix.toString();
+    List<String> declared = fileSetBinaries(scanner, normalized, segments);
+    if (declared.size() == 1) {
+      return Optional.of(declared.get(0));
+    }
+    if (declared.size() > 1) {
+      return Optional.empty();
+    }
+    return spellingBinary(scanner, normalized, spelling, sourceFile)
+        .or(() -> dollarGuard(normalized));
   }
 
-  private static String typeChain(String[] segments, int boundary) {
-    StringJoiner chain = new StringJoiner("$");
-    for (int index = boundary; index < segments.length; index++) {
-      chain.add(segments[index]);
+  /**
+   * The distinct binary spellings the file-set declarations prove for the
+   * canonical: empty when no declaration chain matches (fall through),
+   * one when proven, more than one when ambiguous (abstain).
+   */
+  private static List<String> fileSetBinaries(
+      SourceMetadataScanner scanner, String canonical, List<String> segments) {
+    Set<String> results = new LinkedHashSet<>();
+    for (SourceMetadataScannerState.SourceFile file : scanner.files()) {
+      for (SourceMetadataScannerState.TypeInfo top : topLevelDeclarations(file)) {
+        String topName = qualified(file.packageName(), top.name());
+        if (canonical.equals(topName)) {
+          results.add(topName);
+        } else if (canonical.startsWith(topName + ".")) {
+          collectChain(file, top, segments, topName.split("\\.", -1).length,
+              topName, results);
+        }
+      }
     }
-    return chain.toString();
+    return List.copyOf(results);
+  }
+
+  /** Enumerates every declaration chain below one top-level declaration. */
+  private static void collectChain(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.TypeInfo owner,
+      List<String> segments,
+      int next,
+      String binarySoFar,
+      Set<String> results) {
+    if (next == segments.size()) {
+      results.add(binarySoFar);
+      return;
+    }
+    for (SourceMetadataScannerState.TypeInfo candidate
+        : SourceMetadataScanner.typeDeclarations(file)) {
+      if (candidate.name().equals(segments.get(next))
+          && candidate.start() > owner.start()
+          && candidate.end() < owner.end()) {
+        collectChain(file, candidate, segments, next + 1,
+            binarySoFar + "$" + segments.get(next), results);
+      }
+    }
+  }
+
+  private static List<SourceMetadataScannerState.TypeInfo> topLevelDeclarations(
+      SourceMetadataScannerState.SourceFile file) {
+    List<SourceMetadataScannerState.TypeInfo> all =
+        SourceMetadataScanner.typeDeclarations(file);
+    return all.stream()
+        .filter(candidate -> all.stream().noneMatch(other ->
+            other != candidate
+                && other.start() < candidate.start()
+                && other.end() > candidate.end()))
+        .toList();
+  }
+
+  /**
+   * The type-qualified spelling rule: a spelling like {@code Map.Entry}
+   * (simple first segment, resolvable in the referencing file's scope)
+   * asserts the qualifier is a TYPE — the boundary is proven there and
+   * the remaining segments join the binary chain. Simple and
+   * fully-qualified spellings assert nothing and return empty.
+   */
+  private static Optional<String> spellingBinary(
+      SourceMetadataScanner scanner,
+      String canonical,
+      String spelling,
+      SourceMetadataScannerState.SourceFile sourceFile) {
+    if (spelling == null || sourceFile == null) {
+      return Optional.empty();
+    }
+    String trimmed = spelling.trim();
+    int dot = trimmed.indexOf('.');
+    if (dot <= 0 || trimmed.indexOf('.', dot + 1) >= 0
+        || !SIMPLE_NAME.matcher(trimmed.substring(0, dot)).matches()) {
+      return Optional.empty();
+    }
+    String qualifierSpelling = trimmed.substring(0, dot);
+    Optional<String> qualifier =
+        scanner.resolveReferenceType(qualifierSpelling, sourceFile);
+    if (qualifier.isEmpty() || !canonical.startsWith(qualifier.get() + ".")) {
+      return Optional.empty();
+    }
+    String tail = canonical.substring(qualifier.get().length() + 1);
+    if (!trimmed.substring(dot + 1).equals(tail)) {
+      return Optional.empty();
+    }
+    return binaryName(scanner, qualifier.get(), qualifier.get(), sourceFile)
+        .map(prefix -> prefix + "$" + tail.replace('.', '$'));
+  }
+
+  /**
+   * The JLS-default package reading with the {@code '$'} ambiguity guard:
+   * binary == canonical, unless a {@code '$'} appears in a segment before
+   * the last (ambiguous between a {@code $}-named identifier with further
+   * nesting and a package segment), which abstains.
+   */
+  private static Optional<String> dollarGuard(String canonical) {
+    int lastDot = canonical.lastIndexOf('.');
+    for (int index = canonical.indexOf('$'); index >= 0;
+        index = canonical.indexOf('$', index + 1)) {
+      if (lastDot < 0 || index < lastDot) {
+        return Optional.empty();
+      }
+    }
+    return Optional.of(canonical);
+  }
+
+  private static String qualified(String packageName, String name) {
+    return packageName == null || packageName.isEmpty()
+        ? name : packageName + "." + name;
   }
 }
