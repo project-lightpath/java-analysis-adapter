@@ -31,6 +31,17 @@ final class JvmBinaryNames {
   private JvmBinaryNames() {}
 
   /** Returns the binary name of one resolved canonical type spelling. */
+  static Optional<String> binaryName(
+      SourceMetadataScanner scanner,
+      String canonical,
+      String spelling,
+      SourceMetadataScannerState.SourceFile sourceFile) {
+    // RED stub signature extension: spelling and sourceFile are accepted
+    // so the evidence-based cells compile; the v1 behavior (segment
+    // heuristic) is unchanged until GREEN ignores nothing.
+    return binaryName(scanner, canonical);
+  }
+
   static Optional<String> binaryName(SourceMetadataScanner scanner, String canonical) {
     String normalized = canonical == null ? "" : canonical.trim();
     if (normalized.isEmpty()) {

@@ -83,7 +83,7 @@ class JavacBinaryNameMigrationTest {
   }
 
   @Test
-  void textualJvmDescriptorUsesBinaryNamesForQualifiedSpellings() throws IOException {
+  void textualFullyQualifiedNestedSpellingsKeepThePackageReading() throws IOException {
     AnalysisContext context = context("textual-qualified", Map.of(
         "demo/Api.java", """
             package demo;
@@ -95,9 +95,14 @@ class JavacBinaryNameMigrationTest {
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("textual-qualified"), "demo/Api.java");
-    // Flag-off golden under the NEW dialect: the fully-qualified nested
-    // spelling renders the binary name java.util.Map$Entry.
-    assertEquals(Optional.of("(Ljava/util/Map$Entry;)Ljava/util/Map$Entry;"),
+    // A FULLY-QUALIFIED nested spelling carries no boundary evidence: it is
+    // textually indistinguishable from a top-level type in a package named
+    // like the outer type (JLS-default package reading). The textual
+    // dialect keeps that reading (no fabricated '$'); the flag-on index
+    // resolves the nested reading definitively for correlated members.
+    // Nested binary names reach the textual dialect through type-qualified
+    // spellings (import-qualified cell) and file-set declarations.
+    assertEquals(Optional.of("(Ljava/util/Map/Entry;)Ljava/util/Map/Entry;"),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, file, "java.util.Map.Entry key", "java.util.Map.Entry"));
   }
@@ -127,11 +132,16 @@ class JavacBinaryNameMigrationTest {
   @Test
   void nestedProducerDescriptorParityAcrossFlagStates() throws IOException {
     AnalysisContext context = context("parity", Map.of(
+        "outer/Outer.java", """
+            package outer;
+            public class Outer { static class Inner { } }
+            """,
         "demo/Producer.java", """
             package demo;
             import jakarta.enterprise.inject.Produces;
+            import outer.Outer;
             public class Producer {
-              @Produces public java.util.Map.Entry entry() { return null; }
+              @Produces public Outer.Inner entry() { return null; }
             }
             """));
     System.clearProperty(FLAG);
@@ -145,14 +155,15 @@ class JavacBinaryNameMigrationTest {
     System.setProperty(FLAG, "true");
     SourceMetadataScanner onScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate on = producer(onScanner, "entry");
-    // Dialect parity: the flag-off textual derivation and the flag-on index
-    // shapes render the SAME binary-name descriptor — the dialects never
-    // diverge.
+    // Dialect parity: the flag-off textual derivation (the type-qualified
+    // spelling Outer.Inner resolves its qualifier through the explicit
+    // import, proving the boundary) and the flag-on index shapes render
+    // the SAME binary-name descriptor — the dialects never diverge.
     assertEquals(
-        Optional.of("()Ljava/util/Map$Entry;"),
+        Optional.of("()Louter/Outer$Inner;"),
         offDescriptor);
     assertEquals(
-        Optional.of("()Ljava/util/Map$Entry;"),
+        Optional.of("()Louter/Outer$Inner;"),
         BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, on));
   }
 
@@ -197,16 +208,17 @@ class JavacBinaryNameMigrationTest {
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile outer =
         file(scanner, sourceRoot("lowercase-nested"), "demo/Outer.java");
-    // A lowercase nested member after an uppercase outer type: the chain
-    // join renders demo.Outer$lower (the first uppercase segment starts the
-    // type chain; everything after joins with '$').
+    // A lowercase nested member after an uppercase outer type: the
+    // file-set DECLARATION evidence proves the boundary (demo.Outer is a
+    // top-level declaration; lower is declared inside its body), so the
+    // chain joins with '$' regardless of the member's case.
     assertEquals(Optional.of("(Ldemo/Outer$lower;)Ldemo/Outer$lower;"),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, outer, "demo.Outer.lower p", "demo.Outer.lower"));
   }
 
   @Test
-  void uppercasePackageImportsAbstainInsteadOfFabricating() throws IOException {
+  void uppercasePackageImportsKeepThePackageReading() throws IOException {
     AnalysisContext context = context("uppercase-package", Map.of(
         "demo/Api.java", """
             package demo;
@@ -219,19 +231,60 @@ class JavacBinaryNameMigrationTest {
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("uppercase-package"), "demo/Api.java");
-    // An uppercase-leading package (Com.example) is textually
-    // indistinguishable from a default-package nesting (Outer.Inner): the
-    // boundary rule cannot prove where the package ends, so the descriptor
-    // ABSTAINS rather than fabricating a match. This shape renders
-    // LCom/example/Foo; today — a documented, pinned coverage regression
-    // (fail-closed direction).
-    assertEquals(Optional.empty(),
+    // An uppercase-leading package (Com.example) carries NO boundary
+    // evidence — capitalization is not evidence of a type — so the
+    // JLS-default package reading keeps binary == canonical and the
+    // descriptor renders exactly as before #60 (no fabricated '$', no
+    // abstention either: nothing is ambiguous, merely unproven-nested).
+    assertEquals(Optional.of("(LCom/example/Foo;)LCom/example/Foo;"),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, file, "Foo key", "Foo"));
-    // The default-package nesting shape abstains through the same guard
-    // (direct seam probe: unreachable through resolution).
+  }
+
+  @Test
+  void ambiguousIndexLookupsAbstainInsteadOfThrowing() throws IOException {
+    AnalysisContext context = context("ambiguous-canonical", Map.of(
+        "p/Outer.java", """
+            package p;
+            public class Outer { static class Inner { } }
+            """,
+        "p/Outer/Inner.java", """
+            package p.Outer;
+            public class Inner { }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    // Two file-set types share the canonical spelling p.Outer.Inner (the
+    // nested p.Outer.Inner, binary p.Outer$Inner, and a top-level Inner in
+    // a package literally named p.Outer, binary p.Outer.Inner): the index
+    // lookup is ambiguous and must ABSTAIN — never throw (an ambiguous
+    // reduce must not reach the stream machinery) and never pick a side.
     assertEquals(Optional.empty(),
-        JvmBinaryNames.binaryName(scanner, "Outer.Inner"));
+        JvmBinaryNames.binaryName(scanner, "p.Outer.Inner", "p.Outer.Inner",
+            file(scanner, sourceRoot("ambiguous-canonical"), "p/Outer.java")));
+  }
+
+  @Test
+  void dollarSegmentsBeforeTheLastSegmentAbstain() throws IOException {
+    AnalysisContext context = context("dollar-nested", Map.of(
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              pkg.Outer$X.Inner find(pkg.Outer$X.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("dollar-nested"), "demo/Api.java");
+    // A '$' in a segment BEFORE the last is ambiguous (a '$'-named simple
+    // identifier with further nesting vs a package segment): the spelling
+    // cannot prove which reading applies, so the descriptor abstains. A
+    // final-segment '$' (com.lib.Cash$Flow) keeps the passthrough — that
+    // cell pins it.
+    assertEquals(Optional.empty(),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, file, "pkg.Outer$X.Inner key", "pkg.Outer$X.Inner"));
   }
 
   @Test
@@ -260,11 +313,16 @@ class JavacBinaryNameMigrationTest {
     AnalysisContext context = context("empty-segment", Map.of(
         "demo/Api.java", "package demo; public interface Api { }\n"));
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("empty-segment"), "demo/Api.java");
     // Defensive boundary cell: an empty segment can never come out of
     // resolution, and the seam must abstain rather than render it.
-    assertEquals(Optional.empty(), JvmBinaryNames.binaryName(scanner, "a..B"));
-    assertEquals(Optional.empty(), JvmBinaryNames.binaryName(scanner, ""));
-    assertEquals(Optional.empty(), JvmBinaryNames.binaryName(scanner, null));
+    assertEquals(Optional.empty(),
+        JvmBinaryNames.binaryName(scanner, "a..B", "a..B", file));
+    assertEquals(Optional.empty(),
+        JvmBinaryNames.binaryName(scanner, "", "", file));
+    assertEquals(Optional.empty(),
+        JvmBinaryNames.binaryName(scanner, null, null, file));
   }
 
   @Test
@@ -392,7 +450,7 @@ class JavacBinaryNameMigrationTest {
   }
 
   @Test
-  void lowercaseTopLevelNestingIsTheDocumentedAmbiguity() throws IOException {
+  void lowercaseTopLevelNestingResolvesThroughDeclarations() throws IOException {
     AnalysisContext context = context("lowercase-top-level", Map.of(
         "demo/lower.java", """
             package demo;
@@ -409,12 +467,11 @@ class JavacBinaryNameMigrationTest {
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("lowercase-top-level"), "demo/Api.java");
     // A lowercase TOP-LEVEL class with a nested type (true binary
-    // demo.lower$Inner) is textually indistinguishable from package
-    // demo.lower + class Inner: the segment rule keeps the package
-    // reading and renders the spelling unchanged. This is the documented
-    // residual ambiguity of the textual dialect (PLAN-60 Residuals) —
-    // pinned here so the behavior is visible, not silent.
-    assertEquals(Optional.of("(Ldemo/lower/Inner;)Ldemo/lower/Inner;"),
+    // demo.lower$Inner): the file-set declaration evidence proves the
+    // boundary (demo.lower is a top-level declaration; Inner is declared
+    // inside its body), so capitalization never matters — the binary
+    // chain joins correctly.
+    assertEquals(Optional.of("(Ldemo/lower$Inner;)Ldemo/lower$Inner;"),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, api, "demo.lower.Inner key", "demo.lower.Inner"));
   }

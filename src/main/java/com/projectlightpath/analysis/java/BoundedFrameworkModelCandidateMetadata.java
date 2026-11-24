@@ -178,9 +178,13 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
       case "float" -> Optional.of("F");
       case "double" -> Optional.of("D");
       case "" -> Optional.empty();
-      default -> scanner.resolveReferenceType(normalized, sourceFile)
-          .flatMap(canonical -> JvmBinaryNames.binaryName(scanner, canonical))
-          .map(value -> "L" + value.replace('.', '/') + ";");
+      default -> {
+        String spelling = normalized;
+        Optional<String> binary = scanner.resolveReferenceType(spelling, sourceFile)
+            .flatMap(canonical ->
+                JvmBinaryNames.binaryName(scanner, canonical, spelling, sourceFile));
+        yield binary.map(value -> "L" + value.replace('.', '/') + ";");
+      }
     };
   }
 }
