@@ -875,6 +875,50 @@ class JavacTypeShapeMigrationTest {
     }
   }
 
+  @Test
+  void whitespaceBeforeAnnotationArgumentsKeepsClauseVisible() throws IOException {
+    AnalysisContext context = context("ws-annotation-args", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            public @interface B { int value(); }
+            public @interface A { B value(); }
+            """,
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              @A (@B(1))
+              public <X extends java.util.Set<String>, List extends java.util.Set>
+                  String pick(List p) { return null; }
+              @A (@B(1))
+              public <Y extends java.util.Set<String>, Set extends java.util.List>
+                  Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("ws-annotation-args"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // Whitespace between the annotation name and its argument list is
+    // legal Java: the argument consumption must skip it, otherwise the
+    // annotation looks argument-less, the prefix stops at '(', the clause
+    // goes unrecognized, and the mirrored overloads correlate to each
+    // other's members.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the whitespace-annotation mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);
