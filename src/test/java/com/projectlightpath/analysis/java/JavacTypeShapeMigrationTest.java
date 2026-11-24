@@ -919,6 +919,117 @@ class JavacTypeShapeMigrationTest {
     }
   }
 
+  @Test
+  void annotatedTypeParameterNamesAreRecognized() throws IOException {
+    AnalysisContext context = context("annotated-type-params", Map.of(
+        "demo/Ann.java", """
+            package demo;
+            public @interface Ann { }
+            """,
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              public <@Ann List extends java.util.Set> String pick(List p) { return null; }
+              public <@Ann Set extends java.util.List> Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("annotated-type-params"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // An annotation on the type parameter itself (<@Ann List ...>) must be
+    // stripped before the name is taken: recording "@Ann" as the name
+    // would leave List/Set unresolved through imports and let the
+    // mirrored overloads correlate to each other's members.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the annotated type-parameter mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
+  @Test
+  void typeVariableTokenKeepsDistinctOverloadIdentities() throws IOException {
+    Path sourceRoot = temp.resolve("token-overloads").resolve("src/main/java");
+    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
+    write(sourceRoot, "demo/AccountRepository.java", """
+        package demo;
+        public interface AccountRepository
+            extends org.springframework.data.repository.CrudRepository<Account, Long> {
+          <String extends Number> Object find(String key);
+          Object find(java.lang.String key);
+        }
+        """);
+    AnalysisContext context = context(sourceRoot, "2.7.18",
+        AnalysisContext.Framework.SPRING_BOOT);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile repository =
+        file(scanner, sourceRoot, "demo/AccountRepository.java");
+    // Two DISTINCT overloads: <String extends Number> find(String key) and
+    // find(java.lang.String key). The type variable must keep its TOKEN
+    // (resolving String through java.lang would give both overloads the
+    // identity find(java.lang.String) and deduplicate them). The token
+    // rule keeps the identities distinct: find(String) vs
+    // find(java.lang.String).
+    List<String> identities = scanner.springRepositoryMethods(repository).stream()
+        .map(SourceMetadataScannerState.RepositoryMethod::identity)
+        .filter(identity -> identity.startsWith("find("))
+        .sorted()
+        .toList();
+    assertEquals(List.of("find(String)", "find(java.lang.String)"), identities,
+        "a type-variable parameter must keep its token so the two "
+            + "overloads keep distinct identities: " + identities);
+  }
+
+  @Test
+  void whitespaceAroundQualifiedNameDotsKeepsClauseVisible() throws IOException {
+    AnalysisContext context = context("ws-qualified-annotation", Map.of(
+        "demo/Example.java", """
+            package demo;
+            import java.util.List;
+            import java.util.Set;
+            public class Example {
+              @java . lang . SuppressWarnings ("unchecked")
+              public <X extends java.util.Set<String>, List extends java.util.Set>
+                  String pick(List p) { return null; }
+              @java . lang . SuppressWarnings ("unchecked")
+              public <Y extends java.util.Set<String>, Set extends java.util.List>
+                  Integer pick(Set p) { return null; }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile file =
+        file(scanner, sourceRoot("ws-qualified-annotation"), "demo/Example.java");
+    JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
+    List<SourceMetadataScannerState.MethodInfo> picks = SourceMetadataScanner
+        .methods(file).stream()
+        .filter(method -> method.name().equals("pick"))
+        .toList();
+    assertEquals(2, picks.size(), "both mirrored overloads must be found");
+    // Whitespace around the dots of a qualified annotation name
+    // (@java . lang . SuppressWarnings (...)) is legal Java: the qualified
+    // name consumption must skip it, otherwise the name stops at the first
+    // segment, the prefix stops at the '.', the clause goes unrecognized,
+    // and the mirrored overloads correlate to each other's members.
+    for (SourceMetadataScannerState.MethodInfo method : picks) {
+      assertTrue(correlation
+              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+          "the whitespace-qualified-annotation mirrored overload must abstain: "
+              + method.parameters());
+    }
+  }
+
   private SourceMetadataScannerState.SourceFile file(
       SourceMetadataScanner scanner, Path sourceRoot, String relative) {
     Path root = sourceRoot.resolve(relative);
