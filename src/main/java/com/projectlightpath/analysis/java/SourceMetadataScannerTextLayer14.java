@@ -91,6 +91,37 @@ static List<String> values(List<String> arguments, String attribute) {
         : Optional.empty();
   }
 
+  /**
+   * The type-parameter names declared by every type lexically enclosing
+   * the declaration (innermost to outermost, including local classes),
+   * or null when any enclosing type's clause cannot be established — an
+   * unrecognized clause could hide an import-shadowing type variable, so
+   * the caller abstains, fail closed. The declaration start is
+   * normalized first: the method extraction can anchor on the closing
+   * brace of a previous member, which a naive range check would
+   * mis-attribute to that member's type. (Placed in this layer rather
+   * than TextLayer18 beside typeVariableBounds because PMD's GodClass
+   * metric rejects another method there; behavior is identical.)
+   */
+  static Set<String> enclosingTypeParameterNames(
+      SourceFile file, MethodInfo declaration) {
+    String masked = SourceMetadataScanner.maskStringLiterals(
+        SourceMetadataScanner.stripComments(file.source()));
+    int scope = SourceMetadataScanner.declarationStart(file, declaration.start());
+    Set<String> names = new HashSet<>();
+    for (TypeInfo type : SourceMetadataScanner.typeDeclarations(file)) {
+      if (type.start() > scope || type.end() < scope) {
+        continue;
+      }
+      Set<String> clause = JavacTypeParameterClause.typeClauseNames(masked, type);
+      if (clause == null) {
+        return null;
+      }
+      names.addAll(clause);
+    }
+    return names;
+  }
+
 static Optional<List<String>> typeVariableBoundsInMethod(
       MethodInfo method, String variable) {
     String header = method.annotationBlock().replaceFirst("^[;{}\\s]+", "");

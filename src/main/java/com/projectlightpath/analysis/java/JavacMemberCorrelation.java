@@ -215,6 +215,16 @@ final class JavacMemberCorrelation {
       return List.of();
     }
     Set<String> typeParameters = clause.names();
+    // Class-level type parameters shadow imports exactly like method
+    // ones: a parameter naming one resolves through the import textually
+    // while javac erases it to the enclosing type's bound, so mirrored
+    // overloads can swap vectors. An unestablishable enclosing scope
+    // abstains, fail closed.
+    Set<String> enclosingTypeParameters =
+        SourceMetadataScannerTextLayer14.enclosingTypeParameterNames(file, declaration);
+    if (enclosingTypeParameters == null) {
+      return List.of();
+    }
     List<String> vector = new ArrayList<>();
     for (SourceMetadataScannerState.Parameter parameter
         : SourceMetadataScanner.parameters(declaration.parameters())) {
@@ -222,11 +232,12 @@ final class JavacMemberCorrelation {
           parameter.type() + " " + parameter.name());
       boolean array = textual.endsWith("[]");
       String element = array ? textual.substring(0, textual.length() - 2) : textual;
-      if (typeParameters.contains(element)) {
-        // A method type parameter erases to its BOUND in the index but
-        // resolves through imports textually — the two denotations can
-        // derange across mirrored overloads, so the group must abstain
-        // rather than correlate on swapped vectors.
+      if (typeParameters.contains(element)
+          || enclosingTypeParameters.contains(element)) {
+        // A method OR CLASS type parameter erases to its BOUND in the
+        // index but resolves through imports textually — the two
+        // denotations can derange across mirrored overloads, so the
+        // group must abstain rather than correlate on swapped vectors.
         return List.of();
       }
       Optional<String> canonical = PRIMITIVE_TYPES.contains(element)

@@ -62,7 +62,7 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
 - Default output unchanged with the flag off: pinned textual goldens for
   every wired surface (proxy descriptors, bounded-model descriptors,
   producer type, repository signatures, reflection matching).
-- Gates: `make adapter-test` 610 executions (floor 534), zero failures;
+- Gates: `make adapter-test` 628 executions (floor 534), zero failures;
   `make java-lint` PASS (0 new findings); `make evidence-validate` pass.
 
 ## Change-review record
@@ -335,6 +335,46 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
          (7f9d904) but the reply was only posted on the 4682526615
          sub-thread; the main-thread reply is now posted with the same
          evidence.
+  10. Follow-up round CR-9 (full review on c5c91c0; comments 4686898308,
+      4686898315, 4686898326, 4686898334; all four addressed in
+      REVIEW_23_17):
+      a. (4686898308) The gate receipt in this file recorded 610
+         executions; updated to the final count (628).
+      b. (4686898315) A CLASS type parameter shadowing an import was
+         resolved through the import textually while javac erased it to
+         the enclosing type's bound — the mirrored-overload derangement
+         through class scope. Fixed: enclosingTypeParameterNames
+         (TextLayer14) walks every type lexically enclosing the
+         declaration (innermost to outermost, local classes included,
+         declaration start normalized first) and parses each enclosing
+         type's own clause with the same masked balanced parser
+         (JavacTypeParameterClause.typeClauseNames); a parameter naming
+         any enclosing type parameter abstains in the bijection, and an
+         unestablishable enclosing scope abstains fail-closed. The same
+         extension keeps the CLASS-scoped type-variable token in
+         repositoryMethodSignature identities. Pinned red-first by
+         classTypeParametersShadowingImportsAbstains and
+         classTypeParameterTokenKeepsDistinctOverloadIdentities (both
+         correlated/collapsed at HEAD).
+      c. (4686898326) A dotted spelling was treated as file-independent
+         even when its first segment is a TYPE name (Map.Entry), whose
+         resolution is import-dependent — the repository (explicit
+         import) and fragment (on-demand) got different identities.
+         Fixed: the stable exemption requires a lowercase first segment
+         (a package name), the same rule as resolveReferenceType.
+         Pinned red-first by
+         qualifiedSimplePrefixSpellingsKeepTokensAcrossImportStyles
+         (find(java.util.Map.Entry) vs find(Map.Entry) at HEAD).
+      d. (4686898334) ReflectionLayer00 resolved the owner from the raw
+         extraction start; declarationStart is now applied first, the
+         same normalization the repository layer and
+         JavacMemberCorrelation use. Reachability analysis: the
+         wrong-member path requires correlatedMethod to proceed, which
+         singleTypeFile blocks for any multi-type file (the index's
+         per-file map includes nested AND local/anonymous entries), so
+         the defect was unreachable in practice — the change is
+         consistency hardening, and no non-vacuous regression exists
+         (any nested-type fixture is blocked by singleTypeFile first).
   3. Minor (r4681365963) — index diagnostics (javac errors behind
      flag-on abstentions) do not reach the scan output. DISPOSITIONED:
      routing index diagnostics into `scan.diagnostics()` would block

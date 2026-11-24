@@ -85,11 +85,22 @@ static String repositoryMethodSignature(MethodInfo method) {
       if (clause.abstain()) {
         return repositoryMethodSignature(method);
       }
+      // A CLASS type parameter must keep its token too: resolving it
+      // through java.lang would conflate the class-scoped
+      // find(String key) with find(java.lang.String key). An
+      // unestablishable enclosing scope falls back to the fully textual
+      // signature (deterministic).
+      Set<String> enclosingTypeParameters =
+          SourceMetadataScannerTextLayer14.enclosingTypeParameterNames(file, method);
+      if (enclosingTypeParameters == null) {
+        return repositoryMethodSignature(method);
+      }
       List<String> parameterTypes = new ArrayList<>();
       for (Parameter parameter : parameters(method.parameters())) {
         String token = parameter.type().replaceAll("\\s+", " ").trim();
         String element = stripBalancedGenericArguments(token).trim();
-        if (clause.names().contains(element)) {
+        if (clause.names().contains(element)
+            || enclosingTypeParameters.contains(element)) {
           parameterTypes.add(token);
           continue;
         }
@@ -103,8 +114,12 @@ static String repositoryMethodSignature(MethodInfo method) {
         // simple name differently (explicit vs on-demand), so an
         // import-dependent canonical form would give the declarations
         // different identities and lose the fragment-backed attribution.
+        // A dotted spelling is file-independent only when its first
+        // segment is a package name (lowercase first letter, the same
+        // rule as resolveReferenceType): Map.Entry's first segment is a
+        // TYPE name, so its resolution is import-dependent.
         boolean stable = PRIMITIVE_TYPE_NAMES.contains(element)
-            || element.contains(".")
+            || (element.contains(".") && Character.isLowerCase(element.charAt(0)))
             || canonical.startsWith("java.lang.");
         parameterTypes.add(stable ? canonical : token);
       }

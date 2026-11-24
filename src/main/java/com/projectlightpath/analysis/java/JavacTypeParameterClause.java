@@ -231,7 +231,11 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
    * prefix could hide a clause, so the caller abstains.
    */
   private static int prefixEnd(String header) {
-    int index = 0;
+    return prefixEnd(header, 0);
+  }
+
+  private static int prefixEnd(String header, int from) {
+    int index = from;
     while (index < header.length()) {
       char current = header.charAt(index);
       if (Character.isWhitespace(current)
@@ -274,6 +278,73 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
     }
     int close = closingParen(header, argumentList);
     return close < 0 ? -1 : close + 1;
+  }
+
+  /**
+   * The type-parameter names declared in a type declaration's own header
+   * (its {@code <...>} clause after the name), or null when the header
+   * cannot be parsed — an unrecognizable header could hide an
+   * import-shadowing type variable, so the caller abstains. Annotation
+   * types cannot declare type parameters (JLS 9.6) and yield an empty
+   * set. {@code masked} must be comment- and literal-masked;
+   * {@code type.start()} points at the kind keyword of the declaration
+   * (for {@code @interface}, at the {@code interface} token).
+   */
+  static Set<String> typeClauseNames(
+      String masked, SourceMetadataScannerState.TypeInfo type) {
+    int prefix = prefixEnd(masked, type.start());
+    if (prefix < 0) {
+      return null;
+    }
+    int index = sealedModifierEnd(masked, skipWhitespace(masked, prefix));
+    if (!matchesIdentifierAt(masked, index, type.kind())) {
+      return null;
+    }
+    index = skipWhitespace(masked, index + type.kind().length());
+    if (!matchesIdentifierAt(masked, index, type.name())) {
+      return null;
+    }
+    index = skipWhitespace(masked, index + type.name().length());
+    if (index >= masked.length() || masked.charAt(index) != '<') {
+      return Set.of();
+    }
+    int end = clauseEnd(masked, index);
+    if (end < 0) {
+      return null;
+    }
+    Set<String> names = clauseNames(masked.substring(index + 1, end));
+    return names == null ? null : names;
+  }
+
+  /** The index past any sealed / non-sealed modifiers at {@code from}. */
+  private static int sealedModifierEnd(String masked, int from) {
+    int index = from;
+    while (true) {
+      int skipped = skipWhitespace(masked, index);
+      if (masked.startsWith("non-sealed", skipped)
+          && !isIdentifierPartAt(masked, skipped + 10)) {
+        index = skipped + 10;
+      } else if (masked.startsWith("sealed", skipped)
+          && !isIdentifierPartAt(masked, skipped + 6)) {
+        index = skipped + 6;
+      } else {
+        return index;
+      }
+    }
+  }
+
+  /** Whether {@code name} appears as a whole token at {@code index}. */
+  private static boolean matchesIdentifierAt(String masked, int index, String name) {
+    return index >= 0
+        && masked.startsWith(name, index)
+        && (index + name.length() >= masked.length()
+            || !Character.isJavaIdentifierPart(masked.charAt(index + name.length())));
+  }
+
+  /** Whether the character at {@code index} is a Java identifier part. */
+  private static boolean isIdentifierPartAt(String masked, int index) {
+    return index < masked.length()
+        && Character.isJavaIdentifierPart(masked.charAt(index));
   }
 
   /** The first index at or after {@code from} that is not whitespace. */

@@ -155,7 +155,13 @@ static boolean hasParameter(MethodInfo owner, String variable) {
       // simple-name disjunct would fabricate matches when a same-simple
       // name shadows the queried type (JLS 6.4.1) — and the textual
       // ladder still runs, so no true answer is lost.
-      String ownerType = typeContaining(file, owner.start());
+      // The owner is resolved from the declaration start, not the raw
+      // extraction start: the extraction can anchor on the closing brace
+      // of a preceding nested type, whose inclusive end would make
+      // typeContaining return that nested type. The same normalization
+      // the repository layer and JavacMemberCorrelation apply.
+      String ownerType = typeContaining(file,
+          declarationStart(file, owner.start()));
       Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
           JavacMemberCorrelation.of((SourceMetadataScanner) this)
               .correlatedMethod(file, ownerType, owner);
