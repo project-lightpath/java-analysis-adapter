@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * A method's own {@code <...>} type-parameter clause, parsed from the
@@ -43,42 +41,73 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
     // The clause must be the FIRST thing after modifiers, annotations, and
     // the preceding declaration delimiter ({, }, ;) — a generic RETURN
     // type (List<String> pick) also contains angle brackets but never
-    // starts the header.
-    Matcher opening = HEADER_START.matcher(header);
-    if (!opening.find()) {
+    // starts the header. Annotation arguments are consumed with BALANCED
+    // parentheses: a flat [^)]* pattern cannot match a nested-parenthesis
+    // argument (@A(@B(1))), an unparseable annotation could hide a clause,
+    // and an unrecognized clause would let type variables resolve through
+    // imports — so an unparseable prefix abstains, fail closed.
+    int clauseStart = prefixEnd(header);
+    if (clauseStart < 0) {
+      return unparsed();
+    }
+    if (clauseStart >= header.length() || header.charAt(clauseStart) != '<') {
       return none();
     }
-    // Balance the angle brackets: a bound with nested generics must be
-    // consumed whole, so names after the inner '>' are still recognized.
-    int depth = 0;
-    int clauseEnd = -1;
-    for (int index = opening.end() - 1; index < header.length(); index++) {
-      char current = header.charAt(index);
-      if (current == '<') {
-        depth++;
-      } else if (current == '>') {
-        depth--;
-        if (depth == 0) {
-          clauseEnd = index;
-          break;
-        }
-      }
-    }
+    int clauseEnd = clauseEnd(header, clauseStart);
     if (clauseEnd < 0) {
       return unparsed();
     }
-    String clause = header.substring(opening.end(), clauseEnd);
+    Set<String> names = clauseNames(header.substring(clauseStart + 1, clauseEnd));
+    return names == null ? unparsed() : new JavacTypeParameterClause(false, names);
+  }
+
+  /**
+   * The index of the '>' closing the clause opened at {@code clauseStart},
+   * or -1 when the clause is unclosed. Balances the angle brackets (a
+   * bound with nested generics is consumed whole, so names after the
+   * inner '>' are still recognized) and shields parenthesis contents from
+   * the count: a bound annotation argument (@A(1 > 0)) can contain '>' or
+   * '<', and an unbalanced argument leaves the clause unclosed, which
+   * abstains.
+   */
+  private static int clauseEnd(String header, int clauseStart) {
+    int depth = 0;
+    int parenDepth = 0;
+    for (int index = clauseStart; index < header.length(); index++) {
+      char current = header.charAt(index);
+      if (current == '(') {
+        parenDepth++;
+      } else if (current == ')') {
+        parenDepth--;
+      } else if (parenDepth == 0 && current == '<') {
+        depth++;
+      } else if (parenDepth == 0 && current == '>') {
+        depth--;
+        if (depth == 0) {
+          return index;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Every type-parameter name in the clause text, or null when a segment
+   * does not start with a recognizable name (leading annotations like
+   * {@code @Ann T} are stripped; an argument-carrying annotation that
+   * survives the strip makes the segment unparsable, which abstains).
+   */
+  private static Set<String> clauseNames(String clause) {
     Set<String> names = new HashSet<>();
     for (String segment : splitTopLevel(clause)) {
-      // Strip leading annotations (@Ann T) and take the first identifier.
       String cleaned = segment.replaceAll("@[A-Za-z_][\\w.]*\\s+", "").trim();
       String name = cleaned.split("[\\s<]")[0];
       if (!name.matches("[A-Za-z_$][\\w$]*")) {
-        return unparsed();
+        return null;
       }
       names.add(name);
     }
-    return new JavacTypeParameterClause(false, names);
+    return names;
   }
 
   static JavacTypeParameterClause none() {
@@ -161,18 +190,28 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
     return index;
   }
 
-  /** Splits a type-parameter clause on top-level commas only. */
+  /**
+   * Splits a type-parameter clause on top-level commas only. Parenthesis
+   * contents are shielded from the angle-bracket depth, and commas inside
+   * parentheses (a bound annotation argument like @A(f(1, 2))) do not
+   * split.
+   */
   private static List<String> splitTopLevel(String clause) {
     List<String> segments = new ArrayList<>();
     StringBuilder current = new StringBuilder();
     int depth = 0;
+    int parenDepth = 0;
     for (char character : clause.toCharArray()) {
-      if (character == '<') {
+      if (character == '(') {
+        parenDepth++;
+      } else if (character == ')') {
+        parenDepth--;
+      } else if (parenDepth == 0 && character == '<') {
         depth++;
-      } else if (character == '>') {
+      } else if (parenDepth == 0 && character == '>') {
         depth--;
       }
-      if (character == ',' && depth == 0) {
+      if (character == ',' && depth == 0 && parenDepth == 0) {
         segments.add(current.toString());
         current.setLength(0);
       } else {
@@ -183,8 +222,117 @@ record JavacTypeParameterClause(boolean abstain, Set<String> names) {
     return segments;
   }
 
-  private static final Pattern HEADER_START = Pattern.compile(
-      "^(?:\\s|[{};]|@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?|public|protected|private|"
-          + "static|final|synchronized|abstract|default|strictfp|native)*"
-          + "\\s*<");
+  /**
+   * The index just past the declaration prefix — whitespace, declaration
+   * delimiters ({, }, ;), annotations with balanced arguments, and
+   * modifiers — which is the position of the type-parameter clause's
+   * '{@code <}' when one follows. Returns -1 when an annotation cannot be
+   * parsed (malformed name or unbalanced argument): an unrecognizable
+   * prefix could hide a clause, so the caller abstains.
+   */
+  private static int prefixEnd(String header) {
+    int index = 0;
+    while (index < header.length()) {
+      char current = header.charAt(index);
+      if (Character.isWhitespace(current)
+          || current == '{' || current == '}' || current == ';') {
+        index++;
+      } else if (current == '@') {
+        int annotationEnd = annotationEnd(header, index);
+        if (annotationEnd < 0) {
+          return -1;
+        }
+        index = annotationEnd;
+      } else {
+        int modifierEnd = modifierEnd(header, index);
+        if (modifierEnd < 0) {
+          break;
+        }
+        index = modifierEnd;
+      }
+    }
+    return index;
+  }
+
+  /**
+   * The index just past an annotation at {@code from}: the qualified name
+   * and, when present, its argument list with BALANCED parentheses (a
+   * flat [^)]* match cannot consume a nested-parenthesis argument like
+   * @A(@B(1))). Returns -1 when the annotation cannot be parsed — a
+   * malformed name or unbalanced argument could hide a clause, so the
+   * caller abstains.
+   */
+  private static int annotationEnd(String header, int from) {
+    int nameEnd = qualifiedNameEnd(header, from + 1);
+    if (nameEnd < 0) {
+      return -1;
+    }
+    if (nameEnd >= header.length() || header.charAt(nameEnd) != '(') {
+      return nameEnd;
+    }
+    int close = closingParen(header, nameEnd);
+    return close < 0 ? -1 : close + 1;
+  }
+
+  /** The index just past a qualified annotation name at {@code from}, or -1. */
+  private static int qualifiedNameEnd(String header, int from) {
+    int index = identifierEnd(header, from);
+    if (index < 0) {
+      return -1;
+    }
+    while (index + 1 < header.length()
+        && header.charAt(index) == '.'
+        && Character.isJavaIdentifierStart(header.charAt(index + 1))) {
+      index = identifierEnd(header, index + 1);
+    }
+    return index;
+  }
+
+  /** The index just past an identifier at {@code from}, or -1. */
+  private static int identifierEnd(String header, int from) {
+    if (from >= header.length()
+        || !Character.isJavaIdentifierStart(header.charAt(from))) {
+      return -1;
+    }
+    int index = from + 1;
+    while (index < header.length()
+        && Character.isJavaIdentifierPart(header.charAt(index))) {
+      index++;
+    }
+    return index;
+  }
+
+  /** The index of the parenthesis closing the one at {@code open}, or -1. */
+  private static int closingParen(String header, int open) {
+    int depth = 0;
+    for (int index = open; index < header.length(); index++) {
+      char current = header.charAt(index);
+      if (current == '(') {
+        depth++;
+      } else if (current == ')') {
+        depth--;
+        if (depth == 0) {
+          return index;
+        }
+      }
+    }
+    return -1;
+  }
+
+  private static final List<String> MODIFIERS = List.of(
+      "public", "protected", "private", "static", "final", "synchronized",
+      "abstract", "default", "strictfp", "native");
+
+  /** The index just past a modifier keyword at {@code from}, or -1. */
+  private static int modifierEnd(String header, int from) {
+    for (String modifier : MODIFIERS) {
+      int end = from + modifier.length();
+      if (header.startsWith(modifier, from)
+          && (end >= header.length()
+              || !Character.isJavaIdentifierPart(header.charAt(end)))) {
+        return end;
+      }
+    }
+    return -1;
+  }
 }

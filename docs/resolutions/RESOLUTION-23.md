@@ -247,6 +247,28 @@ byte-identical, pinned by flag-off textual goldens per wired surface):
          the clause repeating the parameter text verbatim; parameters use
          the SECOND declared name after an actual nested generic bound
          `Set<String>`; both mirrored overloads found and both abstain).
+   6. Follow-up round CR-6 (comments 4682526615, 4682526629, and
+      4682567901 on thread r4681365981; all three residuals addressed in
+      REVIEW_23_13):
+      a. HEADER_START's annotation alternative ([^)]* arguments) could
+         not consume a nested-parenthesis annotation argument
+         (@A(@B(1)), @SuppressWarnings(value = ("unchecked"))) before a
+         clause, so the clause went unrecognized and none()
+         (non-abstaining) let mirrored overloads correlate. Fixed: the
+         regex prefix was replaced by a hand-rolled prefix parser whose
+         annotation consumption balances parentheses; an unparseable
+         annotation (malformed name or unbalanced argument) abstains,
+         fail closed. Pinned by
+         `nestedParenthesisAnnotationArgumentBeforeClauseAbstains`
+         (committed red first: both mirrored overloads correlated).
+      b. The balanced angle scan and splitTopLevel counted every '<' and
+         '>', so a bound annotation argument containing '>'
+         (@A(1 > 0)) closed the clause before the second name and the
+         name resolved through imports. Fixed: parenthesis contents are
+         shielded from the bracket count and from comma splitting; an
+         unbalanced argument leaves the clause unclosed, which abstains.
+         Pinned by `boundAnnotationArgumentBracketsDoNotCloseClause`
+         (committed red first: both mirrored overloads correlated).
       b. The mutation check requested on r4681366003 was executed:
          reverting ONLY the erased-parameter check in
          `memberHasErrorType` makes
