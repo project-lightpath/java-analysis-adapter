@@ -559,6 +559,31 @@ class JavacBinaryNameMigrationTest {
         JvmBinaryNames.binaryName(scanner, "java.a.B.C.D", "B.C.D", api));
   }
 
+  @Test
+  void duplicateFlaggedIndexMatchesAbstainInsteadOfFallingThrough() throws IOException {
+    AnalysisContext context = context("duplicate-flagged", Map.of(
+        "p/Outer.java", """
+            package p;
+            public class Outer { static class Inner { } }
+            """,
+        "p/Outer$Inner.java", """
+            package p;
+            public class Outer$Inner { }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile outer =
+        file(scanner, sourceRoot("duplicate-flagged"), "p/Outer.java");
+    // The nested p.Outer.Inner and the top-level p.Outer$Inner share the
+    // binary name p.Outer$Inner, so the index flags BOTH entries. The
+    // index lookup for the canonical finds only the (flagged) nested
+    // entry: duplicate ownership is NOT proven, and the derivation must
+    // abstain — never fall through to the file-set declaration chain,
+    // which would return exactly the binary name the index rejected.
+    assertEquals(Optional.empty(),
+        JvmBinaryNames.binaryName(scanner, "p.Outer.Inner", "p.Outer.Inner", outer));
+  }
+
   private SourceMetadataScannerState.BeanCandidate producer(
       SourceMetadataScanner scanner, String method) {
     return scanner.beanCandidates(AnalysisContext.Framework.QUARKUS).stream()
