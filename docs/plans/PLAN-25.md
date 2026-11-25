@@ -41,8 +41,14 @@ The production reflection path and every seam this plan touches:
   REFLECTION_SOURCE_BOUND cells R1–R8): source-bound binary-name literal →
   DEFINITE; canonical dotted spelling of a nested type → binary-name
   mismatch, not DEFINITE; runtime-only → not DEFINITE; non-literal →
-  visible abstention. The harness stays untouched (BaselineMode
-  LIVE_TEXTUAL; production flag-off stays textual).
+  visible abstention. The DEFINITION cells match this design; the
+  ABSTENTION grades diverge by design (the harness resolver uses
+  task-global `taskHasError` and POSSIBLE-with-name for runtime-only
+  literals, while production keeps runtime strings UNRESOLVED per the
+  issue's "runtime strings stay POSSIBLE/unresolved as today", and
+  production's error authority is per-entry `errorType` — the seam
+  convention since #22 — not per-task). The harness itself stays untouched
+  (BaselineMode LIVE_TEXTUAL; production flag-off stays textual).
 - The index (`JavacSourceSymbolIndex`, flag `flpath.java.symbolindex`,
   default off, per-context cached) provides `type(name)` (distinct-entry
   union of the canonical and binary maps), `members(typeName, memberName)`,
@@ -116,15 +122,22 @@ pinned by flag-off goldens**). Zero edits to existing tests.
        one distinct entry) ⇒ POSSIBLE-grade, diagnostic `error_target` /
        `duplicate_target` / `ambiguous_target`.
      - no entry ⇒ no evidence (runtime string — unchanged UNRESOLVED).
-   - **Member targets** (symbols `getMethod`, `getDeclaredMethod`,
-     `getConstructor`, `getDeclaredConstructor`): the site's first quoted
-     literal is the member name; the remaining arguments are
-     class-literal parameter shapes. The OWNER resolves only from the
-     site's own receiver expression — extracted on the literal-masked
-     source backward from the method-name start to the previous top-level
-     delimiter (`;`, `{`, `}`, or start-of-file), whitespace-trimmed:
+   - **Member targets — method symbols** (`getMethod`,
+     `getDeclaredMethod`): the site's first quoted literal is the member
+     name; a method site with NO quoted literal (computed name) ⇒ no
+     evidence (runtime path). The remaining arguments are class-literal
+     parameter shapes. The OWNER resolves only from the site's own
+     receiver expression — the receiver RANGE is extracted on the
+     literal-masked source backward from the method-name start to the
+     previous top-level delimiter (`;`, `{`, `}`, or start-of-file),
+     whitespace-trimmed (the mask is offset-preserving; the masked range
+     maps 1:1 onto the structural source):
      - receiver is a `forName("L")` invocation (static or chained shape
-       ending in `.forName("L")`) ⇒ owner via the class-target ladder on L;
+       ending in `.forName(...)`): L is recovered by reading the
+       STRUCTURAL source inside the receiver range (the mask hides the
+       literal; the offsets align) via `firstQuotedArgument` anchored at
+       the `forName` token — non-literal ⇒ no evidence. Owner then follows
+       the class-target ladder on L;
      - receiver is `<spelling>.class` ⇒ qualified spelling resolves
        directly through `index.type(spelling)` (exactly one unflagged
        non-error entry, else no-evidence/diagnostic as above); simple
@@ -137,20 +150,40 @@ pinned by flag-off goldens**). Zero edits to existing tests.
      class-literal argument (`X.class`, `X[].class`, `int.class`, …) to a
      canonical erased spelling (primitives direct; arrays append `[]`;
      reference spellings resolved as above) and compare the vector to each
-     member's `parameterTypes()`; constructors (getConstructor family) map
-     `<init>` semantics through the owner-simple-name index entries,
-     keyed `#<init>` in the output (the caller-identity convention).
+     member's `parameterTypes()`.
+   - **Member targets — constructor symbols** (`getConstructor`,
+     `getDeclaredConstructor`): these sites carry NO name literal
+     (`firstQuotedArgument` is null; TextLayer12 maps them to
+     `unknown#unknown`). The member name is the OWNER's simple name
+     (constructors are indexed under it); EVERY argument is a parameter
+     class literal; the owner resolves from the receiver exactly as for
+     method symbols; selection compares the argument vector against the
+     constructor members' `parameterTypes()` (zero-arg
+     `getDeclaredConstructor()` ⇒ the zero-parameter constructor, if
+     unique). Keyed `#<init>` in the output (the caller-identity
+     convention; the index's simple-name entries map to it).
      - exactly one shape-matching member, owner unflagged, member
        `!errorType` ⇒ **source-bound**: `keyedTarget =
        binaryOwner + "#" + memberName` (`#<init>` for constructors),
        `jvmDescriptor = JavacShapeDescriptors.jvmDescriptorFromMember`,
-       parameterTypes + annotationNames recorded.
+       parameterTypes + annotationNames recorded. The vector match
+       requires EQUALITY (same length, same spellings) — a site with
+       fewer class-literal arguments than the member's parameters is a
+       shape mismatch ( boxing/varargs are NOT inferred: `x(String...)`
+       is selected only by `x(String[].class)`, exactly as reflection
+       itself resolves it).
      - owner resolved but no member matches the name, no member matches
        the shape vector, more than one matches, or the matching member is
        `errorType` ⇒ POSSIBLE-grade with diagnostic
        (`member_not_declared` / `shape_mismatch` / `ambiguous_member` /
        `error_member`).
      - owner unresolved (receiver of an unrecognized shape) ⇒ no evidence.
+   - **Per-entry error authority:** javac ERROR diagnostic rows elsewhere
+     in the compilation (an unrelated file referencing `missing.Dep`) do
+     NOT block a clean target: the deciding signal is the target entry's
+     own `errorType`/duplicate flags — the seam convention since #22
+     (deliberate divergence from the harness resolver's task-global
+     `taskHasError`, pinned by cell E4 below).
    - **Untouched symbols:** `Method.invoke`, `Constructor.newInstance`,
      `Class.newInstance`, proxy sites — receiver dataflow, always
      no-evidence (runtime path, never promoted).
@@ -162,11 +195,15 @@ pinned by flag-off goldens**). Zero edits to existing tests.
    already flows through the existing `target`/`targetDescriptor` fields).
 4. **`DynamicScanning.reflectionFeatures`** (flag-on) computes the
    evidence per REFLECTION site via `JavacReflectionTargets.of(scanner)`
-   (one instance per scan) and passes it into the DynamicFeature. The
-   textual `target`/`targetDescriptor` fields keep their current values
-   flag-off; flag-on the FACT rendering (next item) prefers the javac
-   keying — the DynamicFeature's textual fields remain the fallback
-   record of the raw site.
+   (the resolver object is stateless and cheap; the expensive part — the
+   javac index — is already cached per `AnalysisContext`, so one `of()`
+   per `reflectionFeatures` call — which the scanner recomputes per
+   consumer — costs nothing beyond a small allocation). It passes the
+   evidence into the DynamicFeature. The textual `target`/
+   `targetDescriptor` fields keep their current values flag-off; flag-on
+   the FACT rendering (next item) prefers the javac keying — the
+   DynamicFeature's textual fields remain the fallback record of the raw
+   site.
 5. **`ProviderFactNormalizer.dynamicFact`** consumes the evidence:
    - `sourceBound` ⇒ certainty DEFINITE, callee = `keyedTarget`,
      `targetDescriptor` attribute = `jvmDescriptor` (member targets),
@@ -226,9 +263,10 @@ of (target kind × name shape × index answer × receiver shape × flag
 state), not from examples:
 
 - **F1 (RED): source-defined class target.** `Class.forName("demo.Present")`
-  with `demo.Present` in the source set → DEFINITE, EMITTED, callee
-  `demo.Present#unknown`→ keyed `demo.Present`, attributes carry
-  `javacSymbol=demo.Present`, `sourceBound=true`.
+  with `demo.Present` in the source set → DEFINITE, EMITTED, callee keyed
+  `demo.Present`, attributes carry `javacSymbol=demo.Present`,
+  `sourceBound=true` (the `demo.Present#unknown` textual form is the
+  G-series flag-off twin's assertion, not this cell's).
 - **F2 (RED): nested binary-name keying.** `Class.forName("demo.Outer$Inner")`
   → DEFINITE, callee keyed `demo.Outer$Inner` (the `$`-joined caller
   convention).
@@ -271,6 +309,22 @@ state), not from examples:
   `Class.forName("demo.Present").getDeclaredConstructor(String.class)` →
   DEFINITE, callee `demo.Present#<init>`, descriptor
   `(Ljava/lang/String;)V`.
+- **M12 (RED): inherited member never mis-attributed.** Source owner
+  `Child extends Base` (both in the source set), `Base` declares `run()`,
+  `Child` does not redeclare it; site
+  `Class.forName("demo.Child").getMethod("run")` → POSSIBLE, diagnostic
+  `member_not_declared` — never attributed to `demo.Base#run` (the index
+  holds declared members only; inherited lookup is a documented
+  non-goal).
+- **M13 (RED): nested-type class-literal parameters.** Member
+  `x(Outer.Inner p)` selected by `x(Outer.Inner.class)` (qualified
+  spelling) → DEFINITE with `java.lang.Outer`-style canonical vector and
+  `$` binary keying; the SIMPLE spelling twin (`x(Inner.class)` where
+  `Inner` is a sibling's nested type, out of scope per JLS 6.5.5.1) fails
+  closed to no-evidence (site stays UNRESOLVED) — pinned as the
+  documented fail-closed shape, mirroring the #60 interaction.
+- **M14 (control): non-literal member name.**
+  `getMethod(variableName)` → UNRESOLVED unchanged.
 - **M11 (RED): annotation/parameter evidence.** Source-bound member whose
   declaration carries annotations including a `$`/Unicode annotation name
   (`@demo.Märk$Odd`) → evidence `annotationNames` match javac canonical
@@ -279,9 +333,17 @@ state), not from examples:
 - **E1 (RED): error member.** Owner resolved, target member's parameter
   references a missing type (`errorType` member) → POSSIBLE, diagnostic
   `error_member`.
-- **E2 (RED): index integrity fail-close.** Context with a required
-  absent classpath entry (index `missing_classpath`) → NO fact is
-  promoted; every reflection fact byte-identical to flag-off.
+- **E2 (GREEN at RED): index integrity fail-close.** Context with a
+  required absent classpath entry (index `missing_classpath`) → NO fact
+  is promoted; every reflection fact byte-identical to flag-off (with
+  the no-evidence stub the flag-on path is already byte-identical, so
+  this cell is green at RED and doubles as the post-GREEN mutation
+  check for the integrity gate).
+- **E4 (RED): unrelated per-file javac errors do not block a clean
+  target.** A second source file references `missing.Dep` (javac error
+  row, that entry error-typed); `Class.forName("demo.Present")` with a
+  clean unflagged `demo.Present` entry → still DEFINITE (per-entry error
+  authority; the R3 harness divergence, pinned explicitly).
 - **E3 (RED): duplicate-flagged owner.** Two files declaring the same
   binary name; forName literal naming it → POSSIBLE, diagnostic
   `duplicate_target` (never DEFINITE).
@@ -291,8 +353,10 @@ state), not from examples:
   Count-form where per-site identity is not observable.
 - Pairwise (AGENTS): target kind × flag state (F1 vs G), name shape ×
   index answer (F2/F3/F7/E3), receiver shape × literal (M1/M6/M7/M8),
-  member × overload count (M2), Unicode annotation × member resolution
-  (M11), loadClass × forName (F6 vs F1).
+  member × overload count (M2), member kind × name-literal presence
+  (M10 vs M14), Unicode annotation × member resolution (M11), loadClass ×
+  forName (F6 vs F1), inheritance × member lookup (M12), nesting ×
+  parameter vector (M13), per-file error × clean target (E4).
 
 ## Boundary probes (pre-GREEN, scratch, not committed)
 
@@ -302,9 +366,12 @@ prefix/suffix overlap (a receiver whose spelling ends with the method
 name), whitespace inside `X . class` and `forName ( "L" )`, parenthesized
 receivers, `this.`-prefixed receivers, class-literal arrays
 (`String[].class` vs `String [].class`), and `#`/`$` boundaries in the
-keyed target join. Probes run against the compiled
-`JavacReflectionTargets` before GREEN; findings fold back into the
-implementation and (if a shape is reachable) into a cell.
+keyed target join. Plus the mask-alignment probe: the literal-masked
+receiver range and the structural-source literal offsets must align
+1:1 (the L recovery depends on it) — asserted against the compiled
+`JavacReflectionTargets` with a masked-literal fixture before GREEN;
+findings fold back into the implementation and (if a shape is reachable)
+into a cell.
 
 ## TDD sequence
 
@@ -315,9 +382,11 @@ implementation and (if a shape is reachable) into a cell.
   plus a behavior-neutral stub (`JavacReflectionTargets` always returning
   no-evidence, `JavacTargetEvidence` record, `DynamicFeature` component
   defaulted) documented in the commit. Expected RED: F1–F3, F6, F7, M1–M6,
-  M9–M11, E1–E3. Expected GREEN at RED: F4, F5, M7, M8, G-series. Run
-  `make adapter-test` at RED to confirm the expected-red cells fail and
-  the rest of the suite stays green.
+  M9–M13, E1, E3, E4. Expected GREEN at RED: F4, F5, M7, M8, M14, E2,
+  G-series. Run `make adapter-test` at RED to confirm the expected-red
+  cells fail and the rest of the suite stays green; record the observed
+  execution count in the commit message as the floor receipt (652
+  expected on this main; the floor in the Makefile stays 534).
 - **GREEN_25**: minimal implementation — `JavacTargetEvidence`,
   `JavacReflectionTargets` (class + member ladders, fail-close),
   `DynamicFeature` component, `reflectionFeatures` wiring,
@@ -381,12 +450,17 @@ pushing), `make evidence-validate`.
   mapping); if a placement change is forced, behavior stays identical and
   the placement is documented in the commit message.
 
-Confidence score: **0.78** (pre-plan-review). The seams are verified on
-this main (no policy sweep re-forces the dynamic facts; `Fact.provider`
-already emits EMITTED; the index carries every shape needed). Main risks:
-the receiver-expression extraction arithmetic (mitigated by mandatory
-empirical probes), the reviewer's reading of the diagnostics channel
-(mitigated by the explicit blast-radius rejection and the #62 alignment),
-and the possibility that the issue intended receiver re-typing rather than
-target shapes (mitigated by the stated interpretation + the harness R-cell
-semantics, which this design matches cell-for-cell).
+Confidence score: **0.82** (was 0.78 before plan review). Round 1
+(Engram-grounded adversarial subagent): 9 addressable findings, all
+incorporated — the constructor branch and its null-name rule (HIGH), the
+masked-source L-recovery specification and its alignment probe, the E2
+red/green reclassification, the harness-divergence rewording with the
+E4 per-entry-error-authority cell, the M12 inherited-member and M13
+nested-parameter cells, the per-call `of()` cost correction, the floor
+receipt, and the F1 wording. The review found no false-DEFINITE window in
+the class-target ladder and verified the no-re-forcing, EMITTED-derivation,
+and test-unaffected claims against the code. Main residual risks: the
+receiver-expression extraction arithmetic (mitigated by mandatory
+empirical probes including mask alignment), and the reviewer's reading of
+the diagnostics channel (mitigated by the explicit blast-radius rejection
+and the #62 alignment).
