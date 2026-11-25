@@ -248,3 +248,39 @@ fixed red-first in `fba2400`/GREEN:
    now accepted only when it is the only indexed match. Pinned red by
    `mixedFlaggedAndUnflaggedIndexMatchesAbstain`
    (`Optional[p.Outer.Inner]` at the pre-fix head).
+
+CR-5 (comment 4688796145, thread 4688692546): 2 ownership gaps, both
+fixed red-first in `3e02f76`/GREEN:
+
+1. Local class: a LOCAL class inside a method body has no intervening
+   TYPE declaration, so containment-only `isDirectMember` accepted it
+   for a canonical naming an INHERITED member — fabricating
+   `demo.Child$Inner` (the local class's real binary is
+   `demo.Child$1Inner`). `isDirectMember` now also rejects any candidate
+   inside a method or constructor body. Pinned red by
+   `localClassesInMethodBodiesAreNotDirectMembers`.
+2. External qualifier: a type-qualified spelling whose qualifier is
+   outside the file set (ext.Child, java.util.Map) asserts a member
+   relation whose declared-vs-inherited ownership is textually
+   unprovable — the readings carry different binary owners
+   (`ext.Child$Inner` vs `ext.Base$Inner`). The type-qualified rule now
+   ABSTAINS (never appends the tail, never falls through to the package
+   reading, which would contradict the spelling's own assertion). Pinned
+   red by `externalQualifierMembersAbstain`,
+   `importQualifiedExternalMembersAbstain`, and the rewritten
+   multi-segment direct probe. This SUPERSEDES the CR-2 thread's
+   external-qualifier `$` rendering (java.a.B$C$D); its file-set
+   multi-segment arm survives as the evidence-backed case, and the
+   flag-on index still resolves external members definitively for
+   correlated members.
+
+Note on the related CR-1 follow-up (comment 4688258782, resolved
+thread): its demand to remove the package-reading fallback entirely was
+probed empirically and REJECTED — with the fallback fully abstaining,
+three pinned adapter tests fail (map-producer DEFINITE→POSSIBLE, lost
+provider links) because simple-spelling JDK descriptors
+(`()Ljava/util/Map;`) are pinned flag-off behavior; removing them breaks
+the issue's flag-on/flag-off parity acceptance. The package reading
+stays for spellings that assert no member relation (simple and
+fully-qualified spellings); type-qualified spellings — which DO assert
+one — abstain (CR-5 above).

@@ -26,11 +26,14 @@ import java.util.regex.Pattern;
  *     contained in the previous one's body, enumerated exhaustively).
  *     Zero proven chains falls through; more than one DISTINCT binary
  *     abstains.
- * <li>Type-qualified spelling (DEFINITE for the qualifier): when the
- *     ORIGINAL spelling is {@code Qualifier.Member...} with a simple
- *     first segment that resolves to a type in the referencing file's
- *     scope, the source itself asserts the qualifier is a type — the
- *     boundary is proven there and the tail joins with {@code '$'}.
+ * <li>Type-qualified spelling (ABSTAINS): when the ORIGINAL spelling is
+ *     {@code Qualifier.Member...} with a simple first segment that
+ *     resolves to a type in the referencing file's scope, the spelling
+ *     asserts a member of that qualifier — but this point is only
+ *     reached when no file-set declaration prefix matched, so the
+ *     qualifier is outside the file set and nothing proves whether it
+ *     DECLARES the member or INHERITS it (different binary owners). The
+ *     derivation abstains rather than append an unproven tail.
  * <li>Otherwise the JLS-default package reading keeps binary ==
  *     canonical (the pre-#60 rendering for these shapes), guarded by two
  *     abstentions: a {@code '$'} in a segment BEFORE the last is
@@ -88,42 +91,47 @@ final class JvmBinaryNames {
           ? Optional.of(declared.get(0))
           : Optional.empty();
     }
-    return spellingBinary(scanner, normalized, spelling, sourceFile)
-        .or(() -> dollarGuard(normalized));
+    if (isTypeQualifiedSpelling(scanner, normalized, spelling, sourceFile)) {
+      // A type-qualified spelling asserts a MEMBER of its qualifier. This
+      // point is only reached when no file-set declaration prefix
+      // matched the canonical, so the qualifier is outside the file set
+      // (or java.lang): nothing proves whether it DECLARES the member or
+      // INHERITS it, and the two readings carry different binary owners.
+      // Abstain — never append an unproven tail, and never fall through
+      // to the package reading, which would contradict the spelling's
+      // own member assertion.
+      return Optional.empty();
+    }
+    return dollarGuard(normalized);
   }
 
   /**
-   * The type-qualified spelling rule: a spelling like {@code Map.Entry}
-   * (simple first segment, resolvable in the referencing file's scope)
-   * asserts the qualifier is a TYPE — the boundary is proven there and
-   * the remaining segments join the binary chain. Simple and
-   * fully-qualified spellings assert nothing and return empty.
+   * Whether the spelling is type-qualified with a resolvable qualifier:
+   * {@code Qualifier.Member...} with a simple first segment that resolves
+   * to a type in the referencing file's scope, a canonical extending that
+   * qualifier, and a matching tail. Such a spelling asserts a member
+   * relation; simple and fully-qualified spellings assert nothing.
    */
-  private static Optional<String> spellingBinary(
+  private static boolean isTypeQualifiedSpelling(
       SourceMetadataScanner scanner,
       String canonical,
       String spelling,
       SourceMetadataScannerState.SourceFile sourceFile) {
     if (spelling == null || sourceFile == null) {
-      return Optional.empty();
+      return false;
     }
     String trimmed = spelling.trim();
     int dot = trimmed.indexOf('.');
     if (dot <= 0 || !SIMPLE_NAME.matcher(trimmed.substring(0, dot)).matches()) {
-      return Optional.empty();
+      return false;
     }
-    String qualifierSpelling = trimmed.substring(0, dot);
     Optional<String> qualifier =
-        scanner.resolveReferenceType(qualifierSpelling, sourceFile);
+        scanner.resolveReferenceType(trimmed.substring(0, dot), sourceFile);
     if (qualifier.isEmpty() || !canonical.startsWith(qualifier.get() + ".")) {
-      return Optional.empty();
+      return false;
     }
-    String tail = canonical.substring(qualifier.get().length() + 1);
-    if (!trimmed.substring(dot + 1).equals(tail)) {
-      return Optional.empty();
-    }
-    return binaryName(scanner, qualifier.get(), qualifier.get(), sourceFile)
-        .map(prefix -> prefix + "$" + tail.replace('.', '$'));
+    return trimmed.substring(dot + 1)
+        .equals(canonical.substring(qualifier.get().length() + 1));
   }
 
   /**

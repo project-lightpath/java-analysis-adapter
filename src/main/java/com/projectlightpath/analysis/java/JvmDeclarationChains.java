@@ -70,8 +70,10 @@ final class JvmDeclarationChains {
 
   /**
    * Whether {@code candidate} is declared DIRECTLY inside {@code owner}'s
-   * body: no third type declaration lies between them. Containment alone
-   * would accept a grandchild (Helper.Inner inside Child) for a canonical
+   * body: no third type declaration lies between them, and the candidate
+   * is not inside a METHOD body. Containment alone would accept a
+   * grandchild (Helper.Inner inside Child) or a LOCAL class (whose real
+   * binary is {@code Owner$1Name}, not {@code Owner$Name}) for a canonical
    * naming an inherited or other member — fabricating a binary name that
    * does not exist.
    */
@@ -89,7 +91,16 @@ final class JvmDeclarationChains {
         return false;
       }
     }
-    return true;
+    return !insideMethodBody(file, candidate);
+  }
+
+  /** Whether the declaration sits inside a method or constructor body (a local class). */
+  private static boolean insideMethodBody(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.TypeInfo candidate) {
+    return SourceMetadataScanner.executableMethods(file).stream()
+        .anyMatch(method -> SourceMetadataScannerTextLayer06.methodContains(
+            file, method, candidate.start()));
   }
 
   private static List<SourceMetadataScannerState.TypeInfo> topLevelDeclarations(
