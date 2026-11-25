@@ -174,7 +174,8 @@ unsanctioned test edits).
    red pre-fix: the block-level guard lets the lookalike mirror
    emit), and a pre-GREEN scratch probe on the CI JDK (17, helios08
    if needed) records whether any documented mirror-absence cause
-   (type-use/nested occurrence shapes) makes the crossed-pairing path
+   (type-use/nested occurrence shapes) OR same-simple-name
+   order-crossing in `takeMirror` makes the crossed-pairing path
    reachable — if one is constructible, a twin is added for it; if
    not, the check ships as reviewed defense-in-depth with the probe
    receipt.
@@ -279,10 +280,15 @@ unsanctioned test edits).
      twin would be vacuous against the pre-fix code. Twins:
      - a swapped-ORDER twin (`@demo.Qualifier("custom")` declared
        BEFORE `@Qualifier("fast")` ⇒ still exactly `[Qualifier:fast]`)
-       — the per-occurrence guard checks the OCCURRENCE's canonicity
-       while the emitted value comes from the paired MIRROR, so a
-       crossed occurrence↔mirror pairing would emit the lookalike's
-       value under a passing guard; the twin pins the pairing;
+       — pins the per-occurrence guard under reversed declaration
+       order: `takeMirror` pairs by first remaining same-simple-name
+       match in declaration order, so with the lookalike declared
+       first the pairing stays aligned and the twin's red-at-RED comes
+       from the block-level guard (it cannot red-able the
+       crossed-pairing check in isolation — same-simple-name
+       order-crossing is added to the CI-JDK probe's documented
+       causes, and a twin is added if the probe shows it
+       constructible);
      - a `@demo.Component` bean-annotation lookalike (same guard, bean
        family);
      - a dropped-canonical-mirror twin: canonical `@Qualifier("fast")`
@@ -516,8 +522,16 @@ inventory, the remaining-mirrors unreachability, the swapped-order
 twin's red-ability and post-fix output, and the textual-fallback
 availability for canonical occurrences.
 
+Round 5 (convergence): 1 addressable finding (MEDIUM), incorporated —
+the swapped-order twin's "pins the pairing" claim contradicted the
+round-4 coverage status (with declaration-order pairing the twin
+red-ables the GUARD, not the crossed-pairing check); reworded to pin
+the per-occurrence guard under reversed declaration order, and
+same-simple-name order-crossing was added to the CI-JDK probe's
+documented causes.
+
 Confidence score: **0.92** (0.84 → 0.87 → 0.89 → 0.91 → 0.92 across
-plan review). —
+plan review; round 5 found only the consistency edit). —
 the production change is one line plus one bounded defect fix; the
 blast radius was measured empirically (3 failing methods, each
 dispositioned); the test-surface conversion is mechanical and
