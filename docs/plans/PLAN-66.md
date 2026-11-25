@@ -130,11 +130,35 @@ unsanctioned test edits).
      drift silently.
    The per-occurrence guard replaces the block-level guard inside the
    occurrence loop when `guarded` is true; a `guarded` arm keeps its
-   semantics otherwise unchanged. This affects both the
-   Qualifier/Named family and the SPRING_BEAN_ANNOTATION_TYPES family
+   semantics otherwise unchanged. Mechanically, the guard moves to the
+   occurrence loop: `mirrorFamilies` gains the occurrence's
+   `ParsedAnnotation` (today `takeMirror` parses it and discards it —
+   the fix surfaces it, returning or re-parsing) and the
+   remaining-mirrors call passes `null` for it, documented as inert by
+   the unreachability argument below. **Crossed-pairing closure (same
+   weak seam, all manifestations per AGENTS):** `captureMatches` pairs
+   by simple name only and cannot distinguish a canonical mirror from
+   a same-simple-name lookalike; when the occurrence resolves
+   canonically (qualified spelling or canonical import) but its OWN
+   mirror was dropped (error-typed annotations are absent from the
+   mirrors on some compilers — a first-class scenario per the class
+   javadoc and `mirrorCanReplace`'s value-less arm; the canonicity
+   check is purely textual, so "import resolves" and "spring mirror
+   dropped" co-occur in a source-only scan without the framework jar
+   on the classpath), the surviving lookalike mirror supplies the
+   VALUE under the passing guard — a lookalike-derived fact emitted
+   where the textual path emits the canonical one (wrong today
+   flag-on; the flip must not promote it). Fix: in the guarded arm,
+   when the occurrence resolves canonically, require the paired
+   mirror's `canonicalName()` to be that canonical type; otherwise
+   decline the mirror replacement and fall to the textual occurrence
+   answer (which already carries the per-occurrence guard and value).
+   This affects both the Qualifier/Named family and the
+   SPRING_BEAN_ANNOTATION_TYPES family
    (a `@demo.Component` lookalike in a block that also has a canonical
    `@Component` has the same window); the fix closes both because it
-   replaces the guard itself. The remaining-mirrors loop needs NO
+   replaces the guard itself and adds the pairing check. The
+   remaining-mirrors loop needs NO
    guard change, and the `uniqueMirror`-style arm round 1 specified
    for it is unreachable dead code, retracted: that loop invokes
    `mirrorFamilies` only for mirrors whose simple name has an EMPTY
@@ -236,6 +260,13 @@ unsanctioned test edits).
        value under a passing guard; the twin pins the pairing;
      - a `@demo.Component` bean-annotation lookalike (same guard, bean
        family);
+     - a dropped-canonical-mirror twin: canonical `@Qualifier("fast")`
+       + `@demo.Qualifier("custom")` with the SPRING annotation made
+       unresolvable (no spring stub on the compile classpath ⇒ javac
+       drops the spring mirror) ⇒ still exactly `[Qualifier:fast]` from
+       the textual occurrence answer, never `Qualifier:custom` from
+       the surviving lookalike mirror (pins the crossed-pairing
+       closure);
      - an unguarded-path CONTROL pair: a Quarkus/CDI user-defined
        `@demo.Named` field still emits `Named:custom` under the javac
        path (mirroring `quarkusUserDefinedNamedStillEmitsUnguarded`),
@@ -296,9 +327,12 @@ unsanctioned test edits).
 - `-Dflpath.java.symbolindex=false` ⇒ byte-identical to today's default
   (textual), pinned by the converted opt-out goldens and C5.
 - The lookalike fix restores the textual path's per-occurrence
-  canonical-Spring guard on the javac path — a lookalike annotation is
-  EXCLUDED in both flag states (fail-closed; the false-framework-fact
-  window closes, never widens).
+  canonical-Spring guard on the javac path, and adds the crossed-
+  pairing check (a canonically-resolving occurrence never takes its
+  value from a non-canonical same-simple-name mirror) — a lookalike
+  annotation is EXCLUDED in both flag states and a canonical
+  occurrence never emits a lookalike's value (fail-closed; the
+  false-framework-fact windows close, never widen).
 - Zero new scan-global diagnostics (D1).
 
 ## TDD sequence
@@ -408,13 +442,34 @@ Round 2 (delta-only, on the round-1 edits): 3 new addressable findings
    pairing (the guard checks the occurrence, the value comes from the
    paired mirror); a swapped-order twin now pins the pairing.
 
+Round 3 (delta-only, on the round-2 edits): 2 new addressable findings
+(1 MEDIUM, 1 LOW), both incorporated:
+1. MEDIUM — the per-occurrence guard alone left a crossed-pairing
+   window: `captureMatches` pairs by simple name only, so a
+   canonically-resolving occurrence whose OWN mirror was dropped
+   (error-typed spring annotation, source-only scan) takes the
+   surviving lookalike mirror's VALUE under the passing guard — a
+   pre-existing flag-on manifestation of the same weak seam the flip
+   would promote. Item 2 now requires the paired mirror's
+   `canonicalName()` to match the occurrence's canonical resolution in
+   the guarded arm (else fall to the textual occurrence answer), and
+   C6 gains the dropped-canonical-mirror twin.
+2. LOW — item 2 gave two inconsistent descriptions of the guard's
+   mechanical placement; now specified: the guard moves to the
+   occurrence loop with the occurrence's `ParsedAnnotation` surfaced
+   from `takeMirror`, the remaining-mirrors call passes `null`
+   (inert by the unreachability argument).
+
 Verified across rounds: the per-BLOCK/per-OCCURRENCE root cause, the
 exhaustive `mirrorFamilies` caller inventory, the exhaustive item-3
 class list, the `equalsIgnoreCase(null)` safety, the #23 provenance of
 both golden updates, the harness flag-independence, D1's non-vacuity,
-and the issue-acceptance mapping.
+the issue-acceptance mapping, the four-group guarded/unguarded
+inventory, the remaining-mirrors unreachability, and the swapped-order
+twin's red-ability and post-fix output.
 
-Confidence score: **0.89** (0.84 → 0.87 → 0.89 across plan review). —
+Confidence score: **0.91** (0.84 → 0.87 → 0.89 → 0.91 across plan
+review). —
 the production change is one line plus one bounded defect fix; the
 blast radius was measured empirically (3 failing methods, each
 dispositioned); the test-surface conversion is mechanical and
