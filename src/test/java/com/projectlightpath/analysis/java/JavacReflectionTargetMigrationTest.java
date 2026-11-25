@@ -795,6 +795,88 @@ class JavacReflectionTargetMigrationTest {
     assertEquals("demo.Outer$Stat#<init>", fact.callee());
   }
 
+  // M26 (RED, CodeRabbit CR-2): enum constructors carry the synthetic
+  // name/ordinal parameters in the reflection domain.
+  @Test
+  void enumConstructorsCarrySyntheticParameters() throws IOException {
+    AnalysisContext context = context("m26", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void zeroArg() throws Exception {
+                Class.forName("demo.Color").getDeclaredConstructor();
+              }
+              void synthetics() throws Exception {
+                Class.forName("demo.Color").getDeclaredConstructor(String.class, int.class);
+              }
+            }
+            enum Color { RED; Color() { } }
+            """));
+    System.setProperty(FLAG, "true");
+    List<SemanticCallFacts.Fact> facts = facts(context);
+    SemanticCallFacts.Fact zeroArg = fact(facts, "getDeclaredConstructor", "#zeroArg");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, zeroArg.certainty(), zeroArg.toString());
+    assertEquals("shape_mismatch",
+        zeroArg.evidence().get(0).attributes().get("diagnostic"));
+    SemanticCallFacts.Fact synthetics = fact(facts, "getDeclaredConstructor", "#synthetics");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, synthetics.certainty(),
+        synthetics.toString());
+    assertEquals("demo.Color#<init>", synthetics.callee());
+    assertEquals("(Ljava/lang/String;I)V",
+        synthetics.evidence().get(0).attributes().get("targetDescriptor"));
+  }
+
+  // M27 (RED, CodeRabbit CR-2): the enclosing binary is derived by removing
+  // the owner's simple-name suffix, never by the last '$' — a '$' can belong
+  // to the simple name (demo.Outer.Inner$Part's enclosing is demo.Outer).
+  @Test
+  void dollarSimpleNamesKeepTheTrueEnclosingBinary() throws IOException {
+    AnalysisContext context = context("m27", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                Class.forName("demo.Outer$Inner$Part").getDeclaredConstructor(Outer.class);
+              }
+            }
+            class Outer {
+              class Inner$Part { Inner$Part() { } }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredConstructor", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("demo.Outer$Inner$Part#<init>", fact.callee());
+    assertEquals("(Ldemo/Outer;)V",
+        fact.evidence().get(0).attributes().get("targetDescriptor"));
+  }
+
+  // M28 (RED, CodeRabbit CR-2 outside-diff): an index-proven unnamed-package
+  // binary name (JLS 13.1: binary == simple name) renders a valid descriptor.
+  @Test
+  void unnamedPackageTargetsRenderDescriptors() throws IOException {
+    AnalysisContext context = context("m28", Map.of(
+        "Owner.java", """
+            public class Owner {
+              public Token make() { return null; }
+            }
+            class Token { }
+            """,
+        "Probe.java", """
+            public class Probe {
+              void audit() throws Exception {
+                Class.forName("Owner").getDeclaredMethod("make");
+              }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("Owner#make", fact.callee());
+    assertEquals("()LToken;",
+        fact.evidence().get(0).attributes().get("targetDescriptor"));
+  }
+
   // A1 (RED, CodeRabbit CR-1): a parameter type with duplicate source
   // declarations is ambiguous — the vector is unresolvable, never a match.
   @Test

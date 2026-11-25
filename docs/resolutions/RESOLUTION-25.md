@@ -192,6 +192,39 @@ cells total):
    still confirms the candidate before anything is published. Pinned red
    by M22.
 
+CR-2 (incremental review of 3e2acf6): 2 inline findings (both Major)
+plus 1 outside-diff Minor, all verified red-first and addressed in
+REVIEW_25_3:
+1. Major (comment 4698434878) — enum constructors carry the synthetic
+   `(String name, int ordinal)` parameters in the reflection domain; a
+   zero-arg lookup on an enum promoted to DEFINITE `()V`. Fixed:
+   `syntheticPrefixes` prepends `java.lang.String, int` for enum owners
+   in both vectors (enums are never inner, so the two prefix kinds
+   never combine). Pinned red by M26 (both arms: zero-arg →
+   `shape_mismatch`, `(String.class, int.class)` → DEFINITE
+   `(Ljava/lang/String;I)V`).
+2. Major (comment 4698434894) — the enclosing BINARY was derived from
+   the last `$`, which a `$`-named simple name corrupts
+   (`demo.Outer$Inner$Part`'s enclosing is `demo.Outer`, not
+   `demo.Outer$Inner`): the canonical match succeeded and a WRONG
+   descriptor was published as proven. Fixed: both enclosing names are
+   derived by removing the owner's exact simple-name suffix (from the
+   canonical spelling), with a defensive abstention when the binary
+   does not end with the simple name. Pinned red by M27
+   (`(Ldemo/Outer;)V`, was `(Ldemo/Outer$Inner;)V`).
+3. Minor (outside-diff, review 6062018094) — an index-proven
+   unnamed-package binary name (JLS 13.1: binary == simple name) was
+   rejected by the descriptor renderer's no-dot guard, so a DEFINITE
+   fact omitted `targetDescriptor`. Fixed: `binaryJvmDescriptor`'s
+   default arm renders dotless spellings (`LToken;`) — every input to
+   that arm is index-proven; the textual dialect's dot-abstentions
+   (`JvmBinaryNames`) are untouched. Pinned red by M28 (`()LToken;`,
+   was absent). The #60 index-dialect consumers share the helper; the
+   full suite confirms no pinned regression.
+   Two further CR-2 comments (4698464848, 4698474829) are CodeRabbit's
+   own analysis chains — the second acknowledges the reviewer's
+   UNRESOLVED-vs-POSSIBLE correction — not findings.
+
 Index schema note: `TypeShape` gained an additive `staticType` component
 (the second justified exception, same construction discipline as
 `publicMember`) — required to keep static nested constructors eligible

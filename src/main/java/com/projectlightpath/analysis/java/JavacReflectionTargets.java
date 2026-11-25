@@ -151,61 +151,11 @@ final class JavacReflectionTargets {
     }
     // LOCAL/ANONYMOUS constructor owners: the enclosing-instance capture is
     // not derivable from the nesting kind, so the target is never promoted.
-    if (constructorLookup && ownerNestingUnprovable(owner.entry())) {
+    if (constructorLookup && JavacReflectionConstructors.nestingUnprovable(owner.entry())) {
       return possible("inner_class_constructor", ownerKeyed, kind, List.of(), List.of());
     }
     return selectMember(candidates, vector, ownerKeyed, kind, publicOnly,
         owner.entry(), constructorLookup);
-  }
-
-  /** LOCAL/ANONYMOUS owners: the constructor's synthetic parameters (if
-   * any) cannot be derived from the nesting kind — fail closed. */
-  private static boolean ownerNestingUnprovable(JavacSourceSymbolIndex.TypeInfo owner) {
-    return !"TOP_LEVEL".equals(owner.nestingKind()) && !"MEMBER".equals(owner.nestingKind());
-  }
-
-  /**
-   * The member's parameter vector in the REFLECTION domain: a non-static
-   * MEMBER nested constructor takes the enclosing instance as the
-   * reflection-visible first parameter, which javac's source vector omits.
-   */
-  private static List<String> reflectionParameters(
-      JavacSourceSymbolIndex.MemberInfo member,
-      JavacSourceSymbolIndex.TypeInfo owner,
-      boolean constructorLookup) {
-    List<String> source = member.parameterTypes();
-    if (!constructorLookup || owner.shape().staticType()
-        || "TOP_LEVEL".equals(owner.nestingKind())) {
-      return source;
-    }
-    List<String> effective = new ArrayList<>();
-    effective.add(enclosingCanonical(owner));
-    effective.addAll(source);
-    return List.copyOf(effective);
-  }
-
-  /** The binary twin of {@link #reflectionParameters}. */
-  private static List<String> reflectionParameterBinaries(
-      JavacSourceSymbolIndex.MemberInfo member,
-      JavacSourceSymbolIndex.TypeInfo owner,
-      boolean constructorLookup) {
-    List<String> source = member.parameterBinaryTypes();
-    if (!constructorLookup || owner.shape().staticType()
-        || "TOP_LEVEL".equals(owner.nestingKind())) {
-      return source;
-    }
-    List<String> effective = new ArrayList<>();
-    effective.add(enclosingBinary(owner));
-    effective.addAll(source);
-    return List.copyOf(effective);
-  }
-
-  private static String enclosingCanonical(JavacSourceSymbolIndex.TypeInfo owner) {
-    return owner.canonicalName().substring(0, owner.canonicalName().lastIndexOf('.'));
-  }
-
-  private static String enclosingBinary(JavacSourceSymbolIndex.TypeInfo owner) {
-    return owner.binaryName().substring(0, owner.binaryName().lastIndexOf('$'));
   }
 
   /** One lookup site's extraction: name literal, arguments, and owner name. */
@@ -248,7 +198,8 @@ final class JavacReflectionTargets {
       JavacSourceSymbolIndex.TypeInfo owner,
       boolean constructorLookup) {
     List<JavacSourceSymbolIndex.MemberInfo> matches = candidates.stream()
-        .filter(member -> reflectionParameters(member, owner, constructorLookup).equals(vector))
+        .filter(member -> JavacReflectionConstructors
+            .reflectionParameters(member, owner, constructorLookup).equals(vector))
         .toList();
     if (matches.isEmpty()) {
       return possible("shape_mismatch", ownerKeyed, kind, List.of(), List.of());
@@ -265,10 +216,11 @@ final class JavacReflectionTargets {
     }
     return new JavacTargetEvidence(true, ownerKeyed, kind,
         JavacShapeDescriptors.jvmDescriptor(
-                reflectionParameterBinaries(match, owner, constructorLookup),
+                JavacReflectionConstructors.reflectionParameterBinaries(
+                    match, owner, constructorLookup),
                 match.returnBinaryType())
             .orElse(""),
-        reflectionParameters(match, owner, constructorLookup),
+        JavacReflectionConstructors.reflectionParameters(match, owner, constructorLookup),
         memberAnnotationNames(match), "");
   }
 

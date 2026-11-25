@@ -60,9 +60,12 @@ final class JavacShapeDescriptors {
       case "long" -> Optional.of("J");
       case "float" -> Optional.of("F");
       case "double" -> Optional.of("D");
-      default -> normalized.contains(".")
-          ? Optional.of("L" + normalized.replace('.', '/') + ";")
-          : Optional.empty();
+      // A dotless spelling reaching this arm is an INDEX-PROVEN binary
+      // name of an unnamed-package type (JLS 13.1: binary == simple name,
+      // e.g. Elements.getBinaryName of a default-package class) — it
+      // renders LToken;, a valid descriptor. The textual dialect's
+      // dot-abstentions live in JvmBinaryNames and are untouched.
+      default -> Optional.of("L" + normalized.replace('.', '/') + ";");
     };
   }
 }
