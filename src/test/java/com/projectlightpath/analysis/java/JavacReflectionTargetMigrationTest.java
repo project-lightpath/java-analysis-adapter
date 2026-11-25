@@ -481,9 +481,12 @@ class JavacReflectionTargetMigrationTest {
     assertEquals("unknown#unknown", fact.callee());
   }
 
-  // M15: implicit default constructor is not indexed -> fail closed.
+  // M15: implicit default constructor — javac synthesizes it into the index
+  // (probe-verified: kind=constructor, parameterTypes=[]), so the zero-arg
+  // lookup resolves DEFINITE; the original "not indexed, fails closed"
+  // premise was factually wrong and the cell pins the true behavior.
   @Test
-  void implicitDefaultConstructorFailsClosed() throws IOException {
+  void implicitDefaultConstructorResolvesDefinite() throws IOException {
     AnalysisContext context = context("m15", Map.of(
         "demo/Probe.java", """
             package demo;
@@ -496,9 +499,9 @@ class JavacReflectionTargetMigrationTest {
             """));
     System.setProperty(FLAG, "true");
     SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredConstructor", "#audit");
-    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty(), fact.toString());
-    assertEquals("member_not_declared",
-        fact.evidence().get(0).attributes().get("diagnostic"));
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("demo.NoCtor#<init>", fact.callee());
+    assertEquals("()V", fact.evidence().get(0).attributes().get("targetDescriptor"));
   }
 
   // M16: '$'-simple-name owner constructor — kind-filtered selection.

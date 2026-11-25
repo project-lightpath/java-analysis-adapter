@@ -375,12 +375,13 @@ state), not from examples:
   documented fail-closed shape, mirroring the #60 interaction.
 - **M14 (control): non-literal member name.**
   `getMethod(variableName)` → UNRESOLVED unchanged.
-- **M15 (RED): implicit default constructor fails closed.**
+- **M15 (RED): implicit default constructor resolves.**
   `Class.forName("demo.NoCtor").getDeclaredConstructor()` where
-  `demo.NoCtor` declares NO constructor → POSSIBLE, diagnostic
-  `member_not_declared` (the index holds declared members only; the
-  synthesized default constructor is a documented coverage gap, safe
-  direction).
+  `demo.NoCtor` declares NO constructor → DEFINITE, callee
+  `demo.NoCtor#<init>`, descriptor `()V` (behavior fact discovered at
+  GREEN: javac synthesizes the default constructor into the index — the
+  plan's round-2 "not indexed" premise was wrong; the cell was corrected
+  to pin the true behavior red-first against the stub).
 - **M16 (RED): `$`-simple-name owner constructor.** Owner
   `demo.Cash$Flow` with an explicit `Cash$Flow(String)` constructor;
   site `getDeclaredConstructor(String.class)` chained on
@@ -529,11 +530,12 @@ pushing), `make evidence-validate`.
   with `member_not_declared` even when the superclass is in the source
   set — fail-closed, documented; inherited-member walking is a follow-up
   (same class as the FLPATH-5124 residual).
-- The implicit default constructor is not indexed (declared members
-  only): `getDeclaredConstructor()` on a class with no declared
-  constructor yields `member_not_declared` POSSIBLE while the runtime
-  succeeds via the synthesized constructor — fail-closed coverage gap,
-  pinned by M15; indexing synthesized members is a follow-up candidate.
+- The implicit default constructor IS indexed (behavior fact discovered at
+  GREEN, probe-verified: javac synthesizes it into
+  `getEnclosedElements` as a `constructor` member with empty
+  `parameterTypes`), so a zero-arg `getDeclaredConstructor()` on a
+  no-constructor class resolves DEFINITE — pinned by M15; the plan's
+  original "declared members only, fails closed" premise was wrong.
 - Simple-spelling class-literal receivers depend on the textual
   `resolveReferenceType` for the candidate canonical, but the index
   CONFIRMS ownership before any promotion — a wrong textual resolution

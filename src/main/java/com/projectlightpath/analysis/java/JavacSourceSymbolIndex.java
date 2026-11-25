@@ -690,7 +690,10 @@ final class JavacSourceSymbolIndex {
               .map(variable -> variable.getAnnotationMirrors().stream()
                   .map(AnnotationRenderer::info).toList())
               .toList(),
-          memberHasErrorType(element, executable));
+          memberHasErrorType(element, executable),
+          // getMethod/getConstructor return public members only, so the
+          // reflection-target ladder (issue #25) needs the visibility.
+          element.getModifiers().contains(javax.lang.model.element.Modifier.PUBLIC));
     }
 
     private static boolean isMember(Element element) {
@@ -924,7 +927,8 @@ final class JavacSourceSymbolIndex {
       List<AnnotationInfo> annotations,
       MemberTypes types,
       List<List<AnnotationInfo>> parameterAnnotations,
-      boolean errorType) {
+      boolean errorType,
+      boolean publicMember) {
 
     /** Canonical erased parameter spellings ({@code java.lang.String[]}). */
     List<String> parameterTypes() {
