@@ -584,6 +584,37 @@ class JavacBinaryNameMigrationTest {
         JvmBinaryNames.binaryName(scanner, "p.Outer.Inner", "p.Outer.Inner", outer));
   }
 
+  @Test
+  void mixedFlaggedAndUnflaggedIndexMatchesAbstain() throws IOException {
+    AnalysisContext context = context("mixed-flagged", Map.of(
+        "p/Outer.java", """
+            package p;
+            public class Outer { static class Inner { } }
+            """,
+        "p/Outer$Inner.java", """
+            package p;
+            public class Outer$Inner { }
+            """,
+        "p/Outer/Inner.java", """
+            package p.Outer;
+            public class Inner { }
+            """));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile outer =
+        file(scanner, sourceRoot("mixed-flagged"), "p/Outer.java");
+    // The canonical p.Outer.Inner names the flagged nested entry (binary
+    // p.Outer$Inner, colliding with the top-level p.Outer$Inner) AND the
+    // unflagged top-level Inner in the package literally named p.Outer
+    // (binary p.Outer.Inner). One eligible entry remains after the
+    // filter, but the flagged entry is a COMPETING declaration for the
+    // same canonical name: the returned binary is not proven, so the
+    // derivation abstains — a single eligible entry is accepted only
+    // when it is the only indexed match.
+    assertEquals(Optional.empty(),
+        JvmBinaryNames.binaryName(scanner, "p.Outer.Inner", "p.Outer.Inner", outer));
+  }
+
   private SourceMetadataScannerState.BeanCandidate producer(
       SourceMetadataScanner scanner, String method) {
     return scanner.beanCandidates(AnalysisContext.Framework.QUARKUS).stream()
