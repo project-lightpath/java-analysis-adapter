@@ -63,7 +63,11 @@ final class JvmBinaryNames {
       List<JavacSourceSymbolIndex.TypeInfo> eligible = indexed.stream()
           .filter(entry -> !entry.shape().duplicateBinaryName())
           .toList();
-      if (eligible.size() == 1) {
+      if (eligible.size() == 1 && eligible.size() == indexed.size()) {
+        // A single eligible entry is accepted only when it is the ONLY
+        // indexed match: a flagged sibling is a competing declaration for
+        // the same canonical name, so its presence makes the binary
+        // unproven.
         return Optional.of(eligible.get(0).binaryName());
       }
       if (!indexed.isEmpty()) {

@@ -225,7 +225,6 @@ fixed red-first in `cd94ff7`/GREEN:
    (`Optional[p.Outer$Inner]` at the pre-fix head).
 
 ## Build fix (post-CR-3)
-
 The CR-3 change pushed `JvmBinaryNames` over PMD's GodClass threshold
 on CI (WMC=47, JDK 17) while the local JDK 27 gate stayed green on the
 identical commit — an environment divergence, empirically reproduced on
@@ -235,3 +234,17 @@ The file-set declaration-chain logic moved into a `JvmDeclarationChains`
 helper (PMD-forced placement, behavior identical). The divergence itself
 — the local lint gate cannot reproduce CI's JDK 17 measurement — is
 tracked as **#64**.
+
+CR-4 (incremental review of the post-lint-fix head): 1 Minor finding,
+fixed red-first in `fba2400`/GREEN:
+
+1. A canonical whose index lookup mixes a FLAGGED entry (the nested
+   `p.Outer.Inner`, binary `p.Outer$Inner` colliding with a top-level
+   `p.Outer$Inner`) and an UNFLAGGED entry (a top-level `Inner` in the
+   package literally named `p.Outer`, binary `p.Outer.Inner`) left
+   exactly one eligible entry after the filter and returned its binary —
+   but the flagged sibling is a competing declaration for the same
+   canonical, so the binary was not proven. A single eligible entry is
+   now accepted only when it is the only indexed match. Pinned red by
+   `mixedFlaggedAndUnflaggedIndexMatchesAbstain`
+   (`Optional[p.Outer.Inner]` at the pre-fix head).
