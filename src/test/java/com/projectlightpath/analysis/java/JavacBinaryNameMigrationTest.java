@@ -687,7 +687,10 @@ class JavacBinaryNameMigrationTest {
     AnalysisContext context = context("initializer-local", Map.of(
         "demo/Base.java", """
             package demo;
-            public class Base { public static class Inner { } }
+            public class Base {
+              public static class Inner { }
+              public static class AlsoLocal { }
+            }
             """,
         "demo/Child.java", """
             package demo;
@@ -700,24 +703,29 @@ class JavacBinaryNameMigrationTest {
             package demo;
             public interface Api {
               demo.Child.Inner find(demo.Child.Inner key);
+              demo.Child.AlsoLocal also(demo.Child.AlsoLocal key);
             }
             """));
     System.clearProperty(FLAG);
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("initializer-local"), "demo/Api.java");
-    // demo.Child.Inner names the member type INHERITED from Base (true
-    // binary demo.Base$Inner). The only Inner inside Child's body is a
-    // LOCAL class in a STATIC INITIALIZER BLOCK (and a sibling in an
-    // instance initializer) — not inside any method, so the method-body
-    // check alone misses it. A direct member must sit at the owner's
-    // TYPE-BODY level (zero brace depth): any braced context — method,
-    // initializer, lambda, anonymous body — makes the candidate a local
-    // class whose real binary is demo.Child$1Inner. The derivation
-    // abstains rather than fabricate demo.Child$Inner.
+    // demo.Child.Inner and demo.Child.AlsoLocal name member types
+    // INHERITED from Base (true binaries demo.Base$Inner and
+    // demo.Base$AlsoLocal). The only same-named declarations inside
+    // Child's body are LOCAL classes — one in a STATIC initializer block,
+    // one in an INSTANCE initializer — neither inside any method, so the
+    // method-body check alone misses them. A direct member must sit at
+    // the owner's TYPE-BODY level (zero brace depth): any braced context
+    // — method, initializer, lambda, anonymous body — makes the candidate
+    // a local class whose real binary is demo.Child$1Name. Both canonicals
+    // abstain rather than fabricate a Child-owned binary.
     assertEquals(Optional.empty(),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, api, "demo.Child.Inner key", "demo.Child.Inner"));
+    assertEquals(Optional.empty(),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "demo.Child.AlsoLocal key", "demo.Child.AlsoLocal"));
   }
 
   private SourceMetadataScannerState.BeanCandidate producer(
