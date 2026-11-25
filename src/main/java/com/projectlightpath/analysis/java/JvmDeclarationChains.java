@@ -71,11 +71,13 @@ final class JvmDeclarationChains {
   /**
    * Whether {@code candidate} is declared DIRECTLY inside {@code owner}'s
    * body: no third type declaration lies between them, and the candidate
-   * is not inside a METHOD body. Containment alone would accept a
-   * grandchild (Helper.Inner inside Child) or a LOCAL class (whose real
-   * binary is {@code Owner$1Name}, not {@code Owner$Name}) for a canonical
-   * naming an inherited or other member — fabricating a binary name that
-   * does not exist.
+   * sits at the owner's TYPE-BODY level — zero brace depth from the
+   * owner's body opening. Containment alone would accept a grandchild
+   * (Helper.Inner inside Child) or a LOCAL class in ANY braced context —
+   * method body, static or instance initializer, lambda, anonymous class
+   * body (whose real binary is {@code Owner$1Name}, not
+   * {@code Owner$Name}) — for a canonical naming an inherited or other
+   * member, fabricating a binary name that does not exist.
    */
   private static boolean isDirectMember(
       SourceMetadataScannerState.SourceFile file,
@@ -91,16 +93,38 @@ final class JvmDeclarationChains {
         return false;
       }
     }
-    return !insideMethodBody(file, candidate);
+    return atTypeBodyLevel(file, owner, candidate);
   }
 
-  /** Whether the declaration sits inside a method or constructor body (a local class). */
-  private static boolean insideMethodBody(
+  /**
+   * Whether the candidate sits at the owner's type-body level: the brace
+   * depth between the owner's body opening and the candidate start is
+   * zero, counted on the comment- and literal-masked source so braces in
+   * comments or strings cannot skew it. Every braced context — method
+   * and constructor bodies, static and instance initializers, lambda and
+   * anonymous class bodies — raises the depth, so a local class in any
+   * of them is never a direct member.
+   */
+  private static boolean atTypeBodyLevel(
       SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.TypeInfo owner,
       SourceMetadataScannerState.TypeInfo candidate) {
-    return SourceMetadataScanner.executableMethods(file).stream()
-        .anyMatch(method -> SourceMetadataScannerTextLayer06.methodContains(
-            file, method, candidate.start()));
+    String masked = SourceMetadataScanner.maskStringLiterals(
+        SourceMetadataScanner.stripComments(file.source()));
+    int bodyOpening = JavaSourceText.typeBodyOpening(masked, owner.start());
+    if (bodyOpening < 0 || bodyOpening >= candidate.start()) {
+      return false;
+    }
+    int depth = 0;
+    for (int index = bodyOpening + 1; index < candidate.start(); index++) {
+      char character = masked.charAt(index);
+      if (character == '{') {
+        depth++;
+      } else if (character == '}') {
+        depth--;
+      }
+    }
+    return depth == 0;
   }
 
   private static List<SourceMetadataScannerState.TypeInfo> topLevelDeclarations(

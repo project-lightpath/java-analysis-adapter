@@ -274,6 +274,17 @@ fixed red-first in `3e02f76`/GREEN:
    flag-on index still resolves external members definitively for
    correlated members.
 
+CR-6 (comment 4695067201, same thread): the CR-5 local-class fix only
+rejected METHOD bodies; a local class in a STATIC or instance
+INITIALIZER BLOCK slipped through. Fixed generically: a direct member
+must sit at the owner's TYPE-BODY level — zero brace depth from the
+owner's body opening, counted on the comment- and literal-masked source
+— which subsumes method bodies, initializer blocks, lambda bodies, and
+anonymous class bodies (the method-body check was replaced by the depth
+check). Pinned red by
+`initializerBlockLocalClassesAreNotDirectMembers`
+(`Ldemo/Child$Inner;` at the pre-fix head).
+
 Note on the related CR-1 follow-up (comment 4688258782, resolved
 thread): its demand to remove the package-reading fallback entirely was
 probed empirically and REJECTED — with the fallback fully abstaining,
