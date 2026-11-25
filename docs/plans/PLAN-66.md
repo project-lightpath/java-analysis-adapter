@@ -150,9 +150,34 @@ unsanctioned test edits).
    where the textual path emits the canonical one (wrong today
    flag-on; the flip must not promote it). Fix: in the guarded arm,
    when the occurrence resolves canonically, require the paired
-   mirror's `canonicalName()` to be that canonical type; otherwise
+   mirror's `canonicalName()` to be that canonical type — the
+   occurrence's canonical FQN is the qualified spelling when fully
+   qualified, else the FQN of the canonical import matched through
+   `importedTypes`, and the check is STRICT EQUALITY against that FQN,
+   never set membership (a deliberate divergence from the `uniqueMirror`
+   precedent: the multi-canonical families — `Named` → jakarta/javax,
+   `Resource`, `Transactional`, `RolesAllowed` — would let a
+   `javax`-imported occurrence take a `jakarta` mirror's value under
+   set membership, the same fabricated-value window); otherwise
    decline the mirror replacement and fall to the textual occurrence
-   answer (which already carries the per-occurrence guard and value).
+   answer (which already carries the per-occurrence guard and value —
+   always available for a canonical occurrence, because spring
+   canonical FQNs are fully ASCII so the capture is the complete
+   simple name and `parseAnnotation` extracts name+arguments
+   faithfully; a `$`/Unicode-truncated capture can never be canonical).
+   Coverage status stated honestly (probe-verified on JDK 27, scratch
+   probe outside the tree): javac RETAINS the error-typed spring
+   mirror (value-less — `mirrorCanReplace` already falls those to
+   textual), so the crossed-pairing check is DEFENSE-IN-DEPTH, not
+   red-able in isolation on the probed toolchain; the C6
+   dropped-canonical-mirror twin therefore pins the GUARD MOVE (it is
+   red pre-fix: the block-level guard lets the lookalike mirror
+   emit), and a pre-GREEN scratch probe on the CI JDK (17, helios08
+   if needed) records whether any documented mirror-absence cause
+   (type-use/nested occurrence shapes) makes the crossed-pairing path
+   reachable — if one is constructible, a twin is added for it; if
+   not, the check ships as reviewed defense-in-depth with the probe
+   receipt.
    This affects both the Qualifier/Named family and the
    SPRING_BEAN_ANNOTATION_TYPES family
    (a `@demo.Component` lookalike in a block that also has a canonical
@@ -262,11 +287,16 @@ unsanctioned test edits).
        family);
      - a dropped-canonical-mirror twin: canonical `@Qualifier("fast")`
        + `@demo.Qualifier("custom")` with the SPRING annotation made
-       unresolvable (no spring stub on the compile classpath ⇒ javac
-       drops the spring mirror) ⇒ still exactly `[Qualifier:fast]` from
-       the textual occurrence answer, never `Qualifier:custom` from
-       the surviving lookalike mirror (pins the crossed-pairing
-       closure);
+       unresolvable (no spring stub on the compile classpath) ⇒ still
+       exactly `[Qualifier:fast]`, never `Qualifier:custom` from the
+       lookalike mirror. Probe-verified premise (JDK 27): javac
+       RETAINS the error-typed spring mirror value-less, so this twin
+       pins the GUARD MOVE (red pre-fix via the block-level guard;
+       post-fix the value-less spring mirror fails `mirrorCanReplace`
+       and the occurrence falls to the textual answer) — the
+       crossed-pairing check itself is defense-in-depth unless the
+       CI-JDK probe finds a constructible mirror-absence shape (see
+       item 2's coverage status);
      - an unguarded-path CONTROL pair: a Quarkus/CDI user-defined
        `@demo.Named` field still emits `Named:custom` under the javac
        path (mirroring `quarkusUserDefinedNamedStillEmitsUnguarded`),
@@ -460,16 +490,34 @@ Round 3 (delta-only, on the round-2 edits): 2 new addressable findings
    from `takeMirror`, the remaining-mirrors call passes `null`
    (inert by the unreachability argument).
 
+Round 4 (delta-only, on the round-3 edits): 2 new addressable findings
+(1 MEDIUM, 1 LOW), both incorporated:
+1. MEDIUM — the dropped-canonical-mirror twin's premise was
+   empirically false on the host toolchain (scratch probe, JDK 27:
+   javac retains the error-typed spring mirror, value-less — the
+   repo's own `mirrorCanReplace` javadoc says values are dropped, not
+   mirrors). The twin is re-specified as pinning the GUARD MOVE, the
+   crossed-pairing check is documented as defense-in-depth (not
+   red-able in isolation on the probed JDK), and a pre-GREEN CI-JDK
+   probe records whether any mirror-absence shape makes the path
+   reachable (twin added if constructible, probe receipt if not).
+2. LOW — the pairing check's canonical-type derivation is now
+   specified: strict equality against the occurrence's resolved FQN
+   (qualified spelling or `importedTypes` import FQN), never set
+   membership — the `uniqueMirror` precedent would silently accept
+   cross-family `javax`/`jakarta` value substitution.
+
 Verified across rounds: the per-BLOCK/per-OCCURRENCE root cause, the
 exhaustive `mirrorFamilies` caller inventory, the exhaustive item-3
 class list, the `equalsIgnoreCase(null)` safety, the #23 provenance of
 both golden updates, the harness flag-independence, D1's non-vacuity,
 the issue-acceptance mapping, the four-group guarded/unguarded
-inventory, the remaining-mirrors unreachability, and the swapped-order
-twin's red-ability and post-fix output.
+inventory, the remaining-mirrors unreachability, the swapped-order
+twin's red-ability and post-fix output, and the textual-fallback
+availability for canonical occurrences.
 
-Confidence score: **0.91** (0.84 → 0.87 → 0.89 → 0.91 across plan
-review). —
+Confidence score: **0.92** (0.84 → 0.87 → 0.89 → 0.91 → 0.92 across
+plan review). —
 the production change is one line plus one bounded defect fix; the
 blast radius was measured empirically (3 failing methods, each
 dispositioned); the test-surface conversion is mechanical and
