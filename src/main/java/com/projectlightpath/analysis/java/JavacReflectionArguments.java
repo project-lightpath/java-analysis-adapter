@@ -72,11 +72,15 @@ final class JavacReflectionArguments {
         .orElse(null);
   }
 
-  /** Unifies the textual dialect ($-joined vs dotted) through the index entry. */
+  /** Unifies the textual dialect ($-joined vs dotted) through the index
+   * entry; a duplicate-flagged entry makes the parameter type ambiguous,
+   * so the vector is unresolvable (the site abstains, never matches). */
   private String canonicalThroughIndex(String resolved) {
     List<JavacSourceSymbolIndex.TypeInfo> entries = index.type(resolved);
+    if (entries.stream().anyMatch(entry -> entry.shape().duplicateBinaryName())) {
+      return null;
+    }
     if (entries.size() == 1
-        && !entries.get(0).shape().duplicateBinaryName()
         && !entries.get(0).shape().errorType()) {
       return entries.get(0).canonicalName();
     }

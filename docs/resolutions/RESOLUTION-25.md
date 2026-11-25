@@ -6,7 +6,8 @@ Branch: `issue-25-javac-reflection-shapes`.
 Commits: PLAN_25 `0fe4fb0` (+ review rounds `ad6372e`, `f3fd7b1`,
 `b4c45c3`, `60ee680`, amendment `cc51abf`), RED_25 `265d73f`,
 GREEN_25 `76f9bed` (+ JDK 17 lint fix `31fa372`),
-REVIEW_25_1 `09f7b42`, EVIDENCE_25 (this commit).
+REVIEW_25_1 `09f7b42`, REVIEW_25_2 (CodeRabbit CR-1),
+EVIDENCE_25 `51f2176` (+ this amendment).
 
 ## What changed
 
@@ -153,8 +154,55 @@ enumerated in Residuals).
   incorporation (including the mutation sensitivity of the four new
   cells) and found **no new addressable findings** — clean.
 
+## CodeRabbit round (PR #65)
+
+CR-1 (full review): 4 findings (3 Major, 1 Minor), all verified
+empirically — the inner-class constructor finding reproduced the exact
+inverted behavior (zero-arg DEFINITE, enclosing-type mismatch,
+probe-verified) — and all addressed red-first in REVIEW_25_2 with
+mutation-sensitive pins (M22, M23, M24 both arms, M25 control, A1; 42
+cells total):
+1. Major (comment 4697679845) — a forName member-receiver literal naming
+   the CANONICAL spelling (`Class.forName("demo.Outer.Inner")`) promoted
+   to DEFINITE although the runtime API loads binary names; the member
+   path lacked the class ladder's binary-name validation. Fixed:
+   `LookupSite` retains the receiver provenance and forName receivers
+   validate binary == literal → POSSIBLE `binary_name_mismatch`; class
+   literals keep the canonical form. Pinned red by M23.
+2. Major (comment 4697679858) — inner-class constructors compared
+   javac's SOURCE parameter vector: a zero-arg lookup on a non-static
+   nested owner fabricated DEFINITE while the correct
+   `getDeclaredConstructor(Outer.class)` site mismatched. Fixed: the
+   member's parameter vector and JVM descriptor carry the synthetic
+   enclosing-instance parameter for non-static MEMBER nested owners (the
+   new additive `TypeShape.staticType` distinguishes them;
+   LOCAL/ANONYMOUS owners abstain with `inner_class_constructor` — the
+   enclosing capture is not derivable from the nesting kind). Pinned red
+   by M24 (both arms) with the M25 static-nested control.
+3. Major (comment 4697679790) — a parameter class literal naming a
+   duplicate-flagged type kept its spelling and could complete a
+   DEFINITE match (the owner ladder already abstained on duplicates).
+   Fixed: `canonicalThroughIndex` returns null on duplicate entries —
+   the vector is unresolvable and the site stays UNRESOLVED. Pinned red
+   by A1.
+4. Minor (comment 4697679832) — partially qualified class-literal owners
+   (`Outer.Inner.class`) failed closed to NONE. Fixed: dotted
+   class-literal spellings resolve through the source context
+   (`resolveReferenceType`) with the direct form as fallback; the index
+   still confirms the candidate before anything is published. Pinned red
+   by M22.
+
+Index schema note: `TypeShape` gained an additive `staticType` component
+(the second justified exception, same construction discipline as
+`publicMember`) — required to keep static nested constructors eligible
+while non-static ones compare in the reflection domain.
+
 ## Behavior facts discovered at GREEN (probe-verified)
 
+- A non-static MEMBER nested constructor's source parameter vector omits
+  the synthetic enclosing-instance parameter (javac
+  `ExecutableElement.getParameters()`); reflection sees it — the CR-1
+  probe showed the inverted behavior before the fix.
 - javac synthesizes the implicit default constructor into
   `getEnclosedElements` (kind `constructor`, empty `parameterTypes`) —
   the plan's "not indexed, fails closed" premise was wrong; M15 pins the

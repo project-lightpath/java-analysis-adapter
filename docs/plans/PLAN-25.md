@@ -423,6 +423,29 @@ state), not from examples:
   visibility gate.** `Work.class.getMethod("run")` on an
   interface-declared method → DEFINITE (javac's getModifiers carries the
   implicit public; the pin guards against a future over-abstention).
+- **M22 (RED, CodeRabbit CR-1): partially qualified class-literal owner.**
+  `Outer.Inner.class.getMethod("run")` (import-qualified spelling) →
+  DEFINITE — a dot does not establish a fully qualified name; dotted
+  class-literal spellings resolve through the source context before the
+  index confirms (unresolvable dotted spellings keep the direct form and
+  the index decides).
+- **M23 (RED, CodeRabbit CR-1): a forName receiver literal naming the
+  canonical spelling is not promoted.**
+  `Class.forName("demo.Outer.Inner").getDeclaredMethod("run")` → POSSIBLE
+  `binary_name_mismatch` — the member path applies the same binary-name
+  validation as the class ladder; class literals keep the canonical form.
+- **M24 (RED, CodeRabbit CR-1): inner-class constructors compare in the
+  reflection domain.** A non-static `demo.Outer$Inner` with source
+  constructor `Inner()`: the zero-arg site → POSSIBLE `shape_mismatch`,
+  the `getDeclaredConstructor(Outer.class)` site → DEFINITE with the
+  reflection-domain descriptor `(Ldemo/Outer;)V` — the member's vector
+  and descriptor carry the synthetic enclosing-instance parameter javac's
+  source vector omits. M25 (control): static nested constructors keep the
+  source vector.
+- **A1 (RED, CodeRabbit CR-1): duplicate parameter types abstain.** A
+  parameter class literal naming a duplicate-flagged type makes the
+  vector unresolvable → the site stays UNRESOLVED (the argument ladder
+  follows the owner ladder's abstention on duplicate declarations).
 - **M18 (control, GREEN at RED): recognized receiver naming a non-source
   type.** `String.class.getMethod("trim")` → UNRESOLVED unchanged
   (receiver recognized, index has no `java.lang.String` entry — the
@@ -609,3 +632,25 @@ Round 1 (Engram-grounded adversarial subagent, full change cc51abf..31fa372):
 Confidence score: **0.89** (0.78 → 0.82 → 0.85 → 0.88 → 0.89 across plan
 review; implementation-review round 1 found and closed two false-DEFINITE
 windows, both red-first).
+
+## CodeRabbit round (PR #65)
+
+CR-1 (full review): 4 findings (3 Major, 1 Minor), all verified
+empirically — the inner-class constructor finding reproduced the exact
+inverted behavior (zero-arg DEFINITE, enclosing-type mismatch) — and all
+addressed red-first in REVIEW_25_2 with mutation-sensitive pins (M22,
+M23, M24 both arms, M25 control, A1; 42 cells total):
+1. Major — forName member-receiver literals naming the canonical
+   spelling promoted to DEFINITE; the member path now applies the class
+   ladder's binary-name validation (`binary_name_mismatch`).
+2. Major — inner-class constructors compared the source parameter
+   vector; the member's vector and descriptor now carry the synthetic
+   enclosing-instance parameter for non-static MEMBER nested owners
+   (additive `TypeShape.staticType`; LOCAL/ANONYMOUS owners abstain with
+   `inner_class_constructor`).
+3. Major — parameter class literals naming duplicate-flagged types kept
+   their spelling and could complete a DEFINITE match; the argument
+   ladder now abstains (`canonicalThroughIndex` → null).
+4. Minor — partially qualified class-literal owners failed closed;
+   dotted spellings now resolve through the source context with the
+   direct form as fallback (index confirmation unchanged).

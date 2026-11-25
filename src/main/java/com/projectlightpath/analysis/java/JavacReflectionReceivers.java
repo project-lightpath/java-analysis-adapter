@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -70,16 +71,21 @@ final class JavacReflectionReceivers {
         .replaceAll("[.\\s]+$", "");
   }
 
+  /** The owner NAME the receiver provably asserts, with its provenance. */
+  record OwnerName(String name, boolean forNameLiteral) {}
+
   /**
-   * The owner NAME the receiver provably asserts: a class-literal spelling
-   * (qualified used directly, simple normalized by the textual resolver —
-   * the index confirms it later, so an unconfirmed candidate is never
-   * published), or the literal of a static {@code Class.forName} /
+   * The owner the receiver provably asserts: a class-literal spelling —
+   * resolved in the source context (a dot does not establish a fully
+   * qualified name; partially qualified spellings resolve through the
+   * imports, and the index confirms the candidate before anything is
+   * published, so an unconfirmed candidate is never used) — or the
+   * literal of a static {@code Class.forName} /
    * {@code java.lang.Class.forName} invocation. Anything else — simple
    * variables, {@code getClass()}, parenthesized or wrapped receivers —
    * yields nothing (dataflow out of scope, fail closed).
    */
-  java.util.Optional<String> ownerName(
+  Optional<OwnerName> owner(
       SourceMetadataScannerState.SourceFile file,
       String structural,
       String range,
@@ -90,25 +96,32 @@ final class JavacReflectionReceivers {
     }
     Matcher forName = FOR_NAME_CHAIN.matcher(range);
     if (!forName.find() || !prefixAccepted(range, forName.start(1))) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     String chain = forName.group(1);
     // Only the static API spellings are accepted; an instance-qualified or
     // static-imported forName is not revalidated here and fails closed.
     if (!chain.equals("Class") && !chain.equals("java.lang.Class")) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     String literal = SourceMetadataScannerTextLayer10
         .firstQuotedArgument(structural, rangeStart + forName.start(1));
-    return java.util.Optional.ofNullable(literal);
+    return literal == null
+        ? Optional.empty()
+        : Optional.of(new OwnerName(literal, true));
   }
 
-  private java.util.Optional<String> classLiteralOwnerName(
+  private Optional<OwnerName> classLiteralOwnerName(
       SourceMetadataScannerState.SourceFile file, String spelling, int offset) {
-    if (spelling.contains(".")) {
-      return java.util.Optional.of(spelling);
+    Optional<String> resolved = scanner.resolveReferenceType(spelling, file, offset);
+    if (resolved.isPresent()) {
+      return Optional.of(new OwnerName(resolved.orElseThrow(), false));
     }
-    return scanner.resolveReferenceType(spelling, file, offset);
+    // An unresolvable dotted spelling keeps its direct form: the index
+    // lookup decides (absent means the runtime path, unchanged).
+    return spelling.contains(".")
+        ? Optional.of(new OwnerName(spelling, false))
+        : Optional.empty();
   }
 
   /**

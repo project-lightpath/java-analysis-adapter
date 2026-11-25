@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -20,8 +21,14 @@ final class JavacShapeDescriptors {
    */
   static Optional<String> jvmDescriptorFromMember(
       JavacSourceSymbolIndex.MemberInfo member) {
+    return jvmDescriptor(member.parameterBinaryTypes(), member.returnBinaryType());
+  }
+
+  /** Builds a JVM descriptor from explicit binary shapes (the constructor
+   * path prepends reflection-visible synthetic parameters). */
+  static Optional<String> jvmDescriptor(List<String> parameterBinaryTypes, String returnBinaryType) {
     StringBuilder descriptor = new StringBuilder("(");
-    for (String parameter : member.parameterBinaryTypes()) {
+    for (String parameter : parameterBinaryTypes) {
       Optional<String> part = binaryJvmDescriptor(parameter);
       if (part.isEmpty()) {
         return Optional.empty();
@@ -29,7 +36,7 @@ final class JavacShapeDescriptors {
       descriptor.append(part.orElseThrow());
     }
     descriptor.append(')');
-    return binaryJvmDescriptor(member.returnBinaryType())
+    return binaryJvmDescriptor(returnBinaryType)
         .map(value -> descriptor.append(value).toString());
   }
 

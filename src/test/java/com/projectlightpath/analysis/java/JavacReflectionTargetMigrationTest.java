@@ -690,6 +690,152 @@ class JavacReflectionTargetMigrationTest {
     assertEquals("demo.Work#run", fact.callee());
   }
 
+  // M22 (RED, CodeRabbit CR-1): partially qualified class-literal owner.
+  @Test
+  void partiallyQualifiedClassLiteralOwnerResolves() throws IOException {
+    AnalysisContext context = context("m22", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            import demo.Outer;
+            public class Probe {
+              void audit() throws Exception {
+                Outer.Inner.class.getMethod("run");
+              }
+            }
+            """,
+        "demo/Outer.java", """
+            package demo;
+            public class Outer {
+              public static class Inner {
+                public void run() { }
+              }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("demo.Outer$Inner#run", fact.callee());
+  }
+
+  // M23 (RED, CodeRabbit CR-1): a forName receiver literal that names the
+  // canonical spelling cannot load the class — the member target is not
+  // proven even when the index resolves the canonical.
+  @Test
+  void forNameCanonicalReceiverIsNotPromoted() throws IOException {
+    AnalysisContext context = context("m23", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                Class.forName("demo.Outer.Inner").getDeclaredMethod("run");
+              }
+            }
+            class Outer { static class Inner { public void run() { } } }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty(), fact.toString());
+    assertEquals("binary_name_mismatch",
+        fact.evidence().get(0).attributes().get("diagnostic"));
+  }
+
+  // M24 (RED, CodeRabbit CR-1): inner-class constructors take the
+  // enclosing instance as the reflection-visible first parameter — the
+  // zero-arg site mismatches, the enclosing-type site matches.
+  @Test
+  void innerClassConstructorComparesInTheReflectionDomain() throws IOException {
+    AnalysisContext context = context("m24", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void zeroArg() throws Exception {
+                Class.forName("demo.Outer$Inner").getDeclaredConstructor();
+              }
+              void enclosing() throws Exception {
+                Class.forName("demo.Outer$Inner").getDeclaredConstructor(Outer.class);
+              }
+            }
+            class Outer {
+              class Inner { Inner() { } }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    List<SemanticCallFacts.Fact> facts = facts(context);
+    SemanticCallFacts.Fact zeroArg = fact(facts, "getDeclaredConstructor", "#zeroArg");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, zeroArg.certainty(), zeroArg.toString());
+    assertEquals("shape_mismatch",
+        zeroArg.evidence().get(0).attributes().get("diagnostic"));
+    SemanticCallFacts.Fact enclosing = fact(facts, "getDeclaredConstructor", "#enclosing");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, enclosing.certainty(),
+        enclosing.toString());
+    assertEquals("demo.Outer$Inner#<init>", enclosing.callee());
+    assertEquals("(Ldemo/Outer;)V",
+        enclosing.evidence().get(0).attributes().get("targetDescriptor"));
+  }
+
+  // M25 (control, CodeRabbit CR-1): static nested constructors keep the
+  // source parameter vector.
+  @Test
+  void staticNestedConstructorKeepsSourceVector() throws IOException {
+    AnalysisContext context = context("m25", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                Class.forName("demo.Outer$Stat").getDeclaredConstructor();
+              }
+            }
+            class Outer {
+              static class Stat { Stat() { } }
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredConstructor", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("demo.Outer$Stat#<init>", fact.callee());
+  }
+
+  // A1 (RED, CodeRabbit CR-1): a parameter type with duplicate source
+  // declarations is ambiguous — the vector is unresolvable, never a match.
+  @Test
+  void duplicateParameterTypesAbstain() throws IOException {
+    Path first = sourceRoot("a1-first");
+    Path second = sourceRoot("a1-second");
+    write(first, "demo/Token.java", "package demo; public class Token { }\n");
+    write(second, "demo/Token.java", "package demo; public class Token { }\n");
+    write(first, "demo/Probe.java", """
+        package demo;
+        public class Probe {
+          void audit() throws Exception {
+            Class.forName("demo.Present").getDeclaredMethod("m", Token.class);
+          }
+        }
+        class Present {
+          void m(Token token) { }
+        }
+        """);
+    Path root = first.getParent().getParent().getParent();
+    AnalysisContext context = AnalysisContext.builder()
+        .id("a1")
+        .framework(AnalysisContext.Framework.QUARKUS)
+        .frameworkVersion("3.40.1")
+        .fixtureId("javac-reflection-target-test")
+        .javaRelease(17)
+        .repositoryRoot(root)
+        .applicationClasses(root.resolve("classes"))
+        .selectedProfile("test")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("first/src/main/java", first, AnalysisContext.Scope.PRODUCTION, true)
+        .sourceRoot("second/src/main/java", second, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspathRequired(false)
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredMethod", "#audit");
+    assertFalse(fact.certainty() == SemanticCallFacts.Certainty.DEFINITE, fact.toString());
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, fact.certainty());
+  }
+
   // V2: getConstructor visibility gate; the declared variant sees it.
   @Test
   void constructorVisibilityGate() throws IOException {

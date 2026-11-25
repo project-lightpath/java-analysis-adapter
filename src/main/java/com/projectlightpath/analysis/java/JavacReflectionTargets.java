@@ -111,7 +111,7 @@ final class JavacReflectionTargets {
       return JavacTargetEvidence.NONE;
     }
     LookupSite current = lookup.orElseThrow();
-    OwnerResolution owner = classLookup(current.ownerName());
+    OwnerResolution owner = classLookup(current.owner().name());
     if (owner.absent()) {
       return JavacTargetEvidence.NONE;
     }
@@ -120,6 +120,14 @@ final class JavacReflectionTargets {
     String ownerKeyed = owner.keyed() + "#" + memberKey;
     if (owner.diagnostic() != null) {
       return possible(owner.diagnostic(), ownerKeyed, kind, List.of(), List.of());
+    }
+    // A forName receiver resolves BINARY names: a literal that matched only
+    // the canonical spelling (demo.Outer.Inner) cannot load the class, so
+    // no member of the named type is proven reachable through it. A class
+    // literal legitimately names the canonical form.
+    if (current.owner().forNameLiteral()
+        && !owner.entry().binaryName().equals(current.owner().name())) {
+      return possible("binary_name_mismatch", ownerKeyed, kind, List.of(), List.of());
     }
     List<JavacSourceSymbolIndex.MemberInfo> candidates = constructorLookup
         ? owner.entry().members().stream()
@@ -141,7 +149,63 @@ final class JavacReflectionTargets {
     if (vector == null) {
       return JavacTargetEvidence.NONE;
     }
-    return selectMember(candidates, vector, ownerKeyed, kind, publicOnly);
+    // LOCAL/ANONYMOUS constructor owners: the enclosing-instance capture is
+    // not derivable from the nesting kind, so the target is never promoted.
+    if (constructorLookup && ownerNestingUnprovable(owner.entry())) {
+      return possible("inner_class_constructor", ownerKeyed, kind, List.of(), List.of());
+    }
+    return selectMember(candidates, vector, ownerKeyed, kind, publicOnly,
+        owner.entry(), constructorLookup);
+  }
+
+  /** LOCAL/ANONYMOUS owners: the constructor's synthetic parameters (if
+   * any) cannot be derived from the nesting kind — fail closed. */
+  private static boolean ownerNestingUnprovable(JavacSourceSymbolIndex.TypeInfo owner) {
+    return !"TOP_LEVEL".equals(owner.nestingKind()) && !"MEMBER".equals(owner.nestingKind());
+  }
+
+  /**
+   * The member's parameter vector in the REFLECTION domain: a non-static
+   * MEMBER nested constructor takes the enclosing instance as the
+   * reflection-visible first parameter, which javac's source vector omits.
+   */
+  private static List<String> reflectionParameters(
+      JavacSourceSymbolIndex.MemberInfo member,
+      JavacSourceSymbolIndex.TypeInfo owner,
+      boolean constructorLookup) {
+    List<String> source = member.parameterTypes();
+    if (!constructorLookup || owner.shape().staticType()
+        || "TOP_LEVEL".equals(owner.nestingKind())) {
+      return source;
+    }
+    List<String> effective = new ArrayList<>();
+    effective.add(enclosingCanonical(owner));
+    effective.addAll(source);
+    return List.copyOf(effective);
+  }
+
+  /** The binary twin of {@link #reflectionParameters}. */
+  private static List<String> reflectionParameterBinaries(
+      JavacSourceSymbolIndex.MemberInfo member,
+      JavacSourceSymbolIndex.TypeInfo owner,
+      boolean constructorLookup) {
+    List<String> source = member.parameterBinaryTypes();
+    if (!constructorLookup || owner.shape().staticType()
+        || "TOP_LEVEL".equals(owner.nestingKind())) {
+      return source;
+    }
+    List<String> effective = new ArrayList<>();
+    effective.add(enclosingBinary(owner));
+    effective.addAll(source);
+    return List.copyOf(effective);
+  }
+
+  private static String enclosingCanonical(JavacSourceSymbolIndex.TypeInfo owner) {
+    return owner.canonicalName().substring(0, owner.canonicalName().lastIndexOf('.'));
+  }
+
+  private static String enclosingBinary(JavacSourceSymbolIndex.TypeInfo owner) {
+    return owner.binaryName().substring(0, owner.binaryName().lastIndexOf('$'));
   }
 
   /** One lookup site's extraction: name literal, arguments, and owner name. */
@@ -170,9 +234,9 @@ final class JavacReflectionTargets {
     List<String> arguments = SourceMetadataScannerTextLayer06
         .splitTopLevelArguments(masked.substring(opening + 1, closing));
     String range = JavacReflectionReceivers.receiverRange(masked, methodNameStart);
-    return receivers.ownerName(file, structural, range,
+    return receivers.owner(file, structural, range,
             JavacReflectionReceivers.rangeStart(masked, methodNameStart))
-        .map(ownerName -> new LookupSite(nameLiteral, arguments, ownerName));
+        .map(owner -> new LookupSite(nameLiteral, arguments, owner));
   }
 
   private JavacTargetEvidence selectMember(
@@ -180,9 +244,11 @@ final class JavacReflectionTargets {
       List<String> vector,
       String ownerKeyed,
       String kind,
-      boolean publicOnly) {
+      boolean publicOnly,
+      JavacSourceSymbolIndex.TypeInfo owner,
+      boolean constructorLookup) {
     List<JavacSourceSymbolIndex.MemberInfo> matches = candidates.stream()
-        .filter(member -> member.parameterTypes().equals(vector))
+        .filter(member -> reflectionParameters(member, owner, constructorLookup).equals(vector))
         .toList();
     if (matches.isEmpty()) {
       return possible("shape_mismatch", ownerKeyed, kind, List.of(), List.of());
@@ -198,8 +264,12 @@ final class JavacReflectionTargets {
       return possible("visibility_mismatch", ownerKeyed, kind, List.of(), List.of());
     }
     return new JavacTargetEvidence(true, ownerKeyed, kind,
-        JavacShapeDescriptors.jvmDescriptorFromMember(match).orElse(""),
-        match.parameterTypes(), memberAnnotationNames(match), "");
+        JavacShapeDescriptors.jvmDescriptor(
+                reflectionParameterBinaries(match, owner, constructorLookup),
+                match.returnBinaryType())
+            .orElse(""),
+        reflectionParameters(match, owner, constructorLookup),
+        memberAnnotationNames(match), "");
   }
 
   /** The class-target ladder: unique unflagged non-error entry, or a diagnostic. */
@@ -259,5 +329,8 @@ final class JavacReflectionTargets {
   }
 
   /** One member lookup site's extracted inputs. */
-  private record LookupSite(String nameLiteral, List<String> arguments, String ownerName) {}
+  private record LookupSite(
+      String nameLiteral,
+      List<String> arguments,
+      JavacReflectionReceivers.OwnerName owner) {}
 }

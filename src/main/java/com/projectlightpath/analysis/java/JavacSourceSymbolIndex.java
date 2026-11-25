@@ -593,7 +593,8 @@ final class JavacSourceSymbolIndex {
     private static TypeInfo flaggedCopy(TypeInfo entry) {
       return new TypeInfo(entry.canonicalName(), entry.binaryName(), entry.nestingKind(),
           entry.file(), entry.annotations(), entry.members(),
-          new TypeShape(entry.shape().declarationKind(), entry.shape().errorType(), true));
+          new TypeShape(entry.shape().declarationKind(), entry.shape().errorType(), true,
+              entry.shape().staticType()));
     }
 
     private static Map<String, List<TypeInfo>> groupedByBinary(List<TypeInfo> entries) {
@@ -664,7 +665,11 @@ final class JavacSourceSymbolIndex {
               .filter(ElementReader::isMember)
               .map(this::memberInfo)
               .toList(),
-          new TypeShape(declarationKind(element), isError(element.asType()), false));
+          new TypeShape(declarationKind(element), isError(element.asType()), false,
+              // Reflection sees a synthetic enclosing-instance parameter on
+              // non-static nested constructors; the static flag lets the
+              // reflection-target ladder compare in the reflection domain.
+              element.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)));
     }
 
     private MemberInfo memberInfo(Element element) {
@@ -908,7 +913,8 @@ final class JavacSourceSymbolIndex {
   }
 
   /** Declaration kind plus the error and duplicate-binary-name flags of one type. */
-  record TypeShape(String declarationKind, boolean errorType, boolean duplicateBinaryName) {}
+  record TypeShape(String declarationKind, boolean errorType, boolean duplicateBinaryName,
+      boolean staticType) {}
 
   /** One indexed type declaration. */
   record TypeInfo(
