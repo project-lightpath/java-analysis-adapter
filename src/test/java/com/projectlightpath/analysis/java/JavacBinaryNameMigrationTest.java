@@ -682,6 +682,44 @@ class JavacBinaryNameMigrationTest {
             scanner, api, "Child.Inner key", "Child.Inner"));
   }
 
+  @Test
+  void initializerBlockLocalClassesAreNotDirectMembers() throws IOException {
+    AnalysisContext context = context("initializer-local", Map.of(
+        "demo/Base.java", """
+            package demo;
+            public class Base { public static class Inner { } }
+            """,
+        "demo/Child.java", """
+            package demo;
+            public class Child extends Base {
+              static { class Inner { } }
+              { class AlsoLocal { } }
+            }
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              demo.Child.Inner find(demo.Child.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile api =
+        file(scanner, sourceRoot("initializer-local"), "demo/Api.java");
+    // demo.Child.Inner names the member type INHERITED from Base (true
+    // binary demo.Base$Inner). The only Inner inside Child's body is a
+    // LOCAL class in a STATIC INITIALIZER BLOCK (and a sibling in an
+    // instance initializer) — not inside any method, so the method-body
+    // check alone misses it. A direct member must sit at the owner's
+    // TYPE-BODY level (zero brace depth): any braced context — method,
+    // initializer, lambda, anonymous body — makes the candidate a local
+    // class whose real binary is demo.Child$1Inner. The derivation
+    // abstains rather than fabricate demo.Child$Inner.
+    assertEquals(Optional.empty(),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "demo.Child.Inner key", "demo.Child.Inner"));
+  }
+
   private SourceMetadataScannerState.BeanCandidate producer(
       SourceMetadataScanner scanner, String method) {
     return scanner.beanCandidates(AnalysisContext.Framework.QUARKUS).stream()
