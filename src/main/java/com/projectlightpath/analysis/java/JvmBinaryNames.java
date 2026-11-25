@@ -72,11 +72,14 @@ final class JvmBinaryNames {
       }
     }
     List<String> declared = fileSetBinaries(scanner, normalized, segments);
-    if (declared.size() == 1) {
-      return Optional.of(declared.get(0));
-    }
-    if (declared.size() > 1) {
-      return Optional.empty();
+    if (declared != null) {
+      // A top-level declaration prefix matched: the tail is proven (one
+      // binary), ambiguous (more than one), or NOT a direct member chain
+      // (inherited or deeper nesting) — all resolved here, never by
+      // falling through to a weaker rule once a file-set owner is known.
+      return declared.size() == 1
+          ? Optional.of(declared.get(0))
+          : Optional.empty();
     }
     return spellingBinary(scanner, normalized, spelling, sourceFile)
         .or(() -> dollarGuard(normalized));
@@ -84,27 +87,31 @@ final class JvmBinaryNames {
 
   /**
    * The distinct binary spellings the file-set declarations prove for the
-   * canonical: empty when no declaration chain matches (fall through),
-   * one when proven, more than one when ambiguous (abstain).
+   * canonical: null when NO top-level declaration prefix matches (fall
+   * through); otherwise the (possibly empty) list of proven binaries —
+   * one is the answer, zero or more-than-one abstain.
    */
   private static List<String> fileSetBinaries(
       SourceMetadataScanner scanner, String canonical, List<String> segments) {
     Set<String> results = new LinkedHashSet<>();
+    boolean prefixMatched = false;
     for (SourceMetadataScannerState.SourceFile file : scanner.files()) {
       for (SourceMetadataScannerState.TypeInfo top : topLevelDeclarations(file)) {
         String topName = qualified(file.packageName(), top.name());
         if (canonical.equals(topName)) {
+          prefixMatched = true;
           results.add(topName);
         } else if (canonical.startsWith(topName + ".")) {
+          prefixMatched = true;
           collectChain(file, top, segments, topName.split("\\.", -1).length,
               topName, results);
         }
       }
     }
-    return List.copyOf(results);
+    return prefixMatched ? List.copyOf(results) : null;
   }
 
-  /** Enumerates every declaration chain below one top-level declaration. */
+  /** Enumerates every DIRECT-member declaration chain below one top-level declaration. */
   private static void collectChain(
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.TypeInfo owner,
@@ -120,11 +127,36 @@ final class JvmBinaryNames {
         : SourceMetadataScanner.typeDeclarations(file)) {
       if (candidate.name().equals(segments.get(next))
           && candidate.start() > owner.start()
-          && candidate.end() < owner.end()) {
+          && candidate.end() < owner.end()
+          && isDirectMember(file, owner, candidate)) {
         collectChain(file, candidate, segments, next + 1,
             binarySoFar + "$" + segments.get(next), results);
       }
     }
+  }
+
+  /**
+   * Whether {@code candidate} is declared DIRECTLY inside {@code owner}'s
+   * body: no third type declaration lies between them. Containment alone
+   * would accept a grandchild (Helper.Inner inside Child) for a canonical
+   * naming an inherited or other member — fabricating a binary name that
+   * does not exist.
+   */
+  private static boolean isDirectMember(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.TypeInfo owner,
+      SourceMetadataScannerState.TypeInfo candidate) {
+    for (SourceMetadataScannerState.TypeInfo other
+        : SourceMetadataScanner.typeDeclarations(file)) {
+      if (other != owner && other != candidate
+          && other.start() < candidate.start()
+          && other.end() > candidate.end()
+          && other.start() > owner.start()
+          && other.end() < owner.end()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static List<SourceMetadataScannerState.TypeInfo> topLevelDeclarations(
@@ -156,8 +188,7 @@ final class JvmBinaryNames {
     }
     String trimmed = spelling.trim();
     int dot = trimmed.indexOf('.');
-    if (dot <= 0 || trimmed.indexOf('.', dot + 1) >= 0
-        || !SIMPLE_NAME.matcher(trimmed.substring(0, dot)).matches()) {
+    if (dot <= 0 || !SIMPLE_NAME.matcher(trimmed.substring(0, dot)).matches()) {
       return Optional.empty();
     }
     String qualifierSpelling = trimmed.substring(0, dot);

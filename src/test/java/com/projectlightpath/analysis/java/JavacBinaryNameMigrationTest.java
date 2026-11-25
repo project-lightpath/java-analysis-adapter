@@ -134,7 +134,7 @@ class JavacBinaryNameMigrationTest {
     AnalysisContext context = context("parity", Map.of(
         "outer/Outer.java", """
             package outer;
-            public class Outer { static class Inner { } }
+            public class Outer { public static class Inner { } }
             """,
         "demo/Producer.java", """
             package demo;

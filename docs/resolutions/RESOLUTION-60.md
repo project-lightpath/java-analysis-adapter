@@ -183,3 +183,29 @@ in RED_60/GREEN_60 (`381c4f9`/`470b90e`):
    JLS-default package reading. The earlier uppercase-package-import
    "pinned coverage regression" is thereby eliminated — the shape
    renders correctly again.
+
+CR-2 (re-review of `716beb3`): 3 Minor findings, all fixed red-first in
+RED_60/GREEN_60 (`06e56ba`/GREEN below):
+
+1. Containment-only chain matching accepted a grandchild declaration
+   (Helper.Inner inside Child) for a canonical naming an INHERITED
+   member type — fabricating `demo.Child$Inner`, a binary that does not
+   exist. Fixed with `isDirectMember` (no intervening type declaration)
+   plus a tri-state file-set rule: once a top-level declaration prefix
+   matches, an unproven tail ABSTAINS (inherited or deeper nesting)
+   instead of falling through to a weaker rule. Pinned red by
+   `inheritedMemberTypesAbstainThroughDirectOwnership`. Residual: a
+   LOCAL class directly inside a method body has no intervening TYPE
+   declaration, so it still reads as a direct member — local classes
+   are not referable by qualified spellings, so the canonical cannot
+   denote one; registered.
+2. The spelling rule rejected multi-dot type-qualified spellings
+   (`Outer.Middle.Inner`) — the second-dot check removed; the tail join
+   already replaces every dot with `$`. Pinned red by the direct
+   `java.a.B$C$D` probe (the file-set multi-segment cell passes through
+   the declaration rule and pins it end to end).
+3. The parity cell's flag-on arm could run the TEXTUAL renderer
+   (package-private `Inner` in another package made the index
+   correlation abstain — probe-confirmed). `Inner` is public and the
+   cell asserts the correlated member exists before comparing
+   descriptors.
