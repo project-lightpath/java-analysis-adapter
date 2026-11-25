@@ -144,6 +144,7 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
 
     private List<DynamicFeature> reflectionFeatures(SourceFile file) {
       List<DynamicFeature> result = new ArrayList<>();
+      JavacReflectionTargets targets = JavacReflectionTargets.of(SourceMetadataScanner.this);
       for (DynamicSite site : reflectionSites(file)) {
         MethodInfo caller = methodContaining(file, site.offset());
         result.add(new DynamicFeature(
@@ -154,7 +155,9 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
             List.of(site.symbol()),
             "Open-world reflection APIs do not identify a unique runtime target.",
             file.lineAt(site.offset()),
-            site.offset()));
+            site.offset(),
+            "",
+            targets.evidence(file, site)));
       }
       return result;
     }

@@ -12,7 +12,8 @@ public record DynamicFeature(
     String limitation,
     int sourceLine,
     int sourceOffset,
-    String targetDescriptor) {
+    String targetDescriptor,
+    JavacTargetEvidence targetEvidence) {
   /** Compatibility constructor for callers that provide source-site coordinates only. */
   public DynamicFeature(
       Kind kind,
@@ -23,7 +24,8 @@ public record DynamicFeature(
       String limitation,
       int sourceLine,
       int sourceOffset) {
-    this(kind, caller, target, sourcePath, symbols, limitation, sourceLine, sourceOffset, "");
+    this(kind, caller, target, sourcePath, symbols, limitation, sourceLine, sourceOffset,
+        "", JavacTargetEvidence.NONE);
   }
 
   /** Compatibility constructor for provider callers that do not have source-site coordinates. */
@@ -34,7 +36,8 @@ public record DynamicFeature(
       String sourcePath,
       List<String> symbols,
       String limitation) {
-    this(kind, caller, target, sourcePath, symbols, limitation, 0, 0, "");
+    this(kind, caller, target, sourcePath, symbols, limitation, 0, 0,
+        "", JavacTargetEvidence.NONE);
   }
 
   public enum Kind {
@@ -56,5 +59,6 @@ public record DynamicFeature(
     sourceLine = Math.max(0, sourceLine);
     sourceOffset = Math.max(0, sourceOffset);
     targetDescriptor = targetDescriptor == null ? "" : targetDescriptor;
+    targetEvidence = targetEvidence == null ? JavacTargetEvidence.NONE : targetEvidence;
   }
 }
