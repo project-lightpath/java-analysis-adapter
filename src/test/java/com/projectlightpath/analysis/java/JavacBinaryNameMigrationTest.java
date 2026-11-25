@@ -108,7 +108,7 @@ class JavacBinaryNameMigrationTest {
   }
 
   @Test
-  void textualJvmDescriptorUsesBinaryNamesForImportQualifiedSpellings() throws IOException {
+  void importQualifiedExternalMembersAbstain() throws IOException {
     AnalysisContext context = context("textual-import", Map.of(
         "demo/Api.java", """
             package demo;
@@ -121,10 +121,15 @@ class JavacBinaryNameMigrationTest {
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("textual-import"), "demo/Api.java");
-    // The import-qualified spelling resolves through the explicit import to
-    // java.util.Map.Entry and renders the same binary-name descriptor as the
-    // fully-qualified spelling (one dialect, both resolution routes).
-    assertEquals(Optional.of("(Ljava/util/Map$Entry;)Ljava/util/Map$Entry;"),
+    // The import-qualified spelling resolves through the explicit import
+    // to java.util.Map.Entry and asserts Entry is a MEMBER of Map — but
+    // Map is outside the file set, so declared-vs-inherited ownership is
+    // textually unprovable (the same evidence shape as an inherited
+    // Child.Inner). The textual dialect abstains; the flag-on index
+    // resolves the member definitively for correlated members
+    // (Elements.getBinaryName), and file-set nested types render '$'
+    // through the declaration rule (the multi-segment and parity cells).
+    assertEquals(Optional.empty(),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, file, "Map.Entry key", "Map.Entry"));
   }
@@ -550,12 +555,12 @@ class JavacBinaryNameMigrationTest {
     assertEquals(Optional.of("(Lext/Outer$Middle$Inner;)Lext/Outer$Middle$Inner;"),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, api, "Outer.Middle.Inner key", "Outer.Middle.Inner"));
-    // The spelling rule's own multi-dot handling, isolated from the
-    // file-set declaration rule: a NON-file-set qualifier (resolved
-    // through its import) with a two-segment tail. The tail join replaces
-    // every dot with '$'; a second-dot rejection would fall through to
-    // the package reading.
-    assertEquals(Optional.of("java.a.B$C$D"),
+    // The spelling rule's own multi-dot path, isolated from the file-set
+    // declaration rule: a NON-file-set qualifier (resolved through its
+    // import) with a two-segment tail. Declared-vs-inherited ownership is
+    // unprovable for a qualifier outside the file set, so the derivation
+    // abstains — the file-set arm above is the evidence-backed rendering.
+    assertEquals(Optional.empty(),
         JvmBinaryNames.binaryName(scanner, "java.a.B.C.D", "B.C.D", api));
   }
 
@@ -613,6 +618,68 @@ class JavacBinaryNameMigrationTest {
     // when it is the only indexed match.
     assertEquals(Optional.empty(),
         JvmBinaryNames.binaryName(scanner, "p.Outer.Inner", "p.Outer.Inner", outer));
+  }
+
+  @Test
+  void localClassesInMethodBodiesAreNotDirectMembers() throws IOException {
+    AnalysisContext context = context("local-class", Map.of(
+        "demo/Base.java", """
+            package demo;
+            public class Base { public static class Inner { } }
+            """,
+        "demo/Child.java", """
+            package demo;
+            public class Child extends Base {
+              void holder() { class Inner { } }
+            }
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              demo.Child.Inner find(demo.Child.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile api =
+        file(scanner, sourceRoot("local-class"), "demo/Api.java");
+    // demo.Child.Inner names the member type INHERITED from Base (true
+    // binary demo.Base$Inner). The only Inner inside Child's body is a
+    // LOCAL class in a method (its real binary is demo.Child$1Inner) —
+    // no intervening TYPE declaration lies between it and Child, so
+    // containment alone mistakes it for a direct member. A candidate
+    // inside a method body is never a direct member: the derivation
+    // abstains rather than fabricate demo.Child$Inner.
+    assertEquals(Optional.empty(),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "demo.Child.Inner key", "demo.Child.Inner"));
+  }
+
+  @Test
+  void externalQualifierMembersAbstain() throws IOException {
+    AnalysisContext context = context("external-qualifier", Map.of(
+        "demo/Api.java", """
+            package demo;
+            import ext.Child;
+            public interface Api {
+              Child.Inner find(Child.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile api =
+        file(scanner, sourceRoot("external-qualifier"), "demo/Api.java");
+    // The qualifier ext.Child is OUTSIDE the selected file set (no
+    // declaration prefix can match), so nothing proves whether Child
+    // DECLARES Inner or INHERITS it from a supertype — and the two
+    // readings carry different binary owners (ext.Child$Inner vs
+    // ext.Base$Inner). The type-qualified spelling asserts a member
+    // relation the textual path cannot prove: it abstains, never
+    // appending the tail and never falling through to the package
+    // reading (which would contradict the spelling's own assertion).
+    assertEquals(Optional.empty(),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "Child.Inner key", "Child.Inner"));
   }
 
   private SourceMetadataScannerState.BeanCandidate producer(
