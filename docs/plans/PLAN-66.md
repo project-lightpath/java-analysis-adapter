@@ -104,30 +104,44 @@ unsanctioned test edits).
    `annotation.source()`). Fix: the mirror arm applies
    `canonicalSpringAnnotation` against the occurrence source that
    `takeMirror` already parsed (`ParsedAnnotation.source()`), passed into
-   `mirrorFamilies`; for pure-index mirrors with no textual occurrence
-   (Unicode-initial names — the remaining-mirrors loop), the guard checks
-   the mirror's own `canonicalName()` against the canonical Spring type
-   for that simple name (`canonicalSpringAnnotationTypes(name)`, the
-   `JavacFrameworkAnnotationValues.uniqueMirror` precedent, which
-   additionally DECLINES when more than one same-simple-name mirror
-   matches — adopted here: a canonical and a lookalike mirror both
-   surviving to the remaining-mirrors loop decline the site rather than
-   pick), never the block. Weakness disposition (AGENTS), scoped to the
-   GUARDED arms only: the guard fix applies to the `qualifiers()`
-   occurrence loop and the remaining-mirrors loop **when `guarded` is
-   true** (the Spring arms). The `injectionQualifiers` wrapper calls
-   `qualifiers(..., false)` deliberately — the CDI/Quarkus injection
-   path is UNGUARDED in both flag states (the textual fallback
-   `qualifierNames(annotations)` passes no file, so
-   `annotationQualifiers` skips its guard too), and that unguarded
-   semantics is pinned by
-   `JavacFrameworkAnnotationMigrationTest.quarkusUserDefinedNamedStillEmitsUnguarded`
-   (a user-defined `demo.Named` emits `Named:custom` in BOTH flag
-   states) — the fix must not touch it, or javac/textual parity breaks
-   on that path. This affects both the Qualifier/Named family and the
-   SPRING_BEAN_ANNOTATION_TYPES family (a `@demo.Component` lookalike in
-   a block that also has a canonical `@Component` has the same window);
-   the fix closes both because it replaces the guard itself.
+   `mirrorFamilies`. Weakness disposition (AGENTS), scoped to the
+   GUARDED arms only, with the full call-site inventory (the
+   guarded/unguarded split is per-SITE-KIND, not per-framework —
+   verified at every caller of
+   `JavacFrameworkQualifierFamilies.qualifiers(file, block, mirrors,
+   guarded)`):
+   - `FrameworkBeanScanning` (bean-site qualifiers): `guarded =
+     !quarkus` — Spring guarded, Quarkus not. **Fix applies.**
+   - `FrameworkInjectionScanning.injectionParameters` (parameter
+     qualifiers): `guarded = spring`. **Fix applies.**
+   - `FrameworkInjectionScanning` constructor annotation block
+     (`qualifiers(..., false)`, hardcoded, all frameworks): UNGUARDED
+     for Spring and Quarkus alike. **Fix must NOT apply.**
+   - `JavacFrameworkQualifierFamilies.injectionQualifiers` wrapper
+     (field/method annotation blocks, `guarded = false` hardcoded at
+     the wrapper): UNGUARDED for both frameworks — the textual
+     fallback (`qualifierNames(annotations)` →
+     `qualifierNames(null, block)`) is equally unguarded, so a Spring
+     `@Autowired @demo.Qualifier("custom")` field emits
+     `Qualifier:custom` in BOTH flag states by parity. **Fix must NOT
+     apply** — pinned by `quarkusUserDefinedNamedStillEmitsUnguarded`
+     (Quarkus `@Inject @Named("custom")` field) and by a NEW Spring
+     unguarded control in C6, so neither direction of the split can
+     drift silently.
+   The per-occurrence guard replaces the block-level guard inside the
+   occurrence loop when `guarded` is true; a `guarded` arm keeps its
+   semantics otherwise unchanged. This affects both the
+   Qualifier/Named family and the SPRING_BEAN_ANNOTATION_TYPES family
+   (a `@demo.Component` lookalike in a block that also has a canonical
+   `@Component` has the same window); the fix closes both because it
+   replaces the guard itself. The remaining-mirrors loop needs NO
+   guard change, and the `uniqueMirror`-style arm round 1 specified
+   for it is unreachable dead code, retracted: that loop invokes
+   `mirrorFamilies` only for mirrors whose simple name has an EMPTY
+   ASCII prefix, while every `SPRING_BEAN_ANNOTATION_TYPES` key is
+   ASCII-initial — the guard precondition can never hold there, today
+   or after the fix (the loop is fail-safe by construction;
+   unconsumed ASCII-named mirrors already decline the site).
 3. **Sanctioned mechanical test conversion: flag-off arms become opt-out
    goldens.** In every flag-writing `@Isolated` + `SAME_THREAD` class,
    each `System.clearProperty(FLAG)` that establishes a FLAG-OFF arm
@@ -213,14 +227,29 @@ unsanctioned test edits).
      twin places the CANONICAL annotation and the lookalike in the SAME
      guarded block — the defect window only opens when a canonical
      occurrence makes the block-level guard pass, so a lookalike-only
-     twin would be vacuous against the pre-fix code. Twins: a
-     `@demo.Component` bean-annotation lookalike (same guard, bean
-     family), a Unicode-initial pure-index-mirror control (the
-     remaining-mirrors guard path), and the unguarded-path CONTROL — a
-     Quarkus/CDI user-defined `@demo.Named` still emits `Named:custom`
-     under the javac path (pins the `injectionQualifiers` unguarded
-     parity the fix must preserve, mirroring
-     `quarkusUserDefinedNamedStillEmitsUnguarded`).
+     twin would be vacuous against the pre-fix code. Twins:
+     - a swapped-ORDER twin (`@demo.Qualifier("custom")` declared
+       BEFORE `@Qualifier("fast")` ⇒ still exactly `[Qualifier:fast]`)
+       — the per-occurrence guard checks the OCCURRENCE's canonicity
+       while the emitted value comes from the paired MIRROR, so a
+       crossed occurrence↔mirror pairing would emit the lookalike's
+       value under a passing guard; the twin pins the pairing;
+     - a `@demo.Component` bean-annotation lookalike (same guard, bean
+       family);
+     - an unguarded-path CONTROL pair: a Quarkus/CDI user-defined
+       `@demo.Named` field still emits `Named:custom` under the javac
+       path (mirroring `quarkusUserDefinedNamedStillEmitsUnguarded`),
+       AND a Spring `@Autowired @demo.Qualifier("custom")` field still
+       emits `Qualifier:custom` in both flag states — the
+       field/method/constructor annotation-block sites are unguarded
+       for BOTH frameworks by parity with the textual fallback, and no
+       existing test pins the Spring side (grep: zero hits), so this
+       control closes it;
+     - a Unicode-initial pure-index-mirror cell re-designated as an
+       EMIT-path pin (the remaining-mirrors append's non-vacuity — the
+       correction still fires), expected-green at RED; it cannot pin a
+       guard regression (the guard precondition is unreachable on that
+       loop — see item 2's retraction).
    - **D1 (RED for non-vacuity): index diagnostics never reach
      `scan.diagnostics()`.** A default-on scan whose index emits
      `missing_classpath` (required absent entry): the index's own
@@ -343,10 +372,8 @@ addressable findings (1 HIGH, 2 MEDIUM, 2 LOW, 1 NIT), all incorporated:
 1. HIGH — the item-2 weakness disposition as first drafted would have
    applied the guard to the UNGUARDED `injectionQualifiers` path,
    breaking the pinned `quarkusUserDefinedNamedStillEmitsUnguarded`
-   parity (user-defined `demo.Named` emits in both flag states by
-   design, matching the unguarded textual fallback). The disposition is
-   now scoped to the GUARDED arms only, with the unguarded path pinned
-   by a C6 control.
+   parity. Scoped to the GUARDED arms (superseded by round 2's
+   per-site-kind inventory).
 2. MEDIUM — the cell-12 rework was unassigned to a commit and its
    default-arm present-index assertion missing from the expected-RED
    enumeration; now assigned to RED_66 and enumerated.
@@ -356,28 +383,47 @@ addressable findings (1 HIGH, 2 MEDIUM, 2 LOW, 1 NIT), all incorporated:
    declared untouched.
 4. LOW — C1's flag-absence precondition relied on test ordering; now
    the cell's first statement ensures absence explicitly.
-5. LOW — the remaining-mirrors guard now cites the
-   `JavacFrameworkAnnotationValues.uniqueMirror` precedent and adopts
-   its decline semantics (canonical + lookalike mirror both surviving
-   ⇒ decline the site).
+5. LOW — the remaining-mirrors guard cited the `uniqueMirror`
+   precedent with decline semantics (superseded by round 2's
+   unreachability retraction).
 6. NIT — C6 twins now must co-occur with the canonical annotation in
-   the same guarded block (the defect window requires a passing
-   block-level guard; a lookalike-only twin is vacuous pre-fix).
-Verified by the reviewer: the per-BLOCK/per-OCCURRENCE root cause, the
+   the same guarded block.
+
+Round 2 (delta-only, on the round-1 edits): 3 new addressable findings
+(2 MEDIUM, 1 LOW), all incorporated:
+1. MEDIUM — the guarded/unguarded split is per-SITE-KIND, not
+   per-framework: the constructor annotation block and the
+   field/method `injectionQualifiers` wrapper are unguarded for BOTH
+   frameworks (a Spring `@Autowired @demo.Qualifier` field emits in
+   both flag states, matching the unguarded textual fallback), and no
+   existing test pinned the Spring unguarded side. Item 2 now carries
+   the four-group call-site inventory, and C6 adds the Spring
+   unguarded control.
+2. MEDIUM — the round-1 remaining-mirrors guard arm was unreachable
+   dead code (that loop only sees empty-ASCII-prefix simple names;
+   every SPRING_BEAN_ANNOTATION_TYPES key is ASCII-initial).
+   Retracted; the Unicode twin is re-designated as an EMIT-path pin,
+   expected-green at RED.
+3. LOW — C6 lacked a source-order twin for the occurrence↔mirror
+   pairing (the guard checks the occurrence, the value comes from the
+   paired mirror); a swapped-order twin now pins the pairing.
+
+Verified across rounds: the per-BLOCK/per-OCCURRENCE root cause, the
 exhaustive `mirrorFamilies` caller inventory, the exhaustive item-3
 class list, the `equalsIgnoreCase(null)` safety, the #23 provenance of
-both golden updates, the harness flag-independence, and D1's
-non-vacuity.
+both golden updates, the harness flag-independence, D1's non-vacuity,
+and the issue-acceptance mapping.
 
-Confidence score: **0.87** (0.84 → 0.87 after plan-review round 1) —
+Confidence score: **0.89** (0.84 → 0.87 → 0.89 across plan review). —
 the production change is one line plus one bounded defect fix; the
 blast radius was measured empirically (3 failing methods, each
 dispositioned); the test-surface conversion is mechanical and
 semantics-preserving by construction; the harness impact was verified
-flag-independent by exhaustive grep; and the one scope hazard the
-reviewer caught (the unguarded injection path) is now pinned by a
-control in both directions. Residual risk: the `mirrorFamilies` guard
-fix touches a dense correlation seam (mitigated by the guarded-arm
-scoping, the decline semantics, and the lookalike matrix), and the
-golden spellings for the repository symbols assertion must be verified
-against the observed flag-on rendering at RED rather than assumed.
+flag-independent by exhaustive grep; the guard-fix scoping is now
+grounded in the verified four-group call-site inventory with controls
+on both sides of the split. Residual risk: the `mirrorFamilies` guard
+fix touches a dense correlation seam (mitigated by the per-site-kind
+scoping and the lookalike matrix with order and unguarded controls),
+and the golden spellings for the repository symbols assertion must be
+verified against the observed flag-on rendering at RED rather than
+assumed.
