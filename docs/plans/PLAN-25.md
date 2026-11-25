@@ -104,10 +104,14 @@ pinned by flag-off goldens**). Zero edits to existing tests.
    `JavacTargetEvidence evidence(SourceFile file, DynamicSite site)`.
    - **Whole-path fail-close:** flag off, or the index carries any of
      `index_build_error`, `javac_unavailable`, `missing_source`,
-     `missing_classpath` ⇒ every call returns the no-evidence sentinel
-     (all facts unchanged). `release_clamped` and per-file javac error rows
-     do NOT disable the path (they manifest as `errorType` on the specific
-     entries, which abstain per-target).
+     `missing_classpath`, `missing_source_root` ⇒
+     every call returns the no-evidence sentinel (all facts unchanged).
+     `missing_source_root` is included because the build proceeds over
+     the REMAINING roots: a literal naming a type declared in both a
+     present and a missing root would see exactly one entry — fabricated
+     uniqueness, the primary bug class. `release_clamped` and per-file
+     javac error rows do NOT disable the path (they manifest as
+     `errorType` on the specific entries, which abstain per-target).
    - **Class targets** (symbols `Class.forName`, `ClassLoader.loadClass`):
      literal = `firstQuotedArgument(structuralSource, offset)`; null
      (non-literal) ⇒ no evidence. `index.type(literal)`:
@@ -140,11 +144,12 @@ pinned by flag-off goldens**). Zero edits to existing tests.
        the class-target ladder on L;
      - receiver is `<spelling>.class` — matched against the SUFFIX of the
        trimmed receiver range (a leading statement keyword such as
-       `return`/`throw`/`assert`/`case` is not part of the receiver; the
-       receiver is the longest dotted-identifier chain ending at the
-       shape, whose start is preceded by a non-identifier boundary —
-       text before the chain that is neither a keyword nor an expression
-       delimiter makes the receiver unrecognized ⇒ no evidence) ⇒
+       `return`/`throw`/`assert`/`case`/`yield`/`else`/`do`/`new` is not
+       part of the receiver; the receiver is the longest dotted-identifier
+       chain ending at the shape, whose start is preceded by an accepted
+       pre-chain boundary: `= ( , ; { } && || ? : -> ! + - * / < >` or
+       whitespace-after-keyword — anything else makes the receiver
+       unrecognized ⇒ no evidence) ⇒
        qualified spelling resolves directly through `index.type(spelling)`
        (exactly one unflagged non-error entry, else
        no-evidence/diagnostic as above); simple spelling resolves through
@@ -177,6 +182,12 @@ pinned by flag-off goldens**). Zero edits to existing tests.
      valid source, so the only multiplicity source is duplicate binary
      names, already handled by the owner-level `duplicate_target`).
      Keyed `#<init>` in the output (the caller-identity convention).
+     Extraction anchoring: the method-name start is recovered from the
+     symbol text at/after `site.offset` — chained lookup sites carry it
+     exactly (`lookup.methodStart()`); receiver-call and this-receiver
+     sites anchor at the receiver identifier/field name, whose backward
+     ranges cannot suffix-match a `.class`/forName shape and always fail
+     closed to no evidence.
    - **Visibility gate (public-only lookup APIs).** `getMethod` and
      `getConstructor` return PUBLIC members at runtime; a non-public
      match throws `NoSuchMethodException`. `MemberInfo` gains an additive
@@ -257,7 +268,7 @@ pinned by flag-off goldens**). Zero edits to existing tests.
    their forcing — a DEFINITE source-bound reflection fact claims only
    the target SHAPE, not dispatch; invoke/newInstance sites stay
    UNRESOLVED), and proxy features. ONE justified exception to the
-   index-schema freeze: `MemberInfo`/`MemberTypes` gains an additive
+   index-schema freeze: `MemberInfo` — not `MemberTypes`, which stays shape-only — gains an additive
    `publicMember` flag (set from `Element.getModifiers()` in
    `ElementReader`, the single construction site; a hand-written
    accessor keeps every existing reader and test compiling unchanged) —
@@ -375,6 +386,19 @@ state), not from examples:
   diagnostic `visibility_mismatch`; the `getDeclaredConstructor` twin on
   the same constructor → DEFINITE (declared variants see every
   visibility).
+- **M17 (RED): assignment-receiver shape.**
+  `Method m = Present.class.getMethod("run");` (the canonical real-world
+  spelling) → DEFINITE (the `=` pre-chain boundary).
+- **M18 (control, GREEN at RED): recognized receiver naming a non-source
+  type.** `String.class.getMethod("trim")` → UNRESOLVED unchanged
+  (receiver recognized, index has no `java.lang.String` entry — the
+  JDK-owner-member fail-closed path).
+- **E5 (GREEN at RED): missing source root fail-close.** Context with
+  one included root pointing at a nonexistent directory (index
+  `missing_source_root`) and a present root carrying a source-bound
+  forName literal → NO fact is promoted (the partial index cannot prove
+  uniqueness; same stub argument as E2, doubles as the post-GREEN
+  mutation check for the extended fail-close set).
 - **M11 (RED): annotation/parameter evidence.** Source-bound member whose
   declaration carries annotations including a `$`/Unicode annotation name
   (`@demo.Märk$Odd`) → evidence `annotationNames` match javac canonical
@@ -408,7 +432,9 @@ state), not from examples:
   forName (F6 vs F1), inheritance × member lookup (M12), nesting ×
   parameter vector (M13), per-file error × clean target (E4), visibility
   × lookup API (V1/V2 vs M1's declared variant), constructor presence ×
-  declaration (M10 vs M15), `$`-name × constructor selection (M16).
+  declaration (M10 vs M15), `$`-name × constructor selection (M16),
+  pre-chain boundary × receiver shape (M17 vs M6), source-root presence ×
+  promotion (E5).
 
 ## Boundary probes (pre-GREEN, scratch, not committed)
 
@@ -417,7 +443,9 @@ receiver text, single-character receiver, receiver at start-of-file,
 prefix/suffix overlap (a receiver whose spelling ends with the method
 name), whitespace inside `X . class` and `forName ( "L" )`, parenthesized
 receivers, `this.`-prefixed receivers, class-literal arrays
-(`String[].class` vs `String [].class`), and `#`/`$` boundaries in the
+(`String[].class` vs `String [].class`), assignment/arrow pre-chain
+boundaries (`var m = Present.class...`, `x -> Present.class...`,
+`case X -> Present.class...`), and `#`/`$` boundaries in the
 keyed target join. Plus the mask-alignment probe: the literal-masked
 receiver range and the structural-source literal offsets must align
 1:1 (the L recovery depends on it) — asserted against the compiled
@@ -434,8 +462,8 @@ into a cell.
   plus a behavior-neutral stub (`JavacReflectionTargets` always returning
   no-evidence, `JavacTargetEvidence` record, `DynamicFeature` component
   defaulted) documented in the commit. Expected RED: F1–F3, F6, F7, M1–M6,
-  M9–M13, M15, M16, V1, V2, E1, E3, E4. Expected GREEN at RED: F4, F5,
-  M7, M8, M14, E2, G-series. Run `make adapter-test` at RED to confirm the expected-red
+  M9–M13, M15, M16, V1, V2, M17, E1, E3, E4. Expected GREEN at RED: F4,
+  F5, M7, M8, M14, M18, E2, E5, G-series. Run `make adapter-test` at RED to confirm the expected-red
   cells fail and the rest of the suite stays green; record the observed
   execution count in the commit message as the floor receipt (652
   expected on this main; the floor in the Makefile stays 534).
@@ -507,23 +535,17 @@ pushing), `make evidence-validate`.
   mapping); if a placement change is forced, behavior stays identical and
   the placement is documented in the commit message.
 
-Confidence score: **0.85** (0.78 → 0.82 after round 1, → 0.85 after
-round 2). Round 2 (fresh Engram-grounded adversarial subagent): 5
-addressable findings, all incorporated — the visibility false-DEFINITE
-window (HIGH: `getMethod`/`getConstructor` return public members only;
-solved by an additive `MemberInfo.publicMember` flag — the one justified
-index-schema exception, gated by `visibility_mismatch` POSSIBLE and pinned
-by V1/V2), the implicit-default-constructor gap (M15 + Residuals), the
-`$`-boundary constructor selection (kind-filtered, no simple-name
-derivation, M16), the explicit unresolvable-argument disposition (no
-evidence, not shape_mismatch), and the receiver-suffix anchoring with
-leading keywords. Round 2 also verified the round-1 incorporations
-against the code — notably that `literalMaskedSource` is offset-preserving
-(`LiteralMasker` blanks a `char[]` copy in place), that all M-cell
-fixtures reach the asserted behavior through the production site
-extraction, and that zero-length parameter vectors are covered by the
-equality rule. Main residual risks: the receiver-expression extraction
-arithmetic (mitigated by mandatory empirical probes including mask
-alignment and keyword-prefixed receivers), and the reviewer's reading of
-the diagnostics channel (mitigated by the explicit blast-radius rejection
-and the #62 alignment).
+Confidence score: **0.88** (0.78 → 0.82 → 0.85 → 0.88 across review
+rounds). Round 3 (fresh Engram-grounded adversarial subagent): 4
+addressable findings + 1 NIT, all incorporated — `missing_source_root`
+added to the whole-path fail-close set (HIGH: a partial index over
+remaining roots fabricates uniqueness for types declared in both a
+present and a missing root; E5 cell), the pre-chain boundary set
+enumerated with the assignment-receiver shape probed and pinned (M17),
+`publicMember` pinned to `MemberInfo` only (MemberTypes stays
+shape-only), and the extraction-anchor wording corrected (receiver-call
+and this-receiver sites anchor at the receiver and fail closed). The
+round-3 review also verified the publicMember feasibility (6→7
+components, single construction site, zero direct test construction),
+the declared-variant visibility semantics (no access check at lookup),
+and that the suffix anchor defeats the adversarial receiver shapes.
