@@ -223,3 +223,15 @@ fixed red-first in `cd94ff7`/GREEN:
    entry. Pinned red by
    `duplicateFlaggedIndexMatchesAbstainInsteadOfFallingThrough`
    (`Optional[p.Outer$Inner]` at the pre-fix head).
+
+## Build fix (post-CR-3)
+
+The CR-3 change pushed `JvmBinaryNames` over PMD's GodClass threshold
+on CI (WMC=47, JDK 17) while the local JDK 27 gate stayed green on the
+identical commit — an environment divergence, empirically reproduced on
+helios08 under Temurin 17 (pre-split: GodClass fires; post-split: zero
+findings; local JDK 27: no finding either way, fresh reports on both).
+The file-set declaration-chain logic moved into a `JvmDeclarationChains`
+helper (PMD-forced placement, behavior identical). The divergence itself
+— the local lint gate cannot reproduce CI's JDK 17 measurement — is
+tracked as **#64**.
