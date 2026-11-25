@@ -164,12 +164,18 @@ pinned by flag-off goldens**). Zero edits to existing tests.
        field access) ⇒ no evidence (dataflow out of scope — runtime path).
      Member selection: `index.members(ownerName, nameLiteral)`; map each
      class-literal argument (`X.class`, `X[].class`, `int.class`, …) to a
-     canonical erased spelling (primitives direct; arrays append `[]`;
-     reference spellings resolved as the receiver spellings above — an
-     argument spelling that cannot be resolved ⇒ NO evidence for the
-     whole site, not `shape_mismatch`: the mismatch diagnostic must
-     claim index knowledge the index does not have) and compare the
-     vector to each member's `parameterTypes()`.
+     canonical erased spelling for COMPARISON — primitives direct;
+     java.lang simple names direct; arrays append `[]`; other reference
+     spellings normalized through `scanner.resolveReferenceType`
+     WITHOUT index confirmation (an argument names a parameter SHAPE to
+     compare against `parameterTypes()`, not an owner to publish —
+     `String.class` names a JDK type the index legitimately lacks, and a
+     wrong normalization can only produce a vector MISMATCH, which fails
+     closed to `shape_mismatch`, never a fabricated owner). An argument
+     spelling that cannot be normalized ⇒ NO evidence for the whole
+     site, not `shape_mismatch`: the mismatch diagnostic must claim
+     index knowledge the index does not have. Compare the vector to each
+     member's `parameterTypes()`.
    - **Member targets — constructor symbols** (`getConstructor`,
      `getDeclaredConstructor`): these sites carry NO name literal
      (`firstQuotedArgument` is null; TextLayer12 maps them to
