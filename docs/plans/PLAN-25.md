@@ -138,30 +138,53 @@ pinned by flag-off goldens**). Zero edits to existing tests.
        literal; the offsets align) via `firstQuotedArgument` anchored at
        the `forName` token — non-literal ⇒ no evidence. Owner then follows
        the class-target ladder on L;
-     - receiver is `<spelling>.class` ⇒ qualified spelling resolves
-       directly through `index.type(spelling)` (exactly one unflagged
-       non-error entry, else no-evidence/diagnostic as above); simple
-       spelling resolves through `scanner.resolveReferenceType` and is
-       then CONFIRMED by `index.type(canonical)` (unconfirmed ⇒ no
-       evidence — never fabricated);
+     - receiver is `<spelling>.class` — matched against the SUFFIX of the
+       trimmed receiver range (a leading statement keyword such as
+       `return`/`throw`/`assert`/`case` is not part of the receiver; the
+       receiver is the longest dotted-identifier chain ending at the
+       shape, whose start is preceded by a non-identifier boundary —
+       text before the chain that is neither a keyword nor an expression
+       delimiter makes the receiver unrecognized ⇒ no evidence) ⇒
+       qualified spelling resolves directly through `index.type(spelling)`
+       (exactly one unflagged non-error entry, else
+       no-evidence/diagnostic as above); simple spelling resolves through
+       `scanner.resolveReferenceType` and is then CONFIRMED by
+       `index.type(canonical)` (unconfirmed ⇒ no evidence — never
+       fabricated);
      - any other receiver (simple variable, `getClass()`, parenthesized,
        field access) ⇒ no evidence (dataflow out of scope — runtime path).
      Member selection: `index.members(ownerName, nameLiteral)`; map each
      class-literal argument (`X.class`, `X[].class`, `int.class`, …) to a
      canonical erased spelling (primitives direct; arrays append `[]`;
-     reference spellings resolved as above) and compare the vector to each
-     member's `parameterTypes()`.
+     reference spellings resolved as the receiver spellings above — an
+     argument spelling that cannot be resolved ⇒ NO evidence for the
+     whole site, not `shape_mismatch`: the mismatch diagnostic must
+     claim index knowledge the index does not have) and compare the
+     vector to each member's `parameterTypes()`.
    - **Member targets — constructor symbols** (`getConstructor`,
      `getDeclaredConstructor`): these sites carry NO name literal
      (`firstQuotedArgument` is null; TextLayer12 maps them to
-     `unknown#unknown`). The member name is the OWNER's simple name
-     (constructors are indexed under it); EVERY argument is a parameter
-     class literal; the owner resolves from the receiver exactly as for
-     method symbols; selection compares the argument vector against the
+     `unknown#unknown`). Constructor members are selected WITHOUT name
+     derivation — filter the resolved owner entry's own `members()` by
+     `kind == "constructor"` (deriving the simple name from the binary
+     name is wrong at the `$` boundary: `demo.Cash$Flow`'s simple name is
+     `Cash$Flow`, not `Flow`); EVERY argument is a parameter class
+     literal; the owner resolves from the receiver exactly as for method
+     symbols; selection compares the argument vector against the
      constructor members' `parameterTypes()` (zero-arg
      `getDeclaredConstructor()` ⇒ the zero-parameter constructor, if
-     unique). Keyed `#<init>` in the output (the caller-identity
-     convention; the index's simple-name entries map to it).
+     unique — multiple zero-parameter constructors are impossible in
+     valid source, so the only multiplicity source is duplicate binary
+     names, already handled by the owner-level `duplicate_target`).
+     Keyed `#<init>` in the output (the caller-identity convention).
+   - **Visibility gate (public-only lookup APIs).** `getMethod` and
+     `getConstructor` return PUBLIC members at runtime; a non-public
+     match throws `NoSuchMethodException`. `MemberInfo` gains an additive
+     `publicMember` flag (see item 7) and the public-only symbols require
+     it for a source-bound match; a shape match on a non-public member
+     downgrades to POSSIBLE with diagnostic `visibility_mismatch`.
+     `getDeclaredMethod`/`getDeclaredConstructor` see every visibility —
+     no gate.
      - exactly one shape-matching member, owner unflagged, member
        `!errorType` ⇒ **source-bound**: `keyedTarget =
        binaryOwner + "#" + memberName` (`#<init>` for constructors),
@@ -229,12 +252,18 @@ pinned by flag-off goldens**). Zero edits to existing tests.
    `Class.forName("no.such.Type")` would downgrade every ServiceLoader
    DEFINITE; that blast radius is rejected, fail-closed per-fact instead.
 7. **Zero changes** to: the site-classification regexes and receiver
-   typing, the index schema (`MemberInfo`/`MemberTypes`/`ElementReader`),
-   `JavacMemberCorrelation`, the comma-canonical dialects, the #26
-   harness, `DynamicCertaintyPolicy` (edges and framework facts keep
+   typing, `JavacMemberCorrelation`, the comma-canonical dialects, the
+   #26 harness, `DynamicCertaintyPolicy` (edges and framework facts keep
    their forcing — a DEFINITE source-bound reflection fact claims only
    the target SHAPE, not dispatch; invoke/newInstance sites stay
-   UNRESOLVED), and proxy features.
+   UNRESOLVED), and proxy features. ONE justified exception to the
+   index-schema freeze: `MemberInfo`/`MemberTypes` gains an additive
+   `publicMember` flag (set from `Element.getModifiers()` in
+   `ElementReader`, the single construction site; a hand-written
+   accessor keeps every existing reader and test compiling unchanged) —
+   required by the visibility gate above; without it, `getMethod`/
+   `getConstructor` could promote non-public members the runtime APIs
+   never return (a false DEFINITE, the primary bug class).
 
 ## Certainty model
 
@@ -298,8 +327,8 @@ state), not from examples:
 - **M5 (RED): array + primitive shapes.** `x(int[])` by `int[].class` →
   DEFINITE (`int[]`).
 - **M6 (RED): class-literal receiver.** `Present.class.getMethod("run")`
-  (simple spelling, same package; and a qualified `demo.Present.class`
-  twin) → DEFINITE.
+  with `public void run()` declared (simple spelling, same package; and a
+  qualified `demo.Present.class` twin) → DEFINITE.
 - **M7 (control): variable receiver.** `Class<?> c = Present.class;
   c.getMethod("run")` → UNRESOLVED unchanged (no dataflow).
 - **M8 (control): getClass() receiver.** → UNRESOLVED unchanged.
@@ -325,6 +354,27 @@ state), not from examples:
   documented fail-closed shape, mirroring the #60 interaction.
 - **M14 (control): non-literal member name.**
   `getMethod(variableName)` → UNRESOLVED unchanged.
+- **M15 (RED): implicit default constructor fails closed.**
+  `Class.forName("demo.NoCtor").getDeclaredConstructor()` where
+  `demo.NoCtor` declares NO constructor → POSSIBLE, diagnostic
+  `member_not_declared` (the index holds declared members only; the
+  synthesized default constructor is a documented coverage gap, safe
+  direction).
+- **M16 (RED): `$`-simple-name owner constructor.** Owner
+  `demo.Cash$Flow` with an explicit `Cash$Flow(String)` constructor;
+  site `getDeclaredConstructor(String.class)` chained on
+  `Class.forName("demo.Cash$Flow")` → DEFINITE, callee
+  `demo.Cash$Flow#<init>` (kind-filtered selection, no simple-name
+  derivation — the `$` boundary cell).
+- **V1 (RED): getMethod cannot promote non-public members.**
+  `getMethod("run")` naming a private `run` on a resolved source owner →
+  POSSIBLE, diagnostic `visibility_mismatch` (runtime `getMethod` throws
+  NoSuchMethodException — never DEFINITE).
+- **V2 (RED): getConstructor cannot promote non-public constructors.**
+  `getConstructor(String.class)` naming a private constructor → POSSIBLE,
+  diagnostic `visibility_mismatch`; the `getDeclaredConstructor` twin on
+  the same constructor → DEFINITE (declared variants see every
+  visibility).
 - **M11 (RED): annotation/parameter evidence.** Source-bound member whose
   declaration carries annotations including a `$`/Unicode annotation name
   (`@demo.Märk$Odd`) → evidence `annotationNames` match javac canonical
@@ -356,7 +406,9 @@ state), not from examples:
   member × overload count (M2), member kind × name-literal presence
   (M10 vs M14), Unicode annotation × member resolution (M11), loadClass ×
   forName (F6 vs F1), inheritance × member lookup (M12), nesting ×
-  parameter vector (M13), per-file error × clean target (E4).
+  parameter vector (M13), per-file error × clean target (E4), visibility
+  × lookup API (V1/V2 vs M1's declared variant), constructor presence ×
+  declaration (M10 vs M15), `$`-name × constructor selection (M16).
 
 ## Boundary probes (pre-GREEN, scratch, not committed)
 
@@ -382,8 +434,8 @@ into a cell.
   plus a behavior-neutral stub (`JavacReflectionTargets` always returning
   no-evidence, `JavacTargetEvidence` record, `DynamicFeature` component
   defaulted) documented in the commit. Expected RED: F1–F3, F6, F7, M1–M6,
-  M9–M13, E1, E3, E4. Expected GREEN at RED: F4, F5, M7, M8, M14, E2,
-  G-series. Run `make adapter-test` at RED to confirm the expected-red
+  M9–M13, M15, M16, V1, V2, E1, E3, E4. Expected GREEN at RED: F4, F5,
+  M7, M8, M14, E2, G-series. Run `make adapter-test` at RED to confirm the expected-red
   cells fail and the rest of the suite stays green; record the observed
   execution count in the commit message as the floor receipt (652
   expected on this main; the floor in the Makefile stays 534).
@@ -432,6 +484,11 @@ pushing), `make evidence-validate`.
   with `member_not_declared` even when the superclass is in the source
   set — fail-closed, documented; inherited-member walking is a follow-up
   (same class as the FLPATH-5124 residual).
+- The implicit default constructor is not indexed (declared members
+  only): `getDeclaredConstructor()` on a class with no declared
+  constructor yields `member_not_declared` POSSIBLE while the runtime
+  succeeds via the synthesized constructor — fail-closed coverage gap,
+  pinned by M15; indexing synthesized members is a follow-up candidate.
 - Simple-spelling class-literal receivers depend on the textual
   `resolveReferenceType` for the candidate canonical, but the index
   CONFIRMS ownership before any promotion — a wrong textual resolution
@@ -450,17 +507,23 @@ pushing), `make evidence-validate`.
   mapping); if a placement change is forced, behavior stays identical and
   the placement is documented in the commit message.
 
-Confidence score: **0.82** (was 0.78 before plan review). Round 1
-(Engram-grounded adversarial subagent): 9 addressable findings, all
-incorporated — the constructor branch and its null-name rule (HIGH), the
-masked-source L-recovery specification and its alignment probe, the E2
-red/green reclassification, the harness-divergence rewording with the
-E4 per-entry-error-authority cell, the M12 inherited-member and M13
-nested-parameter cells, the per-call `of()` cost correction, the floor
-receipt, and the F1 wording. The review found no false-DEFINITE window in
-the class-target ladder and verified the no-re-forcing, EMITTED-derivation,
-and test-unaffected claims against the code. Main residual risks: the
-receiver-expression extraction arithmetic (mitigated by mandatory
-empirical probes including mask alignment), and the reviewer's reading of
+Confidence score: **0.85** (0.78 → 0.82 after round 1, → 0.85 after
+round 2). Round 2 (fresh Engram-grounded adversarial subagent): 5
+addressable findings, all incorporated — the visibility false-DEFINITE
+window (HIGH: `getMethod`/`getConstructor` return public members only;
+solved by an additive `MemberInfo.publicMember` flag — the one justified
+index-schema exception, gated by `visibility_mismatch` POSSIBLE and pinned
+by V1/V2), the implicit-default-constructor gap (M15 + Residuals), the
+`$`-boundary constructor selection (kind-filtered, no simple-name
+derivation, M16), the explicit unresolvable-argument disposition (no
+evidence, not shape_mismatch), and the receiver-suffix anchoring with
+leading keywords. Round 2 also verified the round-1 incorporations
+against the code — notably that `literalMaskedSource` is offset-preserving
+(`LiteralMasker` blanks a `char[]` copy in place), that all M-cell
+fixtures reach the asserted behavior through the production site
+extraction, and that zero-length parameter vectors are covered by the
+equality rule. Main residual risks: the receiver-expression extraction
+arithmetic (mitigated by mandatory empirical probes including mask
+alignment and keyword-prefixed receivers), and the reviewer's reading of
 the diagnostics channel (mitigated by the explicit blast-radius rejection
 and the #62 alignment).
