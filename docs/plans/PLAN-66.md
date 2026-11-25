@@ -107,12 +107,24 @@ unsanctioned test edits).
    `mirrorFamilies`; for pure-index mirrors with no textual occurrence
    (Unicode-initial names — the remaining-mirrors loop), the guard checks
    the mirror's own `canonicalName()` against the canonical Spring type
-   for that simple name (`canonicalSpringAnnotationTypes(name)`), never
-   the block. Weakness disposition (AGENTS): the weak guard is audited
-   at EVERY path through `mirrorFamilies` — the `qualifiers()` occurrence
-   loop, the `injectionQualifiers()` enrichment wrapper, and the
-   remaining-mirrors loop; all three get the per-occurrence/per-mirror
-   guard. This affects both the Qualifier/Named family and the
+   for that simple name (`canonicalSpringAnnotationTypes(name)`, the
+   `JavacFrameworkAnnotationValues.uniqueMirror` precedent, which
+   additionally DECLINES when more than one same-simple-name mirror
+   matches — adopted here: a canonical and a lookalike mirror both
+   surviving to the remaining-mirrors loop decline the site rather than
+   pick), never the block. Weakness disposition (AGENTS), scoped to the
+   GUARDED arms only: the guard fix applies to the `qualifiers()`
+   occurrence loop and the remaining-mirrors loop **when `guarded` is
+   true** (the Spring arms). The `injectionQualifiers` wrapper calls
+   `qualifiers(..., false)` deliberately — the CDI/Quarkus injection
+   path is UNGUARDED in both flag states (the textual fallback
+   `qualifierNames(annotations)` passes no file, so
+   `annotationQualifiers` skips its guard too), and that unguarded
+   semantics is pinned by
+   `JavacFrameworkAnnotationMigrationTest.quarkusUserDefinedNamedStillEmitsUnguarded`
+   (a user-defined `demo.Named` emits `Named:custom` in BOTH flag
+   states) — the fix must not touch it, or javac/textual parity breaks
+   on that path. This affects both the Qualifier/Named family and the
    SPRING_BEAN_ANNOTATION_TYPES family (a `@demo.Component` lookalike in
    a block that also has a canonical `@Component` has the same window);
    the fix closes both because it replaces the guard itself.
@@ -139,11 +151,13 @@ unsanctioned test edits).
      issue's named edit.)
    - `JavacSourceSymbolIndexTest.flagDoesNotChangeScanOutput` (cell 12):
      its two arms were clearProperty vs `"true"` — under the flip both
-     would be ON and the cell vacuous. Rework: arm 1 becomes
-     `setProperty(FLAG,"false")` (opt-out) vs arm 2 default (ON); the
-     assertion (ServiceLoader scan + resolution identical across flag
-     states — the ServiceLoader slice is flag-independent) is unchanged
-     and non-vacuous. The flag-on arm's present-index assertion stays.
+     would be ON and the cell vacuous. Rework, committed in RED_66:
+     arm 1 becomes `setProperty(FLAG,"false")` (opt-out) vs arm 2 the
+     default (ON); the assertion (ServiceLoader scan + resolution
+     identical across flag states — the ServiceLoader slice is
+     flag-independent) is unchanged and non-vacuous. The flag-on arm's
+     present-index assertion stays and is EXPECTED-RED at RED (the
+     default is still off there).
    - `JavaAnalysisAdapterTest.springRepositoryFactsRequireCanonical
      ContractsAndKnownMethods`: callee and evidence-symbol expectations
      for `demo.CustomRepository#findByEmail` update to the current
@@ -163,9 +177,11 @@ unsanctioned test edits).
      guard is fixed.
 5. **New test class `JavacSymbolIndexDefaultOnTest`**
    (`@Isolated` + `SAME_THREAD`, writes the flag, `@AfterEach` restores):
-   - **C1 (RED): default builds the index.** No property set (cleared in
-     `@AfterEach` of the previous cell / explicitly ensured absent):
-     `of(context)` present, `COMPILATIONS` delta 1, `enabled()` true.
+   - **C1 (RED): default builds the index.** The cell's first statement
+     explicitly ensures the property is absent at entry
+     (clear-or-assert-null; no reliance on a previous cell's cleanup or
+     JUnit method ordering): `of(context)` present, `COMPILATIONS`
+     delta 1, `enabled()` true.
    - **C2 (RED): explicit opt-out disables the index.**
      `setProperty(FLAG,"false")` ⇒ `of()` empty, delta 0, `enabled()`
      false (green at RED only in its `"false"`-is-off half; the
@@ -193,11 +209,18 @@ unsanctioned test edits).
      `@demo.Qualifier("custom")` + `@Value("@Qualifier(literal)")` decoy)
      run with `setProperty(FLAG,"true")` ⇒ parameters carry exactly
      `[Qualifier:fast]`. RED today (flag-on admits the lookalike);
-     after GREEN the same assertion holds under the default. A
-     `@demo.Component` bean-annotation lookalike twin (same guard, bean
-     family) and a Unicode-initial pure-index-mirror control (the
-     remaining-mirrors guard path) close the matrix per the weakness
-     disposition.
+     after GREEN the same assertion holds under the default. Every C6
+     twin places the CANONICAL annotation and the lookalike in the SAME
+     guarded block — the defect window only opens when a canonical
+     occurrence makes the block-level guard pass, so a lookalike-only
+     twin would be vacuous against the pre-fix code. Twins: a
+     `@demo.Component` bean-annotation lookalike (same guard, bean
+     family), a Unicode-initial pure-index-mirror control (the
+     remaining-mirrors guard path), and the unguarded-path CONTROL — a
+     Quarkus/CDI user-defined `@demo.Named` still emits `Named:custom`
+     under the javac path (pins the `injectionQualifiers` unguarded
+     parity the fix must preserve, mirroring
+     `quarkusUserDefinedNamedStillEmitsUnguarded`).
    - **D1 (RED for non-vacuity): index diagnostics never reach
      `scan.diagnostics()`.** A default-on scan whose index emits
      `missing_classpath` (required absent entry): the index's own
@@ -216,11 +239,15 @@ unsanctioned test edits).
 8. **Comment-only sanctioned edits (no assertion changes):** statements
    in test/production comments that say the flag defaults to off or that
    "production flag-off stays textual" are updated to the opt-out
-   wording — `JavacSourceSymbolIndex` javadoc (item 1),
-   `JavacResolverCell`/harness comments referencing the flag-off
-   default, and the flag-writing classes' class javadocs. The #26
-   harness CODE and its pinned defect sets are untouched (preflight
-   evidence: flag-independent by construction).
+   wording — `JavacSourceSymbolIndex` javadoc (item 1) and the
+   flag-writing classes' class javadocs. The #26 harness files
+   (`JavacResolverCell`, `JavacResolverAccuracyHarness`,
+   `JavacResolverMetricsTest`, `JavacResolverAccuracyTest`) are
+   untouched entirely: case-insensitive search for "flag" over them
+   returns no symbolindex references — the only flag-off comments there
+   concern `flpath.java.resolver`, a different flag out of scope for
+   this issue. The #26 harness CODE and its pinned defect sets are
+   untouched (preflight evidence: flag-independent by construction).
 
 ## Non-goals
 
@@ -251,14 +278,16 @@ unsanctioned test edits).
 - **Plan review**: Engram-grounded adversarial subagent, CodeRabbit
   style; findings addressed; loop until no new addressable findings.
 - **RED_66**: `JavacSymbolIndexDefaultOnTest` (C1–C6, D1) plus the
-  sanctioned mechanical conversions (item 3) and the
-  `JavacSourceSymbolIndexTest` inversion (item 4) — the mechanical
-  conversions pass at RED (they preserve current behavior under the
-  still-off default) and are documented as such in the commit message;
-  the expected-RED set is C1 (absent-property arms), C3, C4, C6, and
-  D1's non-vacuity arm. Run `make adapter-test` at RED to confirm the
-  expected-red cells fail and the rest of the suite stays green (floor
-  receipt: 697 + new cells); `make java-lint`; `make evidence-validate`.
+  sanctioned mechanical conversions (item 3), the
+  `JavacSourceSymbolIndexTest` inversion AND the cell-12 rework (item
+  4) — the mechanical conversions pass at RED (they preserve current
+  behavior under the still-off default) and are documented as such in
+  the commit message; the expected-RED set is C1 (absent-property
+  arms), C3, C4, C6, D1's non-vacuity arm, and the cell-12 rework's
+  default-arm present-index assertion. Run `make adapter-test` at RED
+  to confirm the expected-red cells fail and the rest of the suite
+  stays green (floor receipt: 697 + new cells); `make java-lint`;
+  `make evidence-validate`.
 - **GREEN_66**: the `enabled()` flip + javadoc (item 1), the
   per-occurrence canonical-Spring guard (item 2), the two
   `JavaAnalysisAdapterTest` golden updates (item 4, values verified
@@ -307,13 +336,48 @@ new findings; JDK 17 verified on helios08 per #64 when any doubt),
   if the textual path is ever removed, the pins become FROZEN history
   (out of scope here).
 
-Confidence score: **0.84** — the production change is one line plus one
-bounded defect fix; the blast radius was measured empirically (3 failing
-methods, each dispositioned); the test-surface conversion is mechanical
-and semantics-preserving by construction; the harness impact was
-verified flag-independent by exhaustive grep. Residual risk: the
-`mirrorFamilies` guard fix touches a dense correlation seam (mitigated
-by the three-path weakness disposition and the lookalike matrix), and
-the golden spellings for the repository symbols assertion must be
-verified against the observed flag-on rendering at RED rather than
-assumed.
+## Plan-review record
+
+Round 1 (Engram-grounded adversarial subagent, CodeRabbit style): 6
+addressable findings (1 HIGH, 2 MEDIUM, 2 LOW, 1 NIT), all incorporated:
+1. HIGH — the item-2 weakness disposition as first drafted would have
+   applied the guard to the UNGUARDED `injectionQualifiers` path,
+   breaking the pinned `quarkusUserDefinedNamedStillEmitsUnguarded`
+   parity (user-defined `demo.Named` emits in both flag states by
+   design, matching the unguarded textual fallback). The disposition is
+   now scoped to the GUARDED arms only, with the unguarded path pinned
+   by a C6 control.
+2. MEDIUM — the cell-12 rework was unassigned to a commit and its
+   default-arm present-index assertion missing from the expected-RED
+   enumeration; now assigned to RED_66 and enumerated.
+3. MEDIUM — item 8 named `JavacResolverCell`/harness comments that do
+   not exist (the harness's only flag-off comments concern
+   `flpath.java.resolver`); the clause is dropped and the harness files
+   declared untouched.
+4. LOW — C1's flag-absence precondition relied on test ordering; now
+   the cell's first statement ensures absence explicitly.
+5. LOW — the remaining-mirrors guard now cites the
+   `JavacFrameworkAnnotationValues.uniqueMirror` precedent and adopts
+   its decline semantics (canonical + lookalike mirror both surviving
+   ⇒ decline the site).
+6. NIT — C6 twins now must co-occur with the canonical annotation in
+   the same guarded block (the defect window requires a passing
+   block-level guard; a lookalike-only twin is vacuous pre-fix).
+Verified by the reviewer: the per-BLOCK/per-OCCURRENCE root cause, the
+exhaustive `mirrorFamilies` caller inventory, the exhaustive item-3
+class list, the `equalsIgnoreCase(null)` safety, the #23 provenance of
+both golden updates, the harness flag-independence, and D1's
+non-vacuity.
+
+Confidence score: **0.87** (0.84 → 0.87 after plan-review round 1) —
+the production change is one line plus one bounded defect fix; the
+blast radius was measured empirically (3 failing methods, each
+dispositioned); the test-surface conversion is mechanical and
+semantics-preserving by construction; the harness impact was verified
+flag-independent by exhaustive grep; and the one scope hazard the
+reviewer caught (the unguarded injection path) is now pinned by a
+control in both directions. Residual risk: the `mirrorFamilies` guard
+fix touches a dense correlation seam (mitigated by the guarded-arm
+scoping, the decline semantics, and the lookalike matrix), and the
+golden spellings for the repository symbols assertion must be verified
+against the observed flag-on rendering at RED rather than assumed.
