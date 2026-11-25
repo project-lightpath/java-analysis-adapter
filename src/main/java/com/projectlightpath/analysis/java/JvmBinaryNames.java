@@ -61,13 +61,18 @@ final class JvmBinaryNames {
     }
     Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(scanner.context);
     if (index.isPresent()) {
-      List<JavacSourceSymbolIndex.TypeInfo> eligible = index.get().type(normalized).stream()
+      List<JavacSourceSymbolIndex.TypeInfo> indexed = index.get().type(normalized);
+      List<JavacSourceSymbolIndex.TypeInfo> eligible = indexed.stream()
           .filter(entry -> !entry.shape().duplicateBinaryName())
           .toList();
       if (eligible.size() == 1) {
         return Optional.of(eligible.get(0).binaryName());
       }
-      if (eligible.size() > 1) {
+      if (!indexed.isEmpty()) {
+        // Any index match without exactly one eligible entry — ambiguous
+        // matches, and matches whose entries are all duplicate-flagged —
+        // abstains: falling through to a weaker rule could return a
+        // binary name the index itself rejected.
         return Optional.empty();
       }
     }

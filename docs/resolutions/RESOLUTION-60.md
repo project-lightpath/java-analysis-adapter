@@ -209,3 +209,17 @@ RED_60/GREEN_60 (`06e56ba`/GREEN below):
    correlation abstain — probe-confirmed). `Inner` is public and the
    cell asserts the correlated member exists before comparing
    descriptors.
+
+CR-3 (forced re-review after the rate-limit window): 1 Minor finding,
+fixed red-first in `cd94ff7`/GREEN:
+
+1. When the index has entries for a canonical but ALL are
+   duplicate-flagged (the D3 collision shape — nested `p.Outer.Inner`
+   shares binary `p.Outer$Inner` with a top-level `p.Outer$Inner`),
+   the eligible filter emptied the list and the code fell through to the
+   file-set declaration chain, returning exactly the binary name the
+   index rejected. The index lookup now retains the full match list and
+   abstains whenever any match exists without exactly one eligible
+   entry. Pinned red by
+   `duplicateFlaggedIndexMatchesAbstainInsteadOfFallingThrough`
+   (`Optional[p.Outer$Inner]` at the pre-fix head).
