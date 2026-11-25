@@ -1,0 +1,319 @@
+# PLAN-66 — Flip `flpath.java.symbolindex` default to ON (umbrella #20 final step)
+
+Issue: project-lightpath/java-analysis-adapter#66 (parent #20, closes it).
+Branch: `issue-66-symbolindex-default-on` from `origin/main` @ `6dace5d`
+(the PR #65 merge — every javac consumer has landed flag-gated).
+
+## Preflight (verified on this main, 2026-11-25, JDK 27)
+
+- **The seam is single-point.** `JavacSourceSymbolIndex.enabled()` is
+  `Boolean.getBoolean("flpath.java.symbolindex")` (default off). Every
+  consumer reaches the flag through `of(context)`/`enabled()`:
+  `JavacAnnotationAccess` (#22), `JavacFrameworkAnnotations` /
+  `JavacFrameworkQualifierFamilies` (#24), `JavacMemberCorrelation` and the
+  descriptor dialects (#23), `JvmBinaryNames` (#60), `JavacReflectionTargets`
+  (#25). One production line flips the default.
+- **The #26 harness is flag-independent** (exhaustive grep over
+  `JavacResolverAccuracyHarness`, `JavacResolverAccuracyTest`,
+  `JavacResolverMetricsTest`, `JavacResolverCell`: zero references to
+  `flpath.java.symbolindex`). `BaselineMode.LIVE_TEXTUAL` runs the
+  production textual heuristics directly against probe text; javac is
+  already the scoring authority ("javac is the authority; the textual
+  baseline is scored at those positions"). The issue's "the 21 wrong-type
+  cells become fixed expectations under the javac path" is therefore
+  ALREADY the harness's structure: the pinned wrong-type cells document
+  the TEXTUAL (now opt-out) path's defects, and the javac facts they are
+  scored against are the default-path answer. No baseline inversion is
+  needed; the sanctioned harness work is comment-only (statements that
+  "production flag-off stays textual" become "the opt-out path stays
+  textual"), enumerated in item 8.
+- **Empirical blast-radius spike (the plan's load-bearing measurement).**
+  The full suite was run with the flag forced on globally
+  (`JAVA_TOOL_OPTIONS=-Dflpath.java.symbolindex=true make adapter-test`;
+  consumers read the property per call, so this simulates the flipped
+  default for every NON-flag-writing test). Result: 697 executions
+  (default=583, large=1, sootup=113), exactly **3 failing methods**, all
+  in `JavaAnalysisAdapterTest`:
+  1. `springInjectionParametersRequireCanonicalQualifiers` —
+     `[Qualifier:fast]` vs `[Qualifier:fast, Qualifier:custom]`. **Real
+     defect** (see item 2 below): the fixture's `@demo.Qualifier("custom")`
+     lookalike is excluded by the textual path but admitted by the javac
+     qualifier path — a false framework fact, the primary bug class.
+  2. `springRepositoryFactsRequireCanonicalContractsAndKnownMethods` —
+     callee `demo.CustomRepository#findByEmail(String)` vs
+     `...(java.lang.String)`. The designed #23 flag-on delta (canonical
+     parameter types in `repositoryMethodSignature`); golden update.
+  3. `dynamicSitesKeepCallersAndEquivalentReflectionSpellings` (line 7103)
+     — proxy `targetDescriptor` `(String)` vs `(java.lang.String)`. The
+     designed #23 comma-canonical dialect delta; golden update.
+  The spike's limit, stated for review: `JAVA_TOOL_OPTIONS` sets a real
+  system property, so test arms that call `System.clearProperty(FLAG)`
+  ran flag-OFF even under the spike. Those arms are exactly the
+  flag-writing `@Isolated` classes, and item 3 converts every one of them
+  to an explicit opt-out (`setProperty(FLAG, "false")`) — semantics
+  preserved by construction, so the unmeasured combination
+  (default-on + former clearProperty arms) cannot observe a different
+  flag state than the cell was written for.
+- **Diagnostics invariant.** Index diagnostics live on
+  `index.diagnostics()` only; nothing in the flip touches
+  `ServiceLoaderDescriptorScanner.isUnique` or `scan.diagnostics()`
+  (zero scan-global blast radius; stated per AGENTS). Pinned by a new
+  cell (D1).
+- **Cost lane.** With the default on, every scan that reaches a consumer
+  builds the per-context index once (WeakHashMap per context instance,
+  PLAN-21). The spike ran the full 697-execution suite in 3:21 wall with
+  the flag forced on — no OOM, no timeout; per-build `wallMillis()` /
+  `peakHeapBytes()` are recorded in RESOLUTION-66 against #21's receipts.
+- **Gates on this main**: `make adapter-test` floor 534, observed 697;
+  `make java-lint`; `make evidence-validate` (present on this main's
+  Makefile). JDK 17 divergence (#64): the changed production classes are
+  small edits to existing files (no new class approaches GodClass), but
+  lint is verified on helios08 with `~/jdk17` and a scratch checkout
+  before pushing per the standing rule.
+
+## Scope (binding)
+
+Production sources in `src/main`, plus one new test class and sanctioned
+edits to existing tests (every one enumerated in items 3, 4, 8 — zero
+unsanctioned test edits).
+
+1. **Flip the default (the whole production change outside item 2).**
+   `JavacSourceSymbolIndex.enabled()` becomes an explicit OPT-OUT:
+   ```java
+   static boolean enabled() {
+     return !"false".equalsIgnoreCase(
+         System.getProperty("flpath.java.symbolindex"));
+   }
+   ```
+   Semantics: property absent ⇒ ON (the new default); `"true"` ⇒ ON;
+   `"false"` (case-insensitive) ⇒ OFF (field bisection escape hatch);
+   any other value ⇒ ON (an unrecognized value keeps the default — the
+   opt-out must be deliberate). The class javadoc and `enabled()` javadoc
+   ("default off") are updated to the opt-out wording. No other
+   production file changes semantics: every consumer already routes
+   through `of()`/`enabled()`.
+2. **Fix the qualifier lookalike window (defect found by the spike,
+   red-first).** In `JavacFrameworkQualifierFamilies.mirrorFamilies`, the
+   canonical-Spring guard runs per-BLOCK:
+   `SPRING_BEAN_ANNOTATION_TYPES.containsKey(name) &&
+    !canonicalSpringAnnotation(file, block, name)` — so one canonical
+   `@Qualifier("fast")` occurrence unlocks EVERY same-simple-name mirror
+   in the block, including a user-defined `@demo.Qualifier("custom")`
+   lookalike the textual path excludes (the textual
+   `annotationQualifiers` guards each occurrence against its OWN source
+   `annotation.source()`). Fix: the mirror arm applies
+   `canonicalSpringAnnotation` against the occurrence source that
+   `takeMirror` already parsed (`ParsedAnnotation.source()`), passed into
+   `mirrorFamilies`; for pure-index mirrors with no textual occurrence
+   (Unicode-initial names — the remaining-mirrors loop), the guard checks
+   the mirror's own `canonicalName()` against the canonical Spring type
+   for that simple name (`canonicalSpringAnnotationTypes(name)`), never
+   the block. Weakness disposition (AGENTS): the weak guard is audited
+   at EVERY path through `mirrorFamilies` — the `qualifiers()` occurrence
+   loop, the `injectionQualifiers()` enrichment wrapper, and the
+   remaining-mirrors loop; all three get the per-occurrence/per-mirror
+   guard. This affects both the Qualifier/Named family and the
+   SPRING_BEAN_ANNOTATION_TYPES family (a `@demo.Component` lookalike in
+   a block that also has a canonical `@Component` has the same window);
+   the fix closes both because it replaces the guard itself.
+3. **Sanctioned mechanical test conversion: flag-off arms become opt-out
+   goldens.** In every flag-writing `@Isolated` + `SAME_THREAD` class,
+   each `System.clearProperty(FLAG)` that establishes a FLAG-OFF arm
+   becomes `System.setProperty(FLAG, "false")` (comment: opt-out golden).
+   This preserves each cell's meaning exactly under the new default.
+   Classes (exhaustive — every test file referencing the flag):
+   `JavacAnnotationMigrationTest`, `JavacFrameworkAnnotationMigrationTest`,
+   `JavacBinaryNameMigrationTest`, `JavacParameterAnnotationTest`,
+   `JavacReflectionTargetMigrationTest`, `JavacTypeShapeMigrationTest`,
+   `JavacSourceSymbolIndexTest`. `@AfterEach clearFlag` and the
+   `withFlag` finally-block KEEP `clearProperty` (they restore the
+   DEFAULT, which is now ON — correct because the classes are
+   `@Isolated`).
+4. **Sanctioned existing-test edits beyond the mechanical conversion
+   (each keeps a fail-closed twin or an exact pinned value):**
+   - `JavacSourceSymbolIndexTest.flagOffYieldsNoIndexAndNoCompilation`
+     inverts its meaning: becomes
+     `optOutYieldsNoIndexAndNoCompilation` — `setProperty(FLAG,"false")`
+     ⇒ `of()` empty, `COMPILATIONS` delta 0, `enabled()` false. (The
+     default-on positive is the NEW class's cell 1; the inversion is the
+     issue's named edit.)
+   - `JavacSourceSymbolIndexTest.flagDoesNotChangeScanOutput` (cell 12):
+     its two arms were clearProperty vs `"true"` — under the flip both
+     would be ON and the cell vacuous. Rework: arm 1 becomes
+     `setProperty(FLAG,"false")` (opt-out) vs arm 2 default (ON); the
+     assertion (ServiceLoader scan + resolution identical across flag
+     states — the ServiceLoader slice is flag-independent) is unchanged
+     and non-vacuous. The flag-on arm's present-index assertion stays.
+   - `JavaAnalysisAdapterTest.springRepositoryFactsRequireCanonical
+     ContractsAndKnownMethods`: callee and evidence-symbol expectations
+     for `demo.CustomRepository#findByEmail` update to the current
+     flag-on spellings (`java.lang.String` parameter spelling in the
+     callee; the symbols assertion is updated to the observed flag-on
+     rendering, verified at RED against the `"true"` arm before the
+     flip lands). This is the acceptance criterion ("default output
+     matches the current flag-on output") applied to a golden, not a
+     behavior change.
+   - `JavaAnalysisAdapterTest.dynamicSitesKeepCallersAndEquivalent
+     ReflectionSpellings` (line 7103f): proxy `targetDescriptor`
+     expectations `(String)`/`(int)` for `demo.Overloaded#run` update to
+     the flag-on comma-canonical spellings (`(java.lang.String)` /
+     `(int)` — primitives unchanged). Same acceptance rationale.
+   - `springInjectionParametersRequireCanonicalQualifiers` is NOT edited:
+     it is the red pin for item 2 and must pass unmodified once the
+     guard is fixed.
+5. **New test class `JavacSymbolIndexDefaultOnTest`**
+   (`@Isolated` + `SAME_THREAD`, writes the flag, `@AfterEach` restores):
+   - **C1 (RED): default builds the index.** No property set (cleared in
+     `@AfterEach` of the previous cell / explicitly ensured absent):
+     `of(context)` present, `COMPILATIONS` delta 1, `enabled()` true.
+   - **C2 (RED): explicit opt-out disables the index.**
+     `setProperty(FLAG,"false")` ⇒ `of()` empty, delta 0, `enabled()`
+     false (green at RED only in its `"false"`-is-off half; the
+     absent-property half is C1).
+   - **C3 (RED): `"true"` and unrecognized values keep the default on.**
+     `"true"` ⇒ present; `"xyz"` ⇒ present (pins the
+     only-`"false"`-opts-out semantics; boundary cells for the
+     `equalsIgnoreCase` arithmetic per AGENTS: `"FALSE"`, `" False "`
+     (whitespace is NOT trimmed — stays ON, pinned), `""` (empty string
+     ⇒ ON — an empty value is not the deliberate opt-out, pinned)).
+   - **C4 (RED): default scan output equals flag-on output.** A
+     representative scan over an annotation-repair fixture (the #22
+     `@SuppressWarnings`-style triggered-repair shape): default-arm
+     facts equal `"true"`-arm facts, and differ from the `"false"`-arm
+     textual facts where javac repairs (non-vacuity: the on-arm carries
+     the repaired canonical spelling, the opt-out arm the textual one).
+   - **C5: opt-out reproduces today's default.** The same fixture run
+     with `"false"` produces the exact pinned textual values (the
+     existing migration goldens already own this class of pin; this cell
+     pins it at the default-seam level: opt-out output == the committed
+     textual expectation, an exact-value assertion, not a comparison).
+   - **C6 (RED): the qualifier lookalike stays excluded under the javac
+     path.** The `springInjectionParametersRequireCanonicalQualifiers`
+     fixture shape (spring `@Qualifier("fast")` +
+     `@demo.Qualifier("custom")` + `@Value("@Qualifier(literal)")` decoy)
+     run with `setProperty(FLAG,"true")` ⇒ parameters carry exactly
+     `[Qualifier:fast]`. RED today (flag-on admits the lookalike);
+     after GREEN the same assertion holds under the default. A
+     `@demo.Component` bean-annotation lookalike twin (same guard, bean
+     family) and a Unicode-initial pure-index-mirror control (the
+     remaining-mirrors guard path) close the matrix per the weakness
+     disposition.
+   - **D1 (RED for non-vacuity): index diagnostics never reach
+     `scan.diagnostics()`.** A default-on scan whose index emits
+     `missing_classpath` (required absent entry): the index's own
+     `diagnostics()` is non-empty (non-vacuity), and
+     `scan.diagnostics()` is byte-identical to the `"false"` arm's
+     (empty of index rows) — the #62 invariant under the new default.
+6. **Makefile floor raise.** After GREEN, the observed execution count
+   (697 + new cells) replaces 534 in `SurefireTestCounter 534`
+   (adapter-test target). The count must never decrease (697 baseline).
+7. **Cost and diagnostics review (issue acceptance).**
+   RESOLUTION-66.md records: per-context `wallMillis()`/`peakHeapBytes()`
+   for a representative default-on index build, compared with
+   RESOLUTION-21's receipts; whole-suite wall time under the new default
+   vs the 697-execution flag-off baseline (measured during the GREEN
+   gate run); the D1 diagnostic-invariant receipt.
+8. **Comment-only sanctioned edits (no assertion changes):** statements
+   in test/production comments that say the flag defaults to off or that
+   "production flag-off stays textual" are updated to the opt-out
+   wording — `JavacSourceSymbolIndex` javadoc (item 1),
+   `JavacResolverCell`/harness comments referencing the flag-off
+   default, and the flag-writing classes' class javadocs. The #26
+   harness CODE and its pinned defect sets are untouched (preflight
+   evidence: flag-independent by construction).
+
+## Non-goals
+
+- Removing the textual path or the opt-out flag (the escape hatch stays).
+- The #62 per-member evidence channel (separate issue; D1 only pins the
+  existing invariant).
+- `BoundedFrameworkModelTypeParsing` / injection contract matching (#61,
+  still textual, unaffected).
+- Renaming the flag or introducing a new property.
+- Any change to the ServiceLoader slice (already javac-by-default).
+
+## Certainty model
+
+- Default (no property, `"true"`, unrecognized) ⇒ every landed consumer
+  uses javac shapes; output equals today's flag-on output (acceptance;
+  pinned by C4 and the two golden updates).
+- `-Dflpath.java.symbolindex=false` ⇒ byte-identical to today's default
+  (textual), pinned by the converted opt-out goldens and C5.
+- The lookalike fix restores the textual path's per-occurrence
+  canonical-Spring guard on the javac path — a lookalike annotation is
+  EXCLUDED in both flag states (fail-closed; the false-framework-fact
+  window closes, never widens).
+- Zero new scan-global diagnostics (D1).
+
+## TDD sequence
+
+- **PLAN_66** (this file): committed first.
+- **Plan review**: Engram-grounded adversarial subagent, CodeRabbit
+  style; findings addressed; loop until no new addressable findings.
+- **RED_66**: `JavacSymbolIndexDefaultOnTest` (C1–C6, D1) plus the
+  sanctioned mechanical conversions (item 3) and the
+  `JavacSourceSymbolIndexTest` inversion (item 4) — the mechanical
+  conversions pass at RED (they preserve current behavior under the
+  still-off default) and are documented as such in the commit message;
+  the expected-RED set is C1 (absent-property arms), C3, C4, C6, and
+  D1's non-vacuity arm. Run `make adapter-test` at RED to confirm the
+  expected-red cells fail and the rest of the suite stays green (floor
+  receipt: 697 + new cells); `make java-lint`; `make evidence-validate`.
+- **GREEN_66**: the `enabled()` flip + javadoc (item 1), the
+  per-occurrence canonical-Spring guard (item 2), the two
+  `JavaAnalysisAdapterTest` golden updates (item 4, values verified
+  against the `"true"` arm), the Makefile floor raise (item 6). Full
+  gates; helios08 JDK 17 lint verification before pushing.
+- **Implementation review**: a NEW Engram-grounded adversarial subagent
+  (CodeRabbit style) over the full change; findings addressed red-first
+  with mutation checks; loop until clean.
+- **EVIDENCE_66**: `docs/resolutions/RESOLUTION-66.md` — gate counts,
+  cost receipts (item 7), mutation checks (revert `enabled()` ⇒ C1/C3
+  fail; revert the guard fix ⇒ C6 and
+  `springInjectionParametersRequireCanonicalQualifiers` fail; revert a
+  golden update ⇒ the corresponding adapter test fails; restore
+  `clearProperty` in one conversion site ⇒ that opt-out golden fails
+  under the default), residuals.
+
+Gates after every item: `make adapter-test` (execution count never below
+697; Makefile floor raised to the GREEN count), `make java-lint` (zero
+new findings; JDK 17 verified on helios08 per #64 when any doubt),
+`make evidence-validate`.
+
+## Residuals / risks
+
+- An unrecognized property value (e.g. `"flase"`) silently keeps the
+  default ON — pinned by C3 as deliberate semantics; a typo'd opt-out
+  does not disable the index (documented; the alternative — warn on
+  unrecognized values — adds a diagnostics channel this issue keeps
+  closed).
+- The per-occurrence guard fix changes `mirrorFamilies`'s signature
+  (occurrence source parameter); if PMD forces helper restructuring,
+  behavior stays identical and the placement is documented in the commit
+  message.
+- The spike measured non-flag-writing tests only (the
+  `JAVA_TOOL_OPTIONS`/`clearProperty` interaction, stated in the
+  preflight); the conversion in item 3 makes the unmeasured combination
+  unreachable by construction. Residual risk is a flag-writing cell
+  whose fixture behaves differently under default-on vs `"true"` —
+  impossible: both are ON states for the consumer.
+- Suite cost: every scan now builds one index per context instance. The
+  spike (forced-on, 697 executions, 3:21) shows no timeout/OOM at the
+  current pool sizing; RESOLUTION-66 records the per-build cost. If CI
+  shows pressure, the pool sizing is a follow-up under #20, not a
+  behavior change.
+- The #26 harness defect pins remain LIVE_TEXTUAL against the production
+  textual heuristics — they document the opt-out path after this issue;
+  if the textual path is ever removed, the pins become FROZEN history
+  (out of scope here).
+
+Confidence score: **0.84** — the production change is one line plus one
+bounded defect fix; the blast radius was measured empirically (3 failing
+methods, each dispositioned); the test-surface conversion is mechanical
+and semantics-preserving by construction; the harness impact was
+verified flag-independent by exhaustive grep. Residual risk: the
+`mirrorFamilies` guard fix touches a dense correlation seam (mitigated
+by the three-path weakness disposition and the lookalike matrix), and
+the golden spellings for the repository symbols assertion must be
+verified against the observed flag-on rendering at RED rather than
+assumed.
