@@ -147,9 +147,13 @@ pinned by flag-off goldens**). Zero edits to existing tests.
        `return`/`throw`/`assert`/`case`/`yield`/`else`/`do`/`new` is not
        part of the receiver; the receiver is the longest dotted-identifier
        chain ending at the shape, whose start is preceded by an accepted
-       pre-chain boundary: `= ( , ; { } && || ? : -> ! + - * / < >` or
-       whitespace-after-keyword — anything else makes the receiver
-       unrecognized ⇒ no evidence) ⇒
+       pre-chain boundary: `= ( ) , ; { } && || ? : -> ! + - * / < >` or
+       whitespace-after-keyword — `)` is accepted because it cannot be
+       part of a dotted-identifier chain and terminates a control-flow
+       header or cast that is genuinely not the receiver (any mis-split
+       still cannot fabricate an owner: the spelling goes through index
+       confirmation) — anything else makes the receiver unrecognized ⇒
+       no evidence) ⇒
        qualified spelling resolves directly through `index.type(spelling)`
        (exactly one unflagged non-error entry, else
        no-evidence/diagnostic as above); simple spelling resolves through
@@ -389,6 +393,11 @@ state), not from examples:
 - **M17 (RED): assignment-receiver shape.**
   `Method m = Present.class.getMethod("run");` (the canonical real-world
   spelling) → DEFINITE (the `=` pre-chain boundary).
+- **M19 (RED): control-flow and cast pre-chain boundaries.**
+  `if (cond) Present.class.getMethod("run");` and the cast twin
+  `Method m = (Method) Present.class.getMethod("run");` → DEFINITE (the
+  `)` boundary; an enhanced-for header contains no `;`, so the backward
+  delimiter scan swallows it and the boundary set is the only gate).
 - **M18 (control, GREEN at RED): recognized receiver naming a non-source
   type.** `String.class.getMethod("trim")` → UNRESOLVED unchanged
   (receiver recognized, index has no `java.lang.String` entry — the
@@ -433,8 +442,8 @@ state), not from examples:
   parameter vector (M13), per-file error × clean target (E4), visibility
   × lookup API (V1/V2 vs M1's declared variant), constructor presence ×
   declaration (M10 vs M15), `$`-name × constructor selection (M16),
-  pre-chain boundary × receiver shape (M17 vs M6), source-root presence ×
-  promotion (E5).
+  pre-chain boundary × receiver shape (M17/M19 vs M6), source-root
+  presence × promotion (E5).
 
 ## Boundary probes (pre-GREEN, scratch, not committed)
 
@@ -445,7 +454,9 @@ name), whitespace inside `X . class` and `forName ( "L" )`, parenthesized
 receivers, `this.`-prefixed receivers, class-literal arrays
 (`String[].class` vs `String [].class`), assignment/arrow pre-chain
 boundaries (`var m = Present.class...`, `x -> Present.class...`,
-`case X -> Present.class...`), and `#`/`$` boundaries in the
+`case X -> Present.class...`), control-flow and cast pre-chain
+boundaries (`if (c) Present.class...`, `(Method) Present.class...`,
+enhanced-for headers), and `#`/`$` boundaries in the
 keyed target join. Plus the mask-alignment probe: the literal-masked
 receiver range and the structural-source literal offsets must align
 1:1 (the L recovery depends on it) — asserted against the compiled
@@ -462,8 +473,8 @@ into a cell.
   plus a behavior-neutral stub (`JavacReflectionTargets` always returning
   no-evidence, `JavacTargetEvidence` record, `DynamicFeature` component
   defaulted) documented in the commit. Expected RED: F1–F3, F6, F7, M1–M6,
-  M9–M13, M15, M16, V1, V2, M17, E1, E3, E4. Expected GREEN at RED: F4,
-  F5, M7, M8, M14, M18, E2, E5, G-series. Run `make adapter-test` at RED to confirm the expected-red
+  M9–M13, M15, M16, V1, V2, M17, M19, E1, E3, E4. Expected GREEN at RED:
+  F4, F5, M7, M8, M14, M18, E2, E5, G-series. Run `make adapter-test` at RED to confirm the expected-red
   cells fail and the rest of the suite stays green; record the observed
   execution count in the commit message as the floor receipt (652
   expected on this main; the floor in the Makefile stays 534).
@@ -535,17 +546,15 @@ pushing), `make evidence-validate`.
   mapping); if a placement change is forced, behavior stays identical and
   the placement is documented in the commit message.
 
-Confidence score: **0.88** (0.78 → 0.82 → 0.85 → 0.88 across review
-rounds). Round 3 (fresh Engram-grounded adversarial subagent): 4
-addressable findings + 1 NIT, all incorporated — `missing_source_root`
-added to the whole-path fail-close set (HIGH: a partial index over
-remaining roots fabricates uniqueness for types declared in both a
-present and a missing root; E5 cell), the pre-chain boundary set
-enumerated with the assignment-receiver shape probed and pinned (M17),
-`publicMember` pinned to `MemberInfo` only (MemberTypes stays
-shape-only), and the extraction-anchor wording corrected (receiver-call
-and this-receiver sites anchor at the receiver and fail closed). The
-round-3 review also verified the publicMember feasibility (6→7
-components, single construction site, zero direct test construction),
-the declared-variant visibility semantics (no access check at lookup),
-and that the suffix anchor defeats the adversarial receiver shapes.
+Confidence score: **0.89** (0.78 → 0.82 → 0.85 → 0.88 → 0.89 across
+review rounds). Round 4 (fresh Engram-grounded adversarial subagent):
+1 addressable finding, incorporated — `)` added to the pre-chain
+boundary set with the control-flow/cast shapes probed and pinned (M19;
+an enhanced-for header contains no `;` so the boundary set is the only
+gate there). Round 4 verified all round-3 incorporations against the
+code and cleared the remaining adversarial shapes (concatenation-
+embedded literals are blocked by `quotedArgumentIsFirst`;
+`this.`-prefixed qualified literals fail index confirmation). The
+reviewer's verdict: every production seam named in the plan exists with
+the stated behavior, and the matrix/RED-GREEN split is complete and
+consistent — the plan is implementable as written.
