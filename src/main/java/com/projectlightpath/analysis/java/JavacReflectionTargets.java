@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -85,7 +86,7 @@ final class JavacReflectionTargets {
       return possible(owner.diagnostic(), owner.keyed(), "class", List.of(), List.of());
     }
     JavacSourceSymbolIndex.TypeInfo entry = owner.entry();
-    List<String> annotations = annotationNames(entry.annotations());
+    List<String> annotations = typeAnnotationNames(entry.annotations());
     // Class.forName resolves BINARY names: a literal that matched only the
     // canonical spelling (demo.Outer.Inner) cannot load the type.
     if (!entry.binaryName().equals(literal)) {
@@ -189,7 +190,7 @@ final class JavacReflectionTargets {
     }
     return new JavacTargetEvidence(true, ownerKeyed, kind,
         JavacShapeDescriptors.jvmDescriptorFromMember(match).orElse(""),
-        match.parameterTypes(), annotationNames(match), "");
+        match.parameterTypes(), memberAnnotationNames(match), "");
   }
 
   /** The class-target ladder: unique unflagged non-error entry, or a diagnostic. */
@@ -211,19 +212,21 @@ final class JavacReflectionTargets {
     return new OwnerResolution(entry, null, entry.binaryName());
   }
 
-  private static List<String> annotationNames(
+  /** Distinct names (no overloads): JDK 17's PMD mis-resolves private
+   * overloads as unused — the #64 environment divergence. */
+  private static List<String> typeAnnotationNames(
       List<JavacSourceSymbolIndex.AnnotationInfo> declarations) {
     LinkedHashSet<String> names = new LinkedHashSet<>();
     declarations.forEach(annotation -> names.add(annotation.canonicalName()));
     return List.copyOf(names);
   }
 
-  private static List<String> annotationNames(JavacSourceSymbolIndex.MemberInfo member) {
-    LinkedHashSet<String> names = new LinkedHashSet<>();
-    member.annotations().forEach(annotation -> names.add(annotation.canonicalName()));
-    member.parameterAnnotations().forEach(parameter ->
-        parameter.forEach(annotation -> names.add(annotation.canonicalName())));
-    return List.copyOf(names);
+  private static List<String> memberAnnotationNames(
+      JavacSourceSymbolIndex.MemberInfo member) {
+    List<JavacSourceSymbolIndex.AnnotationInfo> declarations =
+        new ArrayList<>(member.annotations());
+    member.parameterAnnotations().forEach(declarations::addAll);
+    return typeAnnotationNames(declarations);
   }
 
   private static JavacTargetEvidence possible(
