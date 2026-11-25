@@ -57,13 +57,17 @@ final class JavacReflectionReceivers {
   }
 
   /**
-   * The receiver range before one lookup's method name, trimmed; the range
-   * retains the chain's connecting dot, which no receiver expression ends
-   * with, so trailing dots are stripped.
+   * The receiver range before one lookup's method name, with only the
+   * trailing dot and whitespace stripped (a receiver expression never
+   * ends with either). LEADING whitespace is kept so range indices stay
+   * offset-faithful against the masked source: the forName literal is
+   * read from the structural source at masked-derived offsets, and a
+   * leading trim would shift the anchor back into the pre-chain prefix —
+   * where a quoted-first-argument call could supply a WRONG literal.
    */
   static String receiverRange(String masked, int methodNameStart) {
     return masked.substring(rangeStart(masked, methodNameStart), methodNameStart)
-        .trim().replaceAll("[.\\s]+$", "");
+        .replaceAll("[.\\s]+$", "");
   }
 
   /**

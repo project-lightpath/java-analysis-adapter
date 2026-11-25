@@ -104,7 +104,7 @@ pinned by flag-off goldens**). Zero edits to existing tests.
    `JavacTargetEvidence evidence(SourceFile file, DynamicSite site)`.
    - **Whole-path fail-close:** flag off, or the index carries any of
      `index_build_error`, `javac_unavailable`, `missing_source`,
-     `missing_classpath`, `missing_source_root` ⇒
+     `missing_classpath`, `missing_source_root`, `javac_global_error` ⇒
      every call returns the no-evidence sentinel (all facts unchanged).
      `missing_source_root` is included because the build proceeds over
      the REMAINING roots: a literal naming a type declared in both a
@@ -397,6 +397,12 @@ state), not from examples:
   diagnostic `visibility_mismatch`; the `getDeclaredConstructor` twin on
   the same constructor → DEFINITE (declared variants see every
   visibility).
+- **V3 (RED, implementation-review round 1): a FIELD sharing the lookup
+  name is never a method target.** `getMethod("run")` with `public int
+  run;` declared → POSSIBLE `member_not_declared` — fields and enum
+  constants share the index's name space with empty parameter vectors
+  and would otherwise fabricate a zero-argument method target (V4 is the
+  enum-constant twin; the method path filters by `kind == "method"`).
 - **M17 (RED): assignment-receiver shape.**
   `Method m = Present.class.getMethod("run");` (the canonical real-world
   spelling) → DEFINITE (the `=` pre-chain boundary).
@@ -405,6 +411,18 @@ state), not from examples:
   `Method m = (Method) Present.class.getMethod("run");` → DEFINITE (the
   `)` boundary; an enhanced-for header contains no `;`, so the backward
   delimiter scan swallows it and the boundary set is the only gate).
+- **M20 (RED, implementation-review round 1): the forName literal anchor
+  is offset-faithful under indentation.** A deeply indented
+  `verify("demo.Evil", Class.forName("demo.Good").getDeclaredMethod("m"))`
+  → DEFINITE `demo.Good#m`, never `demo.Evil#m` — the receiver range
+  keeps its leading whitespace so masked-derived offsets align with the
+  structural source (a leading trim shifted the anchor back into the
+  pre-chain prefix, where a quoted-first-argument call supplied a WRONG
+  literal; committed red first: `demo.Evil#m` at the pre-fix head).
+- **M21 (RED, implementation-review round 1): interface members pass the
+  visibility gate.** `Work.class.getMethod("run")` on an
+  interface-declared method → DEFINITE (javac's getModifiers carries the
+  implicit public; the pin guards against a future over-abstention).
 - **M18 (control, GREEN at RED): recognized receiver naming a non-source
   type.** `String.class.getMethod("trim")` → UNRESOLVED unchanged
   (receiver recognized, index has no `java.lang.String` entry — the
@@ -437,10 +455,16 @@ state), not from examples:
 - **E3 (RED): duplicate-flagged owner.** Two files declaring the same
   binary name; forName literal naming it → POSSIBLE, diagnostic
   `duplicate_target` (never DEFINITE).
-- **G-series (flag-off goldens, GREEN at RED):** every F/M fixture run
+- **G-series (flag-off goldens, GREEN at RED):** the F/M fixtures run
   flag-off → exact current output: textual callee (`demo.Present#unknown`
   / `unknown#handle`), UNRESOLVED, ABSTAINED, `basis`-only attributes.
   Count-form where per-site identity is not observable.
+  (Implementation divergence, recorded: the landed suite carries ONE
+  compact flag-off golden covering both textual shapes rather than a
+  twin per F/M fixture — the full pre-existing suite, 685+ executions,
+  runs flag-off and pins the default output end to end, so the per-fixture
+  twins would duplicate that coverage; implementation-review round 1,
+  finding 5.)
 - Pairwise (AGENTS): target kind × flag state (F1 vs G), name shape ×
   index answer (F2/F3/F7/E3), receiver shape × literal (M1/M6/M7/M8),
   member × overload count (M2), member kind × name-literal presence
@@ -554,15 +578,34 @@ pushing), `make evidence-validate`.
   mapping); if a placement change is forced, behavior stays identical and
   the placement is documented in the commit message.
 
-Confidence score: **0.89** (0.78 → 0.82 → 0.85 → 0.88 → 0.89 across
-review rounds). Round 4 (fresh Engram-grounded adversarial subagent):
-1 addressable finding, incorporated — `)` added to the pre-chain
-boundary set with the control-flow/cast shapes probed and pinned (M19;
-an enhanced-for header contains no `;` so the boundary set is the only
-gate there). Round 4 verified all round-3 incorporations against the
-code and cleared the remaining adversarial shapes (concatenation-
-embedded literals are blocked by `quotedArgumentIsFirst`;
-`this.`-prefixed qualified literals fail index confirmation). The
-reviewer's verdict: every production seam named in the plan exists with
-the stated behavior, and the matrix/RED-GREEN split is complete and
-consistent — the plan is implementable as written.
+## Implementation-review record
+
+Round 1 (Engram-grounded adversarial subagent, full change cc51abf..31fa372):
+6 addressable findings, all addressed red-first in REVIEW_25_1:
+1. HIGH — the method path took `index.members(owner, name)` without a
+   kind filter, so a FIELD or enum constant sharing the lookup name
+   (empty parameter vector) matched a zero-argument lookup and
+   fabricated a DEFINITE method target. Fixed with a
+   `kind == "method"` filter; pinned red-first by V3 (public field
+   namesake) and V4 (enum constant namesake).
+2. HIGH — `receiverRange` trimmed leading whitespace, shifting the
+   forName literal anchor back into the pre-chain prefix, where a
+   quoted-first-argument call could supply a WRONG owner literal
+   (`verify("demo.Evil", Class.forName("demo.Good")...)` under deep
+   indentation → DEFINITE demo.Evil#m). Fixed by keeping the leading
+   whitespace (offset-faithful range); pinned red-first by M20
+   (`demo.Evil#m` at the pre-fix head).
+3. MEDIUM — `javac_global_error` (source-less javac error, attributes
+   to no entry) added to the whole-path fail-close set: the per-entry
+   errorType authority argument does not apply to it.
+4. LOW — interface-member implicit public verified and pinned by M21
+   (javac's getModifiers carries the implicit flag; the cell guards
+   against future over-abstention).
+5. LOW — the G-series divergence from the plan (one compact flag-off
+   golden instead of per-fixture twins) recorded with its mitigation
+   (the full pre-existing suite runs flag-off and pins default output).
+6. NIT — the non-local `orElseThrow` safety documented with a comment.
+
+Confidence score: **0.89** (0.78 → 0.82 → 0.85 → 0.88 → 0.89 across plan
+review; implementation-review round 1 found and closed two false-DEFINITE
+windows, both red-first).

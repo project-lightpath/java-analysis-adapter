@@ -25,11 +25,13 @@ final class JavacReflectionTargets {
    * the index is partial or unbuildable, so its uniqueness claims would be
    * fabricated (a type declared in both a present and a missing source
    * root would look unique). Per-file javac error rows are NOT here —
-   * they manifest as per-entry errorType, which abstains per target.
+   * they manifest as per-entry errorType, which abstains per target —
+   * but a source-less {@code javac_global_error} attributes to no entry,
+   * so it disables the whole path too.
    */
   private static final Set<String> INTEGRITY_CODES = Set.of(
       "index_build_error", "javac_unavailable", "missing_source",
-      "missing_classpath", "missing_source_root");
+      "missing_classpath", "missing_source_root", "javac_global_error");
 
   private final SourceMetadataScanner scanner;
   private final Optional<JavacSourceSymbolIndex> index;
@@ -102,6 +104,8 @@ final class JavacReflectionTargets {
       SourceMetadataScannerState.DynamicSite site,
       boolean constructorLookup,
       boolean publicOnly) {
+    // index.orElseThrow() below is safe non-locally: disabled is true
+    // whenever the index is absent, and evidence returns NONE first.
     Optional<LookupSite> lookup = lookupSite(file, site, constructorLookup);
     if (lookup.isEmpty()) {
       return JavacTargetEvidence.NONE;
@@ -120,7 +124,12 @@ final class JavacReflectionTargets {
     List<JavacSourceSymbolIndex.MemberInfo> candidates = constructorLookup
         ? owner.entry().members().stream()
             .filter(member -> "constructor".equals(member.kind())).toList()
-        : index.orElseThrow().members(owner.entry().canonicalName(), current.nameLiteral());
+        // The method path filters by kind: fields and enum constants share
+        // the index's name space but have empty parameter vectors, so a
+        // namesake field would otherwise match a zero-argument lookup and
+        // fabricate a method target the runtime API never returns.
+        : index.orElseThrow().members(owner.entry().canonicalName(), current.nameLiteral())
+            .stream().filter(member -> "method".equals(member.kind())).toList();
     if (candidates.isEmpty()) {
       return possible("member_not_declared", ownerKeyed, kind, List.of(), List.of());
     }

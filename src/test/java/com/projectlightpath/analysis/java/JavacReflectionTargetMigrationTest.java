@@ -603,6 +603,93 @@ class JavacReflectionTargetMigrationTest {
         fact.evidence().get(0).attributes().get("diagnostic"));
   }
 
+  // V3: a FIELD sharing the lookup name is never a method target.
+  @Test
+  void getMethodCannotPromoteFieldNamesakes() throws IOException {
+    AnalysisContext context = context("v3", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                Present.class.getMethod("run");
+              }
+            }
+            class Present {
+              public int run;
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty(), fact.toString());
+    assertEquals("member_not_declared",
+        fact.evidence().get(0).attributes().get("diagnostic"));
+  }
+
+  // V4: an enum constant sharing the lookup name is never a method target.
+  @Test
+  void getMethodCannotPromoteEnumConstantNamesakes() throws IOException {
+    AnalysisContext context = context("v4", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                Color.class.getMethod("RED");
+              }
+            }
+            enum Color { RED }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty(), fact.toString());
+    assertEquals("member_not_declared",
+        fact.evidence().get(0).attributes().get("diagnostic"));
+  }
+
+  // M20: the forName literal anchor is offset-faithful under indentation —
+  // a quoted-first-argument call in the receiver prefix must not supply
+  // the owner literal.
+  @Test
+  void deeplyIndentedForNameAnchorReadsTheRightLiteral() throws IOException {
+    AnalysisContext context = context("m20", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                                verify("demo.Evil", Class.forName("demo.Good").getDeclaredMethod("m"));
+              }
+              void verify(String name, Object value) { }
+            }
+            class Evil { public void m() {} }
+            class Good { public void m() {} }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getDeclaredMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("demo.Good#m", fact.callee());
+  }
+
+  // M21: interface members are implicitly public — the visibility gate
+  // must not over-abstain for them.
+  @Test
+  void interfaceMembersPassTheVisibilityGate() throws IOException {
+    AnalysisContext context = context("m21", Map.of(
+        "demo/Probe.java", """
+            package demo;
+            public class Probe {
+              void audit() throws Exception {
+                Work.class.getMethod("run");
+              }
+            }
+            interface Work {
+              void run();
+            }
+            """));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts.Fact fact = fact(facts(context), "getMethod", "#audit");
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE, fact.certainty(), fact.toString());
+    assertEquals("demo.Work#run", fact.callee());
+  }
+
   // V2: getConstructor visibility gate; the declared variant sees it.
   @Test
   void constructorVisibilityGate() throws IOException {
