@@ -155,6 +155,20 @@ class JavacBinaryNameMigrationTest {
     System.setProperty(FLAG, "true");
     SourceMetadataScanner onScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate on = producer(onScanner, "entry");
+    // The parity comparison is only meaningful if the flag-on arm actually
+    // ran the INDEX path: assert the correlated member exists (the index
+    // resolved the nested return) before comparing descriptors, so a
+    // regression that silently falls back to the textual renderer fails
+    // here instead of passing vacuously.
+    SourceMetadataScannerState.SourceFile producerFile =
+        file(onScanner, sourceRoot("parity"), "demo/Producer.java");
+    SourceMetadataScannerState.MethodInfo entry = SourceMetadataScanner
+        .methods(producerFile).stream()
+        .filter(method -> method.name().equals("entry"))
+        .findFirst().orElseThrow();
+    assertTrue(JavacMemberCorrelation.of(onScanner)
+            .correlatedMethod(producerFile, "demo.Producer", entry).isPresent(),
+        "the flag-on parity arm must run through the index path");
     // Dialect parity: the flag-off textual derivation (the type-qualified
     // spelling Outer.Inner resolves its qualifier through the explicit
     // import, proving the boundary) and the flag-on index shapes render
@@ -474,6 +488,75 @@ class JavacBinaryNameMigrationTest {
     assertEquals(Optional.of("(Ldemo/lower$Inner;)Ldemo/lower$Inner;"),
         BoundedFrameworkModelCandidateMetadata.methodDescriptor(
             scanner, api, "demo.lower.Inner key", "demo.lower.Inner"));
+  }
+
+  @Test
+  void inheritedMemberTypesAbstainThroughDirectOwnership() throws IOException {
+    AnalysisContext context = context("inherited-member", Map.of(
+        "demo/Base.java", """
+            package demo;
+            public class Base { public static class Inner { } }
+            """,
+        "demo/Child.java", """
+            package demo;
+            public class Child extends Base {
+              class Helper { class Inner { } }
+            }
+            """,
+        "demo/Api.java", """
+            package demo;
+            public interface Api {
+              demo.Child.Inner find(demo.Child.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile api =
+        file(scanner, sourceRoot("inherited-member"), "demo/Api.java");
+    // demo.Child.Inner names the member type INHERITED from Base (true
+    // binary demo.Base$Inner); the only Inner inside Child's body is a
+    // GRANDCHILD (Helper.Inner, binary demo.Child$Helper$Inner).
+    // Containment alone proves neither: direct declaration ownership
+    // cannot be established, so the derivation must ABSTAIN rather than
+    // fabricate demo.Child$Inner — a binary name that does not exist.
+    assertEquals(Optional.empty(),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "demo.Child.Inner key", "demo.Child.Inner"));
+  }
+
+  @Test
+  void multiSegmentTypeQualifiedSpellingsJoinTheChain() throws IOException {
+    AnalysisContext context = context("multi-segment", Map.of(
+        "ext/Outer.java", """
+            package ext;
+            public class Outer { public static class Middle { public static class Inner { } } }
+            """,
+        "demo/Api.java", """
+            package demo;
+            import ext.Outer;
+            import java.a.B;
+            public interface Api {
+              Outer.Middle.Inner find(Outer.Middle.Inner key);
+            }
+            """));
+    System.clearProperty(FLAG);
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile api =
+        file(scanner, sourceRoot("multi-segment"), "demo/Api.java");
+    // A multi-segment type-qualified spelling (Outer.Middle.Inner, the
+    // qualifier resolvable through the explicit import) asserts the same
+    // boundary chain as the single-segment form: every tail segment joins
+    // the binary chain.
+    assertEquals(Optional.of("(Lext/Outer$Middle$Inner;)Lext/Outer$Middle$Inner;"),
+        BoundedFrameworkModelCandidateMetadata.methodDescriptor(
+            scanner, api, "Outer.Middle.Inner key", "Outer.Middle.Inner"));
+    // The spelling rule's own multi-dot handling, isolated from the
+    // file-set declaration rule: a NON-file-set qualifier (resolved
+    // through its import) with a two-segment tail. The tail join replaces
+    // every dot with '$'; a second-dot rejection would fall through to
+    // the package reading.
+    assertEquals(Optional.of("java.a.B$C$D"),
+        JvmBinaryNames.binaryName(scanner, "java.a.B.C.D", "B.C.D", api));
   }
 
   private SourceMetadataScannerState.BeanCandidate producer(
