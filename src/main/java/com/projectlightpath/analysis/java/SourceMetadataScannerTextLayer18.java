@@ -34,7 +34,8 @@ abstract class SourceMetadataScannerTextLayer18 extends SourceMetadataScannerTex
         "The proxy handler target is not promoted without explicit registration evidence.",
         file.lineAt(offset),
         offset,
-        targetDescriptor);
+        targetDescriptor,
+        JavacTargetEvidence.NONE);
   }
 
 static MethodInfo methodContaining(SourceFile file, int index) {

@@ -175,27 +175,35 @@ final class ProviderFactNormalizer {
     return facts;
   }
 
-  /** Creates one unresolved fact for a reflection or proxy observation. */
+  /** Creates one fact for a reflection or proxy observation, consuming javac evidence. */
   private static SemanticCallFacts.Fact dynamicFact(
       AnalysisContext context, DynamicFeature feature, String id) {
     String relationship = feature.kind() == DynamicFeature.Kind.REFLECTION
         ? "reflection" : "proxy_dispatch";
     String evidenceKind = feature.kind() == DynamicFeature.Kind.REFLECTION
         ? "reflection_api" : "dynamic_proxy_call";
+    // Issue #25: the evidence renders its own consumption — a source-defined
+    // target proven by the javac index is DEFINITE (its shape, not its
+    // dispatch); a target the index sees but cannot prove is POSSIBLE with
+    // the diagnostic recorded per fact; everything else — runtime strings,
+    // non-literals, unresolvable receivers — keeps the pre-existing
+    // UNRESOLVED abstention, byte-identical.
+    JavacTargetEvidence evidence =
+        feature.targetEvidence() == null ? JavacTargetEvidence.NONE : feature.targetEvidence();
     return SemanticCallFacts.Fact.provider(
         id,
         context,
         feature.caller().displayName(),
-        feature.target(),
+        evidence.callee(feature.target()),
         relationship,
-        SemanticCallFacts.Certainty.UNRESOLVED,
+        evidence.certainty(),
         List.of(new SemanticCallFacts.Evidence(
             evidenceKind,
             feature.sourcePath(),
             feature.symbols(),
             feature.sourceLine() > 0 ? feature.sourceLine() : null,
-            dynamicEvidenceAttributes(feature))),
-        feature.limitation());
+            evidence.attributes(feature.targetDescriptor()))),
+        evidence.limitation(feature.limitation()));
   }
 
   /** Allocates a deterministic dynamic ID without colliding with call IDs. */
@@ -340,15 +348,6 @@ final class ProviderFactNormalizer {
       candidate = baseId + "-" + digest + "-" + duplicate++;
     }
     return candidate;
-  }
-
-  private static Map<String, String> dynamicEvidenceAttributes(DynamicFeature feature) {
-    if (feature.targetDescriptor().isBlank()) {
-      return Map.of("basis", "SootUp graph does not contain a unique dynamic target");
-    }
-    return Map.of(
-        "basis", "SootUp graph does not contain a unique dynamic target",
-        "targetDescriptor", feature.targetDescriptor());
   }
 
   private static String sha256(String value) {
