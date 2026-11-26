@@ -136,8 +136,10 @@ record JavacAbstentionEvidence(
   re-map to "no evidence (flag off)".
 - Seam B — `JavacAnnotationAccess.member`: `annotation_member_absent`,
   `annotation_member_ambiguous`, `annotation_member_error_type`.
-- Seam C — `JavacFrameworkAnnotations`: `mirror_owner_unusable`
+- Seam C — `JavacFrameworkAnnotations`: `mirror_type_absent` (no index
+  candidate matching the file's type name), `mirror_owner_unusable`
   ($digit / LOCAL / ANONYMOUS / error / duplicate shape),
+  `mirror_owner_ambiguous` (more than one usable cross-file candidate),
   `mirror_member_absent`, `mirror_member_ambiguous`,
   `mirror_member_error_type`.
 
@@ -192,13 +194,21 @@ equality on both sides.
    produced by an internal outcome-carrying helper consumed by
    `methodDescriptor`, so the ~15 direct test call sites of `member(...)`/
    `repairedParameterType(...)` compile unchanged. `DynamicFeature` gains
-   an additive `JavacAbstentionEvidence abstention` field (NONE default,
-   compatibility constructors preserved) — NOT included in
+   TWO additive abstention fields (plan-review round 3, finding 1 — the
+   descriptor member's decline and the caller member's decline are
+   different members that can both abstain on the same feature, e.g. a
+   multi-type interface file AND a multi-type caller file; one field
+   would silently drop one): `descriptorAbstention` (this item) and
+   `callerAbstention` (item 5), both NONE-default with compatibility
+   constructors preserved — NOT included in
    `dynamicFeatureIdentity` / `dynamicFeatureId` (fact IDs stay
    byte-stable; no production or test code compares `DynamicFeature`
-   instances or uses them as map keys — verified).
+   instances or uses them as map keys — verified; exactly two
+   construction sites, both explicit-arity).
    `BoundedFrameworkModelUtilities.dynamicProxyEvidenceAttributes` renders
-   it for the bounded-model dynamic facts, AND
+   them for the bounded-model dynamic facts under distinct attribute
+   keys (`javacAbstention` for the descriptor member,
+   `javacCallerAbstention` for the caller member), AND
    `ProviderFactNormalizer.dynamicFact` (the `sootup-reflection-*` /
    `sootup-dynamic_proxy-*` renderer) merges the feature's abstention
    attributes into the evidence map alongside the #25 `targetEvidence`
@@ -217,9 +227,14 @@ equality on both sides.
    `correlated` query for the site's caller `MethodInfo`, deriving the
    ownerType through the SAME shared `ownerTypeFor(file, owner)` helper
    `parameterMatchesType` uses (the `declarationStart` normalization — see
-   Preflight), and attach the abstention to the `DynamicFeature` (the
-   additive field from item 3) when the caller's member abstains — the
-   classification's textual-ladder fallback becomes visible per site. The
+   Preflight), and attach the abstention to the `DynamicFeature`'s
+   `callerAbstention` field (from item 3) when the caller's member
+   abstains. The attachment is gated to sites whose receiver variable is
+   a PARAMETER of the caller (mirroring `isDeclaredVariableBefore`'s
+   `hasParameter` precondition, plan-review round 3, finding 4): only
+   there did the classification consult `parameterMatchesType`'s
+   correlation arm, so the attribute stays causal — field/local-receiver
+   sites, whose textual ladder is the primary path, do not carry it. The
    abstention member identity always uses the declarationStart owner (it
    explains the classification input), even where it diverges from the
    fact-caller's site-offset owner — the C10 divergence fixture asserts
@@ -233,7 +248,13 @@ equality on both sides.
    `bean_candidate` evidence renders it when the producer's class-level or
    method-level mirror declined. The `memberCount` textual-occurrence
    cross-check is NOT an abstention (it is a guard, not a lookup decline)
-   and stays unwired.
+   and stays unwired. `typeAnnotations`' three empty arms are
+   distinguished (plan-review round 3, finding 2): no candidate matching
+   the file's type name → `mirror_type_absent`; all matches
+   shape-unusable → `mirror_owner_unusable`; more than one usable
+   candidate (cross-file same-name types) → `mirror_owner_ambiguous`.
+   The C8 fixture uses a shape-unusable owner so the arms are
+   distinguishable.
 
 ### What deliberately does not change
 
@@ -249,7 +270,8 @@ equality on both sides.
 
 ## Test matrix (new class `JavacAbstentionEvidenceTest`, @Isolated, flag-writing)
 
-RED cells (all fail against the pre-change tree):
+Cells (C1–C10 and D4 fail against the pre-change tree; D1–D3 are
+expected-green characterization pins, see TDD item 1):
 
 - C1 proxy-target-descriptor abstention: an advisor/proxy target whose
   owner file declares a nested type (`multi_type_file`) → the proxy
@@ -272,12 +294,14 @@ RED cells (all fail against the pre-change tree):
   → `bean_candidate` evidence attribute.
 - C9 repository-signature abstention → the delegation fact for that
   declared method carries the attribute.
-- C10 reflection-feature caller abstention: a reflection site inside a
-  member whose correlation abstains → the reflection fact carries
-  `javacAbstention` for the CALLER member (distinct from the #25
-  target-evidence attributes on the same fact). Includes the anchoring
-  divergence fixture (a caller extracted after a preceding nested type's
-  closing brace — the shared-helper pin).
+- C10 reflection-feature caller abstention: a reflection site whose
+  receiver is a caller PARAMETER, inside a member whose correlation
+  abstains → the reflection fact carries `javacCallerAbstention` for the
+  CALLER member (distinct from the #25 target-evidence attributes and
+  from `javacAbstention` on the same fact); a field/local-receiver twin
+  carries NO caller attribute (the round-3 finding-4 causality pin).
+  Includes the anchoring divergence fixture (a caller extracted after a
+  preceding nested type's closing brace — the shared-helper pin).
 - D1 blast-radius pin: a scan containing an abstaining fixture AND a
   ServiceLoader DEFINITE site → the ServiceLoader fact stays DEFINITE,
   `scan.diagnostics()` stays empty and free of every index code (the
@@ -315,9 +339,14 @@ The Makefile floor is raised from 709 to the observed execution count.
 
 ## TDD / gates / commits
 
-1. RED_62: `JavacAbstentionEvidenceTest` cells C1–C10, D1–D4 failing (plus
-   behavior-neutral compile stubs if unavoidable, documented in the
-   message); run the suite, record expected-red units.
+1. RED_62: `JavacAbstentionEvidenceTest` cells C1–C10 and D4 failing
+   (plus behavior-neutral compile stubs if unavoidable, documented in the
+   message); D1–D3 are EXPECTED-GREEN characterization pins (they assert
+   invariants that already hold on the pre-change tree — no
+   `javacAbstention*` attributes exist on main, `scan.diagnostics()` is
+   already empty, the ServiceLoader site is already DEFINITE — and guard
+   the EVIDENCE_62 mutations; plan-review round 3, finding 3); run the
+   suite, record expected-red units.
 2. GREEN_62: minimal implementation (channel record, result types, wiring);
    suite green; sanctioned golden updates captured from observed output.
 3. REVIEW_62 rounds: fresh Engram-grounded adversarial subagent reviews
@@ -381,6 +410,26 @@ with `compiler.err.cannot.find.symbol` stored verbatim; the join must key
 on the raw `Path` held at `addCompilerDiagnostics` line 446, not the
 rendered row path.
 Confidence score after round 2: **0.87**.
+
+Round 3 (fresh adversarial subagent): 4 addressable findings (2 MEDIUM,
+2 LOW), all incorporated: `DynamicFeature` split into
+`descriptorAbstention` + `callerAbstention` with distinct attribute keys
+(`javacAbstention` / `javacCallerAbstention`) — one field would silently
+drop one of two simultaneously-abstaining members (finding 1); seam-C
+`typeAnnotations`' three empty arms distinguished
+(`mirror_type_absent` / `mirror_owner_unusable` /
+`mirror_owner_ambiguous`) with the C8 fixture pinned to the
+shape-unusable arm (finding 2); D1–D3 relabeled expected-green
+characterization pins, only C1–C10 + D4 are red (finding 3); the
+caller-abstention attachment gated to parameter-receiver sites (the
+`hasParameter` causality precondition) with a field/local-receiver twin
+cell (finding 4). Verified clean: the `JavacCorrelation` factory set
+covers every caller (no consumer needs member AND non-NONE abstention;
+`correlatedFirstParameterIs`' three outcomes remain distinguishable);
+`proxyFeaturesAt` holds the caller; both `DynamicFeature` construction
+sites are explicit-arity with no equality/map-key consumers; the
+RED-commit shape is AGENTS-coherent.
+Confidence score after round 3: **0.89**.
 
 Confidence score (pre-plan-review): **0.78** — the design is grounded in a
 green-suite probe of what actually abstains on main, the #25 precedent, and
