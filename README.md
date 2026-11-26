@@ -33,8 +33,8 @@ through the same target:
 JAVA_TOOL_OPTIONS=-Djunit.jupiter.execution.parallel.enabled=false make adapter-test
 ```
 
-The `Adapter tests` CI lane runs `make adapter-test` and `make evidence-validate`
-on pull requests and pushes to `main`. The separate `Java lint` CI lane runs
+The `Adapter tests` CI lane runs `make adapter-test` on pull requests and
+pushes to `main`. The separate `Java lint` CI lane runs
 the enforced production-quality gate with `make java-lint` and uploads the
 PMD/CPD reports as workflow artifacts, including when the gate fails.
 
@@ -56,17 +56,15 @@ rule rationale, limitations, and review process.
 
 ## FLPATH-5000 spike and findings
 
-The [`spike/`](spike/) directory contains the Java 21/Quarkus fixture, pinned
-Spring Boot baseline manifest, acceptance criteria, candidate/capability
-matrices, contracts, analyzer probes, scripts, and portable normalized results.
-The readiness report is in
+The [`spike/`](spike/) directory contains the concluded Java 21/Quarkus
+readiness spike: the fixture, pinned Spring Boot baseline manifest,
+acceptance criteria, candidate/capability matrices, contracts, and portable
+normalized results — frozen documentation for the decision that selected
+SootUp (#56). The one load-bearing record,
+`spike/results/javac-symbol-resolver-observation.json`, is guarded every CI
+run by `JavacResolverAccuracyTest` comparing fresh javac runs against the
+committed baseline. The readiness report is in
 [`docs/flpath-5000-java-readiness.md`](docs/flpath-5000-java-readiness.md).
-
-Validate the checked-in evidence contracts with:
-
-```sh
-make evidence-validate
-```
 
 The Spring Boot baseline remains external and is not vendored. The ignored
 `spike/runs/` and `spike/.cache/` paths contain disposable host-specific output

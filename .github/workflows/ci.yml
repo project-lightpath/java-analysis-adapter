@@ -29,9 +29,6 @@ jobs:
       - name: Run adapter tests
         run: make adapter-test
 
-      - name: Validate captured evidence
-        run: make evidence-validate
-
   service-loader-e2e:
     name: ServiceLoader e2e
     runs-on: ubuntu-latest
@@ -80,14 +77,3 @@ jobs:
             target/java-lint-effective-pom.xml
           if-no-files-found: warn
           retention-days: 7
-
-  validator-tests:
-    name: Validator tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Run validator tests
-        run: make validator-test

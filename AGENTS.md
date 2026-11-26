@@ -74,7 +74,12 @@ green in isolation do not prove their composition.
   repeated hash computation) happens under green characterization tests and
   is documented in the EVIDENCE commit.
 - Gates after every item, mandatory: `make adapter-test` (execution count
-  must not decrease), `make java-lint` (zero findings), `make evidence-validate`.
+  must not decrease), `make java-lint` (zero findings). The former
+  `make evidence-validate` gate was removed (#56): the FLPATH-5000 spike
+  records are frozen documentation, and the one load-bearing record
+  (`spike/results/javac-symbol-resolver-observation.json`) is guarded by
+  `JavacResolverAccuracyTest`, which compares fresh runs against the
+  committed baseline every CI run.
   `make adapter-test` is the only test target: JUnit schedules the test methods
   in parallel (`src/test/resources/junit-platform.properties`) and the target
   derives the pool from CPU count (capped at 8, 1 GB heap per slot — the

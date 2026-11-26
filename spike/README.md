@@ -1,5 +1,15 @@
 # FLPATH-5000 Java framework readiness spike
 
+> **Status: concluded.** The spike's return value lives in the records below
+> and the decision made from them (SootUp). The tooling that produced these
+> records — the validation, analyzer-runner, normalization, enrichment, and
+> probe scripts — was removed (#56): the records are frozen documentation,
+> reproducible only from git history. The one load-bearing record,
+> `results/javac-symbol-resolver-observation.json`, remains guarded every CI
+> run by `JavacResolverAccuracyTest` comparing fresh javac runs against the
+> committed baseline. `scripts/bootstrap-maven.sh` remains as shared build
+> infrastructure.
+
 This spike implements the bounded work described by [FLPATH-5000](https://redhat.atlassian.net/browse/FLPATH-5000)
 and ADR-001: acceptance criteria, reproducible Quarkus and Spring Boot fixture
 inputs, analyzer evidence, a candidate matrix, machine-readable expected
@@ -60,73 +70,22 @@ facts. The remaining runtime/container limitations stay visible in its output.
 | `acceptance-criteria.json` | Candidate acceptance gate and decision rules |
 | `candidate-matrix.json` | Candidate strengths, gaps, and closure estimates |
 | `capability-matrix.json` | Versioned Quarkus/Spring capability cases and evidence requirements |
-| `scripts/` | Validation, tool bootstrap, fixture run, analyzer runners, normalization, provenance, and JDT LS probe |
-| `results/` | Normalized provider and framework-enrichment observations without host paths |
+| `scripts/` | `bootstrap-maven.sh` only (shared build infrastructure); the spike tooling was removed (#56) |
+| `results/` | Normalized provider and framework-enrichment observations without host paths — frozen documentation |
 
 ## Reproduce
 
-The authoritative environment is Java 21. Maven 3.9.11 is bootstrapped into a
-cache when it is not already installed.
+The spike is concluded; the records below are frozen and the pipeline that
+produced them was removed (#56). To reproduce a record, find the generating
+script and command template in git history (the observation JSONs record
+their `commandTemplate`) or in the reference Java ports on the closed PRs
+#52/#53/#54. The Spring Boot baseline can still be built and tested from its
+sibling clone:
 
 ```sh
-# Validate captured contracts without downloading dependencies.
-make evidence-validate
-
-# Apply the spike-only FrameworkModel to both source fixtures and emit
-# synthetic framework facts.
-make framework-enrichment
-
-# Build and test the test profile.
-make fixture-test
-
-# Package the production profile and generated-source input.
-make fixture-package
-
 # Build and test the pinned Spring Boot baseline from its sibling clone.
 make spring-test
-
-# Download the pinned JDT LS distribution.
-make download-jdtls
-
-# Run the call-hierarchy probe against UserAuthPublicKey#doAuth. Set
-# JDTLS_JAVA to the Java 25 executable required by JDT LS 1.63.0.
-JDTLS_HOME="$HOME/.cache/project-lightpath/jdtls/1.63.0" \
-JDTLS_JAVA="/path/to/jdk-25/bin/java" make jdtls-probe
-
-# Probe a Spring framework entrypoint with the same provider.
-JDTLS_HOME="$HOME/.cache/project-lightpath/jdtls/1.63.0" \
-JDTLS_JAVA="/path/to/jdk-25/bin/java" \
-python3 spike/scripts/probe_jdtls.py \
-  --workspace ../spring-boot-example-application \
-  --target-file ../spring-boot-example-application/src/main/java/com/redhat/lightwell/controller/TransferController.java \
-  --method transfer
-
-# Run the pinned SootUp CHA/RTA probe. The application-only Quarkus run is
-# portable evidence; run the full dependency attempt separately to retain its
-# known Java 21 front-end failure.
-make sootup-quarkus
-make sootup-quarkus-full
-make sootup-spring
-
-# Run the pinned CodeQL buildless database/query flow. Set CODEQL_BIN when the
-# default cache location is not used; pass --replace through the Make target
-# to recreate disposable databases.
-make codeql-quarkus
-make codeql-spring
-
-# Convert ignored raw runs into portable checked-in observations.
-make normalize-static-analysis
-
-# Assemble the provider and framework evidence into a separated,
-# provenance-preserving SemanticCallFacts handoff.
-make semantic-facts-spike
 ```
-
-Every run should be recorded with `record_run.py` or the JDT LS probe. It
-captures the git revision, source fingerprints, Java/Maven/provider versions,
-profile, configuration, command, exit status, and limitations. The fixture
-target is Java 21; the analyzer runtime is a separate input. JDT LS 1.63.0
-currently requires Java 25, so the matrix records both releases explicitly.
 
 ## Framework enrichment contract
 
