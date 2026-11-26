@@ -76,11 +76,18 @@ current sweep as intended, and it produces false provenance (below).
     semantics (an owner-level decision) and newly emits
     `descriptor_path_outside_context`, a SCAN-GLOBAL diagnostic that
     would block DEFINITE promotion for the whole scan — contradicting
-    this plan's zero-diagnostics constraint. The metadata-arm
-    manifestation is real but needs its own issue; the per-root
-    `META-INF/services` sweep arm is geometrically unreachable for
-    nested roots (the sweep directory is a SIBLING of the root path).
-    Filed as a follow-up with this analysis.
+    this plan's zero-diagnostics constraint. The lane has THREE arms,
+    enumerated in #69 (round-3 amendment): the FALLBACK arm (an
+    OBSERVED file path inside a nested excluded root, re-authorized
+    by the `explicitlySelected` self-match), the SWEEP arm (per-root
+    `META-INF/services` — geometrically unreachable for nested roots,
+    the sweep directory is a SIBLING of the root path), and the
+    DIRECTORY arm (an OBSERVED declaredPath that is a directory under
+    an included root whose tree contains a nested excluded root —
+    `scanDirectory` walks it with no per-file scope check, reachable
+    WITHOUT the fallback). All three need the follow-up's owner
+    decision; none is closable by a mechanical predicate in this plan
+    without the semantics call.
   - `SourceArchiveDescriptorRouting.displayPath` — attribution
     rendering via `mostSpecificRoot` over `includedSourceRoots()`;
     open with the resource-lane follow-up above (not closed by this
