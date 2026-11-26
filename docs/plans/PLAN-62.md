@@ -273,7 +273,11 @@ equality on both sides.
 6. **#24 mirror seam.** `JavacFrameworkAnnotations.member` and
    `typeAnnotations` return lookups carrying their decline evidence;
    `FrameworkBeanScanning`'s `ProducerSite` holds it and the
-   `bean_candidate` evidence renders it when the producer's class-level or
+   `bean_candidate` evidence renders it — under its OWN attribute keys
+   (`javacMirrorAbstention` / `javacMirrorAbstentionMember`), because the
+   producer method's correlation abstention (seam A, `javacAbstention`)
+   and the mirror decline are different lookups that can co-occur on the
+   same evidence map — when the producer's class-level or
    method-level mirror declined. The `memberCount` textual-occurrence
    cross-check is NOT an abstention (it is a guard, not a lookup decline)
    and stays unwired. `typeAnnotations`' three empty arms are
