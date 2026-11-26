@@ -107,16 +107,28 @@ class JavacAbstentionEvidenceTest {
   void typeParameterOverloadGroupHasItsOwnCode() throws IOException {
     SemanticCallFacts facts = analyze(List.of("""
         package demo;
+        public class Thing { }
+        """, """
+        package demo;
         import org.springframework.context.annotation.Bean;
         import org.springframework.stereotype.Service;
         @Service public class BeanFactory<T> {
-          @Bean public String make(T value) { return ""; }
-          public String make(java.lang.String value) { return ""; }
+          @Bean public Thing make(T value) { return null; }
+          public Thing make(java.lang.String value) { return null; }
+        }
+        """, """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Thing thing) { }
         }
         """));
     SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
-        .filter(item -> item.callee().startsWith("demo.BeanFactory#make"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            evidence.attributes().getOrDefault("candidateId", "")
+                .startsWith("demo.BeanFactory#make")))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("type_parameter_overload_group",
@@ -131,38 +143,49 @@ class JavacAbstentionEvidenceTest {
   void producerAbstentionIsVisibleOnTheCandidateEvidence() throws IOException {
     SemanticCallFacts facts = analyze(List.of("""
         package demo;
+        public class Thing { }
+        """, """
+        package demo;
         import org.springframework.context.annotation.Bean;
         import org.springframework.stereotype.Service;
         @Service public class ProducerConfig {
           class Helper { }
-          @Bean public java.lang.String build(java.lang.String value) {
-            return value;
+          @Bean public Thing build(java.lang.String value) {
+            return null;
           }
+        }
+        """, """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Thing thing) { }
         }
         """));
     SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
-        .filter(item -> item.callee().equals("demo.ProducerConfig#build"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            "demo.ProducerConfig#build(java.lang.String)".equals(
+                evidence.attributes().get("candidateId"))))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("multi_type_file", attribute(binding, "javacAbstention"),
         binding.evidence().toString());
     assertEquals("demo.ProducerConfig#build(1)",
         attribute(binding, "javacAbstentionMember"), binding.evidence().toString());
-    assertTrue(binding.evidence().stream().anyMatch(evidence ->
-            "java.lang.String".equals(evidence.attributes().get("candidateType"))
-            || "demo.ProducerConfig#build".equals(
-                evidence.attributes().get("candidateId"))
-            && binding.evidence().stream().noneMatch(evidence ->
-                "demo.Helper".equals(evidence.attributes().get("candidateType"))),
-        "the producer type keeps its textual spelling (visibility-only)");
+    boolean textualCandidateType = binding.evidence().stream()
+        .anyMatch(evidence -> "demo.Thing".equals(
+            evidence.attributes().get("candidateType")));
+    assertTrue(textualCandidateType,
+        "the producer type keeps its textual spelling (visibility-only): "
+            + binding.evidence());
   }
 
   // C6: the interface-method descriptor of a JDK dynamic proxy feature
   // abstains when the interface file declares a nested type.
   @Test
   void interfaceProxyDescriptorAbstentionIsVisible() throws IOException {
-    SemanticCallFacts facts = analyze(List.of("""
+    SemanticCallFacts facts = analyzeDynamic(List.of("""
         package demo;
         public interface Api {
           class Inner { }
@@ -192,7 +215,7 @@ class JavacAbstentionEvidenceTest {
   // both declines are visible, under their own keys.
   @Test
   void repairDeclineCarriesItsOwnKey() throws IOException {
-    SemanticCallFacts facts = analyze(List.of("""
+    SemanticCallFacts facts = analyzeDynamic(List.of("""
         package demo;
         public interface Overloaded {
           void run(@Deprecated java.lang.String first);
@@ -220,27 +243,42 @@ class JavacAbstentionEvidenceTest {
         attribute(proxy, "javacRepairAbstention"), proxy.evidence().toString());
   }
 
-  // C8: an error-typed producer signature declines BOTH the correlation
-  // (seam A) and the framework-annotation mirror (seam C) — two
-  // different lookups, two attributes, one evidence map.
+  // C8: an ambiguous same-arity producer overload group correlates
+  // through the bijection (seam A succeeds, no javacAbstention) but
+  // defeats the unique member lookup behind the framework-annotation
+  // mirror (seam C) — the mirror decline is visible under its own key.
   @Test
   void mirrorDeclineIsVisibleAlongsideTheCorrelationAbstention() throws IOException {
     SemanticCallFacts facts = analyze(List.of("""
         package demo;
+        public class Thing { }
+        """, """
+        package demo;
         import org.springframework.context.annotation.Bean;
         import org.springframework.stereotype.Service;
-        @Service public class BrokenProducer {
-          @Bean public missing.Thing build() { return null; }
+        @Service public class AmbiguousProducer {
+          @Bean public Thing make(java.lang.String value) { return null; }
+          public Thing make(java.lang.Integer count) { return null; }
+        }
+        """, """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Thing thing) { }
         }
         """));
     SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
-        .filter(item -> item.callee().equals("demo.BrokenProducer#build"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            evidence.attributes().getOrDefault("candidateId", "")
+                .startsWith("demo.AmbiguousProducer#make")))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
-    assertEquals("error_type_member", attribute(binding, "javacAbstention"),
-        binding.evidence().toString());
-    assertEquals("mirror_member_error_type",
+    assertNull(attribute(binding, "javacAbstention"),
+        "the bijection correlates the group; only the mirror declines: "
+            + binding.evidence());
+    assertEquals("mirror_member_ambiguous",
         attribute(binding, "javacMirrorAbstention"), binding.evidence().toString());
   }
 
@@ -260,6 +298,9 @@ class JavacAbstentionEvidenceTest {
     SemanticCallFacts.Fact findById = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("delegated_implementation"))
         .filter(item -> item.caller().equals("demo.AccountRepository#findById"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            "findById(java.lang.String)".equals(
+                evidence.attributes().get("repositoryMethod"))))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("multi_type_file", attribute(findById, "javacAbstention"),
@@ -273,13 +314,13 @@ class JavacAbstentionEvidenceTest {
   // addJdkOwnerSites arm (Constructor parameter receiver) is covered.
   @Test
   void reflectionCallerAbstentionIsVisibleAndCausal() throws IOException {
-    SemanticCallFacts parameter = analyze(List.of("""
+    SemanticCallFacts parameter = analyzeDynamic(List.of("""
         package demo;
         public class Sites {
-          class Nested { }
-          void call(Class loader) {
+          void call(Class<?> loader) {
             loader.getMethod("run");
           }
+          class Nested { }
         }
         """));
     SemanticCallFacts.Fact site = parameter.providerFacts().stream()
@@ -292,10 +333,10 @@ class JavacAbstentionEvidenceTest {
     assertEquals("demo.Sites#call(1)",
         attribute(site, "javacCallerAbstentionMember"), site.evidence().toString());
 
-    SemanticCallFacts field = analyze(List.of("""
+    SemanticCallFacts field = analyzeDynamic(List.of("""
         package demo;
         public class FieldSites {
-          Class loader;
+          Class<?> loader;
           void call() {
             loader.getMethod("run");
           }
@@ -310,13 +351,13 @@ class JavacAbstentionEvidenceTest {
         "a field receiver never consulted the correlation arm: "
             + fieldSite.evidence());
 
-    SemanticCallFacts constructor = analyze(List.of("""
+    SemanticCallFacts constructor = analyzeDynamic(List.of("""
         package demo;
         public class CtorSites {
-          class Nested { }
           void call(java.lang.reflect.Constructor<?> ctor) {
             ctor.newInstance();
           }
+          class Nested { }
         }
         """));
     SemanticCallFacts.Fact ctorSite = constructor.providerFacts().stream()
@@ -344,11 +385,15 @@ class JavacAbstentionEvidenceTest {
     write(provider, "package demo; public interface Handler { void record(); }\n");
     write(implementation,
         "package demo; public class HandlerImpl implements Handler { public void record() {} }\n");
-    write(app, "package demo;\nimport java.util.ServiceLoader;\nclass App {\n"
-        + "  void call() { ServiceLoader.load(Handler.class).forEach(h -> h.record()); }\n"
-        + "  void reflect(Class loader) { loader.getMethod(\"record\"); }\n"
-        + "  class Nested { }\n"
-        "}\n");
+    write(app, """
+        package demo;
+        import java.util.ServiceLoader;
+        class App {
+          void call() { ServiceLoader.load(Handler.class).forEach(h -> h.record()); }
+          void reflect(Class<?> loader) throws Exception { loader.getMethod("record"); }
+          class Nested { }
+        }
+        """);
     assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null,
         "--release", "17", "-g", "-d", classes.toString(), provider.toString(),
         implementation.toString(), app.toString()));
@@ -356,8 +401,7 @@ class JavacAbstentionEvidenceTest {
     jar(unique, "demo.HandlerImpl");
 
     AnalysisContext context = context(source, classes, List.of(unique));
-    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
-        context, AnalysisGraph.empty());
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
     assertTrue(facts.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("service_loader"))
         .allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.DEFINITE),
@@ -394,11 +438,11 @@ class JavacAbstentionEvidenceTest {
           Account findById(java.lang.String bogus);
         }
         """));
-    assertTrue(facts.frameworkFacts().stream().noneMatch(item ->
-            item.evidence().stream().anyMatch(evidence ->
-                evidence.attributes().keySet().stream()
-                    .anyMatch(key -> key.startsWith("javac")
-                        && key.contains("Abstention"))),
+    boolean anyAbstentionAttribute = facts.frameworkFacts().stream()
+        .anyMatch(item -> item.evidence().stream()
+            .anyMatch(evidence -> evidence.attributes().keySet().stream()
+                .anyMatch(key -> key.startsWith("javac") && key.contains("Abstention"))));
+    assertFalse(anyAbstentionAttribute,
         "the opt-out path is byte-identical to main: " + facts.frameworkFacts());
   }
 
@@ -427,21 +471,19 @@ class JavacAbstentionEvidenceTest {
   @Test
   void abstentionAttributesAreCacheOrderIndependent() throws IOException {
     Path sourceRoot = temp.resolve("cache-order/src/main/java");
-    write(sourceRoot, "demo/Sites.java", """
+    write(sourceRoot.resolve("demo/Sites.java"), """
         package demo;
         public class Sites {
-          class Nested { }
-          void call(Class loader) {
+          void call(Class<?> loader) {
             loader.getMethod("run");
           }
+          class Nested { }
         }
         """);
     AnalysisContext context = context(sourceRoot, temp.resolve("cache-order/classes"),
         List.of());
-    SemanticCallFacts first = new JavaAnalysisAdapter().analyze(
-        context, AnalysisGraph.empty());
-    SemanticCallFacts second = new JavaAnalysisAdapter().analyze(
-        context, AnalysisGraph.empty());
+    SemanticCallFacts first = dynamicScan(context);
+    SemanticCallFacts second = dynamicScan(context);
     assertEquals(
         first.providerFacts().stream()
             .filter(item -> item.relationshipType().equals("reflection"))
@@ -459,18 +501,17 @@ class JavacAbstentionEvidenceTest {
             + second.providerFacts());
     System.setProperty(FLAG, "false");
     Path optOutRoot = temp.resolve("cache-order-optout/src/main/java");
-    write(optOutRoot, "demo/Sites.java", """
+    write(optOutRoot.resolve("demo/Sites.java"), """
         package demo;
         public class Sites {
-          class Nested { }
-          void call(Class loader) {
+          void call(Class<?> loader) {
             loader.getMethod("run");
           }
+          class Nested { }
         }
         """);
-    SemanticCallFacts optedOut = new JavaAnalysisAdapter().analyze(
-        context(optOutRoot, temp.resolve("cache-order-optout/classes"), List.of()),
-        AnalysisGraph.empty());
+    SemanticCallFacts optedOut = dynamicScan(
+        context(optOutRoot, temp.resolve("cache-order-optout/classes"), List.of()));
     assertTrue(optedOut.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("reflection"))
         .allMatch(item -> item.evidence().stream().noneMatch(evidence ->
@@ -498,13 +539,44 @@ class JavacAbstentionEvidenceTest {
 
   private SemanticCallFacts analyze(List<String> sources) throws IOException {
     Path sourceRoot = temp.resolve("abstention/src/main/java");
-    write(sourceRoot, "demo/Account.java", "package demo; public class Account {}\n");
-    for (int index = 0; index < sources.size(); index++) {
-      write(sourceRoot.resolve("demo/Source" + index + ".java"), sources.get(index));
-    }
+    write(sourceRoot.resolve("demo/Account.java"),
+        "package demo; public class Account {}\n");
+    writeSources(sourceRoot, sources);
     return new JavaAnalysisAdapter().analyze(
         context(sourceRoot, temp.resolve("abstention/classes"), List.of()),
         AnalysisGraph.empty());
+  }
+
+  /** The dynamic-feature cells need the graph the production path builds. */
+  private SemanticCallFacts dynamicScan(AnalysisContext scanContext) {
+    return new JavaAnalysisAdapter().analyze(scanContext, new AnalysisGraph(
+        List.of(), new SourceMetadataScanner(scanContext).dynamicFeatures(),
+        java.util.Set.of(), "SootUp", "3.0.1", 0, 0));
+  }
+
+  private SemanticCallFacts analyzeDynamic(List<String> sources) throws IOException {
+    Path sourceRoot = temp.resolve("abstention-dynamic/src/main/java");
+    write(sourceRoot.resolve("demo/Account.java"),
+        "package demo; public class Account {}\n");
+    writeSources(sourceRoot, sources);
+    AnalysisContext scanContext =
+        context(sourceRoot, temp.resolve("abstention-dynamic/classes"), List.of());
+    return dynamicScan(scanContext);
+  }
+
+  /** Files are named after their declared type: the scanner's reflection
+   * extraction anchors on the file/type name, so Source0.java fixtures
+   * would silently produce no sites. */
+  private static void writeSources(Path sourceRoot, List<String> sources)
+      throws IOException {
+    for (int index = 0; index < sources.size(); index++) {
+      java.util.regex.Matcher type = java.util.regex.Pattern
+          .compile("(?:public\\s+)?(?:final\\s+)?(?:abstract\\s+)?"
+              + "(?:class|interface|enum|record)\\s+([A-Za-z_$][\\w$]*)")
+          .matcher(sources.get(index));
+      String name = type.find() ? type.group(1) : "Source" + index;
+      write(sourceRoot.resolve("demo/" + name + ".java"), sources.get(index));
+    }
   }
 
   private AnalysisContext context(

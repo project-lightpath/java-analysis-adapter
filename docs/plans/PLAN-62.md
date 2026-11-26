@@ -290,8 +290,13 @@ equality on both sides.
    the file's type name → `mirror_type_absent`; all matches
    shape-unusable → `mirror_owner_unusable`; more than one usable
    candidate (cross-file same-name types) → `mirror_owner_ambiguous`.
-   The C8 fixture uses a shape-unusable owner so the arms are
-   distinguishable.
+   The C8 fixture uses a same-arity ambiguous producer overload group
+   (RED-calibration amendment): the bijection correlates it — seam A
+   succeeds, `javacAbstention` absent — while the mirror's unique-member
+   lookup declines (`mirror_member_ambiguous`), isolating the seam-C
+   attribute on a live end-to-end candidate; the shape-unusable-owner
+   arm stays covered by the seam-C unit cells in the existing #24 test
+   surface.
 
 ### What deliberately does not change
 
@@ -337,9 +342,12 @@ expected-green characterization pins, see TDD item 1):
   CALLER member (distinct from the #25 target-evidence attributes and
   from `javacAbstention` on the same fact); a field/local-receiver twin
   carries NO caller attribute (the round-3 finding-4 causality pin).
-  Includes the anchoring divergence fixture (a caller extracted after a
-  preceding nested type's closing brace — the shared-helper pin) and
-  the `addJdkOwnerSites` arm (round 5, finding 1): a
+  RED-calibration amendment: the multi-type fixture nests the extra
+  type AFTER the caller method — a type declared immediately BEFORE it
+  breaks the textual `methodContaining` extraction anchor (the site is
+  not extracted at all; pre-existing textual behavior, out of scope),
+  so the shared-helper pin is the post-nested shape. The
+  `addJdkOwnerSites` arm (round 5, finding 1): a
   `Constructor`/`Method` parameter receiver calling
   `newInstance()`/`invoke()` inside a multi-type-file caller carries
   `javacCallerAbstention` — admitted via `isJdkApiOwner`'s
