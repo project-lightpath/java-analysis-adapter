@@ -78,17 +78,27 @@ final class JavacAnnotationAccess {
     }
     JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
     if (found.errorType()) {
-      LinkedHashSet<String> codes = new LinkedHashSet<>();
-      for (JavacSourceSymbolIndex.TypeInfo entry : typeFile(typeName)) {
-        codes.addAll(JavacSourceSymbolIndex.of(context)
-            .map(index -> index.errorCodesFor(entry.file()))
-            .orElse(List.of()));
-      }
       return new MemberLookup(Optional.empty(), Optional.of(
           new JavacAbstentionEvidence("annotation_member_error_type", identity,
-              List.copyOf(codes))));
+              uniqueOwnerErrorCodes(typeFile(typeName)))));
     }
     return new MemberLookup(Optional.of(found), Optional.empty());
+  }
+
+  /**
+   * The declaring file's error codes, only when the owner name resolves
+   * to exactly one index type (same-name types across files cannot be
+   * attributed to one member's file — the ambiguity is already the
+   * decline's story).
+   */
+  private List<String> uniqueOwnerErrorCodes(
+      List<JavacSourceSymbolIndex.TypeInfo> entries) {
+    if (entries.size() != 1) {
+      return List.of();
+    }
+    return JavacSourceSymbolIndex.of(context)
+        .map(index -> index.errorCodesFor(entries.get(0).file()))
+        .orElse(List.of());
   }
 
   /** The declaring file of the (unique) index type, for the error-code join. */

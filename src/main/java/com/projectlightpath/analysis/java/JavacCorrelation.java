@@ -33,6 +33,10 @@ record JavacCorrelation(
 
   /** The abstention outcome. */
   static JavacCorrelation abstained(JavacAbstentionEvidence evidence) {
+    if (evidence == null || !evidence.present()) {
+      throw new IllegalArgumentException(
+          "an abstention outcome requires present evidence");
+    }
     return new JavacCorrelation(null, evidence);
   }
 

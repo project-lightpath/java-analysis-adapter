@@ -87,6 +87,28 @@ record JavacAbstentionEvidence(
     return attributes;
   }
 
+  /**
+   * The evidence attributes contributed under the PRODUCER-TYPE keys
+   * ({@code javacProducerTypeAbstention} family): the producer-type
+   * seam's own correlation decline, distinct from the descriptor
+   * member's {@code javacAbstention} family because the two seams
+   * derive the owner differently (the type seam keeps its historical
+   * raw-extraction anchor) and both can decline for one candidate.
+   */
+  Map<String, String> producerTypeAttributes() {
+    if (!present()) {
+      return Map.of();
+    }
+    Map<String, String> attributes = new java.util.LinkedHashMap<>();
+    attributes.put("javacProducerTypeAbstention", code);
+    attributes.put("javacProducerTypeAbstentionMember", member);
+    if (!indexDiagnostics.isEmpty()) {
+      attributes.put("javacProducerTypeAbstentionDiagnostics",
+          String.join(",", indexDiagnostics));
+    }
+    return attributes;
+  }
+
   /** Merges this record's attributes into an existing map, in place. */
   void mergeInto(Map<String, String> attributes) {
     attributes.putAll(attributes());

@@ -146,15 +146,13 @@ final class JavacFrameworkAnnotations {
     }
     JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
     if (found.errorType()) {
-      LinkedHashSet<String> codes = new LinkedHashSet<>();
-      for (JavacSourceSymbolIndex.TypeInfo entry : raw) {
-        codes.addAll(JavacSourceSymbolIndex.of(context)
-            .map(index -> index.errorCodesFor(entry.file()))
-            .orElse(List.of()));
-      }
+      List<String> codes = raw.size() == 1
+          ? JavacSourceSymbolIndex.of(context)
+              .map(index -> index.errorCodesFor(raw.get(0).file()))
+              .orElse(List.of())
+          : List.of();
       return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_member_error_type", identity,
-              List.copyOf(codes))));
+          new JavacAbstentionEvidence("mirror_member_error_type", identity, codes)));
     }
     return new MemberLookup(Optional.of(found), Optional.empty());
   }

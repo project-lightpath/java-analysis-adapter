@@ -521,7 +521,7 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
         // evidence under their own keys — both lookups can decline for
         // the same candidate, and neither ever enters scan.diagnostics().
         descriptor.mergeAbstentionsInto(attributes);
-        candidate.producerTypeAbstention().mergeInto(attributes);
+        attributes.putAll(candidate.producerTypeAbstention().producerTypeAttributes());
         if (candidate.mirrorAbstention().present()) {
           attributes.put("javacMirrorAbstention", candidate.mirrorAbstention().code());
           attributes.put("javacMirrorAbstentionMember",

@@ -185,7 +185,12 @@ equality on both sides.
 2. **Producer types.** `FrameworkBeanScanning.producerCandidate` consumes
    the `JavacCorrelation`; `BeanCandidate` gains an additive
    `producerTypeAbstention` field (NONE default; 2 construction sites).
-   `candidateEvidence` renders it.
+   `candidateEvidence` renders it under its OWN key family
+   (`javacProducerTypeAbstention` / `-Member` / `-Diagnostics` — review
+   round 1, finding 2): the producer-type seam keeps its historical
+   raw-extraction owner anchor while the descriptor seam uses the
+   declarationStart normalization, so the two declines name different
+   member identities and must not overwrite each other.
 3. **Interface proxy descriptors (#22 seam).**
    `JavacAnnotationAccess.methodDescriptor` returns `JavacDescriptorOutcome`
    carrying EITHER the correlation abstention (seam A) or, on the
@@ -435,8 +440,17 @@ The Makefile floor is raised from 709 to the observed execution count.
 ## Residuals (to state in the resolution)
 
 - The index-diagnostics join is file-level (`MemberInfo` carries no
-  position); a member-level line join would need an additive position
-  component — follow-up candidate, not required by acceptance.
+  position) and unique-owner-only (review round 1, finding 4: with
+  same-name types across files the diagnostics leg is omitted — the
+  ambiguity is already the decline's story); a member-level line join
+  would need an additive position component — follow-up candidate, not
+  required by acceptance.
+- The parameter-arm capture records offsets from the type-INFERENCE
+  callers of `isDeclaredVariableBefore` too (initializer-relative
+  offsets that never match a site offset — dead entries), and a site
+  whose receiver type was transitively inferred from a
+  parameter-initialized local gets no caller abstention (review round
+  1, finding 3, documented as the direct-admitting-arm scope).
 - `memberCount`-style guards and `JavacReflectionTargets`' own abstention
   ladder (#25 channel) are out of scope by design.
 - PMD-forced placement changes (if any) keep behavior identical and are

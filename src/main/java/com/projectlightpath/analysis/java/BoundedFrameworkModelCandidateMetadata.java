@@ -98,25 +98,27 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
    * Builds a JVM descriptor only when every reference type can be
    * resolved. Issue #62: the outcome carries the correlation abstention
    * of the member the descriptor came from (visibility-only; the
-   * descriptor value is unchanged).
+   * descriptor value is unchanged — a correlated member whose binary
+   * render abstains keeps the textual ladder, exactly the pre-#62
+   * flatMap semantics).
    */
   static JavacDescriptorOutcome methodDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.ProxyTarget target) {
     if (JavacSourceSymbolIndex.enabled()) {
       // Flag-on: the correlated member's index shapes render the descriptor
-      // directly; a non-correlating target keeps the textual ladder below.
+      // directly; a non-correlating target — or a correlated member whose
+      // binary render abstains — keeps the textual ladder below.
       JavacCorrelation correlation = JavacMemberCorrelation.of(scanner)
           .correlation(target.file(),
               scanner.typeContaining(target.file(),
                   SourceMetadataScanner.declarationStart(target.file(),
                       target.method().start())),
               target.method());
-      Optional<JavacSourceSymbolIndex.MemberInfo> member = correlation.memberOptional();
-      if (member.isPresent()) {
-        return new JavacDescriptorOutcome(
-            JavacShapeDescriptors.jvmDescriptorFromMember(member.orElseThrow()),
-            null, null);
+      Optional<String> rendered = correlation.memberOptional()
+          .flatMap(JavacShapeDescriptors::jvmDescriptorFromMember);
+      if (rendered.isPresent()) {
+        return new JavacDescriptorOutcome(rendered, null, null);
       }
       return new JavacDescriptorOutcome(
           methodDescriptor(scanner, target.file(), target.method().parameters(),
@@ -149,21 +151,23 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
 
   /**
    * Builds a JVM descriptor for a source producer candidate. Issue #62:
-   * the outcome carries the producer method's correlation abstention.
+   * the outcome carries the producer method's correlation abstention
+   * (a correlated member whose binary render abstains keeps the textual
+   * ladder — the pre-#62 flatMap semantics).
    */
   static JavacDescriptorOutcome producerDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.BeanCandidate candidate) {
     if (JavacSourceSymbolIndex.enabled()) {
       // Flag-on: the correlated producer method's index shapes render the
-      // descriptor directly; a non-correlating candidate keeps textual.
+      // descriptor directly; a non-correlating candidate — or a correlated
+      // member whose binary render abstains — keeps textual.
       JavacCorrelation correlation = JavacMemberCorrelation.of(scanner)
           .producerCorrelation(candidate);
-      Optional<JavacSourceSymbolIndex.MemberInfo> member = correlation.memberOptional();
-      if (member.isPresent()) {
-        return new JavacDescriptorOutcome(
-            JavacShapeDescriptors.jvmDescriptorFromMember(member.orElseThrow()),
-            null, null);
+      Optional<String> rendered = correlation.memberOptional()
+          .flatMap(JavacShapeDescriptors::jvmDescriptorFromMember);
+      if (rendered.isPresent()) {
+        return new JavacDescriptorOutcome(rendered, null, null);
       }
       return new JavacDescriptorOutcome(
           methodDescriptor(

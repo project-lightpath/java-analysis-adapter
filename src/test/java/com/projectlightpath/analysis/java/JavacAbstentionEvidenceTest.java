@@ -70,9 +70,9 @@ class JavacAbstentionEvidenceTest {
         proxy.evidence().toString());
     assertEquals("demo.ProxyService#visible(0)",
         attribute(proxy, "javacAbstentionMember"), proxy.evidence().toString());
-    assertTrue(proxy.certainty() == SemanticCallFacts.Certainty.DEFINITE
-        || proxy.certainty() == SemanticCallFacts.Certainty.POSSIBLE,
-        "the abstention is visibility-only; the certainty is unchanged");
+    assertTrue(proxy.certainty() == SemanticCallFacts.Certainty.POSSIBLE,
+        "the abstention is visibility-only; the certainty is the pre-#62 "
+            + "value: " + proxy.certainty());
     assertTrue(facts.diagnostics().isEmpty(),
         "the per-member channel never enters scan.diagnostics(): "
             + facts.diagnostics());
@@ -171,11 +171,18 @@ class JavacAbstentionEvidenceTest {
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("multi_type_file", attribute(binding, "javacAbstention"),
         binding.evidence().toString());
-    // The member identity carries the owner spelling this seam derives
-    // (the historical raw-extraction anchor; the shared ownerTypeFor
-    // normalization is the classification seam's, not this one's).
-    assertEquals("demo.ProducerConfig$Helper#build(1)",
+    // The descriptor seam derives the owner through the declarationStart
+    // normalization; the producer-TYPE seam keeps its historical
+    // raw-extraction anchor — two different derivations, two key
+    // families, both visible (review round 1, finding 2).
+    assertEquals("demo.ProducerConfig#build(1)",
         attribute(binding, "javacAbstentionMember"), binding.evidence().toString());
+    assertEquals("multi_type_file",
+        attribute(binding, "javacProducerTypeAbstention"),
+        binding.evidence().toString());
+    assertEquals("demo.ProducerConfig$Helper#build(1)",
+        attribute(binding, "javacProducerTypeAbstentionMember"),
+        binding.evidence().toString());
     boolean textualCandidateType = binding.evidence().stream()
         .anyMatch(evidence -> "demo.Thing".equals(
             evidence.attributes().get("candidateType")));
@@ -453,6 +460,13 @@ class JavacAbstentionEvidenceTest {
                 .anyMatch(key -> key.startsWith("javac") && key.contains("Abstention"))));
     assertFalse(anyAbstentionAttribute,
         "the opt-out path is byte-identical to main: " + facts.frameworkFacts());
+    boolean anyProviderAbstention = facts.providerFacts().stream()
+        .anyMatch(item -> item.evidence().stream()
+            .anyMatch(evidence -> evidence.attributes().keySet().stream()
+                .anyMatch(key -> key.startsWith("javac") && key.contains("Abstention"))));
+    assertFalse(anyProviderAbstention,
+        "the opt-out provider path is byte-identical to main: "
+            + facts.providerFacts());
   }
 
   // D3: the control — a correlating member carries NO attribute.

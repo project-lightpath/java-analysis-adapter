@@ -73,18 +73,6 @@ final class JavacMemberCorrelation {
     return hasCommentText(parameters) || !singleTypeFile(file);
   }
 
-  /**
-   * The bounded-model JVM descriptor rendered from index shapes when the
-   * member correlates (either path); empty when it does not.
-   */
-  Optional<String> correlatedJvmDescriptor(
-      SourceMetadataScannerState.SourceFile file,
-      String ownerType,
-      SourceMetadataScannerState.MethodInfo method) {
-    return correlatedMethod(file, ownerType, method).memberOptional()
-        .flatMap(JavacShapeDescriptors::jvmDescriptorFromMember);
-  }
-
   /** The correlation of one declaration, with its abstention evidence. */
   JavacCorrelation correlation(
       SourceMetadataScannerState.SourceFile file,
@@ -209,14 +197,20 @@ final class JavacMemberCorrelation {
         file, declaration, declarations, group, indexName, identity);
   }
 
-  /** The javac error codes recorded for the owner's declaring files. */
+  /**
+   * The javac error codes recorded for the owner's declaring files.
+   * Joined only when the owner name resolves to exactly one index type:
+   * with same-name types across files, javac errors cannot be
+   * attributed to one member's file, and the ambiguity is already the
+   * decline's story (display-only honesty).
+   */
   private static List<String> errorCodesFor(
       JavacSourceSymbolIndex index, String ownerType) {
-    LinkedHashSet<String> codes = new LinkedHashSet<>();
-    for (JavacSourceSymbolIndex.TypeInfo entry : index.type(ownerType)) {
-      codes.addAll(index.errorCodesFor(entry.file()));
+    List<JavacSourceSymbolIndex.TypeInfo> entries = index.type(ownerType);
+    if (entries.size() != 1) {
+      return List.of();
     }
-    return List.copyOf(codes);
+    return List.copyOf(index.errorCodesFor(entries.get(0).file()));
   }
 
   /** The primitive spellings the textual vector resolution admits directly. */
