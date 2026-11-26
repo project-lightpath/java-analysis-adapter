@@ -193,7 +193,12 @@ equality on both sides.
    signatures (plan-review round 2, finding 4) — the decline evidence is
    produced by an internal outcome-carrying helper consumed by
    `methodDescriptor`, so the ~15 direct test call sites of `member(...)`/
-   `repairedParameterType(...)` compile unchanged. `DynamicFeature` gains
+   `repairedParameterType(...)` compile unchanged. The repair path only
+   runs when the correlation already abstained (a correlated member
+   returns its canonical descriptor directly), so the seam-B decline is
+   always secondary: the outcome carries the seam-A code as
+   `javacAbstention` and, when the per-parameter repair also declines,
+   the seam-B code under its own `javacRepairAbstention` key. `DynamicFeature` gains
    TWO additive abstention fields (plan-review round 3, finding 1 — the
    descriptor member's decline and the caller member's decline are
    different members that can both abstain on the same feature, e.g. a
