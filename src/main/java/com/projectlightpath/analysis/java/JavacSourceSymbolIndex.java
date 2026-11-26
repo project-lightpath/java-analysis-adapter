@@ -340,11 +340,13 @@ final class JavacSourceSymbolIndex {
       // exist" (missing_source) from "units exist but are scope-excluded"
       // (issue #68: not missing — a legal declared context state). The
       // all-excluded state intentionally yields a CLEAN empty index (no
-      // integrity row): its safety rests on walker symmetry — zero
-      // scanner files means zero sites that could consult the index
-      // (JavacReflectionTargets' integrity gate stays open, correctly,
-      // because there is nothing to resolve). Sequential walk: the
-      // counter is deliberately non-atomic.
+      // integrity row): its safety rests on walker symmetry for
+      // COMPLETENESS — zero scanner files means zero sites that could
+      // consult the index — while correctness against fabrication is
+      // guarded independently (a scanner file the index never saw
+      // abstains: JavacReflectionTargets' absent-owner path returns the
+      // no-evidence sentinel). Sequential walk: the counter is
+      // deliberately non-atomic.
       long[] rawUnits = {0};
       List<AnalysisContext.SourceRoot> declared =
           context.declaredRootsBySpecificity();
