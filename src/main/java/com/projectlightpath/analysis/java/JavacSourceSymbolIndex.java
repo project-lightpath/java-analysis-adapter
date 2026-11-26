@@ -336,10 +336,16 @@ final class JavacSourceSymbolIndex {
         return List.of();
       }
       Map<Path, AnalysisContext.SourceRoot> discovered = new LinkedHashMap<>();
+      // Raw (pre-scope-filter) discovery count: distinguishes "no units
+      // exist" (missing_source) from "units exist but are scope-excluded"
+      // (issue #68: not missing — a legal declared context state).
+      long[] rawUnits = {0};
+      List<AnalysisContext.SourceRoot> declared =
+          context.declaredRootsBySpecificity();
       for (AnalysisContext.SourceRoot root : AnalysisContext.rootsBySpecificity(roots())) {
-        collectRoot(root, discovered);
+        collectRoot(root, discovered, declared, rawUnits);
       }
-      if (discovered.isEmpty()) {
+      if (discovered.isEmpty() && rawUnits[0] == 0) {
         diagnostics.add(IndexRenderer.row("missing_source",
             "no compilation units were discovered under the included source roots",
             "", 0, 0));
@@ -350,7 +356,10 @@ final class JavacSourceSymbolIndex {
     }
 
     private void collectRoot(
-        AnalysisContext.SourceRoot root, Map<Path, AnalysisContext.SourceRoot> discovered) {
+        AnalysisContext.SourceRoot root,
+        Map<Path, AnalysisContext.SourceRoot> discovered,
+        List<AnalysisContext.SourceRoot> declared,
+        long[] rawUnits) {
       if (!Files.isDirectory(root.path())) {
         diagnostics.add(IndexRenderer.row("missing_source_root",
             "source root is unavailable: " + IndexRenderer.declaredRootPath(root),
@@ -361,8 +370,17 @@ final class JavacSourceSymbolIndex {
         paths.filter(Files::isRegularFile)
             .filter(path -> path.toString().endsWith(".java"))
             .filter(path -> !path.getFileName().toString().equals("module-info.java"))
-            .forEach(path -> discovered.putIfAbsent(
-                path.toAbsolutePath().normalize(), root));
+            .forEach(path -> {
+              rawUnits[0]++;
+              // Issue #68: a nested excluded or out-of-scope declared root
+              // never contributes units to the parent's compilation (the
+              // most-specific declared root governs) — the mirror of
+              // SourceMetadataScannerState.files().
+              if (context.includesSourceFile(path, declared)) {
+                discovered.putIfAbsent(
+                    path.toAbsolutePath().normalize(), root);
+              }
+            });
       } catch (IOException error) {
         throw new IllegalStateException(
             "cannot scan source root " + IndexRenderer.declaredRootPath(root), error);

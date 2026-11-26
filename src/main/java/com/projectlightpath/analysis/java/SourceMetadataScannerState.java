@@ -284,6 +284,8 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       return files;
     }
     Map<Path, AnalysisContext.SourceRoot> selectedRoots = new LinkedHashMap<>();
+    List<AnalysisContext.SourceRoot> declared =
+        context.declaredRootsBySpecificity();
     for (AnalysisContext.SourceRoot root :
         AnalysisContext.rootsBySpecificity(context.includedSourceRoots())) {
       if (!Files.isDirectory(root.path())) {
@@ -293,6 +295,10 @@ static final List<String> SUPPORTED_HTTP_METHODS =
         paths.filter(Files::isRegularFile)
             .filter(path -> path.toString().endsWith(".java"))
             .filter(path -> !isDescriptorSource(path))
+            // Issue #68: a nested excluded or out-of-scope declared root
+            // never contributes files to the parent's walk (the
+            // most-specific declared root governs).
+            .filter(path -> context.includesSourceFile(path, declared))
             .sorted()
             .forEach(path -> selectedRoots.putIfAbsent(path.toAbsolutePath().normalize(), root));
       } catch (IOException error) {
