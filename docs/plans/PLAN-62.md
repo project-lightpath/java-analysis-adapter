@@ -91,7 +91,7 @@ Branch: `issue-62-per-member-evidence` from `origin/main` @ `5c050ec`
 
 ```java
 record JavacAbstentionEvidence(
-    String code,               // enumerated decline reason, never blank
+    String code,               // enumerated decline reason; blank only for NONE
     String member,             // "owner#name(arity)" identity, never blank
     List<String> indexDiagnostics) { // deduped javac/index error codes for
                                      // the member's file, empty when none
@@ -100,6 +100,10 @@ record JavacAbstentionEvidence(
   Map<String, String> attributes();            // self-rendering
 }
 ```
+
+- The compact constructor enforces `present() == !code.isBlank()` and a
+  non-blank member when present (the sentinel is the only blank-code value
+  — plan-review round 2, finding 3).
 
 - `attributes()` contributes `javacAbstention` (the code) and
   `javacAbstentionMember` (the member identity) when present, plus
@@ -119,13 +123,17 @@ record JavacAbstentionEvidence(
 ### Decline codes (enumerated, one set per seam)
 
 - Seam A — `JavacMemberCorrelation.correlated`:
-  `comment_corrupted_parameters`, `multi_type_file`, `index_absent`,
-  `member_absent`, `error_type_member`, `type_parameter_overload_group`,
+  `comment_corrupted_parameters`, `multi_type_file`, `member_absent`,
+  `error_type_member`, `type_parameter_overload_group`,
   `overload_group_mismatch` (the bijection split: a textual vector that hit
   a type parameter / unparseable type-parameter clause / unestablishable
   enclosing scope is `type_parameter_overload_group` — the unresolved-bounds
   class; sibling-count or set/collision mismatches are
-  `overload_group_mismatch`).
+  `overload_group_mismatch`). No `index_absent` code (plan-review round 2,
+  finding 2): `JavacSourceSymbolIndex.of()` returns empty only when the
+  flag is off, and the in-seam gate already maps that to NONE — the
+  probe's `index_absent` × 5 observations were flag-off test arms and
+  re-map to "no evidence (flag off)".
 - Seam B — `JavacAnnotationAccess.member`: `annotation_member_absent`,
   `annotation_member_ambiguous`, `annotation_member_error_type`.
 - Seam C — `JavacFrameworkAnnotations`: `mirror_owner_unusable`
@@ -179,10 +187,16 @@ equality on both sides.
    carrying EITHER the correlation abstention (seam A) or, on the
    per-parameter repair path, the `repairedParameterType` decline (seam B:
    the `member()` lookup's own codes; both arms gate on `enabled()` inside
-   the seam). `DynamicFeature` gains an additive
-   `JavacAbstentionEvidence abstention` field (NONE default, compatibility
-   constructors preserved) — NOT included in `dynamicFeatureIdentity` /
-   `dynamicFeatureId` (fact IDs stay byte-stable).
+   the seam). `member()` and `repairedParameterType()` KEEP their
+   signatures (plan-review round 2, finding 4) — the decline evidence is
+   produced by an internal outcome-carrying helper consumed by
+   `methodDescriptor`, so the ~15 direct test call sites of `member(...)`/
+   `repairedParameterType(...)` compile unchanged. `DynamicFeature` gains
+   an additive `JavacAbstentionEvidence abstention` field (NONE default,
+   compatibility constructors preserved) — NOT included in
+   `dynamicFeatureIdentity` / `dynamicFeatureId` (fact IDs stay
+   byte-stable; no production or test code compares `DynamicFeature`
+   instances or uses them as map keys — verified).
    `BoundedFrameworkModelUtilities.dynamicProxyEvidenceAttributes` renders
    it for the bounded-model dynamic facts, AND
    `ProviderFactNormalizer.dynamicFact` (the `sootup-reflection-*` /
@@ -205,7 +219,14 @@ equality on both sides.
    `parameterMatchesType` uses (the `declarationStart` normalization — see
    Preflight), and attach the abstention to the `DynamicFeature` (the
    additive field from item 3) when the caller's member abstains — the
-   classification's textual-ladder fallback becomes visible per site.
+   classification's textual-ladder fallback becomes visible per site. The
+   abstention member identity always uses the declarationStart owner (it
+   explains the classification input), even where it diverges from the
+   fact-caller's site-offset owner — the C10 divergence fixture asserts
+   exactly that (round 2, finding 6). The per-site recompute is accepted
+   (round 2, finding 5): `correlated()` is map-lookup bounded and the
+   classification path already pays the same cost per candidate variable;
+   no memo is added.
 6. **#24 mirror seam.** `JavacFrameworkAnnotations.member` and
    `typeAnnotations` return lookups carrying their decline evidence;
    `FrameworkBeanScanning`'s `ProducerSite` holds it and the
@@ -272,8 +293,9 @@ RED cells (all fail against the pre-change tree):
   plan-review finding 6): the abstention attributes appear and disappear
   only with the flag, never with cache order.
 
-Sanctioned existing-test edits — by criterion, not a class list
-(plan-review finding 5): every test class whose fixtures appear in the
+Sanctioned existing-test edits — TWO criteria (plan-review round 2,
+finding 1):
+(a) **Golden updates** — every test class whose fixtures appear in the
 probe abstention inventory (`demo.DynamicSites`, `demo.GenericRepository`,
 `demo.Api`, `demo.Producer`, `demo.Bound`, the nested-configuration
 producers, the comment-corrupted fixtures) may need golden updates where
@@ -283,6 +305,12 @@ enumerated at RED with values captured from observed output. Known
 candidates: `JavaAnalysisAdapterTest`, `SpringDataDelegationLadderTest`,
 `JavacAnnotationMigrationTest`, `JavacTypeShapeMigrationTest`,
 `JavacSymbolIndexDefaultOnTest`, `JavacReflectionTargetMigrationTest`.
+(b) **Mechanical compile adaptations of direct callers of changed
+signatures**, enumerated at RED, behavior-preserving accessor rewrites
+only: `JavacBinaryNameMigrationTest` (~19 `methodDescriptor`/
+`producerDescriptor` sites) and `JavacTypeShapeMigrationTest` (~30
+`correlatedMethod`/`correlatedConstructor` sites) call the changed
+signatures directly and cannot compile after GREEN_62 otherwise.
 The Makefile floor is raised from 709 to the observed execution count.
 
 ## TDD / gates / commits
@@ -334,6 +362,25 @@ production rows including the fragment row (finding 7). Verified clean:
 identity functions cannot leak the additive field; attribute consumers are
 key-based; the extraction cache caches extracts, not sites/features.
 Confidence score after round 1: **0.84**.
+
+Round 2 (fresh adversarial subagent): 6 addressable findings (1 HIGH,
+1 MEDIUM, 3 LOW, 1 NIT), all incorporated: the second sanction criterion
+for mechanical compile adaptations (`JavacBinaryNameMigrationTest`,
+`JavacTypeShapeMigrationTest` — finding 1, HIGH, the AGENTS zero-edit
+blocker); `index_absent` removed from the enumeration as unreachable
+behind the in-seam gate (finding 2); the NONE sentinel exempted from the
+blank-code invariant with `present()` enforcement (finding 3); seam-B
+signature stability pinned (`member()`/`repairedParameterType()`
+unchanged, internal outcome helper — finding 4); the per-site recompute
+accepted without memo (finding 5); the divergence-owner identity semantics
+stated (finding 6). Verified clean: `of()` gates on `enabled()` so the
+in-seam gate is behavior-neutral flag-off; no `DynamicFeature`/
+`RepositoryMethod`/`BeanCandidate` equality or map-key consumers; the C2
+missing-classpath fixture exists (`demo.Bound`, `T extends missing.Thing`)
+with `compiler.err.cannot.find.symbol` stored verbatim; the join must key
+on the raw `Path` held at `addCompilerDiagnostics` line 446, not the
+rendered row path.
+Confidence score after round 2: **0.87**.
 
 Confidence score (pre-plan-review): **0.78** — the design is grounded in a
 green-suite probe of what actually abstains on main, the #25 precedent, and
