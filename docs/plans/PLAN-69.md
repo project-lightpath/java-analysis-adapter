@@ -244,7 +244,43 @@ findings), `make evidence-validate`.
   same-content descriptors merge — P6 pins the documented behavior;
   changing the merge key is out of scope.
 
-Confidence score: **0.85** — the decision is recorded and the current
+## Plan-review record
+
+Round 1 (Engram-grounded adversarial subagent, CodeRabbit style): 6
+addressable findings (2 HIGH, 2 MEDIUM, 2 LOW), all incorporated:
+1. HIGH — the ladder-mirror labeling was unimplementable for 3 of 5
+   mechanisms (only the metadata arm runs authorizedPath; the sweep
+   subtree is a sibling of the root; archive paths are synthetic).
+   The mechanism is now threaded from the admission sites.
+2. HIGH — the directory arm's mechanism decided: `selected_metadata`
+   (the arm that scanned the file), regardless of additional
+   containment under an included root.
+3. MEDIUM — P1's geometry pinned (the excluded root must be beside,
+   not under, any included root for the fallback to fire); P2b added
+   (excluded root under an included root).
+4. MEDIUM — P6 merge cell: DescriptorIdentity excludes provenance, so
+   the classpath-preferred merge discards the excluded twin's label —
+   pinned as documented behavior.
+5. LOW — auxiliary 6-arg constructor specified (records cannot
+   default arguments); the direct test construction at
+   JavacServiceLoaderSiteResolverTest:195 carries `unclassified`.
+6. LOW — the EvidenceCache is an IdentityHashMap; the equality
+   consumer is DescriptorIdentity (rationale corrected).
+
+Round 2 (delta-only, performed directly with the Engram MCP tools
+after two subagent-dispatch cancellations — method recorded
+honestly): 0 new findings. Verified: the threading chain is a closed
+caller set with one parameter per hop (Reader arms ->
+scanClasspathEntry/scanDirectory -> scanSelectedEntry ->
+scanServiceDirectory/readDescriptors/readModule -> addServiceFile/
+addDescriptor/addModuleBytes); P6's merge pin exists
+(ServiceLoaderCoverageTest:563-618); the direct test Descriptor at
+JavacServiceLoaderSiteResolverTest:195 asserts certainty only (no
+evidence attributes — `unclassified` harmless); P2b's scan is green
+today (Authorization:87-91 is pure containment); P1's geometry is
+Builder-constructible.
+
+Confidence score: **0.88** (0.85 → 0.88 across plan review) — the decision is recorded and the current
 behavior traced at both reachable arms; the change is labeling-only
 (no gating semantics), which bounds the risk to mislabeling; the
 ladder-sharing mitigation and P1–P4's mechanism matrix are the main
