@@ -241,13 +241,28 @@ equality on both sides.
    (several arms produce the same symbol with different receivers and
    ladders; a feature-time backward identifier scan is provably wrong —
    e.g. `this.m.invoke(...)` is admitted by a field arm that never
-   consults `hasParameter`, yet a caller parameter `m` would exist). So
-   `reflectionSites`/`proxyCallOffsets` capture, per site, whether the
-   admitting arm classified a PARAMETER receiver (an additive
-   `DynamicSite` component or a parallel offset→boolean map built by the
-   extractors at the `addSite`/`add*Receivers` call sites); the
-   feature-build gate reads that captured value, and feature-time
-   re-derivation of the receiver is prohibited. The
+   consults `hasParameter`, yet a caller parameter `m` would exist). The
+   capture is defined at the CHOKE POINT, not per-arm (plan-review round
+   5, finding 1): a scanner-level flag set inside
+   `isDeclaredVariableBefore` when its `hasParameter` arm runs (reset by
+   the admitting arm before its receiver predicate, read after) — because
+   `isJdkApiOwner` itself reaches `isDeclaredVariableBefore` (Layer05:28)
+   for every simple-identifier receiver with a visible value, so
+   parameter-receiver sites admitted by `addJdkOwnerSites`
+   (`Constructor.newInstance`, `Class.newInstance`, `Method.invoke`),
+   the first `addClassForNameSites` disjunct, the `apiReceiver` branch of
+   `addReceiverCallSites`, and `addQualifiedProxyOffsets` all causally
+   consult the correlation arm; per-disjunct capture would silently drop
+   them (invisible incomplete visibility — this issue's own defect
+   class). The short-circuit direction is safe: `isJdkApiOwner` returning
+   true WITHOUT the `isDeclaredVariableBefore` call requires a
+   non-simple-identifier or non-visible-value spelling, which cannot be
+   a bare parameter receiver. One mechanism, not alternatives (round 5,
+   finding 2): a single offset-keyed parameter-arm map built during
+   `reflectionSites`/`proxyCallOffsets` extraction, serving both the
+   reflection `DynamicSite` flow and `proxyFeaturesAt`'s raw-offset flow
+   (`proxyCallOffsets` results are not `DynamicSite`s); both rebuilds
+   re-derive deterministically from the same cached extracts. The
    abstention member identity always uses the declarationStart owner (it
    explains the classification input), even where it diverges from the
    fact-caller's site-offset owner — the C10 divergence fixture asserts
@@ -314,7 +329,13 @@ expected-green characterization pins, see TDD item 1):
   from `javacAbstention` on the same fact); a field/local-receiver twin
   carries NO caller attribute (the round-3 finding-4 causality pin).
   Includes the anchoring divergence fixture (a caller extracted after a
-  preceding nested type's closing brace — the shared-helper pin).
+  preceding nested type's closing brace — the shared-helper pin) and
+  the `addJdkOwnerSites` arm (round 5, finding 1): a
+  `Constructor`/`Method` parameter receiver calling
+  `newInstance()`/`invoke()` inside a multi-type-file caller carries
+  `javacCallerAbstention` — admitted via `isJdkApiOwner`'s
+  `isDeclaredVariableBefore` disjunct, not a bare
+  `isDeclaredVariableBefore` arm.
 - D1 blast-radius pin: a scan containing an abstaining fixture AND a
   ServiceLoader DEFINITE site → the ServiceLoader fact stays DEFINITE,
   `scan.diagnostics()` stays empty and free of every index code (the
@@ -463,6 +484,27 @@ abstaining row under `putIfAbsent`; the #22 descriptor wiring has the
 interface file/ownerType in scope at the choke point; items 1-6 do not
 contradict the invariants section.
 Confidence score after round 4: **0.90**.
+
+Round 5 (fresh adversarial subagent): 2 addressable findings (1 MEDIUM,
+1 LOW), both incorporated: the receiver-arm capture is defined at the
+choke point — a scanner-level flag set inside `isDeclaredVariableBefore`'s
+`hasParameter` arm — because `isJdkApiOwner` reaches that predicate for
+every simple-identifier visible-value receiver, so `addJdkOwnerSites`/
+`addClassForNameSites`/`addReceiverCallSites`/`addQualifiedProxyOffsets`
+parameter-receiver sites causally consult the correlation arm and
+per-disjunct capture would silently drop them (finding 1; new RED cell:
+a `Constructor`/`Method` parameter receiver inside a multi-type-file
+caller); the capture mechanism is a single offset-keyed parameter-arm
+map serving both the reflection `DynamicSite` flow and
+`proxyFeaturesAt`'s raw-offset flow — not alternatives (finding 2).
+Verified clean: `DynamicSite` has zero direct test constructions and no
+equality/serialization consumers; the extraction cache caches extracts
+only, so both rebuilds are deterministic; the short-circuit direction
+of the choke-point flag has no false-positive arm; lambda-parameter
+receivers correctly stay outside the gate.
+Confidence score after round 5: **0.91**. Plan review loop closed at
+round 5 with all findings incorporated; the last two rounds produced
+only plan-precision findings (no design defects).
 
 Confidence score (pre-plan-review): **0.78** — the design is grounded in a
 green-suite probe of what actually abstains on main, the #25 precedent, and
