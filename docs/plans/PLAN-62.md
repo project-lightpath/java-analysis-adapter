@@ -235,6 +235,19 @@ equality on both sides.
    there did the classification consult `parameterMatchesType`'s
    correlation arm, so the attribute stays causal — field/local-receiver
    sites, whose textual ladder is the primary path, do not carry it. The
+   gate uses data CAPTURED AT EXTRACTION TIME (plan-review round 4,
+   finding 1): `DynamicSite` carries only offset/symbol/target, and the
+   admitting extractor arm is NOT recoverable from those at feature time
+   (several arms produce the same symbol with different receivers and
+   ladders; a feature-time backward identifier scan is provably wrong —
+   e.g. `this.m.invoke(...)` is admitted by a field arm that never
+   consults `hasParameter`, yet a caller parameter `m` would exist). So
+   `reflectionSites`/`proxyCallOffsets` capture, per site, whether the
+   admitting arm classified a PARAMETER receiver (an additive
+   `DynamicSite` component or a parallel offset→boolean map built by the
+   extractors at the `addSite`/`add*Receivers` call sites); the
+   feature-build gate reads that captured value, and feature-time
+   re-derivation of the receiver is prohibited. The
    abstention member identity always uses the declarationStart owner (it
    explains the classification input), even where it diverges from the
    fact-caller's site-offset owner — the C10 divergence fixture asserts
@@ -308,9 +321,12 @@ expected-green characterization pins, see TDD item 1):
   isUnique hazard pin).
 - D2 opt-out twin — pinned on the UNGATED paths specifically (the
   annotation-access descriptor, the repair decline, and the reflection
-  re-query, plan-review finding 1): `setProperty(FLAG, "false")` on the
-  C1/C4/C6/C7/C9/C10 fixtures → no `javacAbstention*` attributes anywhere
-  (byte-identical to main).
+  re-query, plan-review round 1, finding 1) AND on seam C (round 4,
+  finding 2 — the one seam whose decline classification needs a NEW
+  explicit `enabled()` check, because flag-off and type-absent both
+  present as an empty candidate list): `setProperty(FLAG, "false")` on
+  the C1/C4/C5/C6/C7/C8/C9/C10 fixtures → no `javacAbstention*`
+  attributes anywhere (byte-identical to main).
 - D3 successful-correlation control: a correlating member → NO attribute.
 - D4 cache-ordering pin, cold-then-warm and warm-then-cold ACROSS the flag
   boundary (the `JavacAnnotationMigrationTest:290-311` warm-cache pattern,
@@ -430,6 +446,23 @@ covers every caller (no consumer needs member AND non-NONE abstention;
 sites are explicit-arity with no equality/map-key consumers; the
 RED-commit shape is AGENTS-coherent.
 Confidence score after round 3: **0.89**.
+
+Round 4 (fresh adversarial subagent): 2 addressable findings (2 MEDIUM),
+both incorporated: the item-5 parameter-receiver gate now uses data
+captured at extraction time (an additive per-site receiver-arm component
+built by the extractors — `DynamicSite` carries only offset/symbol/target
+and the admitting arm is not recoverable at feature time; a
+feature-time backward identifier scan is provably wrong for
+`this.m.invoke(...)`-style field arms, round 4, finding 1); C8 (and C5)
+added to D2's opt-out fixture list — seam C's decline classification
+needs a new explicit `enabled()` check because flag-off and type-absent
+both present as an empty candidate list (finding 2). Verified clean:
+`RepositoryMethod.identity()` key spaces are disjoint (name vs
+parenthesised signature), so the guaranteed row cannot shadow a declared
+abstaining row under `putIfAbsent`; the #22 descriptor wiring has the
+interface file/ownerType in scope at the choke point; items 1-6 do not
+contradict the invariants section.
+Confidence score after round 4: **0.90**.
 
 Confidence score (pre-plan-review): **0.78** — the design is grounded in a
 green-suite probe of what actually abstains on main, the #25 precedent, and
