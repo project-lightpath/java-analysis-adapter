@@ -160,6 +160,31 @@ class ServiceLoaderDescriptorProvenanceTest {
   }
 
   @Test
+  void dependencyEntryDescriptorIsLabeledWithoutRootScope()
+      throws IOException {
+    // The dependency arm's mechanism, and the synthetic-path null-label
+    // contract: a dependency directory's services file carries
+    // dependency_entry and no root-scope label (P4 covered only the
+    // applicationClasses half of the pairwise matrix).
+    Path root = temp.resolve("p4b");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path dependency = root.resolve("lib");
+    writeBridge(sourceRoot);
+    writeServices(dependency.resolve("META-INF/services"));
+    AnalysisContext context = baseBuilder(root, sourceRoot)
+        .dependencyClasspath(List.of(dependency))
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan =
+        ServiceLoaderDescriptorScanner.scan(context);
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    SemanticCallFacts.Evidence evidence = descriptorEvidence(context, scan);
+    assertEquals("dependency_entry", evidence.attributes().get("descriptorProvenance"),
+        evidence.attributes().toString());
+    assertFalse(evidence.attributes().containsKey("descriptorRootScope"),
+        evidence.attributes().toString());
+  }
+
+  @Test
   void labelsReachTheProviderFactEndToEnd() throws IOException {
     Path root = temp.resolve("p5");
     Path sourceRoot = root.resolve("src/main/java");

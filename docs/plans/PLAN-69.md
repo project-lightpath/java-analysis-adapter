@@ -152,11 +152,17 @@ ONE class receives a sanctioned MECHANICAL signature update (item 5).
      not under it (plan-review round 1 finding 1's geometry; the
      original `production/included` expectation was wrong and is
      corrected here).
-   - **P4 (label RED): the entry control.** A dependency-entry (or
-     applicationClasses) descriptor: `descriptorProvenance=
-     dependency_entry` (or `application_classes`), no
-     `descriptorRootScope` attribute (synthetic archive paths get
-     none; real entry paths under no declared root get none).
+   - **P4 (label RED): the applicationClasses control.** An
+     applicationClasses descriptor: `descriptorProvenance=
+     application_classes`, no `descriptorRootScope` attribute.
+   - **P4b (added at implementation review): the dependency-entry
+     control.** A dependency-entry directory's services file:
+     `descriptorProvenance=dependency_entry`, no
+     `descriptorRootScope` — pinning the dependency arm's mechanism
+     and the synthetic-path null-label contract (P4 originally
+     covered only the applicationClasses half of the pairwise
+     matrix; the reviewer flagged the missing cell per AGENTS'
+     close-remaining-cells rule).
    - **P5 (label RED): end-to-end.** The P1 fixture through the full
      scan → resolution path: the provider fact's evidence carries
      both attributes (the label reaches the consumer, not just the
@@ -188,6 +194,15 @@ ONE class receives a sanctioned MECHANICAL signature update (item 5).
    BASELINED with the WMC value embedded in the fingerprint's
    message, so adding methods to the class breaks the baseline match
    — the method count (and therefore WMC) is preserved by design.
+   **P5 correction, recorded (implementation-review finding 3):** the
+   RED-state P5 passed an EMPTY graph, so `providerFacts()` could
+   never attach descriptor evidence — the cell was red for the wrong
+   reason and would have stayed red at GREEN. The GREEN-state cell
+   constructs the CallEdge in the AnalysisGraph and the fixture
+   writes the Provider/ProviderImpl sources the javac site resolver
+   needs (the edge's line is the `record()` invocation's line, 4).
+   Assertion shape unchanged; recorded here per the RED-test-change
+   discipline.
 5. **Sanctioned mechanical existing-test edit (assertions
    untouched).** `ServiceLoaderSeekableZipTest`'s six
    explicit-config `ArchiveSource.scan(...)` call sites gain the

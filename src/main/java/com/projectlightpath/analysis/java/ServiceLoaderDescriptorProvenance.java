@@ -13,6 +13,14 @@ final class ServiceLoaderDescriptorProvenance {
    * Returns the explicitly selected service descriptor locations: observed
    * metadata paths that stay inside the repository root and are not the root
    * itself.
+   *
+   * <p>Issue #69 decision record: paths selected here override root-scope
+   * exclusion BY DESIGN (see {@link ServiceLoaderDescriptorAuthorization
+   * #authorizedPath}) — an owner-declared OBSERVED location is visible for
+   * investigation even when it sits inside an excluded or out-of-scope
+   * root, and every descriptor admitted through it is provenance-labeled
+   * ({@code descriptorProvenance=selected_metadata} plus the root-scope
+   * label) so the override can never include anything silently.
    */
   static List<Path> selectedLocations(AnalysisContext context) {
     Path repositoryRoot = context.repositoryRoot().toAbsolutePath().normalize();
@@ -40,7 +48,12 @@ final class ServiceLoaderDescriptorProvenance {
     return List.copyOf(result);
   }
 
-  /** True when {@code normalized} is one of the explicitly selected locations. */
+  /**
+   * True when {@code normalized} is one of the explicitly selected locations
+   * — the issue #69 override arm: explicit selection beats root-scope
+   * exclusion (see {@link ServiceLoaderDescriptorAuthorization#authorizedPath}
+   * for the decision record), with the admission provenance-labeled.
+   */
   static boolean explicitlySelected(AnalysisContext context, Path normalized) {
     return selectedLocations(context).stream()
         .anyMatch(selected -> ServiceLoaderDescriptorAuthorization.sameRealPath(selected, normalized));

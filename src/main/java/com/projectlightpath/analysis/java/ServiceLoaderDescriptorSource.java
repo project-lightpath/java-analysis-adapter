@@ -41,7 +41,7 @@ final class ServiceLoaderDescriptorSource {
   /**
    * Scans one selected classpath entry. {@code descriptors} must be mutable: a
    * retention rollback removes the descriptors this source contributed.
-   * The 5-arg form is the test/back-compat entry (unclassified origin);
+   * The short forms are test/back-compat entries (unclassified origin);
    * production callers use the 7-arg form with the admission mechanism.
    */
   static void scanClasspathEntry(

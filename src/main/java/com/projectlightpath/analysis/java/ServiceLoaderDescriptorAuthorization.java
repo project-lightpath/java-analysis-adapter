@@ -78,6 +78,21 @@ final class ServiceLoaderDescriptorAuthorization {
     return false;
   }
 
+  /**
+   * Authorizes descriptor paths against the selected analysis inputs.
+   *
+   * <p>Issue #69 decision record: an explicitly selected OBSERVED metadata
+   * path (the {@code explicitlySelected} fallback below) OVERRIDES
+   * root-scope exclusion BY DESIGN. The owner's rationale: when a CVE lands
+   * in a test library, the analysis must be able to answer "is this
+   * reachable from production code?" — which requires SEEING the selected
+   * location, not blindness. Exclusion (#68) governs what is PUBLISHED as
+   * production facts; explicit selection governs what can be SEEN for
+   * investigation, and everything seen carries its provenance label
+   * ({@code descriptorProvenance}/{@code descriptorRootScope} on the
+   * descriptor evidence) — the label is what makes this override
+   * never-silent.
+   */
   static boolean authorizedPath(
       AnalysisContext context, Path path, List<Path> dependencyEntries) {
     Path normalized = path.toAbsolutePath().normalize();
