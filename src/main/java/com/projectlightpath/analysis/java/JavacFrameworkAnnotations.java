@@ -59,10 +59,14 @@ final class JavacFrameworkAnnotations {
     if (!JavacSourceSymbolIndex.enabled()) {
       return MirrorLookup.EMPTY;
     }
+    Optional<JavacSourceSymbolIndex> index =
+        JavacSourceSymbolIndex.intactIndex(context);
+    if (index.isEmpty()) {
+      // Off, absent, or a failed build: no per-member evidence.
+      return MirrorLookup.EMPTY;
+    }
     List<JavacSourceSymbolIndex.TypeInfo> named =
-        JavacSourceSymbolIndex.of(context)
-            .map(index -> index.typesIn(file.path()))
-            .orElse(List.of()).stream()
+        index.orElseThrow().typesIn(file.path()).stream()
             .filter(type -> type.canonicalName().equals(file.typeName())
                 || type.binaryName().equals(file.typeName()))
             .toList();
@@ -106,6 +110,12 @@ final class JavacFrameworkAnnotations {
     if (!JavacSourceSymbolIndex.enabled() || owner == null || owner.isEmpty()) {
       return new MemberLookup(Optional.empty(), Optional.empty());
     }
+    Optional<JavacSourceSymbolIndex> index =
+        JavacSourceSymbolIndex.intactIndex(context);
+    if (index.isEmpty()) {
+      // Off, absent, or a failed build: no per-member evidence.
+      return new MemberLookup(Optional.empty(), Optional.empty());
+    }
     String identity =
         JavacAbstentionEvidence.memberIdentity(owner, name, Math.max(arity, 0));
     if (DOLLAR_DIGIT.matcher(owner).find()) {
@@ -113,9 +123,7 @@ final class JavacFrameworkAnnotations {
           new JavacAbstentionEvidence("mirror_owner_unusable", identity, List.of())));
     }
     List<JavacSourceSymbolIndex.TypeInfo> raw =
-        JavacSourceSymbolIndex.of(context)
-            .map(index -> index.type(owner))
-            .orElse(List.of());
+        index.orElseThrow().type(owner);
     if (raw.isEmpty()) {
       return new MemberLookup(Optional.empty(), Optional.of(
           new JavacAbstentionEvidence("mirror_owner_absent", identity, List.of())));
@@ -147,9 +155,7 @@ final class JavacFrameworkAnnotations {
     JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
     if (found.errorType()) {
       List<String> codes = raw.size() == 1
-          ? JavacSourceSymbolIndex.of(context)
-              .map(index -> index.errorCodesFor(raw.get(0).file()))
-              .orElse(List.of())
+          ? index.orElseThrow().errorCodesFor(raw.get(0).file())
           : List.of();
       return new MemberLookup(Optional.empty(), Optional.of(
           new JavacAbstentionEvidence("mirror_member_error_type", identity, codes)));

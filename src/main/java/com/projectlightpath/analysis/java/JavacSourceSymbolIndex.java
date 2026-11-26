@@ -122,6 +122,18 @@ final class JavacSourceSymbolIndex {
     return Optional.of(CACHE.computeIfAbsent(context, JavacSourceSymbolIndex::build));
   }
 
+  /**
+   * The per-context index when it is usable for per-member classification:
+   * absent when the seam is off, the index is missing, or the build failed
+   * (the #25 integrity codes — a failed build is a scan-global integrity
+   * failure, not a per-member abstention, so the #62 channel stays silent
+   * rather than mislabeling every decline; review round 2, finding 1).
+   */
+  static Optional<JavacSourceSymbolIndex> intactIndex(AnalysisContext context) {
+    Optional<JavacSourceSymbolIndex> index = of(context);
+    return index.filter(candidate -> !candidate.buildFailed());
+  }
+
   /** Returns every indexed type sharing a canonical or binary name, deduped. */
   List<TypeInfo> type(String canonicalOrBinaryName) {
     if (canonicalOrBinaryName == null || canonicalOrBinaryName.isEmpty()) {
@@ -168,6 +180,20 @@ final class JavacSourceSymbolIndex {
   List<IndexDiagnostic> diagnostics() {
     return diagnostics;
   }
+
+  /**
+   * Whether the index build failed (the #25 integrity codes): such an
+   * index is served fail-visible with empty maps, and every decline it
+   * causes is a BUILD failure, not a per-member abstention — the #62
+   * channel must stay silent rather than mislabel it.
+   */
+  boolean buildFailed() {
+    return diagnostics.stream().anyMatch(row -> INTEGRITY_CODES.contains(row.code()));
+  }
+
+  private static final java.util.Set<String> INTEGRITY_CODES = java.util.Set.of(
+      "index_build_error", "javac_unavailable", "missing_source",
+      "missing_classpath", "missing_source_root", "javac_global_error");
 
   /**
    * Returns the deduped compiler ERROR codes recorded for one source
@@ -642,8 +668,18 @@ final class JavacSourceSymbolIndex {
           copyOfLists(groupedByCanonical(flagged)),
           copyOfLists(flaggedByBinary),
           copyOfLists(packageAnnotationsByFile), List.copyOf(diagnostics),
-          Map.copyOf(errorCodesByFile),
+          copyOfCodeLists(errorCodesByFile),
           elapsedMillis(startNano), peakHeap);
+    }
+
+    /** Deep-copies the per-file error-code lists (no live aliases escape). */
+    private static Map<Path, List<String>> copyOfCodeLists(
+        Map<Path, List<String>> codes) {
+      Map<Path, List<String>> result = new LinkedHashMap<>();
+      for (Map.Entry<Path, List<String>> entry : codes.entrySet()) {
+        result.put(entry.getKey(), List.copyOf(entry.getValue()));
+      }
+      return Map.copyOf(result);
     }
 
     private static Map<String, List<TypeInfo>> flagDuplicates(

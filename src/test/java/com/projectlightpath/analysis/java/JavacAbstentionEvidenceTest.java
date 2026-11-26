@@ -133,6 +133,8 @@ class JavacAbstentionEvidenceTest {
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("type_parameter_overload_group",
         attribute(binding, "javacAbstention"), binding.evidence().toString());
+    assertEquals("demo.BeanFactory#make(1)",
+        attribute(binding, "javacAbstentionMember"), binding.evidence().toString());
   }
 
   // C4 + C5: a producer in a multi-type file — the descriptor and the
@@ -321,6 +323,8 @@ class JavacAbstentionEvidenceTest {
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("multi_type_file", attribute(findById, "javacAbstention"),
         findById.evidence().toString());
+    assertEquals("demo.AccountRepository#findById(1)",
+        attribute(findById, "javacAbstentionMember"), findById.evidence().toString());
   }
 
   // C10: a reflection site whose receiver is a caller PARAMETER, inside
@@ -541,6 +545,61 @@ class JavacAbstentionEvidenceTest {
             evidence.attributes().containsKey("javacCallerAbstention"))),
         "a warm-JVM flag-off scan carries no abstention: "
             + optedOut.providerFacts());
+  }
+
+  // D5 (review round 2, finding 1): a FAILED index build is a scan-global
+  // integrity failure, not a per-member abstention — the channel stays
+  // silent rather than labeling every decline multi_type_file.
+  @Test
+  void failedIndexBuildIsNotAMemberAbstention() throws IOException {
+    JavacSourceSymbolIndex.COMPILER.set(() -> null);
+    try {
+      SemanticCallFacts facts = analyze(List.of("""
+          package demo;
+          import org.springframework.scheduling.annotation.Async;
+          import org.springframework.stereotype.Service;
+          @Async @Service public class ProxyService {
+            class Nested { }
+            public String visible() { return ""; }
+          }
+          """));
+      SemanticCallFacts.Fact proxy = frameworkFact(facts, "proxy_dispatch",
+          "demo.ProxyService#visible");
+      assertNull(attribute(proxy, "javacAbstention"),
+          "a failed index build must not be mislabeled a per-member cause: "
+              + proxy.evidence());
+      assertTrue(facts.diagnostics().isEmpty(),
+          "the integrity failure stays on the index diagnostics surface: "
+              + facts.diagnostics());
+    } finally {
+      JavacSourceSymbolIndex.COMPILER.set(ToolProvider::getSystemJavaCompiler);
+    }
+  }
+
+  // D6 (review round 2, finding 3): the PROXY path's caller-abstention
+  // gate, in the affirmative — a bare-receiver proxy construction inside
+  // a member whose correlation abstains.
+  @Test
+  void proxyCallerAbstentionIsVisible() throws IOException {
+    SemanticCallFacts facts = analyzeDynamic(List.of("""
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class ProxySites {
+          void wrap(java.lang.reflect.Proxy Proxy) {
+            Proxy.newProxyInstance(null, null, null);
+          }
+          class Nested { }
+        }
+        """));
+    SemanticCallFacts.Fact proxy = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.caller().startsWith("demo.ProxySites#"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals("multi_type_file",
+        attribute(proxy, "javacCallerAbstention"), proxy.evidence().toString());
+    assertEquals("demo.ProxySites#wrap(1)",
+        attribute(proxy, "javacCallerAbstentionMember"), proxy.evidence().toString());
   }
 
   private SemanticCallFacts.Fact frameworkFact(

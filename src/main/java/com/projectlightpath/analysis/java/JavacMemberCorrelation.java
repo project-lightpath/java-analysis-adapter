@@ -158,6 +158,14 @@ final class JavacMemberCorrelation {
     if (!JavacSourceSymbolIndex.enabled()) {
       return JavacCorrelation.empty();
     }
+    Optional<JavacSourceSymbolIndex> index =
+        JavacSourceSymbolIndex.intactIndex(context);
+    if (index.isEmpty()) {
+      // A failed index build is a scan-global integrity failure (#25's
+      // fail-visible contract), not a per-member abstention: the channel
+      // stays silent rather than mislabeling every decline.
+      return JavacCorrelation.empty();
+    }
     int arity = SourceMetadataScanner.parameters(declaration.parameters()).size();
     String identity =
         JavacAbstentionEvidence.memberIdentity(ownerType, indexName, arity);
@@ -168,10 +176,6 @@ final class JavacMemberCorrelation {
     if (!singleTypeFile(file)) {
       return JavacCorrelation.abstained(new JavacAbstentionEvidence(
           "multi_type_file", identity, List.of()));
-    }
-    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
-    if (index.isEmpty()) {
-      return JavacCorrelation.empty();
     }
     List<JavacSourceSymbolIndex.MemberInfo> group = index.orElseThrow()
         .members(ownerType, indexName).stream()

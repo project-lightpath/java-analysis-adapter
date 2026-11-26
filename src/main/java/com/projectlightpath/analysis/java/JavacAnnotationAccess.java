@@ -14,11 +14,9 @@ import java.util.Optional;
  * for consumers that do not route through it.
  */
 final class JavacAnnotationAccess {
-  private final AnalysisContext context;
   private final SourceMetadataScanner scanner;
 
   private JavacAnnotationAccess(SourceMetadataScanner scanner) {
-    this.context = scanner.context;
     this.scanner = scanner;
   }
 
@@ -48,64 +46,15 @@ final class JavacAnnotationAccess {
   }
 
   /**
-   * The seam-B lookup with its decline evidence (#62). The opt-out gate
-   * lives inside: with the flag off, no evidence is constructed. The
-   * decline classification mirrors {@link #member}'s counting rule —
-   * ALL same-arity overloads are counted before rejecting error types,
-   * so an unresolved overload cannot let a resolved sibling look unique.
+   * The seam-B lookup with its decline evidence (#62), delegated to
+   * {@link JavacAnnotationMemberLookup} (the PMD-forced extraction).
    */
   private MemberLookup memberLookup(
       String typeName, String memberName, int parameterCount) {
-    if (!JavacSourceSymbolIndex.enabled()) {
-      return MemberLookup.EMPTY;
-    }
-    List<JavacSourceSymbolIndex.MemberInfo> matches =
-        JavacSourceSymbolIndex.of(context)
-            .map(index -> index.members(typeName, memberName).stream()
-                .filter(member -> member.kind().equals("method")
-                    && member.parameterTypes().size() == parameterCount)
-                .toList())
-            .orElse(List.of());
-    String identity =
-        JavacAbstentionEvidence.memberIdentity(typeName, memberName, parameterCount);
-    if (matches.isEmpty()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("annotation_member_absent", identity, List.of())));
-    }
-    if (matches.size() > 1) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("annotation_member_ambiguous", identity, List.of())));
-    }
-    JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
-    if (found.errorType()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("annotation_member_error_type", identity,
-              uniqueOwnerErrorCodes(typeFile(typeName)))));
-    }
-    return new MemberLookup(Optional.of(found), Optional.empty());
-  }
-
-  /**
-   * The declaring file's error codes, only when the owner name resolves
-   * to exactly one index type (same-name types across files cannot be
-   * attributed to one member's file — the ambiguity is already the
-   * decline's story).
-   */
-  private List<String> uniqueOwnerErrorCodes(
-      List<JavacSourceSymbolIndex.TypeInfo> entries) {
-    if (entries.size() != 1) {
-      return List.of();
-    }
-    return JavacSourceSymbolIndex.of(context)
-        .map(index -> index.errorCodesFor(entries.get(0).file()))
-        .orElse(List.of());
-  }
-
-  /** The declaring file of the (unique) index type, for the error-code join. */
-  private List<JavacSourceSymbolIndex.TypeInfo> typeFile(String typeName) {
-    return JavacSourceSymbolIndex.of(context)
-        .map(index -> index.type(typeName))
-        .orElse(List.of());
+    JavacAnnotationMemberLookup.MemberLookup lookup =
+        JavacAnnotationMemberLookup.of(scanner)
+            .lookup(typeName, memberName, parameterCount);
+    return new MemberLookup(lookup.member(), lookup.abstention());
   }
 
   /**
