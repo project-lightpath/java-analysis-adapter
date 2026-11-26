@@ -89,9 +89,10 @@ final class ServiceLoaderDescriptorAuthorization {
    * location, not blindness. Exclusion (#68) governs what is PUBLISHED as
    * production facts; explicit selection governs what can be SEEN for
    * investigation, and everything seen carries its provenance label
-   * ({@code descriptorProvenance}/{@code descriptorRootScope} on the
-   * descriptor evidence) — the label is what makes this override
-   * never-silent.
+   * ({@code descriptorProvenance} always, plus
+   * {@code descriptorRootScope} when the path falls under a declared
+   * root, on the descriptor evidence) — the label is what makes this
+   * override never-silent.
    */
   static boolean authorizedPath(
       AnalysisContext context, Path path, List<Path> dependencyEntries) {

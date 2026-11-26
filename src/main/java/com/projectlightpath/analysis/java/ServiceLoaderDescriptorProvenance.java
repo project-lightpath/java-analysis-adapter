@@ -19,8 +19,9 @@ final class ServiceLoaderDescriptorProvenance {
    * #authorizedPath}) — an owner-declared OBSERVED location is visible for
    * investigation even when it sits inside an excluded or out-of-scope
    * root, and every descriptor admitted through it is provenance-labeled
-   * ({@code descriptorProvenance=selected_metadata} plus the root-scope
-   * label) so the override can never include anything silently.
+   * ({@code descriptorProvenance=selected_metadata} always, plus the
+   * root-scope label when the path falls under a declared root) so the
+   * override can never include anything silently.
    */
   static List<Path> selectedLocations(AnalysisContext context) {
     Path repositoryRoot = context.repositoryRoot().toAbsolutePath().normalize();
