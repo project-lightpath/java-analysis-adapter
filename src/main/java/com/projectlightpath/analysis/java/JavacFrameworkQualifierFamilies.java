@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Qualifier-family interpretation over index mirrors: the six-family table
@@ -83,7 +82,7 @@ final class JavacFrameworkQualifierFamilies {
     SourceMetadataScannerState.ParsedAnnotation occurrence =
         SourceMetadataScanner.parseAnnotation(source, matcher);
     JavacSourceSymbolIndex.AnnotationInfo mirror =
-        takeMirror(remaining, matcher, source);
+        takeMirror(remaining, matcher, occurrence);
     List<String> families =
         mirror == null || !mirrorCanReplace(mirror, block)
             ? null
@@ -168,9 +167,8 @@ final class JavacFrameworkQualifierFamilies {
   private static JavacSourceSymbolIndex.AnnotationInfo takeMirror(
       List<JavacSourceSymbolIndex.AnnotationInfo> remaining,
       Matcher matcher,
-      String source) {
-    String occurrenceArguments =
-        SourceMetadataScanner.parseAnnotation(source, matcher).arguments();
+      SourceMetadataScannerState.ParsedAnnotation occurrence) {
+    String occurrenceArguments = occurrence.arguments();
     for (int index = 0; index < remaining.size(); index++) {
       String mirrorName = JavacFrameworkAnnotations.simpleName(remaining.get(index));
       if (captureMatches(matcher.group(1), mirrorName, occurrenceArguments)) {

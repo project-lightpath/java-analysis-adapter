@@ -26,7 +26,8 @@ import org.junit.jupiter.api.parallel.Isolated;
  * ambiguity shapes downgrade to POSSIBLE with a per-fact diagnostic.
  *
  * <p>Every cell asserts through the full analyze path (scanner features
- * to facts), never vacuously. Flag-off goldens pin the default output.
+ * to facts), never vacuously. Flag-off goldens pin the opt-out (textual)
+ * output — the default is ON since issue #66.
  * The class runs same-thread and {@link Isolated isolated} because it
  * writes the flag.
  */

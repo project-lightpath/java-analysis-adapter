@@ -153,7 +153,7 @@ class JavacBinaryNameMigrationTest {
     System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner offScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate off = producer(offScanner, "entry");
-    // The flag-off descriptor must be computed while the flag is CLEAR:
+    // The flag-off descriptor must be computed while the flag is OFF:
     // producerDescriptor reads the flag at call time, not scanner-creation
     // time.
     Optional<String> offDescriptor =
