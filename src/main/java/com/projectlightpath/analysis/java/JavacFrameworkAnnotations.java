@@ -59,10 +59,8 @@ final class JavacFrameworkAnnotations {
     if (!JavacSourceSymbolIndex.enabled()) {
       return MirrorLookup.EMPTY;
     }
-    Optional<JavacSourceSymbolIndex> index =
-        JavacSourceSymbolIndex.intactIndex(context);
+    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
     if (index.isEmpty()) {
-      // Off, absent, or a failed build: no per-member evidence.
       return MirrorLookup.EMPTY;
     }
     List<JavacSourceSymbolIndex.TypeInfo> named =
@@ -72,21 +70,37 @@ final class JavacFrameworkAnnotations {
             .toList();
     String identity = file.typeName();
     if (named.isEmpty()) {
-      return new MirrorLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_type_absent", identity, List.of())));
+      return withSilencedEvidence(index.orElseThrow(), new MirrorLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "mirror_type_absent", identity, List.of()))));
     }
     List<JavacSourceSymbolIndex.TypeInfo> usable =
         named.stream().filter(JavacFrameworkAnnotations::shapeIsUsable).toList();
     if (usable.isEmpty()) {
-      return new MirrorLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_owner_unusable", identity, List.of())));
+      return withSilencedEvidence(index.orElseThrow(), new MirrorLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "mirror_owner_unusable", identity, List.of()))));
     }
     if (usable.size() > 1) {
-      return new MirrorLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_owner_ambiguous", identity, List.of())));
+      return withSilencedEvidence(index.orElseThrow(), new MirrorLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "mirror_owner_ambiguous", identity, List.of()))));
     }
     return new MirrorLookup(
         Optional.of(usable.get(0).annotations()), Optional.empty());
+  }
+
+  /**
+   * Suppresses the decline evidence when the index build failed while
+   * keeping the mirror result: a partial index still carries usable
+   * types (CodeRabbit CR-1, finding 4709913078).
+   */
+  private static MirrorLookup withSilencedEvidence(
+      JavacSourceSymbolIndex index, MirrorLookup lookup) {
+    if (lookup.mirrors().isPresent() || !index.buildFailed()) {
+      return lookup;
+    }
+    return MirrorLookup.EMPTY;
   }
 
   /** Returns the unique index member matching owner, name, kind, and arity. */
@@ -95,72 +109,14 @@ final class JavacFrameworkAnnotations {
     return memberLookup(owner, name, kind, arity).member();
   }
 
-  /** One seam-C member lookup: the member, or the decline evidence (#62). */
-  record MemberLookup(
-      Optional<JavacSourceSymbolIndex.MemberInfo> member,
-      Optional<JavacAbstentionEvidence> abstention) {}
-
   /**
-   * The member lookup with its decline evidence. Count ALL same-arity
-   * overloads before rejecting error types: filtering first would create
-   * false uniqueness when an unresolved overload shadows a resolved one
-   * (the #22 ambiguity rule).
+   * The seam-C member lookup with its decline evidence (#62), delegated
+   * to {@link JavacFrameworkMemberLookup} (the PMD-forced extraction).
    */
-  MemberLookup memberLookup(String owner, String name, String kind, int arity) {
-    if (!JavacSourceSymbolIndex.enabled() || owner == null || owner.isEmpty()) {
-      return new MemberLookup(Optional.empty(), Optional.empty());
-    }
-    Optional<JavacSourceSymbolIndex> index =
-        JavacSourceSymbolIndex.intactIndex(context);
-    if (index.isEmpty()) {
-      // Off, absent, or a failed build: no per-member evidence.
-      return new MemberLookup(Optional.empty(), Optional.empty());
-    }
-    String identity =
-        JavacAbstentionEvidence.memberIdentity(owner, name, Math.max(arity, 0));
-    if (DOLLAR_DIGIT.matcher(owner).find()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_owner_unusable", identity, List.of())));
-    }
-    List<JavacSourceSymbolIndex.TypeInfo> raw =
-        index.orElseThrow().type(owner);
-    if (raw.isEmpty()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_owner_absent", identity, List.of())));
-    }
-    List<JavacSourceSymbolIndex.TypeInfo> usable =
-        raw.stream().filter(JavacFrameworkAnnotations::shapeIsUsable).toList();
-    if (usable.isEmpty()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_owner_unusable", identity, List.of())));
-    }
-    if (usable.size() > 1) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_owner_ambiguous", identity, List.of())));
-    }
-    List<JavacSourceSymbolIndex.MemberInfo> matches = usable.get(0).members().stream()
-        .filter(candidate -> candidate.name().equals(name))
-        .filter(candidate -> candidate.kind().equals(kind))
-        .filter(candidate -> arity < 0
-            || candidate.parameterTypes().size() == arity)
-        .toList();
-    if (matches.isEmpty()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_member_absent", identity, List.of())));
-    }
-    if (matches.size() > 1) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_member_ambiguous", identity, List.of())));
-    }
-    JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
-    if (found.errorType()) {
-      List<String> codes = raw.size() == 1
-          ? index.orElseThrow().errorCodesFor(raw.get(0).file())
-          : List.of();
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("mirror_member_error_type", identity, codes)));
-    }
-    return new MemberLookup(Optional.of(found), Optional.empty());
+  JavacFrameworkMemberLookup.MemberLookup memberLookup(
+      String owner, String name, String kind, int arity) {
+    return JavacFrameworkMemberLookup.forContext(context)
+        .lookup(owner, name, kind, arity);
   }
 
   /** Returns one member's declaration annotation mirrors. */
@@ -259,7 +215,8 @@ final class JavacFrameworkAnnotations {
     return candidates.size() == 1 ? Optional.of(candidates.get(0)) : Optional.empty();
   }
 
-  private static boolean shapeIsUsable(JavacSourceSymbolIndex.TypeInfo type) {
+  /** Reports whether one owner type's shape is usable for mirror correlation. */
+  static boolean shapeIsUsable(JavacSourceSymbolIndex.TypeInfo type) {
     return !type.shape().errorType()
         && !type.shape().duplicateBinaryName()
         && !"LOCAL".equals(type.nestingKind())

@@ -39,10 +39,8 @@ final class JavacAnnotationMemberLookup {
     if (!JavacSourceSymbolIndex.enabled()) {
       return MemberLookup.EMPTY;
     }
-    Optional<JavacSourceSymbolIndex> index =
-        JavacSourceSymbolIndex.intactIndex(context);
+    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
     if (index.isEmpty()) {
-      // Off, absent, or a failed build: no per-member evidence.
       return MemberLookup.EMPTY;
     }
     List<JavacSourceSymbolIndex.MemberInfo> matches =
@@ -53,20 +51,37 @@ final class JavacAnnotationMemberLookup {
     String identity =
         JavacAbstentionEvidence.memberIdentity(typeName, memberName, parameterCount);
     if (matches.isEmpty()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("annotation_member_absent", identity, List.of())));
+      return withSilencedEvidence(index.orElseThrow(), new MemberLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "annotation_member_absent", identity, List.of()))));
     }
     if (matches.size() > 1) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("annotation_member_ambiguous", identity, List.of())));
+      return withSilencedEvidence(index.orElseThrow(), new MemberLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "annotation_member_ambiguous", identity, List.of()))));
     }
     JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
     if (found.errorType()) {
-      return new MemberLookup(Optional.empty(), Optional.of(
-          new JavacAbstentionEvidence("annotation_member_error_type", identity,
-              uniqueOwnerErrorCodes(index.orElseThrow(), typeName))));
+      return withSilencedEvidence(index.orElseThrow(), new MemberLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "annotation_member_error_type", identity,
+              uniqueOwnerErrorCodes(index.orElseThrow(), typeName)))));
     }
     return new MemberLookup(Optional.of(found), Optional.empty());
+  }
+
+  /**
+   * Suppresses the decline evidence when the index build failed while
+   * keeping the lookup result: a partial index still carries usable
+   * members (CodeRabbit CR-1, finding 4709913078) — a scan-global build
+   * failure is not a per-member decline.
+   */
+  private static MemberLookup withSilencedEvidence(
+      JavacSourceSymbolIndex index, MemberLookup lookup) {
+    if (lookup.member().isPresent() || !index.buildFailed()) {
+      return lookup;
+    }
+    return MemberLookup.EMPTY;
   }
 
   /**

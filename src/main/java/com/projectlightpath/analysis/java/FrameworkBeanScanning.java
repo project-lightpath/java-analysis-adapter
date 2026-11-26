@@ -166,7 +166,7 @@ final class FrameworkBeanScanning {
       }
       JavacFrameworkAnnotations.MirrorLookup classMirrors =
           javac.typeAnnotationsLookup(file);
-      JavacFrameworkAnnotations.MemberLookup methodMirrors = javac.memberLookup(
+      JavacFrameworkMemberLookup.MemberLookup methodMirrors = javac.memberLookup(
           scanner.typeContaining(file, method.start()), method.name(), "method",
           JavacFrameworkAnnotations.parameterArity(method.parameters()));
       JavacAbstentionEvidence mirrorAbstention = methodMirrors.abstention()

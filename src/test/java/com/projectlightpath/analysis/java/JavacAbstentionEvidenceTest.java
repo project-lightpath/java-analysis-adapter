@@ -423,11 +423,15 @@ class JavacAbstentionEvidenceTest {
 
     AnalysisContext context = context(source, classes, List.of(unique));
     SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
-    assertTrue(facts.providerFacts().stream()
+    List<SemanticCallFacts.Fact> serviceLoaderFacts = facts.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+    assertFalse(serviceLoaderFacts.isEmpty(),
+        "the ServiceLoader site must produce facts: " + facts.providerFacts());
+    assertTrue(serviceLoaderFacts.stream()
         .allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.DEFINITE),
         "an unrelated abstention must not block DEFINITE promotion: "
-            + facts.providerFacts());
+            + serviceLoaderFacts);
     assertTrue(facts.diagnostics().isEmpty(),
         "the channel must never enter scan.diagnostics(): " + facts.diagnostics());
     assertTrue(facts.providerFacts().stream()
@@ -538,14 +542,61 @@ class JavacAbstentionEvidenceTest {
           class Nested { }
         }
         """);
+    write(optOutRoot.resolve("demo/Overloaded.java"), """
+        package demo;
+        public interface Overloaded {
+          void run(@Mar$k java.lang.String first);
+          void run(/* odd */ java.lang.Integer count);
+        }
+        """);
+    write(optOutRoot.resolve("demo/ProxySites.java"), """
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class ProxySites {
+          void wrap(java.lang.reflect.Proxy Proxy) {
+            Proxy.newProxyInstance(null, null, null);
+          }
+          class Nested { }
+        }
+        """);
+    write(optOutRoot.resolve("demo/OverloadedProxyFactory.java"), """
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class OverloadedProxyFactory {
+          public Overloaded wrap() {
+            return (Overloaded) Proxy.newProxyInstance(
+                Overloaded.class.getClassLoader(),
+                new Class<?>[]{Overloaded.class}, (proxy, method, args) -> null);
+          }
+        }
+        """);
     SemanticCallFacts optedOut = dynamicScan(
         context(optOutRoot, temp.resolve("cache-order-optout/classes"), List.of()));
-    assertTrue(optedOut.providerFacts().stream()
+    // CR-1, finding 4709913135: the flag-off twins for the UNGATED paths,
+    // each requiring the fact to exist before asserting attribute absence.
+    SemanticCallFacts.Fact reflectionSite = optedOut.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("reflection"))
-        .allMatch(item -> item.evidence().stream().noneMatch(evidence ->
-            evidence.attributes().containsKey("javacCallerAbstention"))),
-        "a warm-JVM flag-off scan carries no abstention: "
-            + optedOut.providerFacts());
+        .filter(item -> item.caller().startsWith("demo.Sites#"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(optedOut.providerFacts().toString()));
+    assertNull(attribute(reflectionSite, "javacCallerAbstention"),
+        "flag-off reflection re-query: " + reflectionSite.evidence());
+    SemanticCallFacts.Fact repairSite = optedOut.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.Overloaded#run"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(optedOut.providerFacts().toString()));
+    assertNull(attribute(repairSite, "javacAbstention"),
+        "flag-off descriptor correlation: " + repairSite.evidence());
+    assertNull(attribute(repairSite, "javacRepairAbstention"),
+        "flag-off repair decline: " + repairSite.evidence());
+    SemanticCallFacts.Fact proxySite = optedOut.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.caller().startsWith("demo.ProxySites#"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(optedOut.providerFacts().toString()));
+    assertNull(attribute(proxySite, "javacCallerAbstention"),
+        "flag-off proxy caller gate: " + proxySite.evidence());
   }
 
   // D5 (review round 2, finding 1): a FAILED index build is a scan-global
@@ -601,6 +652,108 @@ class JavacAbstentionEvidenceTest {
         attribute(proxy, "javacCallerAbstention"), proxy.evidence().toString());
     assertEquals("demo.ProxySites#wrap(1)",
         attribute(proxy, "javacCallerAbstentionMember"), proxy.evidence().toString());
+  }
+
+  // D7 (CodeRabbit CR-1, finding 4709913078): a PARTIAL index — one
+  // missing source root, another root indexed — carries an integrity
+  // code but still holds usable members. The lookups must keep their
+  // results (the index dialect descriptor), and only the per-member
+  // evidence is silenced.
+  @Test
+  void partialIndexKeepsLookupResultsAndSilencesEvidence() throws IOException {
+    Path sourceRoot = temp.resolve("partial/src/main/java");
+    write(sourceRoot.resolve("demo/Api.java"), """
+        package demo;
+        public interface Api {
+          void run(String value);
+        }
+        """);
+    write(sourceRoot.resolve("demo/ApiProxyFactory.java"), """
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class ApiProxyFactory {
+          public Api wrap() {
+            return (Api) Proxy.newProxyInstance(Api.class.getClassLoader(),
+                new Class<?>[]{Api.class}, (proxy, method, args) -> null);
+          }
+        }
+        """);
+    AnalysisContext context = AnalysisContext.builder()
+        .id("spring-boot-production")
+        .framework(AnalysisContext.Framework.SPRING_BOOT)
+        .frameworkVersion("2.7.18")
+        .fixtureId("fsi-spring-boot")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("partial/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .sourceRoot("other/src/main/java",
+            temp.resolve("partial-missing/src/main/java"),
+            AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of())
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    SemanticCallFacts facts = dynamicScan(context);
+    SemanticCallFacts.Fact proxy = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.Api#run"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals("(java.lang.String)",
+        attribute(proxy, "targetDescriptor"),
+        "a partial index keeps its lookup results — the index dialect, "
+            + "not the textual fallback: " + proxy.evidence());
+    assertNull(attribute(proxy, "javacAbstention"),
+        "the integrity code silences the per-member evidence, not the "
+            + "lookup: " + proxy.evidence());
+  }
+
+  // D8 (CodeRabbit CR-1, finding 4709913104): a type parameter at array
+  // rank 2 must still abstain the overload group; a non-generic rank-2
+  // control still correlates.
+  @Test
+  void rankTwoTypeParameterArraysAbstainAndNonGenericArraysCorrelate() throws IOException {
+    SemanticCallFacts facts = analyzeDynamic(List.of("""
+        package demo;
+        public interface Rank<T> {
+          void run(T[][] grid);
+          void run(String[] single);
+          void grid(String[][] wide);
+          void grid(int[] narrow);
+        }
+        """, """
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class RankProxyFactory {
+          public Rank wrap() {
+            return (Rank) Proxy.newProxyInstance(Rank.class.getClassLoader(),
+                new Class<?>[]{Rank.class}, (proxy, method, args) -> null);
+          }
+        }
+        """));
+    SemanticCallFacts.Fact run = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.Rank#run"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals("type_parameter_overload_group",
+        attribute(run, "javacAbstention"),
+        "T[][] must be recognized as a type parameter at rank 2: "
+            + run.evidence());
+    SemanticCallFacts.Fact grid = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.Rank#grid"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertNull(attribute(grid, "javacAbstention"),
+        "non-generic rank-2 and rank-1 array overloads still correlate: "
+            + grid.evidence());
   }
 
   private SemanticCallFacts.Fact frameworkFact(

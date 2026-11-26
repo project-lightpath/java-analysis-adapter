@@ -127,8 +127,14 @@ final class JavacOverloadBijection {
         : SourceMetadataScanner.parameters(declaration.parameters())) {
       String textual = SourceMetadataScanner.parameterType(
           parameter.type() + " " + parameter.name());
-      boolean array = textual.endsWith("[]");
-      String element = array ? textual.substring(0, textual.length() - 2) : textual;
+      // CR-1, finding 4709913104: strip EVERY trailing [] rank before the
+      // base-name test — T[][] must recognize its type parameter at any
+      // rank, or mirrored rank-2 overloads could derange their vectors.
+      String element = textual;
+      while (element.endsWith("[]")) {
+        element = element.substring(0, element.length() - 2);
+      }
+      String dimensions = textual.substring(element.length());
       if (typeParameters.contains(element)
           || enclosingTypeParameters.contains(element)) {
         // A method OR CLASS type parameter erases to its BOUND in the
@@ -143,7 +149,7 @@ final class JavacOverloadBijection {
       if (canonical.isEmpty()) {
         return VectorResolution.EMPTY;
       }
-      vector.add(canonical.get() + (array ? "[]" : ""));
+      vector.add(canonical.get() + dimensions);
     }
     return new VectorResolution(vector, false);
   }

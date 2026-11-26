@@ -44,9 +44,14 @@ record JavacAbstentionEvidence(
     return !code.isBlank();
   }
 
-  /** The member identity: {@code owner#name(arity)}. */
+  /**
+   * The member identity: {@code owner#name(arity)}; a NEGATIVE arity
+   * (unknown — comment-corrupted parameter text) renders as the explicit
+   * {@code (*)} marker so it stays distinct from the real arity zero
+   * (CodeRabbit CR-1, finding 4709913093).
+   */
   static String memberIdentity(String owner, String name, int arity) {
-    return owner + "#" + name + "(" + arity + ")";
+    return owner + "#" + name + "(" + (arity < 0 ? "*" : arity) + ")";
   }
 
   /**

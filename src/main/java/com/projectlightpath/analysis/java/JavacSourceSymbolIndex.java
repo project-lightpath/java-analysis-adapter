@@ -122,18 +122,6 @@ final class JavacSourceSymbolIndex {
     return Optional.of(CACHE.computeIfAbsent(context, JavacSourceSymbolIndex::build));
   }
 
-  /**
-   * The per-context index when it is usable for per-member classification:
-   * absent when the seam is off, the index is missing, or the build failed
-   * (the #25 integrity codes — a failed build is a scan-global integrity
-   * failure, not a per-member abstention, so the #62 channel stays silent
-   * rather than mislabeling every decline; review round 2, finding 1).
-   */
-  static Optional<JavacSourceSymbolIndex> intactIndex(AnalysisContext context) {
-    Optional<JavacSourceSymbolIndex> index = of(context);
-    return index.filter(candidate -> !candidate.buildFailed());
-  }
-
   /** Returns every indexed type sharing a canonical or binary name, deduped. */
   List<TypeInfo> type(String canonicalOrBinaryName) {
     if (canonicalOrBinaryName == null || canonicalOrBinaryName.isEmpty()) {

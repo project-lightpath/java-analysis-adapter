@@ -158,14 +158,40 @@ final class JavacMemberCorrelation {
     if (!JavacSourceSymbolIndex.enabled()) {
       return JavacCorrelation.empty();
     }
-    Optional<JavacSourceSymbolIndex> index =
-        JavacSourceSymbolIndex.intactIndex(context);
+    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
     if (index.isEmpty()) {
-      // A failed index build is a scan-global integrity failure (#25's
-      // fail-visible contract), not a per-member abstention: the channel
-      // stays silent rather than mislabeling every decline.
       return JavacCorrelation.empty();
     }
+    return withSilencedEvidence(index.orElseThrow(),
+        correlatedWithIndex(file, ownerType, declaration, declarations, kind, indexName,
+            index.orElseThrow()));
+  }
+
+  /**
+   * Suppresses the per-member abstention evidence when the index build
+   * failed (the #25 integrity codes) while KEEPING the lookup result: a
+   * partial index (e.g. one missing source root) still carries usable
+   * members whose correlation must not change (CodeRabbit CR-1, finding
+   * 4709913078) — a scan-global build failure is not a per-member
+   * abstention, so the channel stays silent, but the value path is the
+   * pre-#62 one either way.
+   */
+  private static JavacCorrelation withSilencedEvidence(
+      JavacSourceSymbolIndex index, JavacCorrelation outcome) {
+    if (outcome.memberOptional().isPresent() || !index.buildFailed()) {
+      return outcome;
+    }
+    return JavacCorrelation.empty();
+  }
+
+  private JavacCorrelation correlatedWithIndex(
+      SourceMetadataScannerState.SourceFile file,
+      String ownerType,
+      SourceMetadataScannerState.MethodInfo declaration,
+      List<SourceMetadataScannerState.MethodInfo> declarations,
+      String kind,
+      String indexName,
+      JavacSourceSymbolIndex index) {
     int arity = SourceMetadataScanner.parameters(declaration.parameters()).size();
     String identity =
         JavacAbstentionEvidence.memberIdentity(ownerType, indexName, arity);
@@ -177,7 +203,7 @@ final class JavacMemberCorrelation {
       return JavacCorrelation.abstained(new JavacAbstentionEvidence(
           "multi_type_file", identity, List.of()));
     }
-    List<JavacSourceSymbolIndex.MemberInfo> group = index.orElseThrow()
+    List<JavacSourceSymbolIndex.MemberInfo> group = index
         .members(ownerType, indexName).stream()
         .filter(member -> member.kind().equals(kind)
             && member.parameterTypes().size() == arity)
@@ -187,7 +213,7 @@ final class JavacMemberCorrelation {
     if (group.stream().anyMatch(JavacSourceSymbolIndex.MemberInfo::errorType)) {
       return JavacCorrelation.abstained(new JavacAbstentionEvidence(
           "error_type_member", identity,
-          errorCodesFor(index.orElseThrow(), ownerType)));
+          errorCodesFor(index, ownerType)));
     }
     if (group.size() == 1) {
       return JavacCorrelation.correlated(group.get(0));
@@ -195,7 +221,7 @@ final class JavacMemberCorrelation {
     if (group.isEmpty()) {
       return JavacCorrelation.abstained(new JavacAbstentionEvidence(
           "member_absent", identity,
-          errorCodesFor(index.orElseThrow(), ownerType)));
+          errorCodesFor(index, ownerType)));
     }
     return new JavacOverloadBijection(scanner).correlate(
         file, declaration, declarations, group, indexName, identity);

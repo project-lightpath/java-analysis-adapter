@@ -147,6 +147,25 @@ unchanged everywhere (the full suite shows zero golden churn).
   extracted at all) — pre-existing textual behavior, out of scope;
   the multi-type fixtures nest the extra type AFTER the method.
 
+- **CodeRabbit CR-1** (PR #72): 5 findings (2 Major, 3 Minor), all
+  addressed red-first. Major 4709913078 — the `intactIndex` hard gate
+  changed LOOKUP RESULTS for partial indexes (an integrity code with
+  usable members): replaced with evidence-only silencing
+  (`withSilencedEvidence` keeps the lookup result, suppresses the
+  per-member evidence when `buildFailed()`); pinned by D7 (a missing
+  second source root: the index-dialect descriptor survives, the
+  abstention is silenced), mutation-verified red. Major 4709913104 —
+  `T[][]` escaped the type-parameter guard (single-rank strip, a
+  pre-existing #23 defect): every trailing `[]` rank is now stripped
+  for the base-name test; pinned by D8 (rank-2 generic abstention +
+  non-generic rank-2 control), mutation-verified red. Minor
+  4709913093 — unknown arity (-1) rendered as arity zero in the member
+  identity: explicit `(*)` marker. Minor 4709913124 — D1 now requires
+  the ServiceLoader facts to exist. Minor 4709913135 — D2 gained
+  flag-off twins for the repair, reflection-caller, and proxy-caller
+  fixtures, each requiring the fact before asserting attribute
+  absence. PMD-forced extraction: `JavacFrameworkMemberLookup`.
+
 ## Residuals
 
 - The index-diagnostics join is file-level (`MemberInfo` carries no
