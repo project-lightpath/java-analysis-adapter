@@ -29,9 +29,13 @@ final class JavacReflectionTargets {
    * but a source-less {@code javac_global_error} attributes to no entry,
    * so it disables the whole path too.
    */
-  private static final Set<String> INTEGRITY_CODES = Set.of(
-      "index_build_error", "javac_unavailable", "missing_source",
-      "missing_classpath", "missing_source_root", "javac_global_error");
+  /**
+   * The integrity codes of a failed index build: shared with
+   * {@code JavacSourceSymbolIndex.buildFailed()} (one set, so the #25
+   * fail-close and the #62 silence channel cannot drift — review round 3).
+   */
+  private static final java.util.Set<String> INTEGRITY_CODES =
+      JavacSourceSymbolIndex.INTEGRITY_CODES;
 
   private final SourceMetadataScanner scanner;
   private final Optional<JavacSourceSymbolIndex> index;

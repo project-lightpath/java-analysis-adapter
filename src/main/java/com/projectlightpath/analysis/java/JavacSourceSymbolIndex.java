@@ -182,6 +182,16 @@ final class JavacSourceSymbolIndex {
   }
 
   /**
+   * The integrity codes that mark a failed index build (#25's
+   * fail-visible contract). Package-visible: {@code JavacReflectionTargets}
+   * and {@code buildFailed()} share ONE set so the two fail-close
+   * channels cannot drift (review round 3).
+   */
+  static final java.util.Set<String> INTEGRITY_CODES = java.util.Set.of(
+      "index_build_error", "javac_unavailable", "missing_source",
+      "missing_classpath", "missing_source_root", "javac_global_error");
+
+  /**
    * Whether the index build failed (the #25 integrity codes): such an
    * index is served fail-visible with empty maps, and every decline it
    * causes is a BUILD failure, not a per-member abstention — the #62
@@ -190,10 +200,6 @@ final class JavacSourceSymbolIndex {
   boolean buildFailed() {
     return diagnostics.stream().anyMatch(row -> INTEGRITY_CODES.contains(row.code()));
   }
-
-  private static final java.util.Set<String> INTEGRITY_CODES = java.util.Set.of(
-      "index_build_error", "javac_unavailable", "missing_source",
-      "missing_classpath", "missing_source_root", "javac_global_error");
 
   /**
    * Returns the deduped compiler ERROR codes recorded for one source
