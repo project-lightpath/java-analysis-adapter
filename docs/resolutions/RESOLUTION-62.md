@@ -157,14 +157,27 @@ unchanged everywhere (the full suite shows zero golden churn).
   abstention is silenced), mutation-verified red. Major 4709913104 —
   `T[][]` escaped the type-parameter guard (single-rank strip, a
   pre-existing #23 defect): every trailing `[]` rank is now stripped
-  for the base-name test; pinned by D8 (rank-2 generic abstention +
-  non-generic rank-2 control), mutation-verified red. Minor
-  4709913093 — unknown arity (-1) rendered as arity zero in the member
-  identity: explicit `(*)` marker. Minor 4709913124 — D1 now requires
-  the ServiceLoader facts to exist. Minor 4709913135 — D2 gained
-  flag-off twins for the repair, reflection-caller, and proxy-caller
-  fixtures, each requiring the fact before asserting attribute
-  absence. PMD-forced extraction: `JavacFrameworkMemberLookup`.
+  for the base-name test; pinned by D8/D9, mutation-verified red.
+  Minor 4709913093 — unknown arity (-1) rendered as arity zero in the
+  member identity: explicit `(*)` marker. Minor 4709913124 — D1 now
+  requires the ServiceLoader facts to exist. Minor 4709913135 — D2
+  gained flag-off twins for the repair, reflection-caller, and
+  proxy-caller fixtures. PMD-forced extraction:
+  `JavacFrameworkMemberLookup`.
+- **CodeRabbit CR-2 through CR-4** (the rank-2 thread's verification
+  rounds, each catching a subtler fixture defect in D9 — the guard
+  itself was verified present from CR-3 on): D9 was reworked three
+  times into its final form — the mirrored fixture uses the QUALIFIED
+  crossed-bound shadowing form
+  (`Mirror<List extends java.util.Set, Set extends java.util.List>`,
+  erasures crossed and distinct; the unqualified bound refers to the
+  type parameter per JLS 6.3 and clashes, and fully-crossed unqualified
+  bounds cycle — both probe-verified), requires both facts to exist,
+  and the Grid control verifies each declaration's correlated member
+  both by its fact's descriptor and DIRECTLY through the correlation's
+  `parameterTypes()`. The D2 twins sweep every `javac*Abstention*` key
+  (CR-2). Final head 15495f8; all six review threads RESOLVED by
+  CodeRabbit verification; CI green on every push.
 
 ## Residuals
 
