@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -56,7 +55,7 @@ class NestedSourceRootScopeTest {
     AnalysisContext context = testNestedUnderProduction("index-test-scope");
     JavacSourceSymbolIndex index = JavacSourceSymbolIndex.of(context)
         .orElseThrow();
-    assertTrue(index.type("demo.App").size() == 1, "non-vacuity: App indexed");
+    assertEquals(1, index.type("demo.App").size(), "non-vacuity: App indexed");
     assertTrue(index.type("demo.Extra").isEmpty(),
         index.type("demo.Extra").toString());
   }
@@ -105,7 +104,7 @@ class NestedSourceRootScopeTest {
         .build();
     JavacSourceSymbolIndex index = JavacSourceSymbolIndex.of(context)
         .orElseThrow();
-    assertTrue(index.type("demo.generated.Kept").size() == 1,
+    assertEquals(1, index.type("demo.generated.Kept").size(),
         "non-vacuity: Kept indexed");
     assertTrue(index.type("demo.generated.Dropped").isEmpty());
   }
@@ -133,8 +132,8 @@ class NestedSourceRootScopeTest {
         .sorted()
         .toList();
     assertEquals(List.of("App.java", "Kept.java"), files);
-    assertTrue(JavacSourceSymbolIndex.of(context).orElseThrow()
-        .type("demo.generated.Kept").size() == 1);
+    assertEquals(1, JavacSourceSymbolIndex.of(context).orElseThrow()
+        .type("demo.generated.Kept").size());
   }
 
   @Test

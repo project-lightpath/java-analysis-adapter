@@ -338,7 +338,13 @@ final class JavacSourceSymbolIndex {
       Map<Path, AnalysisContext.SourceRoot> discovered = new LinkedHashMap<>();
       // Raw (pre-scope-filter) discovery count: distinguishes "no units
       // exist" (missing_source) from "units exist but are scope-excluded"
-      // (issue #68: not missing — a legal declared context state).
+      // (issue #68: not missing — a legal declared context state). The
+      // all-excluded state intentionally yields a CLEAN empty index (no
+      // integrity row): its safety rests on walker symmetry — zero
+      // scanner files means zero sites that could consult the index
+      // (JavacReflectionTargets' integrity gate stays open, correctly,
+      // because there is nothing to resolve). Sequential walk: the
+      // counter is deliberately non-atomic.
       long[] rawUnits = {0};
       List<AnalysisContext.SourceRoot> declared =
           context.declaredRootsBySpecificity();
