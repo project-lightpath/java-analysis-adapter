@@ -74,7 +74,9 @@ final class FrameworkBeanScanning {
           primary(scanner, framework, file, block),
           null,
           null,
-          null));
+          null,
+          JavacAbstentionEvidence.NONE,
+          JavacAbstentionEvidence.NONE));
     }
 
     /** Extracts one bean annotation-value family, index first. */
@@ -145,24 +147,36 @@ final class FrameworkBeanScanning {
       String candidateId = file.typeName() + "#" + method.name() + "("
           + method.parameters().replaceAll("\\s+", " ").trim() + ")";
       String producerType = scanner.resolveReferenceType(method.returnType(), file).orElse("");
+      JavacAbstentionEvidence producerTypeAbstention = JavacAbstentionEvidence.NONE;
       if (JavacSourceSymbolIndex.enabled()) {
         // Flag-on: the correlated member's canonical return type is the
-        // producer bean type; a non-correlating declaration keeps textual.
-        String ownerType = scanner.typeContaining(file, method.start());
-        producerType = JavacMemberCorrelation.of(scanner)
-            .correlatedMethod(file, ownerType, method)
+        // producer bean type; a non-correlating declaration keeps textual
+        // — and #62 records WHY on the candidate (never scan.diagnostics()).
+        // The owner keeps this path's historical derivation (the raw
+        // extraction start): the shared ownerTypeFor helper is the
+        // classification/re-query pair's normalization, not this seam's.
+        JavacCorrelation correlation = JavacMemberCorrelation.of(scanner)
+            .correlatedMethod(file, scanner.typeContaining(file, method.start()), method);
+        producerType = correlation.memberOptional()
             .map(member -> member.returnType())
             .filter(returnType -> !returnType.isBlank() && !returnType.equals("void"))
             .orElse(producerType);
+        producerTypeAbstention =
+            correlation.abstentionOptional().orElse(JavacAbstentionEvidence.NONE);
       }
-      Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> classMirrors =
-          javac.typeAnnotations(file);
-      Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> methodMirrors =
-          javac.memberAnnotations(
-              scanner.typeContaining(file, method.start()), method.name(), "method",
-              JavacFrameworkAnnotations.parameterArity(method.parameters()));
+      JavacFrameworkAnnotations.MirrorLookup classMirrors =
+          javac.typeAnnotationsLookup(file);
+      JavacFrameworkAnnotations.MemberLookup methodMirrors = javac.memberLookup(
+          scanner.typeContaining(file, method.start()), method.name(), "method",
+          JavacFrameworkAnnotations.parameterArity(method.parameters()));
+      JavacAbstentionEvidence mirrorAbstention = methodMirrors.abstention()
+          .or(() -> classMirrors.abstention())
+          .orElse(JavacAbstentionEvidence.NONE);
       ProducerSite site = new ProducerSite(
-          file, block, method, classMirrors, methodMirrors);
+          file, block, method, classMirrors.mirrors(),
+          methodMirrors.member()
+              .map(member -> Optional.of(member.annotations()))
+              .orElse(Optional.empty()));
       return new BeanCandidate(
           file,
           Set.of(),
@@ -177,7 +191,9 @@ final class FrameworkBeanScanning {
           producerPrimary(scanner, framework, file, block, method),
           method.name(),
           method.returnType(),
-          method.parameters());
+          method.parameters(),
+          producerTypeAbstention,
+          mirrorAbstention);
     }
 
     /** One producer-method site and its class- and method-level mirrors. */

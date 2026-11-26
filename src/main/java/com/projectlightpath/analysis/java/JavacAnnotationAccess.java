@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,18 +35,67 @@ final class JavacAnnotationAccess {
   /** Returns the unique index member matching owner, name, and arity. */
   Optional<JavacSourceSymbolIndex.MemberInfo> member(
       String typeName, String memberName, int parameterCount) {
+    return memberLookup(typeName, memberName, parameterCount).member();
+  }
+
+  /** One seam-B member lookup: the member, or the decline evidence. */
+  private record MemberLookup(
+      Optional<JavacSourceSymbolIndex.MemberInfo> member,
+      Optional<JavacAbstentionEvidence> abstention) {
+
+    static final MemberLookup EMPTY =
+        new MemberLookup(Optional.empty(), Optional.empty());
+  }
+
+  /**
+   * The seam-B lookup with its decline evidence (#62). The opt-out gate
+   * lives inside: with the flag off, no evidence is constructed. The
+   * decline classification mirrors {@link #member}'s counting rule —
+   * ALL same-arity overloads are counted before rejecting error types,
+   * so an unresolved overload cannot let a resolved sibling look unique.
+   */
+  private MemberLookup memberLookup(
+      String typeName, String memberName, int parameterCount) {
+    if (!JavacSourceSymbolIndex.enabled()) {
+      return MemberLookup.EMPTY;
+    }
+    List<JavacSourceSymbolIndex.MemberInfo> matches =
+        JavacSourceSymbolIndex.of(context)
+            .map(index -> index.members(typeName, memberName).stream()
+                .filter(member -> member.kind().equals("method")
+                    && member.parameterTypes().size() == parameterCount)
+                .toList())
+            .orElse(List.of());
+    String identity =
+        JavacAbstentionEvidence.memberIdentity(typeName, memberName, parameterCount);
+    if (matches.isEmpty()) {
+      return new MemberLookup(Optional.empty(), Optional.of(
+          new JavacAbstentionEvidence("annotation_member_absent", identity, List.of())));
+    }
+    if (matches.size() > 1) {
+      return new MemberLookup(Optional.empty(), Optional.of(
+          new JavacAbstentionEvidence("annotation_member_ambiguous", identity, List.of())));
+    }
+    JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
+    if (found.errorType()) {
+      LinkedHashSet<String> codes = new LinkedHashSet<>();
+      for (JavacSourceSymbolIndex.TypeInfo entry : typeFile(typeName)) {
+        codes.addAll(JavacSourceSymbolIndex.of(context)
+            .map(index -> index.errorCodesFor(entry.file()))
+            .orElse(List.of()));
+      }
+      return new MemberLookup(Optional.empty(), Optional.of(
+          new JavacAbstentionEvidence("annotation_member_error_type", identity,
+              List.copyOf(codes))));
+    }
+    return new MemberLookup(Optional.of(found), Optional.empty());
+  }
+
+  /** The declaring file of the (unique) index type, for the error-code join. */
+  private List<JavacSourceSymbolIndex.TypeInfo> typeFile(String typeName) {
     return JavacSourceSymbolIndex.of(context)
-        .map(index -> index.members(typeName, memberName).stream()
-            .filter(member -> member.kind().equals("method")
-                && member.parameterTypes().size() == parameterCount)
-            .toList())
-        // Count ALL same-arity overloads before rejecting error types:
-        // filtering first would create false uniqueness when an unresolved
-        // overload shadows a resolved one (name+arity cannot tell which
-        // textual declaration is which).
-        .filter(matches -> matches.size() == 1)
-        .map(matches -> matches.get(0))
-        .filter(found -> !found.errorType());
+        .map(index -> index.type(typeName))
+        .orElse(List.of());
   }
 
   /**
@@ -98,33 +148,50 @@ final class JavacAnnotationAccess {
    * nested and sibling types too, and a name+arity correlation cannot prove
    * which declaration a textual method belongs to — ambiguous files fall
    * back to fully textual.
+   *
+   * <p>Issue #62: the outcome carries the correlation abstention (seam A)
+   * and, when the repair path also declined, the seam-B repair code.
    */
-  String methodDescriptor(
+  JavacDescriptorOutcome methodDescriptor(
       SourceMetadataScannerState.MethodInfo method, String ownerType,
       SourceMetadataScannerState.SourceFile file) {
     JavacMemberCorrelation correlation = JavacMemberCorrelation.of(scanner);
-    Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
+    JavacCorrelation correlated =
         correlation.correlatedMethod(file, ownerType, method);
-    if (correlated.isPresent()) {
-      return "(" + String.join(",", correlated.orElseThrow().parameterTypes()) + ")";
+    if (correlated.memberOptional().isPresent()) {
+      return new JavacDescriptorOutcome(Optional.of("("
+          + String.join(",", correlated.memberOptional().orElseThrow().parameterTypes())
+          + ")"), null, null);
     }
+    JavacAbstentionEvidence abstention =
+        correlated.abstentionOptional().orElse(JavacAbstentionEvidence.NONE);
     String parameters = method.parameters().trim();
     if (parameters.isEmpty()) {
-      return "()";
+      return new JavacDescriptorOutcome(Optional.of("()"), abstention, null);
     }
     if (correlation.blocked(file, parameters)) {
-      return textualDescriptor(parameters);
+      return new JavacDescriptorOutcome(
+          Optional.of(textualDescriptor(parameters)), abstention, null);
     }
     List<String> split = SourceMetadataScannerTextLayer06.splitTopLevelArguments(parameters);
+    MemberLookup lookup =
+        memberLookup(ownerType, method.name(), split.size());
+    boolean repairTriggered = split.stream().anyMatch(this::repairTriggered);
+    JavacAbstentionEvidence repairAbstention =
+        repairTriggered && lookup.member().isEmpty()
+            ? lookup.abstention().orElse(JavacAbstentionEvidence.NONE)
+            : JavacAbstentionEvidence.NONE;
     StringBuilder descriptor = new StringBuilder("(");
     for (int index = 0; index < split.size(); index++) {
       if (index > 0) {
         descriptor.append(',');
       }
       descriptor.append(parameterTypeOrRepair(
-          split.get(index), ownerType, method.name(), split.size(), index));
+          split.get(index), ownerType, method.name(), split.size(), index,
+          lookup.member()));
     }
-    return descriptor.append(')').toString();
+    return new JavacDescriptorOutcome(
+        Optional.of(descriptor.append(')').toString()), abstention, repairAbstention);
   }
 
   /** Returns the fully textual descriptor for files the repair cannot own. */
@@ -138,10 +205,15 @@ final class JavacAnnotationAccess {
   /** Returns the repaired spelling when triggered and unambiguous, else the textual one. */
   private String parameterTypeOrRepair(
       String rawParameter, String ownerType, String memberName,
-      int parameterCount, int parameterIndex) {
+      int parameterCount, int parameterIndex,
+      Optional<JavacSourceSymbolIndex.MemberInfo> member) {
     String textual = SourceMetadataScanner.parameterType(rawParameter);
-    return repairedParameterType(rawParameter, ownerType, memberName,
-            parameterCount, parameterIndex)
+    if (!repairTriggered(rawParameter) || member.isEmpty()) {
+      return textual;
+    }
+    return member
+        .filter(found -> parameterIndex < found.parameterTypes().size())
+        .map(found -> found.parameterTypes().get(parameterIndex))
         .orElse(textual);
   }
 

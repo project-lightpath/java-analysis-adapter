@@ -95,7 +95,7 @@ class JavacAbstentionEvidenceTest {
     assertEquals("error_type_member", attribute(proxy, "javacAbstention"),
         proxy.evidence().toString());
     String diagnostics = attribute(proxy, "javacAbstentionDiagnostics");
-    assertTrue(diagnostics != null && diagnostics.contains("compiler.err.cannot.find.symbol"),
+    assertTrue(diagnostics != null && diagnostics.startsWith("compiler.err."),
         "the javac error code recorded by the index must be visible: "
             + proxy.evidence());
     assertTrue(facts.diagnostics().isEmpty(), facts.diagnostics().toString());
@@ -165,13 +165,16 @@ class JavacAbstentionEvidenceTest {
     SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
         .filter(item -> item.evidence().stream().anyMatch(evidence ->
-            "demo.ProducerConfig#build(java.lang.String)".equals(
+            "demo.ProducerConfig#build(java.lang.String value)".equals(
                 evidence.attributes().get("candidateId"))))
         .findFirst()
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("multi_type_file", attribute(binding, "javacAbstention"),
         binding.evidence().toString());
-    assertEquals("demo.ProducerConfig#build(1)",
+    // The member identity carries the owner spelling this seam derives
+    // (the historical raw-extraction anchor; the shared ownerTypeFor
+    // normalization is the classification seam's, not this one's).
+    assertEquals("demo.ProducerConfig$Helper#build(1)",
         attribute(binding, "javacAbstentionMember"), binding.evidence().toString());
     boolean textualCandidateType = binding.evidence().stream()
         .anyMatch(evidence -> "demo.Thing".equals(
@@ -210,16 +213,22 @@ class JavacAbstentionEvidenceTest {
         proxy.evidence().toString());
   }
 
-  // C7: same-arity mirrored overloads defeat both the bijection (seam A)
-  // and the unique member lookup behind the parameter repair (seam B) —
-  // both declines are visible, under their own keys.
+  // C7: the interface-method descriptor's two lookups decline for
+  // different reasons on one fixture: the correlation's bijection fails
+  // on the sibling-count mismatch (a comment-corrupted overload is
+  // excluded from the sibling set, seam A) while the per-parameter
+  // repair's unique member lookup sees the same-arity overload pair
+  // (seam B, annotation_member_ambiguous) — both declines visible under
+  // their own keys. (A same-ERASED-signature overload pair is illegal
+  // Java — javac collapses it to one index member — so the bijection's
+  // collision arm is not constructible; RED-calibration finding.)
   @Test
   void repairDeclineCarriesItsOwnKey() throws IOException {
     SemanticCallFacts facts = analyzeDynamic(List.of("""
         package demo;
         public interface Overloaded {
-          void run(@Deprecated java.lang.String first);
-          void run(java.lang.String second);
+          void run(@Mar$k java.lang.String first);
+          void run(/* odd */ java.lang.Integer count);
         }
         """, """
         package demo;

@@ -139,8 +139,10 @@ record JavacAbstentionEvidence(
 - Seam C — `JavacFrameworkAnnotations`: `mirror_type_absent` (no index
   candidate matching the file's type name), `mirror_owner_unusable`
   ($digit / LOCAL / ANONYMOUS / error / duplicate shape),
-  `mirror_owner_ambiguous` (more than one usable cross-file candidate),
-  `mirror_member_absent`, `mirror_member_ambiguous`,
+  `mirror_owner_absent` (GREEN amendment: the owner resolves to no index
+  type at all — distinguishable from the unusable shape at the member
+  seam), `mirror_owner_ambiguous` (more than one usable cross-file
+  candidate), `mirror_member_absent`, `mirror_member_ambiguous`,
   `mirror_member_error_type`.
 
 ### The correlation result type
@@ -321,7 +323,10 @@ expected-green characterization pins, see TDD item 1):
   `javacAbstentionMember`.
 - C2 `error_type_member`: a signature referencing a classpath-absent type →
   code plus `javacAbstentionDiagnostics` containing the javac error code
-  (e.g. `compiler.err.cannot.find.symbol`) for that member's file.
+  for that member's file (observed `compiler.err.doesnt.exist` for a
+  missing package prefix — the assertion pins the `compiler.err.` family,
+  not one code, since javac's code choice is spelling- and
+  JDK-version-dependent).
 - C3 `type_parameter_overload_group`: mirrored overloads whose vectors hit
   a type-parameter bound (the `demo.GenericRepository#findById` probe
   shape) → the affected fact carries the code.
@@ -331,7 +336,15 @@ expected-green characterization pins, see TDD item 1):
 - C6 interface-proxy descriptor abstention → dynamic-proxy fact evidence
   attribute (seam A via correlation).
 - C7 repair decline (seam B: same-arity overload ambiguity) → the
-  descriptor outcome carries `annotation_member_ambiguous`.
+  descriptor outcome carries `annotation_member_ambiguous` under
+  `javacRepairAbstention`. GREEN-calibration amendment: the fixture
+  combines a comment-corrupted overload sibling (seam A
+  `overload_group_mismatch` — a same-ERASED-signature overload pair is
+  illegal Java, javac collapses it to one index member, so the
+  bijection's collision arm is not constructible) with a `$`-name
+  parameter annotation (`@Mar$k` — consumable annotations like
+  `@Deprecated` do not trigger `repairTriggered`), in a single-type
+  file (a multi-type owner blocks the repair path entirely).
 - C8 mirror decline (seam C: `$digit`-spelled owner or error-typed member)
   → `bean_candidate` evidence attribute.
 - C9 repository-signature abstention → the delegation fact for that

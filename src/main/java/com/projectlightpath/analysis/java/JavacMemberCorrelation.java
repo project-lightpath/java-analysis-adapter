@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -18,6 +19,13 @@ import java.util.regex.Pattern;
  * only when every textual sibling overload's resolved parameter vector
  * forms a bijection onto the index vectors, failing closed otherwise.
  * Comment-corrupted parameter lists and multi-type files never correlate.
+ *
+ * <p>Issue #62: every decline returns a {@link JavacCorrelation} carrying
+ * per-member abstention evidence (code + member identity + the javac
+ * error codes recorded for the member's file) — the blast-radius-safe
+ * visibility channel that never enters {@code scan.diagnostics()}. The
+ * opt-out gate lives INSIDE the seam: with the flag off, the correlation
+ * is empty and no evidence is constructed, whatever the caller.
  */
 final class JavacMemberCorrelation {
   private final AnalysisContext context;
@@ -42,12 +50,22 @@ final class JavacMemberCorrelation {
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo method,
       List<String> expected) {
-    String ownerType = scanner.typeContaining(file,
-        SourceMetadataScanner.declarationStart(file, method.start()));
-    return correlatedMethod(file, ownerType, method)
+    JavacCorrelation correlation = correlatedFirstParameter(file, method);
+    return correlation.memberOptional()
         .filter(member -> !member.parameterTypes().isEmpty())
         .map(member -> expected.contains(member.parameterTypes().get(0)))
         .orElse(false);
+  }
+
+  /**
+   * The first-parameter check with its abstention evidence (#62): the
+   * repository layer surfaces the decline on the declared method's
+   * delegation fact.
+   */
+  JavacCorrelation correlatedFirstParameter(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.MethodInfo method) {
+    return correlatedMethod(file, scanner.ownerTypeFor(file, method), method);
   }
 
   /** Reports whether the correlation guards block one file and parameter list. */
@@ -63,8 +81,30 @@ final class JavacMemberCorrelation {
       SourceMetadataScannerState.SourceFile file,
       String ownerType,
       SourceMetadataScannerState.MethodInfo method) {
-    return correlatedMethod(file, ownerType, method)
+    return correlatedMethod(file, ownerType, method).memberOptional()
         .flatMap(JavacShapeDescriptors::jvmDescriptorFromMember);
+  }
+
+  /** The correlation of one declaration, with its abstention evidence. */
+  JavacCorrelation correlation(
+      SourceMetadataScannerState.SourceFile file,
+      String ownerType,
+      SourceMetadataScannerState.MethodInfo method) {
+    return correlatedMethod(file, ownerType, method);
+  }
+
+  /**
+   * The caller member's abstention, re-issued at feature-build time for
+   * the reflection and proxy classification seams (#62): the SAME pure
+   * correlation query the classification ran, derived through the SAME
+   * shared owner normalization, so the evidence is causal and
+   * cache-order independent by construction.
+   */
+  Optional<JavacAbstentionEvidence> callerAbstention(
+      SourceMetadataScannerState.SourceFile file,
+      SourceMetadataScannerState.MethodInfo caller) {
+    return correlatedMethod(file, scanner.ownerTypeFor(file, caller), caller)
+        .abstentionOptional();
   }
 
   /**
@@ -73,7 +113,7 @@ final class JavacMemberCorrelation {
    * is not comment-aware), so the derived arity cannot be trusted for
    * overload selection — such methods keep the textual spelling.
    */
-  private static boolean hasCommentText(String parameters) {
+  static boolean hasCommentText(String parameters) {
     return parameters.contains("/*") || parameters.contains("//");
   }
 
@@ -92,9 +132,11 @@ final class JavacMemberCorrelation {
    * forms a bijection onto the index vectors, failing closed otherwise.
    *
    * <p>Guards shared by every wired consumer: comment-corrupted parameter
-   * lists and multi-type files (unprovable owner) never correlate.
+   * lists and multi-type files (unprovable owner) never correlate. The
+   * flag-off arm returns the empty correlation BEFORE any evidence is
+   * constructed (the in-seam opt-out gate).
    */
-  Optional<JavacSourceSymbolIndex.MemberInfo> correlatedMethod(
+  JavacCorrelation correlatedMethod(
       SourceMetadataScannerState.SourceFile file,
       String ownerType,
       SourceMetadataScannerState.MethodInfo method) {
@@ -108,7 +150,7 @@ final class JavacMemberCorrelation {
    * index member, which the index names by the owner's simple name with
    * kind {@code constructor}, through the same group-scoped rule.
    */
-  Optional<JavacSourceSymbolIndex.MemberInfo> correlatedConstructor(
+  JavacCorrelation correlatedConstructor(
       SourceMetadataScannerState.SourceFile file,
       String ownerType,
       SourceMetadataScannerState.MethodInfo constructor) {
@@ -118,144 +160,71 @@ final class JavacMemberCorrelation {
         ownerType.substring(ownerType.lastIndexOf('.') + 1));
   }
 
-  private Optional<JavacSourceSymbolIndex.MemberInfo> correlated(
+  private JavacCorrelation correlated(
       SourceMetadataScannerState.SourceFile file,
       String ownerType,
       SourceMetadataScannerState.MethodInfo declaration,
       List<SourceMetadataScannerState.MethodInfo> declarations,
       String kind,
       String indexName) {
-    if (hasCommentText(declaration.parameters()) || !singleTypeFile(file)) {
-      return Optional.empty();
+    if (!JavacSourceSymbolIndex.enabled()) {
+      return JavacCorrelation.empty();
     }
     int arity = SourceMetadataScanner.parameters(declaration.parameters()).size();
-    List<JavacSourceSymbolIndex.MemberInfo> group = JavacSourceSymbolIndex.of(context)
-        .map(index -> index.members(ownerType, indexName).stream()
-            .filter(member -> member.kind().equals(kind)
-                && member.parameterTypes().size() == arity)
-            .toList())
-        .orElse(List.of());
+    String identity =
+        JavacAbstentionEvidence.memberIdentity(ownerType, indexName, arity);
+    if (hasCommentText(declaration.parameters())) {
+      return JavacCorrelation.abstained(new JavacAbstentionEvidence(
+          "comment_corrupted_parameters", identity, List.of()));
+    }
+    if (!singleTypeFile(file)) {
+      return JavacCorrelation.abstained(new JavacAbstentionEvidence(
+          "multi_type_file", identity, List.of()));
+    }
+    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
+    if (index.isEmpty()) {
+      return JavacCorrelation.empty();
+    }
+    List<JavacSourceSymbolIndex.MemberInfo> group = index.orElseThrow()
+        .members(ownerType, indexName).stream()
+        .filter(member -> member.kind().equals(kind)
+            && member.parameterTypes().size() == arity)
+        .toList();
     // Error-typed members are counted before any uniqueness or type filter:
     // an unresolved overload must not let a resolved sibling look unique.
     if (group.stream().anyMatch(JavacSourceSymbolIndex.MemberInfo::errorType)) {
-      return Optional.empty();
+      return JavacCorrelation.abstained(new JavacAbstentionEvidence(
+          "error_type_member", identity,
+          errorCodesFor(index.orElseThrow(), ownerType)));
     }
     if (group.size() == 1) {
-      return Optional.of(group.get(0));
+      return JavacCorrelation.correlated(group.get(0));
     }
-    if (group.size() < 2) {
-      return Optional.empty();
+    if (group.isEmpty()) {
+      return JavacCorrelation.abstained(new JavacAbstentionEvidence(
+          "member_absent", identity,
+          errorCodesFor(index.orElseThrow(), ownerType)));
     }
-    return correlatedByBijection(file, declaration, declarations, group, indexName);
+    return new JavacOverloadBijection(scanner).correlate(
+        file, declaration, declarations, group, indexName, identity);
   }
 
-  /**
-   * The multi-overload bijection: every textual sibling in the group must
-   * resolve to a distinct canonical parameter vector, and the vector set
-   * must equal the index vector set. A single wrong or missing resolution
-   * breaks the bijection (vector collision or set mismatch), so the group
-   * fails closed to textual rather than selecting a wrong overload.
-   */
-  private Optional<JavacSourceSymbolIndex.MemberInfo> correlatedByBijection(
-      SourceMetadataScannerState.SourceFile file,
-      SourceMetadataScannerState.MethodInfo declaration,
-      List<SourceMetadataScannerState.MethodInfo> declarations,
-      List<JavacSourceSymbolIndex.MemberInfo> group,
-      String indexName) {
-    List<SourceMetadataScannerState.MethodInfo> siblings = declarations.stream()
-        .filter(other -> other.name().equals(declaration.name()))
-        .filter(other -> !hasCommentText(other.parameters()))
-        .filter(other -> SourceMetadataScanner.parameters(other.parameters()).size()
-            == declarationArity(declaration))
-        .toList();
-    if (siblings.size() != group.size()) {
-      return Optional.empty();
+  /** The javac error codes recorded for the owner's declaring files. */
+  private static List<String> errorCodesFor(
+      JavacSourceSymbolIndex index, String ownerType) {
+    LinkedHashSet<String> codes = new LinkedHashSet<>();
+    for (JavacSourceSymbolIndex.TypeInfo entry : index.type(ownerType)) {
+      codes.addAll(index.errorCodesFor(entry.file()));
     }
-    List<List<String>> textualVectors = new ArrayList<>();
-    for (SourceMetadataScannerState.MethodInfo sibling : siblings) {
-      List<String> vector = resolvedParameterVector(file, sibling, indexName);
-      if (vector.isEmpty()) {
-        return Optional.empty();
-      }
-      textualVectors.add(vector);
-    }
-    List<List<String>> indexVectors = group.stream()
-        .map(JavacSourceSymbolIndex.MemberInfo::parameterTypes)
-        .toList();
-    if (textualVectors.stream().distinct().count() != textualVectors.size()
-        || indexVectors.stream().distinct().count() != indexVectors.size()
-        || !new HashSet<>(textualVectors).equals(new HashSet<>(indexVectors))) {
-      return Optional.empty();
-    }
-    List<String> queried = resolvedParameterVector(file, declaration, indexName);
-    if (queried.isEmpty()) {
-      return Optional.empty();
-    }
-    return group.stream()
-        .filter(member -> member.parameterTypes().equals(queried))
-        .findFirst();
+    return List.copyOf(codes);
   }
 
-  private int declarationArity(SourceMetadataScannerState.MethodInfo declaration) {
-    return SourceMetadataScanner.parameters(declaration.parameters()).size();
-  }
-
-  /** The canonical parameter vector of one textual declaration, or empty. */
-  private List<String> resolvedParameterVector(
-      SourceMetadataScannerState.SourceFile file,
-      SourceMetadataScannerState.MethodInfo declaration,
-      String indexName) {
-    JavacTypeParameterClause clause =
-        JavacTypeParameterClause.parse(file, declaration, indexName);
-    if (clause.abstain()) {
-      // An unparseable type-parameter clause leaves the parameter names
-      // unknown, reopening the mirrored-overload derangement window: the
-      // group must abstain rather than correlate on possibly-swapped
-      // vectors.
-      return List.of();
-    }
-    Set<String> typeParameters = clause.names();
-    // Class-level type parameters shadow imports exactly like method
-    // ones: a parameter naming one resolves through the import textually
-    // while javac erases it to the enclosing type's bound, so mirrored
-    // overloads can swap vectors. An unestablishable enclosing scope
-    // abstains, fail closed.
-    Set<String> enclosingTypeParameters =
-        SourceMetadataScannerTextLayer14.enclosingTypeParameterNames(file, declaration);
-    if (enclosingTypeParameters == null) {
-      return List.of();
-    }
-    List<String> vector = new ArrayList<>();
-    for (SourceMetadataScannerState.Parameter parameter
-        : SourceMetadataScanner.parameters(declaration.parameters())) {
-      String textual = SourceMetadataScanner.parameterType(
-          parameter.type() + " " + parameter.name());
-      boolean array = textual.endsWith("[]");
-      String element = array ? textual.substring(0, textual.length() - 2) : textual;
-      if (typeParameters.contains(element)
-          || enclosingTypeParameters.contains(element)) {
-        // A method OR CLASS type parameter erases to its BOUND in the
-        // index but resolves through imports textually — the two
-        // denotations can derange across mirrored overloads, so the
-        // group must abstain rather than correlate on swapped vectors.
-        return List.of();
-      }
-      Optional<String> canonical = PRIMITIVE_TYPES.contains(element)
-          ? Optional.of(element)
-          : scanner.resolveReferenceType(element, file);
-      if (canonical.isEmpty()) {
-        return List.of();
-      }
-      vector.add(canonical.get() + (array ? "[]" : ""));
-    }
-    return vector;
-  }
-
-  private static final Set<String> PRIMITIVE_TYPES = Set.of(
+  /** The primitive spellings the textual vector resolution admits directly. */
+  static final Set<String> PRIMITIVE_TYPES = Set.of(
       "boolean", "byte", "char", "short", "int", "long", "float", "double", "void");
 
-  /** The index-rendered producer descriptor, matching the producer method by its own parameter text. */
-  Optional<String> producerJvmDescriptorFromIndex(
+  /** The index-rendered producer correlation, matching the producer method by its own parameter text. */
+  JavacCorrelation producerCorrelation(
       SourceMetadataScannerState.BeanCandidate candidate) {
     int arity = SourceMetadataScanner.parameters(candidate.producerParameters()).size();
     String candidateParameters = candidate.producerParameters()
@@ -269,13 +238,12 @@ final class JavacMemberCorrelation {
           && method.parameters().replaceAll("\\s+", " ").trim()
               .equals(candidateParameters)
           && SourceMetadataScanner.parameters(method.parameters()).size() == arity) {
-        return correlatedJvmDescriptor(
+        return correlatedMethod(
             candidate.file(),
-            scanner.typeContaining(candidate.file(),
-                SourceMetadataScanner.declarationStart(candidate.file(), method.start())),
+            scanner.ownerTypeFor(candidate.file(), method),
             method);
       }
     }
-    return Optional.empty();
+    return JavacCorrelation.empty();
   }
 }

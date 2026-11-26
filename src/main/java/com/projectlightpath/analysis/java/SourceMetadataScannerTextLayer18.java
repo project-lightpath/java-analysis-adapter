@@ -20,6 +20,19 @@ abstract class SourceMetadataScannerTextLayer18 extends SourceMetadataScannerTex
   /** Builds unresolved evidence for one dynamic proxy construction site. */
   DynamicFeature dynamicProxyFeature(
       SourceFile file, MethodInfo caller, String target, String targetDescriptor, int offset) {
+    return dynamicProxyFeature(file, caller, target, targetDescriptor, offset,
+        JavacFeatureAbstentions.NONE);
+  }
+
+  /**
+   * Builds unresolved evidence for one dynamic proxy construction site,
+   * carrying the #62 per-member abstentions (the interface-method
+   * descriptor decline, the parameter-repair decline, and the caller
+   * member's correlation decline).
+   */
+  DynamicFeature dynamicProxyFeature(
+      SourceFile file, MethodInfo caller, String target, String targetDescriptor,
+      int offset, JavacFeatureAbstentions abstentions) {
     List<String> symbols = new ArrayList<>();
     symbols.add("Proxy.newProxyInstance");
     if (file.structuralSource().contains("InvocationHandler")) {
@@ -35,7 +48,7 @@ abstract class SourceMetadataScannerTextLayer18 extends SourceMetadataScannerTex
         file.lineAt(offset),
         offset,
         targetDescriptor,
-        JavacTargetEvidence.NONE);
+        new JavacFeatureEvidence(null, abstentions));
   }
 
 static MethodInfo methodContaining(SourceFile file, int index) {

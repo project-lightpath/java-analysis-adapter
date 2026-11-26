@@ -71,6 +71,13 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
       return false;
     }
     if (hasParameter(owner, variable)) {
+      // Issue #62 choke point: the parameter-match arm is about to consult
+      // the caller's correlation (through parameterMatchesType). Captured
+      // at extraction time so the feature-build re-query stays causal —
+      // feature-time re-derivation of the receiver is prohibited (the
+      // admitting extractor arm is not recoverable from the site alone).
+      parameterArmOffsets.computeIfAbsent(
+          file.path(), ignored -> new LinkedHashSet<>()).add(offset);
       return parameterMatchesType(file, owner, type, variable, offset);
     }
     Optional<LocalDeclaration> local = activeLocalDeclaration(file, owner, variable, offset);
@@ -85,6 +92,20 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
       return isJdkDeclaredType(file, declaration.type(), declaration.start(), type);
     }
     return hasVisibleField(file, type, variable, offset);
+  }
+
+  /**
+   * The per-file offsets whose receiver classification consulted the
+   * parameter-match arm (#62), captured at extraction time. Both
+   * rebuilds (reflection sites, proxy offsets) re-derive from the same
+   * cached extracts, so the capture is deterministic.
+   */
+  private final Map<Path, Set<Integer>> parameterArmOffsets = new LinkedHashMap<>();
+
+  /** The parameter-arm offsets recorded for one file during extraction. */
+  Set<Integer> parameterReceiverOffsets(SourceFile file) {
+    return parameterArmOffsets.getOrDefault(
+        file.path(), Set.of());
   }
 
   String inferredReflectionType(SourceFile file, String initializer, int offset) {

@@ -72,7 +72,7 @@ abstract class BoundedFrameworkModelMetadataMatching extends BoundedFrameworkMod
       AnalysisContext context,
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.ProxyTarget target) {
-    Optional<String> descriptor = methodDescriptor(scanner, target);
+    Optional<String> descriptor = methodDescriptor(scanner, target).descriptor();
     return context.proxyTargetMetadata().stream()
         .filter(row -> proxyTargetTypeMatches(scanner, row.targetType(), target))
         .filter(row -> row.methodName().equals(target.method().name()))

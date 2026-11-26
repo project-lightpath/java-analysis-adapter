@@ -45,6 +45,11 @@ abstract class BoundedFrameworkModelDynamicFacts extends BoundedFrameworkModelGe
           factIds,
           dynamicProxyFactId(scanner, feature),
           dynamicFeatureIdentity(feature));
+      // Issue #62: the per-member abstention attributes ride the evidence
+      // (never scan.diagnostics()); the fact stays UNRESOLVED, unchanged.
+      Map<String, String> attributes =
+          new HashMap<>(dynamicProxyEvidenceAttributes(feature));
+      feature.abstentions().mergeInto(attributes);
       facts.add(SemanticCallFacts.Fact.framework(
           factId,
           context,
@@ -59,7 +64,7 @@ abstract class BoundedFrameworkModelDynamicFacts extends BoundedFrameworkModelGe
                   feature.sourcePath(),
                   feature.symbols(),
                   feature.sourceLine() > 0 ? feature.sourceLine() : null,
-                  dynamicProxyEvidenceAttributes(feature))),
+                  attributes)),
               feature.limitation())));
     }
     return facts;
