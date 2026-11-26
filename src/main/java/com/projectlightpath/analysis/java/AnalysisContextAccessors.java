@@ -118,6 +118,39 @@ abstract class AnalysisContextAccessors {
     return List.copyOf(result);
   }
 
+  /**
+   * Most-specific-first list of every declared root (source and
+   * generated, ANY inclusion or scope) — the resolution order for
+   * {@link #includesSourceFile}.
+   */
+  List<AnalysisContext.SourceRoot> declaredRootsBySpecificity() {
+    List<AnalysisContext.SourceRoot> declared =
+        new ArrayList<>(sourceRoots());
+    declared.addAll(generatedSourceRoots());
+    return AnalysisContext.rootsBySpecificity(declared);
+  }
+
+  /**
+   * Reports whether one source file under a walked included root stays
+   * in the analysis scope (issue #68): the file's most-specific
+   * DECLARED containing root must be included and in the analysis
+   * scope, so a nested excluded or out-of-scope root never contributes
+   * files to the parent's walk. The most-specific root governs — an
+   * included nested root under an excluded parent still contributes.
+   * The safe default when no declared root contains the file is
+   * {@code true} (the walked root, already included, governs).
+   */
+  boolean includesSourceFile(
+      Path file, List<AnalysisContext.SourceRoot> declaredBySpecificity) {
+    Path normalized = file.toAbsolutePath().normalize();
+    for (AnalysisContext.SourceRoot root : declaredBySpecificity) {
+      if (normalized.startsWith(root.path())) {
+        return root.included() && root.scope() == analysisScope;
+      }
+    }
+    return true;
+  }
+
   public List<Path> dependencyClasspath() {
     return dependencyClasspath;
   }

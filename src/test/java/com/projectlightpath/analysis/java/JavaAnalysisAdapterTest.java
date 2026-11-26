@@ -272,6 +272,12 @@ class JavaAnalysisAdapterTest {
           public String map(String value) { return value; }
         }
         """);
+    write(generatedRoot, "demo/generated/IncludedMapper.java", """
+        package demo.generated;
+        public class IncludedMapper {
+          public String map(String value) { return value; }
+        }
+        """);
 
     AnalysisContext context = AnalysisContext.builder()
         .id("quarkus-production")
@@ -320,7 +326,13 @@ class JavaAnalysisAdapterTest {
         .filter(item -> item.relationshipType().equals("generated_implementation"))
         .toList();
 
-    assertEquals(2, generatedFacts.size());
+    // Issue #68: the nested excluded and TEST-scope roots never
+    // contribute files — exactly one fact, for the mapper directly under
+    // the included root, and none for the excluded/test mappers. (The
+    // pre-#68 assertions counted the excluded/test mappers' facts,
+    // misattributed to the included root — probe receipt in PLAN-68.)
+    assertEquals(1, generatedFacts.size(), generatedFacts.toString());
+    assertEquals("demo.generated.IncludedMapper#map", generatedFacts.get(0).callee());
     assertTrue(generatedFacts.stream().allMatch(item ->
         item.evidence().get(0).attributes().get("sourceRoot").equals("generated-src/main/java")));
     assertTrue(generatedFacts.stream().allMatch(item ->
@@ -329,6 +341,9 @@ class JavaAnalysisAdapterTest {
         item.evidence().get(0).attributes().get("sourceRootScope").equals("production")));
     assertTrue(generatedFacts.stream().allMatch(item ->
         item.evidence().get(0).attributes().get("sourceRootFingerprint").equals("included-fingerprint")));
+    assertTrue(generatedFacts.stream().noneMatch(item ->
+        item.callee().contains("ExcludedMapper")
+            || item.callee().contains("TestMapper")), generatedFacts.toString());
   }
 
   /** Covers Spring MVC, injection, proxy, repository, and lifecycle facts. */
