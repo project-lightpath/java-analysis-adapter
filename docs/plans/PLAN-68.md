@@ -181,8 +181,11 @@ sanctioned existing-test restructuring (item 4).
      the cell vacuous): the scanner's file-set projection AND the
      framework-fact projection are equal across
      `-Dflpath.java.symbolindex=false` and the default; both exclude
-     the nested files (green at RED — both currently include — and
-     stays green post-fix; the parity invariant is the pin). The
+     the nested files (sub-status corrected at
+     RED: the PARITY comparison is green at RED — both flag states
+     currently include the nested files, the invariant is the pin; the
+     cell's exclusion assertions are RED at RED, so the method as a
+     whole is expected-RED). The
      oracle is stated here so the RED commit can prove non-vacuity:
      the on-arm's projection is non-empty for the included mapper.
    - **N8 (RED for the file-set assertion): all-filtered-out parity.**
@@ -269,8 +272,9 @@ sanctioned existing-test restructuring (item 4).
   restructuring of `generatedProvenanceUsesOnlyIncludedActiveScope
   NestedRoots`. Expected-RED: N1–N4, N7, N8's file-set assertion (and
   the restructured existing test — its no-facts-for-Excluded/Test
-  assertions fail today). Expected-green at RED: N5, N6, N8's
-  `missing_source` characterization. Full gates at RED (expected
+  assertions fail today). Expected-green at RED: N5 and N8's
+  `missing_source` characterization (N6's parity comparison is green
+  but its exclusion assertions are red — the method is expected-RED). Full gates at RED (expected
   failures enumerated in the commit message; floor receipt 709 + new).
 - **GREEN_68**: the two predicate members (item 1) and the two walker
   filters + the all-filtered-out diagnostic rule (item 2). Boundary
