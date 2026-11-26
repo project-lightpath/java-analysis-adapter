@@ -774,7 +774,7 @@ class JavacAbstentionEvidenceTest {
         package demo;
         import java.util.List;
         import java.util.Set;
-        public interface Mirror<List extends Set, Set extends java.util.Collection> {
+        public interface Mirror<List extends java.util.Set, Set extends java.util.List> {
           void pick(List[][] first);
           void pick(Set[][] second);
         }
