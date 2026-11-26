@@ -371,6 +371,25 @@ Round 2 (delta-only, on the round-1 edits): 4 new addressable findings
 5. NIT — N8's cross-flag parity is scoped to the file set (no index
    `diagnostics()` exists flag-off).
 
+Round 3 (delta-only, on the round-2 edits): 1 addressable finding
+(MEDIUM), incorporated — the resource-lane retraction under-enumerated
+the lane: a third, DIRECTORY arm exists (an OBSERVED declaredPath that
+is a directory under an included root whose tree contains a nested
+excluded root — `scanDirectory` walks it with no per-file scope
+check, reachable WITHOUT the `explicitlySelected` fallback), so #69's
+proposed `authorizedPath`-only fix would not close the lane. The
+audit entry and #69 (amendment comment) now carry the three-arm
+inventory; round-2 findings 1 and 3 are superseded by it.
+
+Round 4 (delta-only): 1 addressable finding (LOW), incorporated — the
+N9 retraction bullet still carried the round-2 two-arm rationale;
+aligned with the three-arm inventory.
+
+Round 5 (convergence): 1 addressable finding (LOW — this record was
+missing the round 3/4 entries; added here). No findings in the plan
+body; end-to-end consistency verified (cell list, expected-RED
+enumeration, items 1-5, certainty model, residuals).
+
 Verified across rounds: both walkers' sweep, the existing test's
 misattribution pin, the loader's excluded-ordinary-root rejection,
 the specificity mechanism's correctness (including N5's
@@ -382,7 +401,7 @@ rule's compatibility with the existing missing_source cells (8/8b
 short-circuit before any walk), and — from round 2 — the
 `authorizedPath` caller/fallback trace that forced the retraction.
 
-Confidence score: **0.89** (0.86 → 0.88 → 0.89 across plan review) —
+Confidence score: **0.89** (0.86 → 0.88 → 0.89 across plan review; rounds 3-5 were consistency and enumeration corrections, no scope change) —
 the defect and its only existing pin are probe-verified; the .java
 fix is a symmetric filter over an existing, well-tested specificity
 mechanism; the resource lane is honestly excluded with the blocker
