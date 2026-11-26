@@ -72,7 +72,8 @@ by not touching `scan.diagnostics()` semantics).
 ## Scope (binding)
 
 Production sources in `src/main`, one new test class. Zero gating
-changes; zero new diagnostics; zero edits to existing tests.
+changes; zero new diagnostics. Existing-test edits: NONE to assertions;
+ONE class receives a sanctioned MECHANICAL signature update (item 5).
 
 1. **Document the decision.** Javadoc on
    `ServiceLoaderDescriptorAuthorization.authorizedPath`,
@@ -142,11 +143,15 @@ changes; zero new diagnostics; zero edits to existing tests.
      check), mechanism still `selected_metadata` (the metadata arm
      scanned it), `descriptorRootScope=production/excluded` — the
      label distinguishes what the admission geometry cannot.
-   - **P3 (label RED): the sweep control.** The per-root
-     `META-INF/services` sweep under an included root (the
+   - **P3 (label RED; corrected at GREEN): the sweep control.** The
+     per-root `META-INF/services` sweep under an included root (the
      `nestedServiceTypesResolveAtCallSite` fixture shape):
-     `descriptorProvenance=included_root`,
-     `descriptorRootScope=production/included`.
+     `descriptorProvenance=included_root`, and NO
+     `descriptorRootScope` attribute — the sweep subtree
+     (`src/main/resources`) is a SIBLING of the declared source root,
+     not under it (plan-review round 1 finding 1's geometry; the
+     original `production/included` expectation was wrong and is
+     corrected here).
    - **P4 (label RED): the entry control.** A dependency-entry (or
      applicationClasses) descriptor: `descriptorProvenance=
      dependency_entry` (or `application_classes`), no
@@ -156,23 +161,41 @@ changes; zero new diagnostics; zero edits to existing tests.
      scan → resolution path: the provider fact's evidence carries
      both attributes (the label reaches the consumer, not just the
      descriptor record).
-   - **P6 (label RED; the merge consequence).** Two same-content
-     descriptors — one from a selected location inside an excluded
-     root, one classpath-backed — merge in `selectedDescriptors`
-     (keyed by `DescriptorIdentity`, which excludes provenance; the
-     existing pinned behavior prefers the classpath-backed twin,
-     `ServiceLoaderCoverageTest.identicalSourceAndOutputDescriptors
-     AreMergedPreferringClasspath`): the survivor carries the
-     classpath twin's `dependency_entry` label. Pinned as DOCUMENTED
-     behavior (the merge preference is pre-existing and sanctioned;
-     the excluded-scope twin's label does not survive the merge) —
-     the residual that the merge can discard a scope label, recorded
-     with the cell rather than changed.
+   - **P6 (label RED; corrected at GREEN): the merge consequence.**
+     Two same-content descriptors — one from a selected location
+     inside an excluded root, one under applicationClasses — the SCAN
+     keeps both (the `DescriptorIdentity` merge happens at RESOLVE
+     time, not scan time); at resolve, the classpath twin wins (its
+     display path is ABSOLUTE and sorts first; both twins are
+     classpath-backed — explicit selection backs the excluded twin),
+     and the survivor carries the classpath twin's
+     `application_classes` label while the excluded twin's label is
+     DISCARDED by the merge. Pinned as DOCUMENTED behavior: the merge
+     is deterministic but NOT label-cautious — it can drop a scope
+     label (the round-2 finding-4 residual, now with the observed
+     winner recorded).
    - Pairwise (AGENTS): mechanism × root-scope (P1/P2b excluded vs
      P2 test vs P3 included), mechanism × path kind (file P1 vs
      directory P2), explicit-vs-sweep (P1/P2/P2b vs P3), entry (P4),
      merge × label (P6).
-4. **Makefile floor raise** to the observed post-fix count
+4. **ArchiveSource threading is MECHANISM-ONLY (design note, forced
+   by PMD).** Archive descriptors carry synthetic `archive!/entry`
+   paths, so their origin is `(mechanism, null)` — the archive arm
+   never needs the context, and `readModule` stays at 8 parameters
+   (under the >8 `ExcessiveParameterList` threshold). The scan family
+   keeps EXACTLY two methods (the 3-arg delegator plus the
+   config-and-mechanism body): ArchiveSource's GodClass finding is
+   BASELINED with the WMC value embedded in the fingerprint's
+   message, so adding methods to the class breaks the baseline match
+   — the method count (and therefore WMC) is preserved by design.
+5. **Sanctioned mechanical existing-test edit (assertions
+   untouched).** `ServiceLoaderSeekableZipTest`'s six
+   explicit-config `ArchiveSource.scan(...)` call sites gain the
+   trailing `"unclassified"` mechanism argument (the 4-arg
+   config-scan signature became the 5-arg
+   config-and-mechanism body). Zero assertion changes; the edit is
+   purely the signature the plan's threading requires.
+6. **Makefile floor raise** to the observed post-fix count
    (717 + new cells).
 
 ## Non-goals
