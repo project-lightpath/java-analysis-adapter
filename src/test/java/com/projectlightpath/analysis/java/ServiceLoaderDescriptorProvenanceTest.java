@@ -185,6 +185,39 @@ class ServiceLoaderDescriptorProvenanceTest {
   }
 
   @Test
+  void symlinkedSelectionPathIsLabeledByTheRealLocation() throws IOException {
+    // CodeRabbit CR-1 on PR #73: a metadata path selected through a
+    // symbolic-link parent inside the included root aliases the excluded
+    // root's services file. Admission compares real paths (under/
+    // sameRealPath); the label must too, or the descriptor would be
+    // labeled production/included while really lying under the excluded
+    // root. The direct-path control is P1.
+    Path root = temp.resolve("p7");
+    Path sourceRoot = root.resolve("src/main/java");
+    Path excludedRoot = root.resolve("excluded-gen");
+    writeBridge(sourceRoot);
+    writeServices(excludedRoot.resolve("META-INF/services"));
+    Files.createSymbolicLink(
+        sourceRoot.resolve("alias"), Path.of("../../../excluded-gen"));
+    AnalysisContext context = baseBuilder(root, sourceRoot)
+        .generatedSourceRoot("excluded-gen", excludedRoot,
+            AnalysisContext.Scope.PRODUCTION, false, false, null)
+        .frameworkMetadata(metadata(
+            "src/main/java/alias/META-INF/services/demo.Provider"))
+        .build();
+    ServiceLoaderDescriptorScanner.Scan scan =
+        ServiceLoaderDescriptorScanner.scan(context);
+    // Admission unchanged: the aliased descriptor IS scanned (the
+    // explicit-selection arm matches real paths).
+    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    SemanticCallFacts.Evidence evidence = descriptorEvidence(context, scan);
+    assertEquals("selected_metadata", evidence.attributes().get("descriptorProvenance"),
+        evidence.attributes().toString());
+    assertEquals("production/excluded", evidence.attributes().get("descriptorRootScope"),
+        evidence.attributes().toString());
+  }
+
+  @Test
   void labelsReachTheProviderFactEndToEnd() throws IOException {
     Path root = temp.resolve("p5");
     Path sourceRoot = root.resolve("src/main/java");

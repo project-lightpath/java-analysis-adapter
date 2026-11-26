@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -67,19 +68,36 @@ final class ServiceLoaderDescriptorProvenance {
    * never gates admission), or {@code null} when the path is under no
    * declared root (dependency entries, application classes outside roots,
    * synthetic archive paths) or the context is unknown.
+   *
+   * <p>Containment compares REAL paths (CodeRabbit CR-1 on PR #73): the
+   * admission gates ({@code under}/{@code sameRealPath}) resolve with
+   * {@code toRealPath()}, and a descriptor selected through a
+   * symbolic-link parent that aliases an excluded root must be labeled by
+   * where the file really lies, not by the lexical spelling of the alias.
+   * Resolution failure falls back to the lexical form (the pre-fix
+   * behavior; the label can then be absent, never fabricated).
    */
   static String rootScopeLabel(AnalysisContext context, Path path) {
     if (context == null || path == null) {
       return null;
     }
-    Path normalized = path.toAbsolutePath().normalize();
+    Path normalized = resolvedPath(path);
     for (AnalysisContext.SourceRoot root : context.declaredRootsBySpecificity()) {
-      if (normalized.startsWith(root.path())) {
+      if (normalized.startsWith(resolvedPath(root.path()))) {
         return root.scope().name().toLowerCase(java.util.Locale.ROOT)
             + "/" + (root.included() ? "included" : "excluded");
       }
     }
     return null;
+  }
+
+  /** Real-path resolution matching the admission gates; lexical on failure. */
+  private static Path resolvedPath(Path path) {
+    try {
+      return path.toRealPath();
+    } catch (IOException | SecurityException error) {
+      return path.toAbsolutePath().normalize();
+    }
   }
 
   /**

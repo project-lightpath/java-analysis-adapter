@@ -229,11 +229,15 @@ ONE class receives a sanctioned MECHANICAL signature update (item 5).
 - Descriptor admission is UNCHANGED (all three arms keep today's
   reachability); the only behavior delta is two additive evidence
   attributes.
-- An explicitly-selected descriptor inside an excluded/out-of-scope
-  root is always identifiable downstream by its
+- An explicitly-selected RETAINED descriptor inside an
+  excluded/out-of-scope root is always identifiable downstream by its
   `descriptorRootScope` — silent inclusion is impossible by
   construction (the attribute is emitted from the descriptor's own
-  path, not from a caller-supplied claim).
+  path, not from a caller-supplied claim). The guarantee scopes to
+  each RETAINED descriptor: provenance DISCARDED by the
+  resolution-time `DescriptorIdentity` merge (P6 — the classpath
+  twin wins and the excluded twin's label is dropped) is outside
+  this guarantee (CodeRabbit CR-1 on PR #73).
 - Zero new diagnostics, zero scan-global blast radius (stated per
   AGENTS: `scan.diagnostics()` untouched).
 
