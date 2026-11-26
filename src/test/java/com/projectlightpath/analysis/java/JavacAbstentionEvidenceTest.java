@@ -572,31 +572,36 @@ class JavacAbstentionEvidenceTest {
         """);
     SemanticCallFacts optedOut = dynamicScan(
         context(optOutRoot, temp.resolve("cache-order-optout/classes"), List.of()));
-    // CR-1, finding 4709913135: the flag-off twins for the UNGATED paths,
-    // each requiring the fact to exist before asserting attribute absence.
+    // CR-1, finding 4709913135 + CR-2 (thread 4710214825): the flag-off
+    // twins for the UNGATED paths, each requiring the fact to exist and
+    // sweeping EVERY javac*Abstention* key on it.
     SemanticCallFacts.Fact reflectionSite = optedOut.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("reflection"))
         .filter(item -> item.caller().startsWith("demo.Sites#"))
         .findFirst()
         .orElseThrow(() -> new AssertionError(optedOut.providerFacts().toString()));
-    assertNull(attribute(reflectionSite, "javacCallerAbstention"),
-        "flag-off reflection re-query: " + reflectionSite.evidence());
+    assertNoAbstentionAttributes(reflectionSite, "flag-off reflection re-query");
     SemanticCallFacts.Fact repairSite = optedOut.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .filter(item -> item.callee().equals("demo.Overloaded#run"))
         .findFirst()
         .orElseThrow(() -> new AssertionError(optedOut.providerFacts().toString()));
-    assertNull(attribute(repairSite, "javacAbstention"),
-        "flag-off descriptor correlation: " + repairSite.evidence());
-    assertNull(attribute(repairSite, "javacRepairAbstention"),
-        "flag-off repair decline: " + repairSite.evidence());
+    assertNoAbstentionAttributes(repairSite, "flag-off descriptor/repair decline");
     SemanticCallFacts.Fact proxySite = optedOut.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .filter(item -> item.caller().startsWith("demo.ProxySites#"))
         .findFirst()
         .orElseThrow(() -> new AssertionError(optedOut.providerFacts().toString()));
-    assertNull(attribute(proxySite, "javacCallerAbstention"),
-        "flag-off proxy caller gate: " + proxySite.evidence());
+    assertNoAbstentionAttributes(proxySite, "flag-off proxy caller gate");
+  }
+
+  /** Requires that NO javac*Abstention* key appears on the fact. */
+  private static void assertNoAbstentionAttributes(
+      SemanticCallFacts.Fact fact, String context) {
+    assertTrue(fact.evidence().stream()
+            .noneMatch(evidence -> evidence.attributes().keySet().stream()
+                .anyMatch(key -> key.startsWith("javac") && key.contains("Abstention"))),
+        context + " carries no abstention attribute: " + fact.evidence());
   }
 
   // D5 (review round 2, finding 1): a FAILED index build is a scan-global
@@ -754,6 +759,72 @@ class JavacAbstentionEvidenceTest {
     assertNull(attribute(grid, "javacAbstention"),
         "non-generic rank-2 and rank-1 array overloads still correlate: "
             + grid.evidence());
+  }
+
+  // D9 (CodeRabbit CR-2, thread 4709913104): the MIRRORED rank-2 case —
+  // two overloads whose parameters are both rank-2 type-parameter arrays
+  // (the derangement shape the single-rank guard missed) — and the
+  // non-generic control asserting that BOTH rank-2 overloads select
+  // their OWN members (the descriptor proves the pairing).
+  @Test
+  void mirroredRankTwoOverloadsAbstainAndControlsSelectTheirMembers() throws IOException {
+    SemanticCallFacts mirrored = analyzeDynamic(List.of("""
+        package demo;
+        public interface Mirror<T, U> {
+          void pick(T[][] first);
+          void pick(U[][] second);
+        }
+        """, """
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class MirrorProxyFactory {
+          public Mirror wrap() {
+            return (Mirror) Proxy.newProxyInstance(Mirror.class.getClassLoader(),
+                new Class<?>[]{Mirror.class}, (proxy, method, args) -> null);
+          }
+        }
+        """));
+    assertTrue(mirrored.providerFacts().stream()
+            .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+            .filter(item -> item.callee().equals("demo.Mirror#pick"))
+            .allMatch(item -> "type_parameter_overload_group".equals(
+                attribute(item, "javacAbstention"))),
+        "both mirrored rank-2 type-parameter overloads must abstain: "
+            + mirrored.providerFacts());
+
+    SemanticCallFacts controls = analyzeDynamic(List.of("""
+        package demo;
+        public interface Grid {
+          void pick(String[][] wide);
+          void pick(int[] narrow);
+        }
+        """, """
+        package demo;
+        import java.lang.reflect.Proxy;
+        public class GridProxyFactory {
+          public Grid wrap() {
+            return (Grid) Proxy.newProxyInstance(Grid.class.getClassLoader(),
+                new Class<?>[]{Grid.class}, (proxy, method, args) -> null);
+          }
+        }
+        """));
+    List<SemanticCallFacts.Fact> picks = controls.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.Grid#pick"))
+        .toList();
+    assertEquals(2, picks.size(), controls.providerFacts().toString());
+    for (SemanticCallFacts.Fact pick : picks) {
+      assertNull(attribute(pick, "javacAbstention"),
+          "each non-generic overload correlates: " + pick.evidence());
+    }
+    assertTrue(picks.stream().anyMatch(pick ->
+            "(java.lang.String[][])".equals(attribute(pick, "targetDescriptor"))),
+        "the String[][] overload selects its own member (its descriptor): "
+            + picks);
+    assertTrue(picks.stream().anyMatch(pick ->
+            "(int[])".equals(attribute(pick, "targetDescriptor"))),
+        "the int[] overload selects its own member (its descriptor): "
+            + picks);
   }
 
   private SemanticCallFacts.Fact frameworkFact(
