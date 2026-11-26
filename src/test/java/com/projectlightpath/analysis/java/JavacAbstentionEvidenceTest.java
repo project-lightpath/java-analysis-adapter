@@ -360,6 +360,7 @@ class JavacAbstentionEvidenceTest {
           void call() {
             loader.getMethod("run");
           }
+          class Nested { }
         }
         """));
     SemanticCallFacts.Fact fieldSite = field.providerFacts().stream()
