@@ -56,8 +56,9 @@ import javax.tools.ToolProvider;
  * <p>One javac parse per {@link AnalysisContext}, cached by context identity,
  * exposing annotations, member type shapes, canonical and binary names, and
  * error-type state as immutable records. The seam is gated by the
- * {@code flpath.java.symbolindex} system property (default off), so default
- * fact output is unchanged while the flag is off.
+ * {@code flpath.java.symbolindex} system property (default on since issue
+ * #66): {@code -Dflpath.java.symbolindex=false} is the explicit opt-out
+ * that keeps the textual path for field bisection.
  *
  * <p>The index never retains the context: every diagnostic path is rendered
  * at build time, and no accessor stores compiler or context objects.
@@ -98,9 +99,15 @@ final class JavacSourceSymbolIndex {
     this.peakHeapBytes = peakHeapBytes;
   }
 
-  /** Reports whether the index seam flag is enabled (default off). */
+  /**
+   * Reports whether the index seam is enabled. Default ON (issue #66);
+   * an explicit {@code "false"} (case-insensitive) opts out. Any other
+   * value — absent, {@code "true"}, or unrecognized — keeps the default:
+   * the opt-out must be deliberate.
+   */
   static boolean enabled() {
-    return Boolean.getBoolean("flpath.java.symbolindex");
+    return !"false".equalsIgnoreCase(
+        System.getProperty("flpath.java.symbolindex"));
   }
 
   /** Returns the per-context index, parsed at most once per context instance. */

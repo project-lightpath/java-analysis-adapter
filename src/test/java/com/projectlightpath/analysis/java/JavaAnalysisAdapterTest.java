@@ -847,17 +847,21 @@ class JavaAnalysisAdapterTest {
         .filter(item -> item.callee().startsWith("demo.CustomRepository#"))
         .findFirst()
         .orElseThrow();
-    assertEquals("demo.CustomRepository#findByEmail(String)", custom.callee());
-    assertTrue(custom.evidence().get(0).symbols().contains("declared findByEmail(String)"));
+    // Issue #66 default-on delta (#23 canonical repository signatures):
+    // parameter types come from the javac index.
+    assertEquals("demo.CustomRepository#findByEmail(java.lang.String)", custom.callee());
+    assertTrue(custom.evidence().get(0).symbols().contains(
+        "declared findByEmail(java.lang.String)"),
+        custom.evidence().toString());
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals("demo.PagingRepository#findById")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
-        "demo.OverloadedRepository#findByEmail(String)")));
+        "demo.OverloadedRepository#findByEmail(java.lang.String)")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.OverloadedRepository#findByEmail(int)")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
-        "demo.OverloadedRepository#findById(String)")));
+        "demo.OverloadedRepository#findById(java.lang.String)")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
-        "demo.OverloadedRepository#findById(Long)")));
+        "demo.OverloadedRepository#findById(java.lang.Long)")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.CustomRepository#findByEmail()")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("#delegated")));
@@ -868,7 +872,7 @@ class JavaAnalysisAdapterTest {
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("MarkerRepository")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().contains("WildcardRepository")));
     assertTrue(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
-        "demo.GenericRepository#findById(String)")));
+        "demo.GenericRepository#findById(java.lang.String)")));
     assertFalse(repositoryFacts.stream().anyMatch(item -> item.callee().equals(
         "demo.GenericRepository#findById(ID)")));
 
@@ -7100,8 +7104,10 @@ class JavaAnalysisAdapterTest {
     assertTrue(proxyFacts.stream().anyMatch(item -> item.evidence().get(0).attributes().get("caller").contains("#secondProxy")));
     assertTrue(proxyFacts.stream().anyMatch(item -> item.evidence().get(0).attributes().get("caller").contains("#proxyWithVariable")
         && item.callee().equals("unknown#unknown")));
+    // Issue #66 default-on delta (#23 comma-canonical proxy descriptors):
+    // index shapes replace the textual spellings.
     assertTrue(proxyFacts.stream().anyMatch(item -> item.callee().equals("demo.Overloaded#run")
-        && item.evidence().get(0).attributes().get("targetDescriptor").equals("(String)")));
+        && item.evidence().get(0).attributes().get("targetDescriptor").equals("(java.lang.String)")));
     assertTrue(proxyFacts.stream().anyMatch(item -> item.callee().equals("demo.Overloaded#run")
         && item.evidence().get(0).attributes().get("targetDescriptor").equals("(int)")));
     assertFalse(proxyFacts.stream().anyMatch(item -> item.evidence().get(0).path().contains("TextBlockExamples.java")));

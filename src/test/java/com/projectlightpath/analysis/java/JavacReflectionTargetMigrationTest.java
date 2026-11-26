@@ -26,13 +26,15 @@ import org.junit.jupiter.api.parallel.Isolated;
  * ambiguity shapes downgrade to POSSIBLE with a per-fact diagnostic.
  *
  * <p>Every cell asserts through the full analyze path (scanner features
- * to facts), never vacuously. Flag-off goldens pin the default output.
+ * to facts), never vacuously. Flag-off goldens pin the opt-out (textual)
+ * output — the default is ON since issue #66.
  * The class runs same-thread and {@link Isolated isolated} because it
  * writes the flag.
  */
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacReflectionTargetMigrationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -1110,7 +1112,7 @@ class JavacReflectionTargetMigrationTest {
               void handle(String value) { }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SemanticCallFacts.Fact> facts = facts(context);
     SemanticCallFacts.Fact forName = fact(facts, "Class.forName", "#audit");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, forName.certainty());

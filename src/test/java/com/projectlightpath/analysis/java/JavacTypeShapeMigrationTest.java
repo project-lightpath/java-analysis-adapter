@@ -29,6 +29,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacTypeShapeMigrationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -58,7 +59,7 @@ class JavacTypeShapeMigrationTest {
               }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<DynamicFeature> off = new SourceMetadataScanner(context).dynamicFeatures();
     System.setProperty(FLAG, "true");
     List<DynamicFeature> on = new SourceMetadataScanner(context).dynamicFeatures();
@@ -219,7 +220,7 @@ class JavacTypeShapeMigrationTest {
     SourceMetadataScannerState.MethodInfo audit = SourceMetadataScanner
         .methods(file).get(0);
     int offset = audit.start() + 10;
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     // Flag-off golden: the corrupted textual spelling cannot match.
     assertFalse(scanner.parameterMatchesType(
         file, audit, "java.lang.String", "target", offset));
@@ -244,7 +245,7 @@ class JavacTypeShapeMigrationTest {
               @Produces public String clean() { return null; }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.BeanCandidate> off =
         new SourceMetadataScanner(context).beanCandidates(
             AnalysisContext.Framework.QUARKUS);
@@ -295,7 +296,7 @@ class JavacTypeShapeMigrationTest {
               @Produces public Integer make(Integer seed) { return seed; }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.BeanCandidate> off =
         new SourceMetadataScanner(context).beanCandidates(
             AnalysisContext.Framework.QUARKUS);
@@ -351,7 +352,7 @@ class JavacTypeShapeMigrationTest {
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile repository =
         file(scanner, sourceRoot("repo"), "demo/AccountRepository.java");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScannerState.RepositoryMethod textual = scanner
         .springRepositoryMethods(repository).stream()
         .filter(method -> method.name().equals("findByOwner"))

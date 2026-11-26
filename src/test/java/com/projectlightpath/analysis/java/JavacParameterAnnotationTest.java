@@ -28,6 +28,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacParameterAnnotationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -215,7 +216,7 @@ class JavacParameterAnnotationTest {
               public void call(@Dec String a) {}
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     assertEquals(Optional.empty(), JavacSourceSymbolIndex.of(context));
     System.setProperty(FLAG, "true");
     JavacSourceSymbolIndex index = JavacSourceSymbolIndex.of(context).orElseThrow();
