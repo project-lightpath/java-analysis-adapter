@@ -761,20 +761,22 @@ class JavacAbstentionEvidenceTest {
             + grid.evidence());
   }
 
-  // D9 (CodeRabbit CR-1 finding 4709913104 + CR-2 follow-ups 4710552555
-  // and 4710588530): the MIRRORED rank-2 case — two overloads whose
-  // parameters are rank-2 type-parameter arrays with DISTINCT imported
-  // bounds (unbounded parameters would erase both to Object[][] and
-  // clash) — and the non-generic control with TWO rank-2 overloads,
-  // verifying each declaration's correlated member.
+  // D9 (CodeRabbit CR-1 finding 4709913104 + CR-2/CR-3 follow-ups): the
+  // MIRRORED rank-2 case with CROSSED vectors — class type parameters
+  // NAMED after the imported types they shadow, with crossed bounds
+  // (the JavacTypeShapeMigrationTest shadowing model at rank 2) — and
+  // the non-generic control with TWO rank-2 overloads, verifying each
+  // declaration's correlated member both by its fact's descriptor and
+  // DIRECTLY through the correlation's parameterTypes().
   @Test
   void mirroredRankTwoOverloadsAbstainAndControlsSelectTheirMembers() throws IOException {
     SemanticCallFacts mirrored = analyzeDynamic(List.of("""
         package demo;
         import java.util.List;
-        public interface Mirror<T extends List, U extends Number> {
-          void pick(T[][] first);
-          void pick(U[][] second);
+        import java.util.Set;
+        public interface Mirror<List extends Set, Set extends java.util.Collection> {
+          void pick(List[][] first);
+          void pick(Set[][] second);
         }
         """, """
         package demo;
@@ -796,16 +798,18 @@ class JavacAbstentionEvidenceTest {
     assertTrue(mirroredPicks.stream()
             .allMatch(item -> "type_parameter_overload_group".equals(
                 attribute(item, "javacAbstention"))),
-        "both mirrored rank-2 type-parameter overloads must abstain: "
+        "both crossed rank-2 type-parameter overloads must abstain: "
             + mirroredPicks);
 
-    SemanticCallFacts controls = analyzeDynamic(List.of("""
+    Path controlRoot = temp.resolve("grid-control/src/main/java");
+    write(controlRoot.resolve("demo/Grid.java"), """
         package demo;
         public interface Grid {
           void pick(String[][] wide);
           void pick(int[][] narrow);
         }
-        """, """
+        """);
+    write(controlRoot.resolve("demo/GridProxyFactory.java"), """
         package demo;
         import java.lang.reflect.Proxy;
         public class GridProxyFactory {
@@ -814,7 +818,10 @@ class JavacAbstentionEvidenceTest {
                 new Class<?>[]{Grid.class}, (proxy, method, args) -> null);
           }
         }
-        """));
+        """);
+    AnalysisContext controlContext = context(
+        controlRoot, temp.resolve("grid-control/classes"), List.of());
+    SemanticCallFacts controls = dynamicScan(controlContext);
     List<SemanticCallFacts.Fact> picks = controls.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("proxy_dispatch"))
         .filter(item -> item.callee().equals("demo.Grid#pick"))
@@ -831,6 +838,24 @@ class JavacAbstentionEvidenceTest {
       assertNull(attribute(own.get(0), "javacAbstention"),
           "each non-generic rank-2 overload correlates: " + own.get(0).evidence());
     }
+    // And DIRECTLY: each textual declaration correlates to the member
+    // whose parameterTypes() are that declaration's own erased vector.
+    SourceMetadataScanner scanner = new SourceMetadataScanner(controlContext);
+    SourceMetadataScannerState.SourceFile gridFile = scanner.files().stream()
+        .filter(file -> file.typeName().equals("demo.Grid"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    List<List<String>> correlatedVectors = SourceMetadataScanner.methods(gridFile)
+        .stream()
+        .filter(method -> method.name().equals("pick"))
+        .map(method -> JavacMemberCorrelation.of(scanner)
+            .correlatedMethod(gridFile, "demo.Grid", method)
+            .memberOptional().orElseThrow().parameterTypes())
+        .toList();
+    assertEquals(List.of(
+        List.of("java.lang.String[][]"),
+        List.of("int[][]")), correlatedVectors,
+        "each Grid declaration selects its OWN member's vector");
   }
 
   private SemanticCallFacts.Fact frameworkFact(
