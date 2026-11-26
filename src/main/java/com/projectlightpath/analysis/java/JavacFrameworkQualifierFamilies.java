@@ -48,20 +48,15 @@ final class JavacFrameworkQualifierFamilies {
     List<JavacSourceSymbolIndex.AnnotationInfo> remaining = new ArrayList<>(mirrors);
     Matcher matcher = TEXTUAL_ANNOTATION_NAME.matcher(masked);
     while (matcher.find()) {
-      JavacSourceSymbolIndex.AnnotationInfo mirror =
-          takeMirror(remaining, matcher, source);
-      if (mirror == null || !mirrorCanReplace(mirror, block)) {
-        // The textual family answer for this occurrence — including the
-        // textual canonical-Spring guard on guarded arms.
-        result.addAll(SourceMetadataScanner.annotationQualifiers(
-            guarded ? file : null, source, matcher));
-      } else {
-        result.addAll(mirrorFamilies(file, block, mirror, guarded));
-      }
+      addOccurrenceFamilies(file, block, source, matcher, guarded, remaining, result);
     }
     for (JavacSourceSymbolIndex.AnnotationInfo mirror : remaining) {
       if (asciiPrefix(JavacFrameworkAnnotations.simpleName(mirror)).isEmpty()) {
-        result.addAll(mirrorFamilies(file, block, mirror, guarded));
+        List<String> families =
+            JavacFrameworkQualifierTable.mirrorFamilies(file, mirror, guarded, null);
+        if (families != null) {
+          result.addAll(families);
+        }
       } else {
         // An ASCII-named mirror with no textual occurrence cannot be
         // attributed: decline the whole site.
@@ -69,6 +64,37 @@ final class JavacFrameworkQualifierFamilies {
       }
     }
     return Optional.of(List.copyOf(new LinkedHashSet<>(result)));
+  }
+
+  /**
+   * Resolves one textual occurrence's families: the paired mirror's table
+   * answer when it can stand in, else the textual occurrence answer (the
+   * no-mirror arm, and the crossed-pairing decline — the textual answer
+   * carries the per-occurrence guard and value, the safe direction).
+   */
+  private static void addOccurrenceFamilies(
+      SourceMetadataScannerState.SourceFile file,
+      String block,
+      String source,
+      Matcher matcher,
+      boolean guarded,
+      List<JavacSourceSymbolIndex.AnnotationInfo> remaining,
+      List<String> result) {
+    SourceMetadataScannerState.ParsedAnnotation occurrence =
+        SourceMetadataScanner.parseAnnotation(source, matcher);
+    JavacSourceSymbolIndex.AnnotationInfo mirror =
+        takeMirror(remaining, matcher, source);
+    List<String> families =
+        mirror == null || !mirrorCanReplace(mirror, block)
+            ? null
+            : JavacFrameworkQualifierTable.mirrorFamilies(
+                file, mirror, guarded, occurrence);
+    if (families != null) {
+      result.addAll(families);
+    } else {
+      result.addAll(SourceMetadataScanner.annotationQualifiers(
+          guarded ? file : null, source, matcher));
+    }
   }
 
   /** Qualifier table plus the injection enrichment derivations. */
@@ -100,34 +126,6 @@ final class JavacFrameworkQualifierFamilies {
       }
       return List.copyOf(result);
     });
-  }
-
-  /** Applies the six-family table to one mirror's rendered arguments. */
-  private static List<String> mirrorFamilies(
-      SourceMetadataScannerState.SourceFile file,
-      String block,
-      JavacSourceSymbolIndex.AnnotationInfo mirror,
-      boolean guarded) {
-    String args = JavacFrameworkAnnotations.renderedArguments(mirror);
-    String name = JavacFrameworkAnnotations.simpleName(mirror);
-    if (guarded && SourceMetadataScannerState.SPRING_BEAN_ANNOTATION_TYPES.containsKey(name)
-        && !SourceMetadataScanner.canonicalSpringAnnotation(file, block, name)) {
-      return List.of();
-    }
-    if (name.equals("Resource")) {
-      return SourceMetadataScanner.resourceQualifier(args);
-    }
-    if (SourceMetadataScanner.isBeanNameAnnotation(name)) {
-      return SourceMetadataScanner.beanNameQualifier(args);
-    }
-    if (SourceMetadataScannerState.NON_QUALIFIER_ANNOTATIONS.contains(name)) {
-      return List.of();
-    }
-    if (name.equals("Qualifier") || name.equals("Named")) {
-      return List.of(name + ":" + SourceMetadataScanner.quotedValue(
-          args.replaceFirst("^value\\s*=\\s*", "").trim()));
-    }
-    return List.of(name);
   }
 
   /**

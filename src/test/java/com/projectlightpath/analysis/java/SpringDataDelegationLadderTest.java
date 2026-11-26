@@ -49,9 +49,13 @@ class SpringDataDelegationLadderTest {
     SemanticCallFacts.Fact derived = delegationFact(
         facts, "demo.AccountRepository#findByAccountNumber");
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE, derived.certainty());
+    // Issue #66 default-on delta (#23 canonical repository signatures):
+    // the evidence attribute carries the javac-indexed parameter type.
     assertTrue(derived.evidence().stream().anyMatch(evidence ->
-        "findByAccountNumber(String)".equals(evidence.attributes().get("repositoryMethod"))),
-        "the source signature stays on the evidence for overload-aware joins");
+        "findByAccountNumber(java.lang.String)".equals(
+            evidence.attributes().get("repositoryMethod"))),
+        "the source signature stays on the evidence for overload-aware joins: "
+            + derived.evidence());
   }
 
   @Test
