@@ -55,13 +55,24 @@ Branch: `issue-62-per-member-evidence` from `origin/main` @ `5c050ec`
   (`parameterMatchesType` → `isDeclaredVariableBefore` → `isJdkApiOwner` →
   site extractors → `DynamicFeature`); threading a result type through would
   rewrite ~8 call sites that never care. But `correlated(file, ownerType,
-  method)` is a pure function of (file, member, index): the reflection and
-  proxy feature constructors already hold the caller `MethodInfo`
+  method)` is a pure function of (file, member, index), and the reflection
+  and proxy feature constructors already hold the caller `MethodInfo`
   (`reflectionFeatures`, SourceMetadataScanner.java:149), so the SAME
-  correlation query can be re-issued at feature-build time with an identical
-  answer — no side channel, no cache-ordering hazard (the scanner
-  extraction cache cannot make the attribute appear or disappear), no dual
-  implementation (one `correlated`).
+  correlation query can be re-issued at feature-build time — PROVIDED the
+  ownerType input is identical by construction: classification derives it as
+  `typeContaining(file, declarationStart(file, owner.start()))`
+  (ReflectionLayer00.java:163-164, whose comment documents how sensitive
+  this is to extraction anchoring), while the feature path's
+  `typeContaining(file, site.offset())` (SourceMetadataScanner.java:152) is
+  a DIFFERENT expression. The plan therefore extracts one shared
+  `ownerTypeFor(file, owner)` helper (the `declarationStart` normalization)
+  used by BOTH `parameterMatchesType` and the re-query; the feature path's
+  `MethodSymbol` owner construction at line 152 is NOT touched (its output
+  is fact-visible today). A RED cell pins the anchoring divergence case
+  (a caller extracted after a preceding nested type's closing brace).
+  No side channel, no cache-ordering hazard (the scanner extraction cache
+  caches extracts, not `reflectionSites`/`dynamicFeatures`, so the re-query
+  reads the same cached inputs), no dual implementation (one `correlated`).
 - **Schema-exception precedents.** `MemberInfo.publicMember` (#25) and
   `TypeShape.staticType` (CR-1 of #25) are the additive-component
   discipline; this plan's additive fields follow it.
@@ -128,15 +139,24 @@ record JavacAbstentionEvidence(
 new `JavacCorrelation` record (exactly one of member/abstention non-null,
 enforced in the compact constructor; static factories `correlated(member)`
 and `abstained(evidence)`). Every existing caller updates mechanically.
-The abstention records the member identity (`owner#name(arity)`), the code,
-and — for `error_type_member` and `member_absent` — the index error codes
-for the member's owning type's file, joined inside
-`JavacSourceSymbolIndex` by a new package-private
-`List<String> errorCodesFor(Path file)` that renders the file path through
-the SAME pipeline the rows were rendered with (`unitDisplayPath` /
-`repositoryRelative`), so the join cannot mismatch by construction.
-Boundary probe per AGENTS before commit: empty path, single-char name,
-prefix/suffix overlap, dotless unnamed-package spellings.
+**The opt-out gate lives INSIDE the seam (plan-review finding 1, HIGH):**
+`correlated` returns the empty correlation (`abstention` NONE) when
+`!JavacSourceSymbolIndex.enabled()` — the flag-off invariant must not depend
+on call-site discipline, because `JavacAnnotationAccess.methodDescriptor`
+and the reflection re-query are reachable ungated. Seam B's outcome factory
+gates identically. The abstention records the member identity
+(`owner#name(arity)`), the code, and — for `error_type_member` and
+`member_absent` — the index error codes for the member's owning type's
+file. The join is by `Path`, not by rendered string (plan-review finding
+4): the index builds an additive `Map<Path, List<String>>
+errorCodesByFile` at record time, keyed by the normalized absolute
+`sourcePath` of each compiler ERROR diagnostic (the existing normalization
+at `IndexRenderer.sourcePath`, lines 457-463); `errorCodesFor(Path file)`
+joins by `Path` equality against the member's owning `TypeInfo.file`
+(normalized the same way). Rendering stays display-only. Boundary probe
+per AGENTS before commit: null/empty path, single-char name, prefix/suffix
+overlap, dotless unnamed-package spellings, and `Path` normalization
+equality on both sides.
 
 ### Consumer wiring (per fact family)
 
@@ -158,24 +178,34 @@ prefix/suffix overlap, dotless unnamed-package spellings.
    `JavacAnnotationAccess.methodDescriptor` returns `JavacDescriptorOutcome`
    carrying EITHER the correlation abstention (seam A) or, on the
    per-parameter repair path, the `repairedParameterType` decline (seam B:
-   the `member()` lookup's own codes). `DynamicFeature` gains an additive
+   the `member()` lookup's own codes; both arms gate on `enabled()` inside
+   the seam). `DynamicFeature` gains an additive
    `JavacAbstentionEvidence abstention` field (NONE default, compatibility
    constructors preserved) — NOT included in `dynamicFeatureIdentity` /
    `dynamicFeatureId` (fact IDs stay byte-stable).
    `BoundedFrameworkModelUtilities.dynamicProxyEvidenceAttributes` renders
-   it.
+   it for the bounded-model dynamic facts, AND
+   `ProviderFactNormalizer.dynamicFact` (the `sootup-reflection-*` /
+   `sootup-dynamic_proxy-*` renderer) merges the feature's abstention
+   attributes into the evidence map alongside the #25 `targetEvidence`
+   attributes (plan-review finding 3).
 4. **Repository signatures.** `redeclaresGuaranteedContractMethod` consumes
    the `JavacCorrelation` from the first-parameter check;
    `RepositoryMethod` gains an additive `abstention` field (NONE default; 3
-   construction sites — guaranteed and fragment rows stay NONE).
+   production construction sites — the guaranteed row
+   `SourceMetadataScannerRepositoryLayer.java:37`, the declared row `:44`,
+   and the fragment row `SourceMetadataScannerFragmentLayer.java:42`; the
+   first and third stay NONE).
    `BoundedFrameworkModelSpringFacts.delegationFact` merges it into the
    evidence attribute map (which already carries `repositoryMethod`).
 5. **Reflection classification (`parameterMatchesType`).** No signature
    change. `reflectionFeatures` / `proxyFeaturesAt` re-issue the same pure
-   `correlated` query for the site's caller `MethodInfo` and attach the
-   abstention to the `DynamicFeature` (the additive field from item 3) when
-   the caller's member abstains — the classification's textual-ladder
-   fallback becomes visible per site.
+   `correlated` query for the site's caller `MethodInfo`, deriving the
+   ownerType through the SAME shared `ownerTypeFor(file, owner)` helper
+   `parameterMatchesType` uses (the `declarationStart` normalization — see
+   Preflight), and attach the abstention to the `DynamicFeature` (the
+   additive field from item 3) when the caller's member abstains — the
+   classification's textual-ladder fallback becomes visible per site.
 6. **#24 mirror seam.** `JavacFrameworkAnnotations.member` and
    `typeAnnotations` return lookups carrying their decline evidence;
    `FrameworkBeanScanning`'s `ProducerSite` holds it and the
@@ -224,23 +254,36 @@ RED cells (all fail against the pre-change tree):
 - C10 reflection-feature caller abstention: a reflection site inside a
   member whose correlation abstains → the reflection fact carries
   `javacAbstention` for the CALLER member (distinct from the #25
-  target-evidence attributes on the same fact).
+  target-evidence attributes on the same fact). Includes the anchoring
+  divergence fixture (a caller extracted after a preceding nested type's
+  closing brace — the shared-helper pin).
 - D1 blast-radius pin: a scan containing an abstaining fixture AND a
   ServiceLoader DEFINITE site → the ServiceLoader fact stays DEFINITE,
   `scan.diagnostics()` stays empty and free of every index code (the
   isUnique hazard pin).
-- D2 opt-out twin: `setProperty(FLAG, "false")` on the C1/C4/C9 fixtures →
-  no `javacAbstention*` attributes anywhere (byte-identical to main).
+- D2 opt-out twin — pinned on the UNGATED paths specifically (the
+  annotation-access descriptor, the repair decline, and the reflection
+  re-query, plan-review finding 1): `setProperty(FLAG, "false")` on the
+  C1/C4/C6/C7/C9/C10 fixtures → no `javacAbstention*` attributes anywhere
+  (byte-identical to main).
 - D3 successful-correlation control: a correlating member → NO attribute.
-- D4 determinism: two scans of the same context produce identical
-  attributes (the pure-re-query design's cache pin).
+- D4 cache-ordering pin, cold-then-warm and warm-then-cold ACROSS the flag
+  boundary (the `JavacAnnotationMigrationTest:290-311` warm-cache pattern,
+  plan-review finding 6): the abstention attributes appear and disappear
+  only with the flag, never with cache order.
 
-Sanctioned existing-test edits (enumerated at RED, values captured from
-observed output): default-on goldens in `JavaAnalysisAdapterTest` and
-`SpringDataDelegationLadderTest` whose fixtures abstain (probe owners:
-`demo.DynamicSites`, `demo.GenericRepository`, the nested-configuration
-producers) gain the new attributes; the Makefile floor is raised from 709
-to the observed execution count.
+Sanctioned existing-test edits — by criterion, not a class list
+(plan-review finding 5): every test class whose fixtures appear in the
+probe abstention inventory (`demo.DynamicSites`, `demo.GenericRepository`,
+`demo.Api`, `demo.Producer`, `demo.Bound`, the nested-configuration
+producers, the comment-corrupted fixtures) may need golden updates where
+the new attributes or the additive `DynamicFeature`/`RepositoryMethod`/
+`BeanCandidate` components surface in assertions; the full list is
+enumerated at RED with values captured from observed output. Known
+candidates: `JavaAnalysisAdapterTest`, `SpringDataDelegationLadderTest`,
+`JavacAnnotationMigrationTest`, `JavacTypeShapeMigrationTest`,
+`JavacSymbolIndexDefaultOnTest`, `JavacReflectionTargetMigrationTest`.
+The Makefile floor is raised from 709 to the observed execution count.
 
 ## TDD / gates / commits
 
@@ -274,6 +317,23 @@ to the observed execution count.
   ladder (#25 channel) are out of scope by design.
 - PMD-forced placement changes (if any) keep behavior identical and are
   documented in the commit message per AGENTS.
+
+## Plan review record
+
+Round 1 (Engram-grounded adversarial subagent): 7 addressable findings
+(1 HIGH, 4 MEDIUM, 1 LOW, 1 NIT), all incorporated above: the opt-out gate
+moved inside the seams (finding 1, HIGH — `JavacAnnotationAccess` and the
+reflection re-query are reachable ungated); the shared `ownerTypeFor`
+helper with the anchoring-divergence RED cell (finding 2);
+`ProviderFactNormalizer.dynamicFact` added as the C10 wiring point
+(finding 3); the `errorCodesByFile` `Path`-keyed join replacing the
+rendered-string join (finding 4); the golden-churn sanction widened to the
+criterion (finding 5); D4 reshaped cold/warm across the flag boundary
+(finding 6); the construction-site inventory corrected to the three
+production rows including the fragment row (finding 7). Verified clean:
+identity functions cannot leak the additive field; attribute consumers are
+key-based; the extraction cache caches extracts, not sites/features.
+Confidence score after round 1: **0.84**.
 
 Confidence score (pre-plan-review): **0.78** — the design is grounded in a
 green-suite probe of what actually abstains on main, the #25 precedent, and
