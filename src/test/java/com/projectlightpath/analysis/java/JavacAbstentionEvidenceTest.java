@@ -761,16 +761,18 @@ class JavacAbstentionEvidenceTest {
             + grid.evidence());
   }
 
-  // D9 (CodeRabbit CR-2, thread 4709913104): the MIRRORED rank-2 case —
-  // two overloads whose parameters are both rank-2 type-parameter arrays
-  // (the derangement shape the single-rank guard missed) — and the
-  // non-generic control asserting that BOTH rank-2 overloads select
-  // their OWN members (the descriptor proves the pairing).
+  // D9 (CodeRabbit CR-1 finding 4709913104 + CR-2 follow-ups 4710552555
+  // and 4710588530): the MIRRORED rank-2 case — two overloads whose
+  // parameters are rank-2 type-parameter arrays with DISTINCT imported
+  // bounds (unbounded parameters would erase both to Object[][] and
+  // clash) — and the non-generic control with TWO rank-2 overloads,
+  // verifying each declaration's correlated member.
   @Test
   void mirroredRankTwoOverloadsAbstainAndControlsSelectTheirMembers() throws IOException {
     SemanticCallFacts mirrored = analyzeDynamic(List.of("""
         package demo;
-        public interface Mirror<T, U> {
+        import java.util.List;
+        public interface Mirror<T extends List, U extends Number> {
           void pick(T[][] first);
           void pick(U[][] second);
         }
@@ -784,19 +786,24 @@ class JavacAbstentionEvidenceTest {
           }
         }
         """));
-    assertTrue(mirrored.providerFacts().stream()
-            .filter(item -> item.relationshipType().equals("proxy_dispatch"))
-            .filter(item -> item.callee().equals("demo.Mirror#pick"))
+    List<SemanticCallFacts.Fact> mirroredPicks = mirrored.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("proxy_dispatch"))
+        .filter(item -> item.callee().equals("demo.Mirror#pick"))
+        .toList();
+    assertEquals(2, mirroredPicks.size(),
+        "both mirrored rank-2 overloads must produce facts: "
+            + mirrored.providerFacts());
+    assertTrue(mirroredPicks.stream()
             .allMatch(item -> "type_parameter_overload_group".equals(
                 attribute(item, "javacAbstention"))),
         "both mirrored rank-2 type-parameter overloads must abstain: "
-            + mirrored.providerFacts());
+            + mirroredPicks);
 
     SemanticCallFacts controls = analyzeDynamic(List.of("""
         package demo;
         public interface Grid {
           void pick(String[][] wide);
-          void pick(int[] narrow);
+          void pick(int[][] narrow);
         }
         """, """
         package demo;
@@ -813,18 +820,17 @@ class JavacAbstentionEvidenceTest {
         .filter(item -> item.callee().equals("demo.Grid#pick"))
         .toList();
     assertEquals(2, picks.size(), controls.providerFacts().toString());
-    for (SemanticCallFacts.Fact pick : picks) {
-      assertNull(attribute(pick, "javacAbstention"),
-          "each non-generic overload correlates: " + pick.evidence());
+    // Each declaration's correlated member is verified by ITS fact's
+    // descriptor: exactly one fact per overload shape, abstention-free.
+    for (String expected : List.of("(java.lang.String[][])", "(int[][])")) {
+      List<SemanticCallFacts.Fact> own = picks.stream()
+          .filter(pick -> expected.equals(attribute(pick, "targetDescriptor")))
+          .toList();
+      assertEquals(1, own.size(),
+          "the " + expected + " overload selects its own member: " + picks);
+      assertNull(attribute(own.get(0), "javacAbstention"),
+          "each non-generic rank-2 overload correlates: " + own.get(0).evidence());
     }
-    assertTrue(picks.stream().anyMatch(pick ->
-            "(java.lang.String[][])".equals(attribute(pick, "targetDescriptor"))),
-        "the String[][] overload selects its own member (its descriptor): "
-            + picks);
-    assertTrue(picks.stream().anyMatch(pick ->
-            "(int[])".equals(attribute(pick, "targetDescriptor"))),
-        "the int[] overload selects its own member (its descriptor): "
-            + picks);
   }
 
   private SemanticCallFacts.Fact frameworkFact(
