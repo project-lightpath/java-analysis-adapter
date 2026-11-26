@@ -130,7 +130,11 @@ class ServiceLoaderDescriptorProvenanceTest {
     SemanticCallFacts.Evidence evidence = descriptorEvidence(context, scan);
     assertEquals("included_root", evidence.attributes().get("descriptorProvenance"),
         evidence.attributes().toString());
-    assertEquals("production/included", evidence.attributes().get("descriptorRootScope"),
+    // The sweep subtree (src/main/resources) is a SIBLING of the declared
+    // source root, not under it - no root-scope label (plan-review round 1,
+    // finding 1; the cell's original production/included expectation was
+    // wrong).
+    assertFalse(evidence.attributes().containsKey("descriptorRootScope"),
         evidence.attributes().toString());
   }
 
@@ -167,8 +171,17 @@ class ServiceLoaderDescriptorProvenanceTest {
             AnalysisContext.Scope.PRODUCTION, false, false, null)
         .frameworkMetadata(metadata("excluded-gen/META-INF/services/demo.Provider"))
         .build();
+    CallEdge factEdge = new CallEdge(
+        new MethodSymbol("demo.Bridge", "audit", "()V"),
+        new MethodSymbol("demo.ProviderImpl", "record", "()V"),
+        4,
+        "src/main/java/demo/Bridge.java",
+        SemanticCallFacts.Certainty.DEFINITE,
+        "service_loader");
     List<SemanticCallFacts.Fact> facts = new JavaAnalysisAdapter()
-        .analyze(context, AnalysisGraph.empty()).providerFacts();
+        .analyze(context, new AnalysisGraph(
+            List.of(factEdge), List.of(), java.util.Set.of(), "SootUp", "3.0.1", 0, 0))
+        .providerFacts();
     assertTrue(facts.stream().anyMatch(fact ->
             fact.evidence().stream()
                 .filter(evidence -> evidence.kind().equals("service_loader_descriptor"))
@@ -201,7 +214,15 @@ class ServiceLoaderDescriptorProvenanceTest {
         .build();
     ServiceLoaderDescriptorScanner.Scan scan =
         ServiceLoaderDescriptorScanner.scan(context);
-    assertEquals(1, scan.descriptors().size(), scan.descriptors().toString());
+    // The scan keeps BOTH same-content twins; the DescriptorIdentity merge
+    // happens at resolve time. The classpath twin wins here (its display
+    // path is absolute and sorts first; both twins are classpath-backed),
+    // and the survivor carries the classpath twin's label - the excluded
+    // twin's label is DISCARDED by the merge. That is the documented
+    // residual from plan-review round 2 finding 4: the merge can drop a
+    // scope label; deterministic but not label-cautious. Pinned as
+    // observed behavior, not changed here.
+    assertEquals(2, scan.descriptors().size(), scan.descriptors().toString());
     SemanticCallFacts.Evidence evidence = descriptorEvidence(context, scan);
     assertEquals("application_classes", evidence.attributes().get("descriptorProvenance"),
         evidence.attributes().toString());
@@ -212,7 +233,7 @@ class ServiceLoaderDescriptorProvenanceTest {
     CallEdge edge = new CallEdge(
         new MethodSymbol("demo.Bridge", "audit", "()V"),
         new MethodSymbol("demo.ProviderImpl", "record", "()V"),
-        3,
+        4,
         "src/main/java/demo/Bridge.java",
         SemanticCallFacts.Certainty.DEFINITE,
         "service_loader");
@@ -252,6 +273,11 @@ class ServiceLoaderDescriptorProvenanceTest {
     Path bridge = sourceRoot.resolve("demo/Bridge.java");
     Files.createDirectories(bridge.getParent());
     Files.writeString(bridge, BRIDGE);
+    Files.writeString(sourceRoot.resolve("demo/Provider.java"),
+        "package demo; interface Provider { void record(); }");
+    Files.writeString(sourceRoot.resolve("demo/ProviderImpl.java"),
+        "package demo; final class ProviderImpl implements Provider"
+        + " { public void record() { } }");
   }
 
   private void writeServices(Path services) throws IOException {

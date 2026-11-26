@@ -171,7 +171,8 @@ class ServiceLoaderSeekableZipTest {
     try {
       ServiceLoaderDescriptorArchiveSource.scan(
           archive, descriptors, state,
-          ServiceLoaderDescriptorArchiveConfig.defaults().withTempRoot(spillRoot));
+          ServiceLoaderDescriptorArchiveConfig.defaults().withTempRoot(spillRoot),
+          "unclassified");
     } finally {
       Thread.interrupted();
     }
@@ -199,7 +200,8 @@ class ServiceLoaderSeekableZipTest {
         archive, descriptors, state,
         ServiceLoaderDescriptorArchiveConfig.defaults()
             .withTempRoot(spillRoot)
-            .withChannelOpener(path -> new InterruptingChannel(path, 12)));
+            .withChannelOpener(path -> new InterruptingChannel(path, 12)),
+          "unclassified");
 
     assertTrue(descriptors.isEmpty(), descriptors.toString());
     assertTrue(state.diagnostics().stream()
@@ -279,7 +281,8 @@ class ServiceLoaderSeekableZipTest {
         ServiceLoaderDescriptorArchiveConfig.defaults()
             .withTempRoot(spillRoot)
             .withSortMemoryBytes(1)
-            .withMaxSpillBytes(1));
+            .withMaxSpillBytes(1),
+          "unclassified");
 
     assertTrue(descriptors.isEmpty(), descriptors.toString());
     assertTrue(state.diagnostics().stream()
@@ -298,7 +301,8 @@ class ServiceLoaderSeekableZipTest {
     ServiceLoaderDescriptorSource.ScanState state = new ServiceLoaderDescriptorSource.ScanState();
     ServiceLoaderDescriptorArchiveSource.scan(
         archive, descriptors, state,
-        ServiceLoaderDescriptorArchiveConfig.defaults().withTempRoot(spillRoot));
+        ServiceLoaderDescriptorArchiveConfig.defaults().withTempRoot(spillRoot),
+          "unclassified");
 
     assertEquals(1, descriptors.size(), state.diagnostics().toString());
     assertTrue(empty(spillRoot), "spill root not empty");
@@ -320,7 +324,8 @@ class ServiceLoaderSeekableZipTest {
                 throw new IOException("injected tape cleanup failure");
               }
               Files.deleteIfExists(path);
-            }));
+            }),
+        "unclassified");
     assertEquals(1, descriptors.size(), state.diagnostics().toString());
     assertTrue(state.diagnostics().stream()
         .anyMatch(item -> item.code().equals("archive_spill_error")),
@@ -359,7 +364,8 @@ class ServiceLoaderSeekableZipTest {
         archive, descriptors, state,
         ServiceLoaderDescriptorArchiveConfig.defaults()
             .withTempRoot(spillRoot)
-            .withChannelOpener(path -> new FailingChannel(path)));
+            .withChannelOpener(path -> new FailingChannel(path)),
+          "unclassified");
 
     assertTrue(descriptors.isEmpty(), descriptors.toString());
     assertTrue(state.diagnostics().stream().anyMatch(item ->

@@ -199,6 +199,14 @@ final class ServiceLoaderDescriptorScanner {
       attributes.put("malformedProviderEntries", String.join("|", descriptor.malformedEntries()));
     }
     attributes.put("selection", selection);
+    // Issue #69 provenance labels: the admission mechanism and, when the
+    // descriptor's real path sits under a declared source root, that root's
+    // scope/inclusion — explicit selection overrides root-scope exclusion
+    // BY DESIGN, and the label is what makes that override never-silent.
+    attributes.put("descriptorProvenance", descriptor.origin().mechanism());
+    if (descriptor.origin().rootScope() != null) {
+      attributes.put("descriptorRootScope", descriptor.origin().rootScope());
+    }
     if (descriptor.moduleInfo()) {
       attributes.put("moduleVisibility", "not_proven");
     }
@@ -279,10 +287,17 @@ final class ServiceLoaderDescriptorScanner {
       String path,
       String fingerprint,
       String kind,
-      List<String> malformedEntries) {
+      List<String> malformedEntries,
+      DescriptorOrigin origin) {
     Descriptor {
       providers = List.copyOf(providers);
       malformedEntries = List.copyOf(malformedEntries);
+    }
+
+    Descriptor(String serviceType, List<String> providers, String path,
+        String fingerprint, String kind, List<String> malformedEntries) {
+      this(serviceType, providers, path, fingerprint, kind, malformedEntries,
+          DescriptorOrigin.UNCLASSIFIED);
     }
 
     /** True when the descriptor comes only from a source-root resource tree. */
@@ -302,6 +317,16 @@ final class ServiceLoaderDescriptorScanner {
     boolean moduleInfo() {
       return kind.equals("module_info");
     }
+  }
+
+  /**
+   * How one descriptor was admitted (issue #69): the admission mechanism
+   * (which scan arm found it) and, when its real path sits under a declared
+   * source root, that root's scope and inclusion — the provenance label that
+   * makes explicit selection never-silent.
+   */
+  record DescriptorOrigin(String mechanism, String rootScope) {
+    static final DescriptorOrigin UNCLASSIFIED = new DescriptorOrigin("unclassified", null);
   }
 
   private record DescriptorIdentity(

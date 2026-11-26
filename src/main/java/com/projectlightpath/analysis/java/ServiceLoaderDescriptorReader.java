@@ -49,7 +49,8 @@ final class ServiceLoaderDescriptorReader {
     List<String> limitations = SourceArchiveDescriptorRouting.modeLimitations(
         context, dependencyResolution);
     ServiceLoaderDescriptorSource.scanClasspathEntry(
-        context.applicationClasses(), descriptors, visited, state);
+        context.applicationClasses(), descriptors, visited, state, false,
+        "application_classes", context);
     for (AnalysisContext.SourceRoot root : context.includedSourceRoots()) {
       if (state.interrupted()) {
         break;
@@ -58,7 +59,7 @@ final class ServiceLoaderDescriptorReader {
       if (parent != null && ServiceLoaderDescriptorAuthorization.derivedDirectory(
           parent, "resources/" + SERVICES, state)) {
         scanDirectory(parent.resolve("resources").resolve(SERVICES), context,
-            dependencyEntries, descriptors, visited, state);
+            dependencyEntries, descriptors, visited, state, "included_root");
       }
     }
     for (AnalysisContext.FrameworkMetadata metadata : context.frameworkMetadata()) {
@@ -76,7 +77,7 @@ final class ServiceLoaderDescriptorReader {
         break;
       }
       ServiceLoaderDescriptorSource.scanClasspathEntry(
-          dependency, descriptors, visited, state, true);
+          dependency, descriptors, visited, state, true, "dependency_entry", context);
     }
     descriptors.sort(Comparator.comparing(ServiceLoaderDescriptorScanner.Descriptor::path)
         .thenComparing(ServiceLoaderDescriptorScanner.Descriptor::serviceType));
@@ -119,7 +120,8 @@ final class ServiceLoaderDescriptorReader {
       return;
     }
     if (!Files.isRegularFile(normalizedDeclared, LinkOption.NOFOLLOW_LINKS)) {
-      scanDirectory(normalizedDeclared, context, dependencyEntries, descriptors, visited, state);
+      scanDirectory(normalizedDeclared, context, dependencyEntries, descriptors, visited,
+          state, "selected_metadata");
       return;
     }
     if (validDescriptorFilename(normalizedDeclared)) {
@@ -128,7 +130,8 @@ final class ServiceLoaderDescriptorReader {
       if (!state.tryRetain(displayPath(context, normalizedDeclared))) {
         return;
       }
-      addFile(normalizedDeclared, context, dependencyEntries, descriptors, visited, state);
+      addFile(normalizedDeclared, context, dependencyEntries, descriptors, visited,
+          state, "selected_metadata");
       if (descriptors.size() == descriptorStart) {
         state.restoreRetained(retainedBefore);
       }
@@ -152,7 +155,9 @@ final class ServiceLoaderDescriptorReader {
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
       ServiceLoaderDescriptorSource.ScanState state,
-      boolean diagnoseUnavailable) {
+      boolean diagnoseUnavailable,
+      String mechanism,
+      AnalysisContext context) {
     Path normalized = entry.toAbsolutePath().normalize();
     BasicFileAttributes attributes;
     try {
@@ -172,14 +177,18 @@ final class ServiceLoaderDescriptorReader {
           normalized, ServiceLoaderDescriptorSource.SERVICES_DIRECTORY, state)) {
         ServiceLoaderDescriptorSource.scanServiceDirectory(
             normalized.resolve(ServiceLoaderDescriptorSource.SERVICES_DIRECTORY),
-            normalized.toString(), "meta_inf_services", descriptors, visited, state);
+            normalized.toString(), "meta_inf_services", descriptors, visited, state,
+            mechanism, context);
       }
-      if (!ServiceLoaderDescriptorSource.scanModuleInfo(normalized, descriptors, state)) {
+      if (!ServiceLoaderDescriptorSource.scanModuleInfo(
+          normalized, descriptors, state, mechanism, context)) {
         descriptors.subList(descriptorStart, descriptors.size()).clear();
         state.restoreRetained(retainedBefore);
       }
     } else if (attributes.isRegularFile()) {
-      ServiceLoaderDescriptorArchiveSource.scan(normalized, descriptors, state);
+      ServiceLoaderDescriptorArchiveSource.scan(
+          normalized, descriptors, state,
+          ServiceLoaderDescriptorArchiveConfig.defaults(), mechanism);
     } else if (diagnoseUnavailable) {
       state.diagnostic("descriptor_entry_unavailable", normalized.toString(),
           "entry is neither a non-symbolic directory nor a regular file");
@@ -192,7 +201,8 @@ final class ServiceLoaderDescriptorReader {
       List<Path> dependencyEntries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
+      ServiceLoaderDescriptorSource.ScanState state,
+      String mechanism) {
     if (!ServiceLoaderDescriptorAuthorization.readableDirectory(directory, state)) {
       return;
     }
@@ -202,7 +212,7 @@ final class ServiceLoaderDescriptorReader {
         .ifPresent(candidates -> {
           for (Path path : candidates) {
             int descriptorStart = descriptors.size();
-            addFile(path, context, dependencyEntries, descriptors, visited, state);
+            addFile(path, context, dependencyEntries, descriptors, visited, state, mechanism);
             if (descriptors.size() == descriptorStart) {
               state.releaseRetained();
             }
@@ -216,7 +226,8 @@ final class ServiceLoaderDescriptorReader {
       List<Path> dependencyEntries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
-      ServiceLoaderDescriptorSource.ScanState state) {
+      ServiceLoaderDescriptorSource.ScanState state,
+      String mechanism) {
     String kind = ServiceLoaderDescriptorProvenance.classpathBacked(
         context, file, dependencyEntries) ? "meta_inf_services" : "source_meta_inf_services";
     ServiceLoaderDescriptorSource.addServiceFile(
@@ -225,7 +236,9 @@ final class ServiceLoaderDescriptorReader {
         kind,
         descriptors,
         visited,
-        state);
+        state,
+        mechanism,
+        context);
   }
 
   private static boolean validDescriptorFilename(Path file) {

@@ -47,6 +47,28 @@ final class ServiceLoaderDescriptorProvenance {
   }
 
   /**
+   * The provenance scope label for one descriptor path (issue #69):
+   * {@code <scope>/<included|excluded>} of the MOST-SPECIFIC declared root
+   * containing the path (#68's specificity order, labeling role only — this
+   * never gates admission), or {@code null} when the path is under no
+   * declared root (dependency entries, application classes outside roots,
+   * synthetic archive paths) or the context is unknown.
+   */
+  static String rootScopeLabel(AnalysisContext context, Path path) {
+    if (context == null || path == null) {
+      return null;
+    }
+    Path normalized = path.toAbsolutePath().normalize();
+    for (AnalysisContext.SourceRoot root : context.declaredRootsBySpecificity()) {
+      if (normalized.startsWith(root.path())) {
+        return root.scope().name().toLowerCase(java.util.Locale.ROOT)
+            + "/" + (root.included() ? "included" : "excluded");
+      }
+    }
+    return null;
+  }
+
+  /**
    * True when a descriptor path is backed by the selected output, a dependency
    * entry, or an explicitly selected metadata location (file or directory).
    * Source-root-derived resources are not classpath-backed unless selected
