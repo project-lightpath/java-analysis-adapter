@@ -202,10 +202,9 @@ sanctioned existing-test restructuring (item 4).
      fact (`demo.generated.IncludedMapper#map`) with
      `sourceRoot=generated-src/main/java, included=true,
      scope=production`; ZERO facts for Excluded/Test mappers.
-   - **N9 (resource lane): RETRACTED in plan-review round 2** — the
-     metadata arm is blocked by the `explicitlySelected` fallback (see
-     the audit retraction above) and the sweep arm is geometrically
-     unreachable for nested roots. Filed as a follow-up issue instead.
+   - **N9 (resource lane): RETRACTED in plan-review round 2** — all
+     three arms of the lane need the follow-up's owner decision (see
+     the audit entry's round-3 three-arm inventory and #69).
    - **Boundary probes (pre-GREEN, scratch, per AGENTS):** the
      `Path.startsWith` segment arithmetic (a sibling directory whose
      name is a prefix of the nested root's name —
