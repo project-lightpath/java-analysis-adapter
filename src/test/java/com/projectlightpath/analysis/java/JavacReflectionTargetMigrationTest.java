@@ -33,6 +33,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacReflectionTargetMigrationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -1110,7 +1111,7 @@ class JavacReflectionTargetMigrationTest {
               void handle(String value) { }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SemanticCallFacts.Fact> facts = facts(context);
     SemanticCallFacts.Fact forName = fact(facts, "Class.forName", "#audit");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, forName.certainty());

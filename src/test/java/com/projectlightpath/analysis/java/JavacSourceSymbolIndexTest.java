@@ -40,6 +40,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacSourceSymbolIndexTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
   private static final Supplier<JavaCompiler> REAL_COMPILER =
       JavacSourceSymbolIndex.COMPILER.get();
@@ -62,8 +63,10 @@ class JavacSourceSymbolIndexTest {
   }
 
   @Test
-  void flagOffYieldsNoIndexAndNoCompilation() throws IOException {
-    System.clearProperty(FLAG);
+  void optOutYieldsNoIndexAndNoCompilation() throws IOException {
+    // Issue #66: the flag defaults ON; "false" is the explicit opt-out
+    // that keeps the textual path for field bisection.
+    System.setProperty(FLAG, "false");
     long before = JavacSourceSymbolIndex.COMPILATIONS.get();
     AnalysisContext context = context("flag-off", Map.of("demo/App.java",
         "package demo; public class App {}"));
@@ -583,12 +586,13 @@ class JavacSourceSymbolIndexTest {
         "src/main/java/demo/Bridge.java",
         SemanticCallFacts.Certainty.DEFINITE,
         "service_loader");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     ServiceLoaderDescriptorScanner.Scan scanOff = ServiceLoaderDescriptorScanner.scan(context);
     ServiceLoaderDescriptorScanner.Resolution resolutionOff =
         ServiceLoaderDescriptorScanner.resolve(context, edge, scanOff, scanner);
 
-    System.setProperty(FLAG, "true");
+    // Issue #66: the default (no property) is now the ON arm.
+    System.clearProperty(FLAG);
     assertTrue(JavacSourceSymbolIndex.of(context).isPresent());
     ServiceLoaderDescriptorScanner.Scan scanOn = ServiceLoaderDescriptorScanner.scan(context);
     ServiceLoaderDescriptorScanner.Resolution resolutionOn = ServiceLoaderDescriptorScanner.resolve(

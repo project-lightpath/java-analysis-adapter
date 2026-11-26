@@ -27,6 +27,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacFrameworkAnnotationMigrationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -40,14 +41,14 @@ class JavacFrameworkAnnotationMigrationTest {
   void flagOffFrameworkOutputIsByteForByteTextual() throws IOException {
     AnalysisContext context = springFixture("flag-off");
     AnalysisContext baseline = springFixture("flag-off-baseline");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner textual = new SourceMetadataScanner(baseline);
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     System.setProperty(FLAG, "true");
     scanner.routes(AnalysisContext.Framework.SPRING_BOOT);
     scanner.beanCandidates(AnalysisContext.Framework.SPRING_BOOT);
     scanner.injectionPoints(AnalysisContext.Framework.SPRING_BOOT);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     // A flag-off re-scan after the flag-on scan must equal the independent
     // textual baseline: the static extracts were not poisoned.
     assertEquals(routeProjection(textual, AnalysisContext.Framework.SPRING_BOOT),
@@ -61,7 +62,7 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void springRouteValuesMatchTextualOutputFlagOn() throws IOException {
     AnalysisContext context = springFixture("spring-routes");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = routeProjection(
         new SourceMetadataScanner(context), AnalysisContext.Framework.SPRING_BOOT);
     System.setProperty(FLAG, "true");
@@ -73,7 +74,7 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void springBeanAndInjectionQualifiersMatchTextualOutputFlagOn() throws IOException {
     AnalysisContext context = springFixture("spring-beans");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner off = new SourceMetadataScanner(context);
     List<String> offBeans = beanProjection(off, AnalysisContext.Framework.SPRING_BOOT);
     List<String> offInjections =
@@ -109,7 +110,7 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void quarkusRouteAndQualifierValuesMatchTextualOutputFlagOn() throws IOException {
     AnalysisContext context = quarkusFixture("quarkus");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner off = new SourceMetadataScanner(context);
     List<String> offRoutes = routeProjection(off, AnalysisContext.Framework.QUARKUS);
     List<String> offBeans = beanProjection(off, AnalysisContext.Framework.QUARKUS);
@@ -131,7 +132,7 @@ class JavacFrameworkAnnotationMigrationTest {
       if (flag) {
         System.setProperty(FLAG, "true");
       } else {
-        System.clearProperty(FLAG);
+        System.setProperty(FLAG, "false"); // opt-out golden (#66)
       }
       SourceMetadataScanner scanner = new SourceMetadataScanner(context);
       assertTrue(scanner.routes(AnalysisContext.Framework.QUARKUS).stream()
@@ -170,7 +171,7 @@ class JavacFrameworkAnnotationMigrationTest {
       if (flag) {
         System.setProperty(FLAG, "true");
       } else {
-        System.clearProperty(FLAG);
+        System.setProperty(FLAG, "false"); // opt-out golden (#66)
       }
       SourceMetadataScanner scanner = new SourceMetadataScanner(context);
       assertTrue(scanner.routes(AnalysisContext.Framework.SPRING_BOOT).stream()
@@ -188,7 +189,7 @@ class JavacFrameworkAnnotationMigrationTest {
   @Test
   void conditionsRenderFromIndexMirrorsFlagOn() throws IOException {
     AnalysisContext context = springFixture("conditions");
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.BeanCandidate> off =
         new SourceMetadataScanner(context).beanCandidates(AnalysisContext.Framework.SPRING_BOOT);
     System.setProperty(FLAG, "true");
@@ -219,7 +220,7 @@ class JavacFrameworkAnnotationMigrationTest {
             @interface Ωmega {}
             """);
     AnalysisContext context = springContext("dollar-bean", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = qualifierListOf(new SourceMetadataScanner(context), "demo.Weird");
     System.setProperty(FLAG, "true");
     List<String> on = qualifierListOf(new SourceMetadataScanner(context), "demo.Weird");
@@ -242,7 +243,7 @@ class JavacFrameworkAnnotationMigrationTest {
             @interface Mar$k {}
             """);
     AnalysisContext context = springContext("dollar-field", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
     List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
@@ -281,7 +282,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("local-owners", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     String off = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).toString();
     System.setProperty(FLAG, "true");
@@ -307,7 +308,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("overloads", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     String off = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).toString();
     System.setProperty(FLAG, "true");
@@ -330,7 +331,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("comment-arity", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     String off = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).toString();
     System.setProperty(FLAG, "true");
@@ -356,7 +357,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("type-use", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     String off = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).toString();
     System.setProperty(FLAG, "true");
@@ -385,7 +386,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("nested-args", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     String off = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.SPRING_BOOT).toString();
     System.setProperty(FLAG, "true");
@@ -419,7 +420,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("static-enum", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.Route> off = new SourceMetadataScanner(context)
         .routes(AnalysisContext.Framework.SPRING_BOOT);
     System.setProperty(FLAG, "true");
@@ -456,7 +457,7 @@ class JavacFrameworkAnnotationMigrationTest {
             }
             """);
     AnalysisContext context = springContext("folded", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.Route> off = new SourceMetadataScanner(context)
         .routes(AnalysisContext.Framework.SPRING_BOOT);
     System.setProperty(FLAG, "true");
@@ -487,7 +488,7 @@ class JavacFrameworkAnnotationMigrationTest {
       if (flag) {
         System.setProperty(FLAG, "true");
       } else {
-        System.clearProperty(FLAG);
+        System.setProperty(FLAG, "false"); // opt-out golden (#66)
       }
       List<SourceMetadataScannerState.Route> routes =
           new SourceMetadataScanner(context).routes(AnalysisContext.Framework.SPRING_BOOT);
@@ -568,7 +569,7 @@ class JavacFrameworkAnnotationMigrationTest {
             public class Wrapped {}
             """);
     AnalysisContext context = springContext("nested-values", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = profilesOf(new SourceMetadataScanner(context), "demo.Wrapped");
     System.setProperty(FLAG, "true");
     List<String> on = profilesOf(new SourceMetadataScanner(context), "demo.Wrapped");
@@ -605,7 +606,7 @@ class JavacFrameworkAnnotationMigrationTest {
       if (flag) {
         System.setProperty(FLAG, "true");
       } else {
-        System.clearProperty(FLAG);
+        System.setProperty(FLAG, "false"); // opt-out golden (#66)
       }
       List<SourceMetadataScannerState.InjectionPoint> points =
           new SourceMetadataScanner(context)
@@ -634,7 +635,7 @@ class JavacFrameworkAnnotationMigrationTest {
             public class FullyQualified {}
             """);
     AnalysisContext context = springContext("fqcn", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = qualifierListOf(
         new SourceMetadataScanner(context), "demo.FullyQualified");
     System.setProperty(FLAG, "true");
@@ -679,7 +680,7 @@ class JavacFrameworkAnnotationMigrationTest {
             """);
     AnalysisContext context = context(
         "quarkus-local", AnalysisContext.Framework.QUARKUS, files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     String off = new SourceMetadataScanner(context)
         .injectionPoints(AnalysisContext.Framework.QUARKUS).toString();
     System.setProperty(FLAG, "true");
@@ -710,7 +711,7 @@ class JavacFrameworkAnnotationMigrationTest {
             """);
     AnalysisContext context = context(
         "quarkus-user-named", AnalysisContext.Framework.QUARKUS, files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = quarkusFieldQualifiers(new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
     List<String> on = quarkusFieldQualifiers(new SourceMetadataScanner(context), "value");
@@ -756,7 +757,7 @@ class JavacFrameworkAnnotationMigrationTest {
                   @POST public String hello() { return ""; }
                 }
                 """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> offConditions = conditionsOf(
         new SourceMetadataScanner(spring), "demo.WrappedConditions");
     List<String> offPaths = pathsOf(new SourceMetadataScanner(quarkus));
@@ -803,7 +804,7 @@ class JavacFrameworkAnnotationMigrationTest {
             @interface Foo { Role role() default @Role; }
             """);
     AnalysisContext context = springContext("quoted", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
     List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
@@ -837,7 +838,7 @@ class JavacFrameworkAnnotationMigrationTest {
             + " public @interface ApplicationScoped {}");
     AnalysisContext context = context(
         "dollar-prefix", AnalysisContext.Framework.QUARKUS, files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<String> off = quarkusFieldQualifiers(
         new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
@@ -866,7 +867,7 @@ class JavacFrameworkAnnotationMigrationTest {
             """);
     AnalysisContext context = context(
         "quarkus-folded", AnalysisContext.Framework.QUARKUS, files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.Route> off = new SourceMetadataScanner(context)
         .routes(AnalysisContext.Framework.QUARKUS);
     System.setProperty(FLAG, "true");
@@ -904,7 +905,7 @@ class JavacFrameworkAnnotationMigrationTest {
       if (flag) {
         System.setProperty(FLAG, "true");
       } else {
-        System.clearProperty(FLAG);
+        System.setProperty(FLAG, "false"); // opt-out golden (#66)
       }
       // The INJECT_FIELD discovery regex cannot span the arguments after a
       // $-named annotation (its type class excludes the parens), so the

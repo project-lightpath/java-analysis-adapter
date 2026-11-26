@@ -33,6 +33,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacBinaryNameMigrationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -91,7 +92,7 @@ class JavacBinaryNameMigrationTest {
               java.util.Map.Entry find(java.util.Map.Entry key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("textual-qualified"), "demo/Api.java");
@@ -117,7 +118,7 @@ class JavacBinaryNameMigrationTest {
               Map.Entry find(Map.Entry key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("textual-import"), "demo/Api.java");
@@ -149,7 +150,7 @@ class JavacBinaryNameMigrationTest {
               @Produces public Outer.Inner entry() { return null; }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner offScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate off = producer(offScanner, "entry");
     // The flag-off descriptor must be computed while the flag is CLEAR:
@@ -196,7 +197,7 @@ class JavacBinaryNameMigrationTest {
               public Cash$Flow flow() { return null; }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner offScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile provider =
         file(offScanner, sourceRoot("dollar-simple"), "demo/Provider.java");
@@ -223,7 +224,7 @@ class JavacBinaryNameMigrationTest {
               class lower { }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile outer =
         file(scanner, sourceRoot("lowercase-nested"), "demo/Outer.java");
@@ -246,7 +247,7 @@ class JavacBinaryNameMigrationTest {
               Foo find(Foo key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("uppercase-package"), "demo/Api.java");
@@ -292,7 +293,7 @@ class JavacBinaryNameMigrationTest {
               pkg.Outer$X.Inner find(pkg.Outer$X.Inner key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("dollar-nested"), "demo/Api.java");
@@ -315,7 +316,7 @@ class JavacBinaryNameMigrationTest {
               com.lib.Cash$Flow find(com.lib.Cash$Flow key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile file =
         file(scanner, sourceRoot("dollar-passthrough"), "demo/Api.java");
@@ -392,7 +393,7 @@ class JavacBinaryNameMigrationTest {
               @Produces public Outer.Inner make() { return null; }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.BeanCandidate> off =
         new SourceMetadataScanner(context).beanCandidates(
             AnalysisContext.Framework.QUARKUS);
@@ -454,7 +455,7 @@ class JavacBinaryNameMigrationTest {
               public Foo foo() { return null; }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile user =
         file(scanner, sourceRoot("uppercase-file-set"), "DEMO/User.java");
@@ -481,7 +482,7 @@ class JavacBinaryNameMigrationTest {
               demo.lower.Inner find(demo.lower.Inner key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("lowercase-top-level"), "demo/Api.java");
@@ -514,7 +515,7 @@ class JavacBinaryNameMigrationTest {
               demo.Child.Inner find(demo.Child.Inner key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("inherited-member"), "demo/Api.java");
@@ -544,7 +545,7 @@ class JavacBinaryNameMigrationTest {
               Outer.Middle.Inner find(Outer.Middle.Inner key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("multi-segment"), "demo/Api.java");
@@ -639,7 +640,7 @@ class JavacBinaryNameMigrationTest {
               demo.Child.Inner find(demo.Child.Inner key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("local-class"), "demo/Api.java");
@@ -665,7 +666,7 @@ class JavacBinaryNameMigrationTest {
               Child.Inner find(Child.Inner key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("external-qualifier"), "demo/Api.java");
@@ -706,7 +707,7 @@ class JavacBinaryNameMigrationTest {
               demo.Child.AlsoLocal also(demo.Child.AlsoLocal key);
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     SourceMetadataScanner scanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.SourceFile api =
         file(scanner, sourceRoot("initializer-local"), "demo/Api.java");

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated
 @Execution(ExecutionMode.SAME_THREAD)
 class JavacAnnotationMigrationTest {
+  /** Opt-out flag: defaults ON since #66; "false" pins the textual path. */
   private static final String FLAG = "flpath.java.symbolindex";
 
   @TempDir Path temp;
@@ -49,7 +50,7 @@ class JavacAnnotationMigrationTest {
             }
             """));
     SourceMetadataScanner off = new SourceMetadataScanner(context);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     assertFalse(JavacAnnotationAccess.of(off).enabled());
     SourceMetadataScanner on = new SourceMetadataScanner(context);
     System.setProperty(FLAG, "true");
@@ -289,7 +290,7 @@ class JavacAnnotationMigrationTest {
     // root use a different static-cache key, so its extracts are filled
     // purely textually and cannot share the warmed entry.
     AnalysisContext baseline = context("cache-baseline", files);
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<SourceMetadataScannerState.MethodInfo> textualApi =
         new SourceMetadataScanner(baseline)
             .methods(file(baseline, "cache-baseline", "demo/Api.java"));
@@ -302,7 +303,7 @@ class JavacAnnotationMigrationTest {
         feature.target().startsWith("demo.Api#")
             && feature.targetDescriptor().equals("(java.lang.String)")),
         warmed.toString());
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     // A flag-off re-read of the warmed root must equal the independent
     // textual baseline — the cache was not poisoned by index values.
     assertEquals(textualApi.toString(),
@@ -459,7 +460,7 @@ class JavacAnnotationMigrationTest {
               }
             }
             """));
-    System.clearProperty(FLAG);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
     List<DynamicFeature> off = new SourceMetadataScanner(context).dynamicFeatures();
     System.setProperty(FLAG, "true");
     List<DynamicFeature> on = new SourceMetadataScanner(context).dynamicFeatures();
