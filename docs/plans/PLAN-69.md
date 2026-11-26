@@ -47,16 +47,27 @@ by not touching `scan.diagnostics()` semantics).
 - **The sweep arm is geometrically unreachable** for nested roots
   (the per-root `META-INF/services` directory is a SIBLING of the
   root path) — not a manifestation; unchanged.
-- **The label surface.** `Descriptor` (Scanner:276-282) carries
-  `serviceType/providers/path/fingerprint/kind/malformedEntries`;
-  `descriptorEvidence` (Scanner:186-208) builds the fact evidence
-  context-free. Three construction sites hold the absolute path and
-  the admission context: `ServiceLoaderDescriptorSource.addServiceFile`
-  (the services files — sweep, selected metadata, selected entries),
-  `ServiceLoaderDescriptorArchiveSource.addDescriptor` (classpath
-  entries/archives), `ServiceLoaderDescriptorSource.addModuleBytes`
-  (module-info). The `#26`-style additive-component pattern
-  (`MemberInfo.publicMember`, #25) keeps every reader compiling.
+- **The label surface (corrected in plan-review round 1).** The
+  mechanism CANNOT be derived by re-walking `authorizedPath`'s ladder
+  on the file path: only `scanObservedMetadata` runs that gate; the
+  per-root sweep scans a SIBLING subtree of the included root (not
+  under it); archive descriptors carry SYNTHETIC
+  `archive!/entry` paths that defeat `toRealPath`. The admission
+  mechanism is known only at the ADMISSION SITE — the arms of
+  `ServiceLoaderDescriptorReader.scan` (applicationClasses at :51,
+  the per-root sweep at :57-62, dependency entries at :74-79, the
+  observed-metadata ladder at :107) — and must be THREADED down
+  through `scanSelectedEntry`/`scanDirectory`/`addFile`/
+  `addModuleBytes`/`addDescriptor` as a parameter. The root-scope
+  label is computed from the real path at the construction sites
+  (synthetic archive paths get no root-scope label). The `#26`-style
+  additive-component pattern (`MemberInfo.publicMember`, #25) keeps
+  every reader compiling via an auxiliary 6-arg constructor delegating
+  with `"unclassified"` (records cannot default arguments; four
+  existing 6-arg construction sites — Source:161, Source:237,
+  ArchiveSource:343, and JavacServiceLoaderSiteResolverTest:195 —
+  keep compiling; the test descriptor then carries
+  `descriptorProvenance=unclassified`, verified harmless at RED).
 
 ## Scope (binding)
 
@@ -71,41 +82,66 @@ changes; zero new diagnostics; zero edits to existing tests.
    rationale; #68 excluded test code from the DEFAULT fact scope, not
    from explicit investigation), and the override is safe because
    every descriptor it admits is provenance-labeled (item 2).
-2. **Provenance labels on every descriptor.** `Descriptor` gains an
-   additive `String provenance` component (hand-written accessor via
-   a compact constructor default of `"unclassified"` so all existing
-   construction paths compile unchanged), computed at the three
-   construction sites through one new helper:
-   `ServiceLoaderDescriptorProvenance.describe(context, absolutePath,
-   dependencyEntries)` returning the ADMISSION MECHANISM, mirroring
-   `authorizedPath`'s ladder order exactly:
-   `application_classes` | `dependency_entry` | `included_root` |
-   `selected_metadata` | `unclassified` (defense; unreachable while
-   the ladder is walked in order).
+2. **Provenance labels on every descriptor (mechanism threaded from
+   the admission site).** A package-private mechanism constant (String
+   or enum: `application_classes`, `dependency_entry`,
+   `included_root`, `selected_metadata`) is threaded from each arm of
+   `ServiceLoaderDescriptorReader.scan` through
+   `scanSelectedEntry`/`scanDirectory`/`addFile`/`addModuleBytes`/
+   `addDescriptor` into the construction sites:
+   - `applicationClasses` arm (Reader:51);
+   - the per-root `META-INF/services` sweep (Reader:57-62) —
+     `included_root` (the sweep subtree is a sibling of the root;
+     the arm itself is the only truth);
+   - dependency entries (Reader:74-79) — `dependency_entry` (covers
+     archive descriptors with synthetic paths);
+   - the observed-metadata arm (Reader:104-143) —
+     `selected_metadata`, for BOTH the declared file and every file
+     inside a declared directory tree (the arm admitted them; being
+     additionally under an included root does not change who scanned
+     them — the plan-review round-1 decision on the directory arm).
+   `Descriptor` gains an additive `String provenance` component with
+   an auxiliary 6-arg constructor delegating with `"unclassified"`
+   (defensive; visible in the attribute, never silent).
    `descriptorEvidence` emits two additive attributes:
-   - `descriptorProvenance` — the mechanism;
+   - `descriptorProvenance` — the threaded mechanism;
    - `descriptorRootScope` — `<scope>/<included|excluded>` of the
-     MOST-SPECIFIC declared root containing the path (#68's
-     `declaredRootsBySpecificity` order, labeling role only), absent
-     when the path is under no declared root (dependency entries,
-     application classes outside roots).
-   The EvidenceCache key (`descriptor, selection`) already
-   differentiates by Descriptor; the additive component changes
-   equality — safe: the cache is per-scan and the label is a function
-   of the same descriptor's path.
+     MOST-SPECIFIC declared root containing the descriptor's REAL
+     path (`ServiceLoaderDescriptorProvenance.rootScopeLabel(context,
+     absolutePath)`, #68's `declaredRootsBySpecificity` order,
+     labeling role only), absent for synthetic archive paths and
+     paths under no declared root.
+   The EvidenceCache is an `IdentityHashMap` (per-instance, not
+   equality-keyed) — unaffected by the additive component; the
+   equality consumer is `DescriptorIdentity` (Scanner:307-319), which
+   already excludes path/kind and will exclude provenance — see item
+   3's P6 for the merge consequence.
 3. **Test class `ServiceLoaderDescriptorProvenanceTest`** (plain
    `@Test`; no flag writes — the resource lane is flag-independent):
    - **P1 (label RED; scan GREEN today): the fallback arm.** OBSERVED
-     metadata FILE inside a nested EXCLUDED generated root: the
-     descriptor IS scanned (the override, pinned green), and its
-     evidence carries `descriptorProvenance=selected_metadata` and
+     metadata FILE inside an EXCLUDED generated root that is NOT
+     under any included root, applicationClasses, or dependency entry
+     (geometry pinned per plan-review round 1 — only then does the
+     `explicitlySelected` fallback fire): the descriptor IS scanned
+     (the override, pinned green), and its evidence carries
+     `descriptorProvenance=selected_metadata` and
      `descriptorRootScope=production/excluded` (RED — the attributes
      do not exist).
    - **P2 (label RED; scan GREEN today): the directory arm.** OBSERVED
      metadata DIRECTORY under an included root whose tree contains a
-     nested TEST-scope root: the nested root's descriptor IS scanned,
-     labeled `descriptorProvenance=selected_metadata` (inside a
-     selected location) and `descriptorRootScope=test/included`.
+     nested TEST-scope root: the nested root's descriptor IS scanned
+     (green today — the included-roots arm admits the directory and
+     `scanDirectory` sweeps the tree), labeled
+     `descriptorProvenance=selected_metadata` (the observed-metadata
+     arm scanned it; additionally being under an included root does
+     not change who admitted it — the round-1 decision) and
+     `descriptorRootScope=test/included`.
+   - **P2b (label RED; the round-1 geometry cell).** OBSERVED metadata
+     FILE inside an excluded root that IS nested under an included
+     root: admitted (the included-roots containment has no exclusion
+     check), mechanism still `selected_metadata` (the metadata arm
+     scanned it), `descriptorRootScope=production/excluded` — the
+     label distinguishes what the admission geometry cannot.
    - **P3 (label RED): the sweep control.** The per-root
      `META-INF/services` sweep under an included root (the
      `nestedServiceTypesResolveAtCallSite` fixture shape):
@@ -114,14 +150,28 @@ changes; zero new diagnostics; zero edits to existing tests.
    - **P4 (label RED): the entry control.** A dependency-entry (or
      applicationClasses) descriptor: `descriptorProvenance=
      dependency_entry` (or `application_classes`), no
-     `descriptorRootScope` attribute.
+     `descriptorRootScope` attribute (synthetic archive paths get
+     none; real entry paths under no declared root get none).
    - **P5 (label RED): end-to-end.** The P1 fixture through the full
      scan → resolution path: the provider fact's evidence carries
      both attributes (the label reaches the consumer, not just the
      descriptor record).
-   - Pairwise (AGENTS): mechanism × root-scope (P1 excluded vs P2
-     test vs P3 included), mechanism × path kind (file P1 vs
-     directory P2), explicit-vs-sweep (P1/P2 vs P3), entry (P4).
+   - **P6 (label RED; the merge consequence).** Two same-content
+     descriptors — one from a selected location inside an excluded
+     root, one classpath-backed — merge in `selectedDescriptors`
+     (keyed by `DescriptorIdentity`, which excludes provenance; the
+     existing pinned behavior prefers the classpath-backed twin,
+     `ServiceLoaderCoverageTest.identicalSourceAndOutputDescriptors
+     AreMergedPreferringClasspath`): the survivor carries the
+     classpath twin's `dependency_entry` label. Pinned as DOCUMENTED
+     behavior (the merge preference is pre-existing and sanctioned;
+     the excluded-scope twin's label does not survive the merge) —
+     the residual that the merge can discard a scope label, recorded
+     with the cell rather than changed.
+   - Pairwise (AGENTS): mechanism × root-scope (P1/P2b excluded vs
+     P2 test vs P3 included), mechanism × path kind (file P1 vs
+     directory P2), explicit-vs-sweep (P1/P2/P2b vs P3), entry (P4),
+     merge × label (P6).
 4. **Makefile floor raise** to the observed post-fix count
    (717 + new cells).
 
@@ -154,10 +204,10 @@ changes; zero new diagnostics; zero edits to existing tests.
 - **PLAN_69** (this file): committed first.
 - **Plan review**: Engram-grounded adversarial subagent, CodeRabbit
   style; loop until no new addressable findings.
-- **RED_69**: `ServiceLoaderDescriptorProvenanceTest` (P1–P5).
-  Expected-RED: the five label assertions (the scan assertions in
-  P1/P2 are green today — the override is the current behavior, and
-  pinning it green is part of this issue's decision record). Full
+- **RED_69**: `ServiceLoaderDescriptorProvenanceTest` (P1–P6).
+  Expected-RED: the six label assertions (the scan assertions in
+  P1/P2/P2b are green today — the override is the current behavior,
+  and pinning it green is part of this issue's decision record). Full
   gates at RED.
 - **GREEN_69**: the javadoc decision record (item 1), the additive
   `Descriptor.provenance` component + `describe` helper + the two
@@ -186,9 +236,13 @@ findings), `make evidence-validate`.
   EvidenceCache and any Descriptor-set semantics; the cache is
   per-scan and label-inclusive keys are strictly finer — audited at
   GREEN.
-- `unclassified` is a defensive value; if reachable it indicates a
-  construction site missed by the ladder — visible in the attribute
+- `unclassified` is a defensive value; if reachable it indicates an
+  admission site missed by the threading — visible in the attribute
   (never silent), recorded as a residual if observed.
+- The `selectedDescriptors` merge (`DescriptorIdentity` excludes
+  provenance) can discard an excluded-scope twin's label when
+  same-content descriptors merge — P6 pins the documented behavior;
+  changing the merge key is out of scope.
 
 Confidence score: **0.85** — the decision is recorded and the current
 behavior traced at both reachable arms; the change is labeling-only
