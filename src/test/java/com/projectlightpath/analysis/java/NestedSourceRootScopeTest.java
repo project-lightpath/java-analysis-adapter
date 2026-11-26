@@ -146,7 +146,11 @@ class NestedSourceRootScopeTest {
     System.clearProperty(FLAG);
     List<String> byDefault = generatedProjections();
     assertEquals(optOut, byDefault);
-    assertTrue(byDefault.stream().anyMatch(line -> line.contains("KeptMapper")),
+    // The framework-fact oracle, asserted separately from the filename:
+    // the generated_implementation fact for the kept mapper must exist
+    // under the default (a filename-only match would pass vacuously).
+    assertTrue(byDefault.stream()
+        .anyMatch(line -> line.equals("demo.generated.KeptMapper#map")),
         byDefault.toString());
     assertFalse(byDefault.stream().anyMatch(line -> line.contains("Dropped")),
         byDefault.toString());
