@@ -64,6 +64,21 @@ current sweep as intended, and it produces false provenance (below).
     bytecode (compiled production classes do not contain test-only
     owners in the production lane). Audited; recorded as a residual
     (same-path resolution for graph owners), not changed here.
+  - `ServiceLoaderDescriptorAuthorization.authorizedPath` — authorizes
+    ANY path under an included root; a descriptor source physically
+    inside a nested excluded/out-of-scope root is authorized via the
+    parent, and this is REACHABLE (explicitly-selected OBSERVED
+    metadata can point at arbitrary files/directories,
+    `ServiceLoaderDescriptorReader.scan` lines 64-72 pass their
+    candidates through this gate). Same manifestation class —
+    **fix applies** (item 2b): the gate uses the same
+    most-specific-declared-root predicate (a descriptor path inside a
+    nested non-included root is not authorized).
+  - `SourceArchiveDescriptorRouting.displayPath` — display-path
+    attribution via `mostSpecificRoot` over `includedSourceRoots()`;
+    once `authorizedPath` excludes nested non-included descriptor
+    sources, this renderer is unreachable for them. Audited residual
+    (attribution rendering, not inclusion).
   - `BoundedFrameworkModelGeneratedFacts.generatedRootAttributes` —
     computes attributes per GENERATED FILE (post-walk); once the walk
     excludes nested non-included files, no generated file can carry a
@@ -108,12 +123,29 @@ sanctioned existing-test restructuring (item 4).
    - `JavacSourceSymbolIndex.Inputs.collectRoot`: the same filter in
      the stream (the index stays the scanner's mirror; the #22–#25
      parity suites enforce it).
+   - **2b. `ServiceLoaderDescriptorAuthorization.authorizedPath`** uses
+     the same predicate: a candidate descriptor path is authorized
+     only when its most-specific declared containing root is included
+     and in scope (a path inside a nested excluded/out-of-scope root
+     is NOT authorized via the parent). The gate hoists the
+     declared-roots list per scan, not per path.
    No other walker changes (audit above). Zero new diagnostics: an
    excluded nested root is a legal, declared context state — silently
    narrower is CORRECT here (the current behavior silently WIDENS,
    which is the defect; the safe direction per AGENTS is not scanning
    what the scope excludes). Stated per AGENTS: no scan-global
    diagnostic blast radius.
+   **All-filtered-out parity (plan-review round 1):** post-fix, a
+   Builder-reachable state has an included root whose only `.java`
+   files sit under a nested excluded root. The index's `missing_source`
+   diagnostic ("no compilation units were discovered") must NOT fire
+   for that state — the source is not missing, it is scope-excluded —
+   or flag-on diagnoses what flag-off silently accepts (a parity
+   asymmetry in exactly this plan's shape). Implementation:
+   `collectRoot` distinguishes raw discovery (before the predicate)
+   from post-filter discovery; `missing_source` fires only when the
+   RAW count is zero. The scanner stays silent in both states (its
+   current behavior). Pinned by N8.
 3. **New test class `NestedSourceRootScopeTest`** (plain
    `@Test`, no flag writes — the predicate is flag-independent; the
    index cells exercise the default-on path):
@@ -133,11 +165,23 @@ sanctioned existing-test restructuring (item 4).
      root under an EXCLUDED parent still contributes** — most-specific
      governs; both walkers include the file, attributed to the nested
      included root.
-   - **N6 (parity): flag-on == flag-off file sets.** The N1 fixture's
-     scan projections (framework facts over the fixture) are equal
-     across `-Dflpath.java.symbolindex=false` and the default; both
-     exclude the nested files (green at RED — both currently include —
-     and stays green post-fix; the parity invariant is the pin).
+   - **N6 (parity): flag-on == flag-off file sets, non-vacuous
+     oracle.** The N3/N4 generated-root fixture (which produces
+     observable `generated_implementation` facts via
+     `FrameworkMetadata`, the existing test's shape — NOT the plain
+     `App.java` fixture, whose projections are empty and would make
+     the cell vacuous): the scanner's file-set projection AND the
+     framework-fact projection are equal across
+     `-Dflpath.java.symbolindex=false` and the default; both exclude
+     the nested files (green at RED — both currently include — and
+     stays green post-fix; the parity invariant is the pin). The
+     oracle is stated here so the RED commit can prove non-vacuity:
+     the on-arm's projection is non-empty for the included mapper.
+   - **N8 (RED): all-filtered-out parity.** An included root whose
+     only `.java` files sit under a nested excluded root: scanner
+     `files()` empty, the index's `diagnostics()` contains NO
+     `missing_source` row (scope-excluded is not missing), identical
+     across flag states.
    - **N7 (RED): end-to-end provenance.** The
      `generatedProvenanceUsesOnlyIncludedActiveScopeNestedRoots`
      fixture shape PLUS an `IncludedMapper` directly under the
@@ -145,6 +189,13 @@ sanctioned existing-test restructuring (item 4).
      fact (`demo.generated.IncludedMapper#map`) with
      `sourceRoot=generated-src/main/java, included=true,
      scope=production`; ZERO facts for Excluded/Test mappers.
+   - **N9 (RED): the resource lane.** A descriptor source (a
+     `META-INF/services` file or a metadata-selected file) physically
+     inside a nested excluded generated root: NOT authorized/ scanned
+     via the parent included root (the `authorizedPath` gate applies
+     the same predicate) — no descriptor facts from it, while the same
+     descriptor directly under the included root IS scanned
+     (non-vacuity).
    - **Boundary probes (pre-GREEN, scratch, per AGENTS):** the
      `Path.startsWith` segment arithmetic (a sibling directory whose
      name is a prefix of the nested root's name —
@@ -157,13 +208,20 @@ sanctioned existing-test restructuring (item 4).
    `JavaAnalysisAdapterTest.generatedProvenanceUsesOnlyIncludedActive
    ScopeNestedRoots` is restructured to its own name's semantics: add
    an `IncludedMapper` under the included generated root; assert
-   exactly ONE generated fact for it with the included/production
-   attributes, and NO facts whose callee is `ExcludedMapper` or
-   `TestMapper` (fail-closed twins in both directions). The current
-   assertions are the misattribution's pin (probe receipt in the
-   preflight); the restructuring is the fix's red-first owner, and the
-   commit message carries the probe evidence. Zero edits to any other
-   existing test.
+   exactly ONE generated fact for it retaining ALL FOUR attribute
+   pins (`sourceRoot=generated-src/main/java`, `sourceRootIncluded=
+   true`, `sourceRootScope=production`, AND
+   `sourceRootFingerprint=included-fingerprint`), and NO facts whose
+   callee is `ExcludedMapper` or `TestMapper` (fail-closed twins in
+   both directions). The current assertions are the
+   misattribution's pin (probe receipt in the preflight); the
+   restructuring is the fix's red-first owner, and the commit message
+   carries the probe evidence. Zero edits to any other existing test.
+   Adjacent audit note: `JavaAnalysisAdapterTest` line ~209 nests an
+   included generated root under an included source root (both in
+   scope) — audited, unaffected by the fix (most-specific declared
+   root is the included generated root; attribution unchanged), so the
+   "exactly one" count is verifiable.
 5. **Makefile floor raise** to the observed post-fix count (709 + new
    cells; the restructured test is count-neutral).
 
@@ -198,16 +256,17 @@ sanctioned existing-test restructuring (item 4).
 - **PLAN_68** (this file): committed first.
 - **Plan review**: Engram-grounded adversarial subagent, CodeRabbit
   style; loop until no new addressable findings.
-- **RED_68**: `NestedSourceRootScopeTest` (N1–N7) plus the sanctioned
+- **RED_68**: `NestedSourceRootScopeTest` (N1–N9) plus the sanctioned
   restructuring of `generatedProvenanceUsesOnlyIncludedActiveScope
-  NestedRoots`. Expected-RED: N1–N4, N7 (and the restructured
+  NestedRoots`. Expected-RED: N1–N4, N7, N8, N9 (and the restructured
   existing test — its no-facts-for-Excluded/Test assertions fail
   today). Expected-green at RED: N5, N6. Full gates at RED (expected
   failures enumerated in the commit message; floor receipt 709 + new).
-- **GREEN_68**: the two predicate members (item 1) and the two walker
-  filters (item 2). Boundary probes before the commit. Full gates;
-  JDK 17 lint on helios08 if any doubt (#64 — the touched classes are
-  small additions to existing files).
+- **GREEN_68**: the two predicate members (item 1), the two walker
+  filters + the all-filtered-out diagnostic rule, and the
+  `authorizedPath` gate (item 2/2b). Boundary probes before the
+  commit. Full gates; JDK 17 lint on helios08 if any doubt (#64 — the
+  touched classes are small additions to existing files).
 - **Implementation review**: a NEW Engram-grounded adversarial
   subagent over the full change; findings red-first; loop until clean.
 - **EVIDENCE_68**: `docs/resolutions/RESOLUTION-68.md` — probe
@@ -240,13 +299,61 @@ findings), `make evidence-validate`.
   the declared-roots list (hoisted sort, linear containment scan);
   bounded by (files × declared roots) path-prefix comparisons —
   negligible against the per-file parse the walkers already pay.
+- Symlink-alias containment (plan-review round 1): root and file
+  containment is LEXICAL (`toAbsolutePath().normalize()` +
+  `Path.startsWith`); this repo's fixtures declare roots through
+  symlinked aliases (`ServiceLoaderSafetyLifetimeTest`), where a
+  declared alias and the walked spelling can differ lexically. In
+  that shape the predicate's fail-open default (`true` when no
+  declared root lexically contains the file) keeps today's
+  attribution — the pre-#68 behavior, never wider. Recorded as a
+  residual shared with the existing `mostSpecificRoot`/`displayPath`
+  lexical semantics (PLAN-21 recorded the same class for `typesIn`).
+- `SourceArchiveDescriptorRouting.displayPath` attribution for
+  excluded-nested descriptor paths — unreachable after the
+  `authorizedPath` fix (audited residual).
 
-Confidence score: **0.86** — the defect and its only existing pin are
-probe-verified; the fix is a symmetric two-line filter over an
-existing, well-tested specificity mechanism; the blast radius on the
-709-test suite is measured at RED (the restructured test is the only
-sanctioned edit). Residual risk: the most-specific-governs edge (N5)
-inverts the intuition of naive prefix exclusion and must be pinned
-exactly, and the walker audit's non-.java consumers
-(ServiceLoaderDescriptorReader, SootUp) are dispositioned by reasoning
-rather than probes.
+## Plan-review record
+
+Round 1 (Engram-grounded adversarial subagent, CodeRabbit style): 5
+addressable findings (3 MEDIUM, 2 LOW) + 1 NIT, all incorporated:
+1. MEDIUM — the walker audit missed
+   `ServiceLoaderDescriptorAuthorization.authorizedPath` (reachable
+   false-inclusion in the resource lane via OBSERVED metadata) and
+   `SourceArchiveDescriptorRouting.displayPath`; `authorizedPath` is
+   now in scope (item 2b, cell N9), `displayPath` is an audited
+   residual (unreachable after 2b).
+2. MEDIUM — post-fix all-filtered-out state would make the index's
+   `missing_source` diagnostic asymmetric with the scanner; the
+   diagnostic now fires only when the RAW (pre-predicate) discovery
+   count is zero, pinned by N8.
+3. MEDIUM — N6 as drafted was vacuous (plain fixture, empty
+   projections); re-specified over the generated-root fixture with a
+   stated non-empty oracle.
+4. LOW — item 4 now retains all FOUR attribute pins including the
+   fingerprint.
+5. LOW — the fail-open default's lexical-containment limit under
+   symlinked root aliases is recorded as a residual (behavior = today's,
+   never wider).
+6. NIT — the adjacent nested-included test (JavaAnalysisAdapterTest
+   ~line 209) is audited and noted unaffected, making the
+   "exactly one existing test" count auditable.
+
+Verified by the reviewer: both walkers' sweep, the existing test's
+misattribution pin, the loader's excluded-ordinary-root rejection,
+the specificity mechanism's correctness (including N5's
+preserved-today semantics and the deeper-excluded-root case),
+predicate placement legality, the exhaustive nested-root test search
+(exactly one test to restructure), the exhaustive `Files.walk` audit
+(no missed .java walker), and N6's green-at-RED status.
+
+Confidence score: **0.88** (0.86 → 0.88 after plan-review round 1) —
+the defect and its only existing pin are probe-verified; the fix is a
+symmetric filter over an existing, well-tested specificity mechanism,
+now covering the resource lane's reachable manifestation too; the
+blast radius on the 709-test suite is measured at RED (the
+restructured test is the only sanctioned edit). Residual risk: the
+most-specific-governs edge (N5) inverts the intuition of naive prefix
+exclusion and must be pinned exactly; the resource-lane gate change
+(N9) touches authorization semantics with fewer existing patterns to
+copy; and the symlink-alias lexical residual is inherited, not fixed.
