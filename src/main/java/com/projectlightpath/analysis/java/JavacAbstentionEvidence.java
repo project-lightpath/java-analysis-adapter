@@ -96,9 +96,11 @@ record JavacAbstentionEvidence(
    * The evidence attributes contributed under the PRODUCER-TYPE keys
    * ({@code javacProducerTypeAbstention} family): the producer-type
    * seam's own correlation decline, distinct from the descriptor
-   * member's {@code javacAbstention} family because the two seams
-   * derive the owner differently (the type seam keeps its historical
-   * raw-extraction anchor) and both can decline for one candidate.
+   * member's {@code javacAbstention} family because they describe
+   * different lookups (the producer bean type vs the descriptor
+   * member) and both can decline for one candidate (#77: both seams
+   * now derive the owner through the shared {@code ownerTypeFor}
+   * normalization).
    */
   Map<String, String> producerTypeAttributes() {
     if (!present()) {

@@ -152,11 +152,13 @@ final class FrameworkBeanScanning {
         // Flag-on: the correlated member's canonical return type is the
         // producer bean type; a non-correlating declaration keeps textual
         // — and #62 records WHY on the candidate (never scan.diagnostics()).
-        // The owner keeps this path's historical derivation (the raw
-        // extraction start): the shared ownerTypeFor helper is the
-        // classification/re-query pair's normalization, not this seam's.
+        // The owner derives through the shared ownerTypeFor helper (#77):
+        // the declarationStart normalization every correlation consumer
+        // applies, so a member declared after a nested type correlates
+        // against its true owner, not the nested type the raw extraction
+        // start anchored on.
         JavacCorrelation correlation = JavacMemberCorrelation.of(scanner)
-            .correlatedMethod(file, scanner.typeContaining(file, method.start()), method);
+            .correlatedMethod(file, scanner.ownerTypeFor(file, method), method);
         producerType = correlation.memberOptional()
             .map(member -> member.returnType())
             .filter(returnType -> !returnType.isBlank() && !returnType.equals("void"))
