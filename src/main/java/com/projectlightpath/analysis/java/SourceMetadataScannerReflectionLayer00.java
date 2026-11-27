@@ -146,6 +146,20 @@ static boolean hasParameter(MethodInfo owner, String variable) {
     return parameters(owner.parameters()).stream().anyMatch(parameter -> parameter.name().equals(variable));
   }
 
+  /**
+   * The owner type of one declaration, derived through the
+   * {@code declarationStart} normalization (#62's shared helper): the
+   * raw extraction start can anchor on the closing brace of a preceding
+   * nested type, whose inclusive end would make {@code typeContaining}
+   * return that nested type. Every correlation consumer — the
+   * classification arm and the feature-build re-query — derives the
+   * owner through THIS method so the inputs are identical by
+   * construction.
+   */
+  String ownerTypeFor(SourceFile file, MethodInfo owner) {
+    return typeContaining(file, declarationStart(file, owner.start()));
+  }
+
   boolean parameterMatchesType(
       SourceFile file, MethodInfo owner, String type, String variable, int offset) {
     if (JavacSourceSymbolIndex.enabled()) {
@@ -155,16 +169,13 @@ static boolean hasParameter(MethodInfo owner, String variable) {
       // simple-name disjunct would fabricate matches when a same-simple
       // name shadows the queried type (JLS 6.4.1) — and the textual
       // ladder still runs, so no true answer is lost.
-      // The owner is resolved from the declaration start, not the raw
-      // extraction start: the extraction can anchor on the closing brace
-      // of a preceding nested type, whose inclusive end would make
-      // typeContaining return that nested type. The same normalization
-      // the repository layer and JavacMemberCorrelation apply.
-      String ownerType = typeContaining(file,
-          declarationStart(file, owner.start()));
+      // The owner is resolved through the shared ownerTypeFor helper,
+      // the same normalization the repository layer, the correlation,
+      // and the #62 feature-build re-query apply.
       Optional<JavacSourceSymbolIndex.MemberInfo> correlated =
           JavacMemberCorrelation.of((SourceMetadataScanner) this)
-              .correlatedMethod(file, ownerType, owner);
+              .correlatedMethod(file, ownerTypeFor(file, owner), owner)
+              .memberOptional();
       if (correlated.isPresent()) {
         List<Parameter> declared = parameters(owner.parameters());
         List<String> canonical = correlated.orElseThrow().parameterTypes();

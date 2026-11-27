@@ -157,7 +157,18 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
             file.lineAt(site.offset()),
             site.offset(),
             "",
-            targets.evidence(file, site)));
+            new JavacFeatureEvidence(
+                targets.evidence(file, site),
+                new JavacFeatureAbstentions(null, null,
+                    // Issue #62: the caller member's correlation abstention,
+                    // gated to sites whose receiver classification consulted
+                    // the parameter-match arm (captured at extraction time —
+                    // the choke-point flag inside isDeclaredVariableBefore).
+                    parameterReceiverOffsets(file).contains(site.offset())
+                        ? JavacMemberCorrelation.of(SourceMetadataScanner.this)
+                            .callerAbstention(file, caller)
+                            .orElse(JavacAbstentionEvidence.NONE)
+                        : JavacAbstentionEvidence.NONE))));
       }
       return result;
     }
@@ -174,18 +185,30 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
     private List<DynamicFeature> proxyFeaturesAt(SourceFile file, int proxyOffset) {
       List<String> interfaceNames = proxyInterfaceNames(file.structuralSource(), proxyOffset);
       MethodInfo caller = methodContaining(file, proxyOffset);
+      // Issue #62: the caller member's correlation abstention, gated to
+      // sites whose receiver classification consulted the parameter-match
+      // arm (the same extraction-time capture the reflection path uses).
+      JavacAbstentionEvidence callerAbstention =
+          parameterReceiverOffsets(file).contains(proxyOffset)
+              ? JavacMemberCorrelation.of(SourceMetadataScanner.this)
+                  .callerAbstention(file, caller)
+                  .orElse(JavacAbstentionEvidence.NONE)
+              : JavacAbstentionEvidence.NONE;
       if (interfaceNames.isEmpty()) {
-        return List.of(dynamicProxyFeature(file, caller, "unknown#unknown", "", proxyOffset));
+        return List.of(dynamicProxyFeature(file, caller, "unknown#unknown",
+            "", proxyOffset, new JavacFeatureAbstentions(null, null, callerAbstention)));
       }
       List<DynamicFeature> result = new ArrayList<>();
       for (String interfaceName : interfaceNames) {
-        result.addAll(proxyFeaturesForInterface(file, caller, interfaceName, proxyOffset));
+        result.addAll(proxyFeaturesForInterface(
+            file, caller, interfaceName, proxyOffset, callerAbstention));
       }
       return result;
     }
 
     private List<DynamicFeature> proxyFeaturesForInterface(
-        SourceFile file, MethodInfo caller, String interfaceName, int proxyOffset) {
+        SourceFile file, MethodInfo caller, String interfaceName, int proxyOffset,
+        JavacAbstentionEvidence callerAbstention) {
       String qualified = resolveContractType(interfaceName, file)
           .orElseGet(() -> qualify(interfaceName, file.packageName()));
       Optional<SourceFile> interfaceFile = files().stream()
@@ -199,16 +222,26 @@ static List<String> proxyInterfaceNames(String source, int proxyOffset) {
           .filter(method -> !hasModifier(method.annotationBlock(), "private"))
           .toList();
       if (eligibleMethods.isEmpty()) {
-        return List.of(dynamicProxyFeature(file, caller, qualified + "#unknown", "", proxyOffset));
+        return List.of(dynamicProxyFeature(file, caller, qualified + "#unknown",
+            "", proxyOffset, new JavacFeatureAbstentions(null, null, callerAbstention)));
       }
       return eligibleMethods.stream()
-          .map(method -> dynamicProxyFeature(
-              file,
-              caller,
-              qualified + "#" + method.name(),
-              JavacAnnotationAccess.of(SourceMetadataScanner.this)
-                  .methodDescriptor(method, qualified, interfaceFile.get()),
-              proxyOffset))
+          .map(method -> {
+            // Issue #62: the descriptor outcome carries the correlation
+            // abstention (seam A) and, when the repair path also declined,
+            // the seam-B repair code.
+            JavacDescriptorOutcome outcome = JavacAnnotationAccess
+                .of(SourceMetadataScanner.this)
+                .methodDescriptor(method, qualified, interfaceFile.get());
+            return dynamicProxyFeature(
+                file,
+                caller,
+                qualified + "#" + method.name(),
+                outcome.descriptor().orElse(""),
+                proxyOffset,
+                new JavacFeatureAbstentions(
+                    outcome.abstention(), outcome.repairAbstention(), callerAbstention));
+          })
           .toList();
     }
 

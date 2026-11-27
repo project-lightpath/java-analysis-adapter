@@ -42,7 +42,9 @@ abstract class SourceMetadataScannerRepositoryLayer
           && abstractInstanceRepositoryMethod(method)
           && !redeclaresGuaranteedContractMethod(file, method, result)) {
         RepositoryMethod repositoryMethod = new RepositoryMethod(
-            method.name(), repositoryMethodSignature(file, method), false);
+            method.name(), repositoryMethodSignature(file, method), false,
+            new JavacRepositoryContractCorrelation((SourceMetadataScanner) this)
+                .guaranteedContractCheckAbstention(file, method, result));
         result.putIfAbsent(repositoryMethod.identity(), repositoryMethod);
       }
     }
@@ -74,9 +76,8 @@ abstract class SourceMetadataScannerRepositoryLayer
     // Flag-on: the correlated member's canonical parameter-0 type matches
     // even when the textual token is corrupted or unqualified; the textual
     // token comparison above still runs, so no true answer is lost.
-    return JavacSourceSymbolIndex.enabled()
-        && JavacMemberCorrelation.of((SourceMetadataScanner) this)
-            .correlatedFirstParameterIs(file, method, List.of(entityType, idType));
+    return new JavacRepositoryContractCorrelation((SourceMetadataScanner) this)
+        .firstParameterMatchesContract(file, method, entityType, idType);
   }
 
   /**
@@ -126,7 +127,7 @@ abstract class SourceMetadataScannerRepositoryLayer
   }
 
   /** Matches only the canonical Spring Data query annotation, not lookalikes. */
-  private boolean queryAnnotated(SourceFile file, MethodInfo method) {
+  boolean queryAnnotated(SourceFile file, MethodInfo method) {
     if (!canonicalAnnotationOccurrences(
         file, method.annotationBlock(), "Query",
         SourceMetadataScannerState.SPRING_DATA_QUERY_ANNOTATIONS).isEmpty()) {

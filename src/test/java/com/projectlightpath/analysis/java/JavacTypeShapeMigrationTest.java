@@ -188,14 +188,14 @@ class JavacTypeShapeMigrationTest {
     // named by the owner's simple name, through the same type bijection.
     assertEquals(List.of("java.lang.String"),
         access.correlatedConstructor(file, "demo.Probe", ctor)
-            .orElseThrow().parameterTypes());
+            .memberOptional().orElseThrow().parameterTypes());
     SourceMetadataScannerState.MethodInfo intCtor = SourceMetadataScanner
         .constructors(file).stream()
         .filter(method -> method.parameters().contains("int"))
         .findFirst().orElseThrow();
     assertEquals(List.of("int"),
         access.correlatedConstructor(file, "demo.Probe", intCtor)
-            .orElseThrow().parameterTypes());
+            .memberOptional().orElseThrow().parameterTypes());
   }
 
   @Test
@@ -317,7 +317,8 @@ class JavacTypeShapeMigrationTest {
         continue;
       }
       Optional<String> descriptor =
-          BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, candidate);
+          BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, candidate)
+              .descriptor();
       if (candidate.candidateType().equals("java.lang.String")) {
         assertEquals(Optional.of("(Ljava/lang/String;)Ljava/lang/String;"), descriptor,
             "the String overload must carry its own descriptor");
@@ -385,7 +386,8 @@ class JavacTypeShapeMigrationTest {
         .constructors(file).get(0);
     JavacMemberCorrelation access = JavacMemberCorrelation.of(scanner);
     JavacSourceSymbolIndex.MemberInfo member =
-        access.correlatedConstructor(file, "demo.Probe", ctor).orElseThrow();
+        access.correlatedConstructor(file, "demo.Probe", ctor)
+            .memberOptional().orElseThrow();
     // The bounded-model JVM descriptor dialect renders from index shapes:
     // erased generic -> java.util.List, varargs -> String[].
     assertEquals("(Ljava/util/List;[Ljava/lang/String;)V",
@@ -587,7 +589,7 @@ class JavacTypeShapeMigrationTest {
       // brace, which the declaration start includes: the type-parameter
       // clause must still be found, so both mirrored overloads abstain.
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the mirrored type-parameter overload must abstain: " + method.parameters());
     }
   }
@@ -665,7 +667,7 @@ class JavacTypeShapeMigrationTest {
       // let the mirrored overloads correlate to each other's members. The
       // balanced parse yields every name, so both abstain.
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Nested", method).isEmpty(),
+              .correlatedMethod(file, "demo.Nested", method).memberOptional().isEmpty(),
           "the nested-bound mirrored overload must abstain: " + method.parameters());
     }
   }
@@ -699,7 +701,7 @@ class JavacTypeShapeMigrationTest {
     // in parameterTypes. This pins the erased-parameter check specifically —
     // the declared check alone does not fire for a TYPEVAR mirror.
     assertTrue(JavacMemberCorrelation.of(scanner)
-            .correlatedMethod(boundFile, "demo.Bound", run).isEmpty(),
+            .correlatedMethod(boundFile, "demo.Bound", run).memberOptional().isEmpty(),
         "an unresolved type-variable bound parameter must abstain");
     // Control: a VALID bound (T extends Number, erasure java.lang.Number is
     // not an error type) stays eligible — the member correlates and its
@@ -713,7 +715,7 @@ class JavacTypeShapeMigrationTest {
     assertEquals(List.of("java.lang.Number"),
         JavacMemberCorrelation.of(scanner)
             .correlatedMethod(validFile, "demo.Valid", validRun)
-            .orElseThrow().parameterTypes(),
+            .memberOptional().orElseThrow().parameterTypes(),
         "a valid bounded type variable must stay eligible");
   }
 
@@ -747,7 +749,7 @@ class JavacTypeShapeMigrationTest {
     // later names are parsed. Both mirrored overloads abstain.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the comment-corrupted mirrored overload must abstain: "
               + method.parameters());
     }
@@ -786,7 +788,7 @@ class JavacTypeShapeMigrationTest {
     // actual nested generic bound (Set<String>). Both abstain.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the comment-before-clause mirrored overload must abstain: "
               + method.parameters());
     }
@@ -830,7 +832,7 @@ class JavacTypeShapeMigrationTest {
     // so the clause is found and both abstain.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the nested-paren annotation mirrored overload must abstain: "
               + method.parameters());
     }
@@ -874,7 +876,7 @@ class JavacTypeShapeMigrationTest {
     // shielded from the bracket count, so both abstain.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the bound-annotation mirrored overload must abstain: "
               + method.parameters());
     }
@@ -918,7 +920,7 @@ class JavacTypeShapeMigrationTest {
     // other's members.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the whitespace-annotation mirrored overload must abstain: "
               + method.parameters());
     }
@@ -956,7 +958,7 @@ class JavacTypeShapeMigrationTest {
     // mirrored overloads correlate to each other's members.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the annotated type-parameter mirrored overload must abstain: "
               + method.parameters());
     }
@@ -1029,7 +1031,7 @@ class JavacTypeShapeMigrationTest {
     // and the mirrored overloads correlate to each other's members.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the whitespace-qualified-annotation mirrored overload must abstain: "
               + method.parameters());
     }
@@ -1064,7 +1066,7 @@ class JavacTypeShapeMigrationTest {
     // enclosing class must abstain, like method type parameters do.
     for (SourceMetadataScannerState.MethodInfo method : picks) {
       assertTrue(correlation
-              .correlatedMethod(file, "demo.Example", method).isEmpty(),
+              .correlatedMethod(file, "demo.Example", method).memberOptional().isEmpty(),
           "the class-type-parameter mirrored overload must abstain: "
               + method.parameters());
     }

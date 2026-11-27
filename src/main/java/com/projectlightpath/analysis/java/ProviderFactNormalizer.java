@@ -190,6 +190,12 @@ final class ProviderFactNormalizer {
     // UNRESOLVED abstention, byte-identical.
     JavacTargetEvidence evidence =
         feature.targetEvidence() == null ? JavacTargetEvidence.NONE : feature.targetEvidence();
+    // Issue #62: the per-member abstention attributes ride the same
+    // evidence map. Visibility-only: certainty, callee, and limitation
+    // are the #25 channel's, unchanged.
+    Map<String, String> attributes =
+        new java.util.LinkedHashMap<>(evidence.attributes(feature.targetDescriptor()));
+    feature.abstentions().mergeInto(attributes);
     return SemanticCallFacts.Fact.provider(
         id,
         context,
@@ -202,7 +208,7 @@ final class ProviderFactNormalizer {
             feature.sourcePath(),
             feature.symbols(),
             feature.sourceLine() > 0 ? feature.sourceLine() : null,
-            evidence.attributes(feature.targetDescriptor()))),
+            attributes)),
         evidence.limitation(feature.limitation()));
   }
 
