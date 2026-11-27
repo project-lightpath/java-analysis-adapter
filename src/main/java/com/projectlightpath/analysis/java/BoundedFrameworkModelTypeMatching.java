@@ -34,17 +34,21 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
-      SourceMetadataScannerState.BeanCandidate candidate) {
+      SourceMetadataScannerState.BeanCandidate candidate,
+      Optional<String> requestedShape) {
     Boolean directCompatibility = directTypeCompatibility(
-        scanner, injectionFile, requestedType, candidate);
+        scanner, injectionFile, requestedType, candidate, requestedShape);
     if (directCompatibility == Boolean.TRUE) {
       return true;
     }
     if (directCompatibility == null) {
-      return contractMatches(context, scanner, injectionFile, requestedType, candidate);
+      return contractMatches(
+          context, scanner, injectionFile, requestedType, candidate, requestedShape);
     }
-    return directTypesHaveDifferentRawTypes(scanner, injectionFile, requestedType, candidate)
-        && contractMatches(context, scanner, injectionFile, requestedType, candidate);
+    return directTypesHaveDifferentRawTypes(
+            scanner, injectionFile, requestedType, candidate, requestedShape)
+        && contractMatches(
+            context, scanner, injectionFile, requestedType, candidate, requestedShape);
   }
 
   /** Returns whether source and metadata establish a type match strongly enough for definiteness. */
@@ -53,9 +57,10 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
-      SourceMetadataScannerState.BeanCandidate candidate) {
+      SourceMetadataScannerState.BeanCandidate candidate,
+      Optional<String> requestedShape) {
     Boolean directCompatibility = directTypeCompatibility(
-        scanner, injectionFile, requestedType, candidate);
+        scanner, injectionFile, requestedType, candidate, requestedShape);
     if (directCompatibility == Boolean.TRUE) {
       return true;
     }
@@ -63,8 +68,10 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       return false;
     }
     return directCompatibility == Boolean.FALSE
-        && directTypesHaveDifferentRawTypes(scanner, injectionFile, requestedType, candidate)
-        && contractMatches(context, scanner, injectionFile, requestedType, candidate);
+        && directTypesHaveDifferentRawTypes(
+            scanner, injectionFile, requestedType, candidate, requestedShape)
+        && contractMatches(
+            context, scanner, injectionFile, requestedType, candidate, requestedShape);
   }
 
   /** Matches source and metadata contracts without using an ambiguous package suffix. */
@@ -73,10 +80,21 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
-      SourceMetadataScannerState.BeanCandidate candidate) {
+      SourceMetadataScannerState.BeanCandidate candidate,
+      Optional<String> requestedShape) {
     Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
+    // Issue #61: the index contract disjunct — the candidate's direct
+    // supertype shapes against the repair-only erased raw of the requested
+    // type. Generics-gated (the shapes are erased; a generic requested type
+    // keeps the generic-retaining textual semantics, which alone can
+    // compare type arguments) and independent of the requested.isEmpty()
+    // early return below: the shape arm fires precisely when that return
+    // would (the textual vacuum case).
+    boolean indexContract = !hasGenericArguments(requestedType)
+        && contractShapesMatch(scanner, injectionFile, requestedType,
+            requestedShape, candidate);
     if (requested.isEmpty()) {
-      return false;
+      return indexContract;
     }
     boolean sourceContract = candidate.contracts().stream()
         .anyMatch(contract -> contractMatchesType(
@@ -85,7 +103,30 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
         .flatMap(row -> row.contracts().stream())
         .anyMatch(contract -> contractMatchesType(
             requestedType, requested, contract, candidate.file(), scanner));
-    return sourceContract || metadataContract;
+    return sourceContract || metadataContract || indexContract;
+  }
+
+  /**
+   * The index contract comparison (issue #61): the candidate's direct
+   * supertype shapes contain the requested type's repair-only erased raw
+   * resolution. Both sides are canonical, erased, and javac-resolved —
+   * this answers exactly the case the textual contract resolution cannot
+   * (an implements spelling that is a textual vacuum).
+   */
+  private static boolean contractShapesMatch(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String requestedType,
+      Optional<String> requestedShape,
+      SourceMetadataScannerState.BeanCandidate candidate) {
+    Optional<String> requestedRaw = canonicalType(
+        eraseGenericArguments(requestedType), injectionFile, scanner)
+        .or(() -> requestedShape);
+    return requestedRaw.isPresent()
+        && JavacInjectionTypeShapes.of(scanner)
+            .contractShapes(candidate)
+            .map(supertypes -> supertypes.contains(requestedRaw.get()))
+            .orElse(false);
   }
 
   /** Compares generic contract arguments whenever either side provides them. */

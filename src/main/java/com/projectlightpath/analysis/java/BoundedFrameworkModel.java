@@ -55,7 +55,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
         List<SourceMetadataScannerState.BeanCandidate> matches,
         List<SourceMetadataScannerState.BeanCandidate> candidates,
         List<AnalysisContext.ResolvedBindingMetadata> selectedRows,
-        List<AnalysisContext.ResolvedBindingMetadata> bindingRows) {}
+        List<AnalysisContext.ResolvedBindingMetadata> bindingRows,
+        Optional<String> requestedShape) {}
 
     private record CertaintyRequest(
         BoundedFrameworkModel model,
@@ -68,7 +69,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
         List<SourceMetadataScannerState.BeanCandidate> qualifiedTypeMatches,
         List<AnalysisContext.BindingCandidateMetadata> metadataOnlyMatches,
         long eligibleCandidateCount,
-        List<AnalysisContext.ResolvedBindingMetadata> selectedRows) {}
+        List<AnalysisContext.ResolvedBindingMetadata> selectedRows,
+        Optional<String> requestedShape) {}
 
     private record SelectedFactsRequest(
         BoundedFrameworkModel model,
@@ -154,9 +156,15 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
       SourceMetadataScannerState.Parameter parameter = request.parameter();
       int parameterIndex = request.parameterIndex();
       boolean uniqueInjectionSite = request.uniqueInjectionSite();
+      // Issue #61: the requested side's index shape, computed ONCE per
+      // parameter through the seam (empty on every decline, including
+      // flag-off — the textual ladder then answers exactly as before).
+      Optional<String> requestedShape = JavacInjectionTypeShapes.of(scanner)
+          .requestedShape(injection, parameterIndex);
       List<SourceMetadataScannerState.BeanCandidate> typeMatches = candidates.stream()
           .filter(candidate -> model.matches(
-              context, scanner, injection.file(), parameter.type(), candidate))
+              context, scanner, injection.file(), parameter.type(), candidate,
+              requestedShape))
           .filter(candidate -> model.profileMatches(candidate.profiles()) != Boolean.FALSE)
           .toList();
       List<SourceMetadataScannerState.BeanCandidate> matches = typeMatches.stream()
@@ -171,7 +179,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
           injection.file(),
           parameter.type(),
           model.mergeQualifiers(injection.qualifiers(), parameter.qualifiers()),
-          candidates);
+          candidates,
+          requestedShape);
       long activeMetadataOnlyCount = metadataOnlyMatches.stream()
           .filter(row -> row.active() != Boolean.FALSE)
           .map(AnalysisContext.BindingCandidateMetadata::candidateId)
@@ -179,7 +188,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
           .count();
       long eligibleCandidateCount = qualifiedTypeMatches.size() + activeMetadataOnlyCount;
       List<AnalysisContext.ResolvedBindingMetadata> bindingRows = model.matchingBindings(
-          context, scanner, injection, parameter, parameterIndex, candidates);
+          context, scanner, injection, parameter, parameterIndex, candidates,
+          requestedShape);
       List<AnalysisContext.ResolvedBindingMetadata> selectedRows = bindingRows.stream()
           .filter(row -> row.active() == Boolean.TRUE)
           .filter(row -> row.selected() == Boolean.TRUE)
@@ -193,7 +203,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
           matches,
           candidates,
           selectedRows,
-          bindingRows));
+          bindingRows,
+          requestedShape));
       boolean legacyIdAllowed = uniqueInjectionSite && matches.size() == 1;
       if (matches.isEmpty()) {
         return List.of(model.injectionFact(new InjectionFactRequest(
@@ -223,7 +234,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
           qualifiedTypeMatches,
           metadataOnlyMatches,
           eligibleCandidateCount,
-          selectedRows));
+          selectedRows,
+          requestedShape));
       return selectedFacts(new SelectedFactsRequest(
           model,
           context,
@@ -250,10 +262,12 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
       List<SourceMetadataScannerState.BeanCandidate> candidates = request.candidates();
       List<AnalysisContext.ResolvedBindingMetadata> selectedRows = request.selectedRows();
       List<AnalysisContext.ResolvedBindingMetadata> bindingRows = request.bindingRows();
+      Optional<String> requestedShape = request.requestedShape();
       if (!selectedRows.isEmpty()) {
         List<SourceMetadataScannerState.BeanCandidate> activeCandidates = candidates.stream()
             .filter(candidate -> model.matches(
-                context, scanner, injection.file(), parameter.type(), candidate))
+                context, scanner, injection.file(), parameter.type(), candidate,
+                requestedShape))
             .filter(candidate -> model.profileMatches(candidate.profiles()) != Boolean.FALSE)
             .filter(candidate -> model.candidateMetadataActive(context, scanner, candidate) != Boolean.FALSE)
             .toList();
@@ -315,7 +329,7 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
           && metadata.get(0).active() == Boolean.TRUE
           && request.model().typeMatchCertain(
               request.context(), request.scanner(), request.injection().file(),
-              request.parameter().type(), selected);
+              request.parameter().type(), selected, request.requestedShape());
     }
 
     private static boolean exactActiveSet(CertaintyRequest request) {
@@ -327,7 +341,8 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
           && metadataOnlyCandidatesInactive(request)
           && request.model().typeMatchCertain(
               request.context(), request.scanner(), request.injection().file(),
-              request.parameter().type(), request.matches().get(0));
+              request.parameter().type(), request.matches().get(0),
+              request.requestedShape());
     }
 
     private static boolean metadataCoversTypeMatches(CertaintyRequest request) {

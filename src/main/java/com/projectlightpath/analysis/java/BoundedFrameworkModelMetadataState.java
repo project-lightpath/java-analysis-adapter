@@ -88,11 +88,13 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
       List<String> requestedQualifiers,
-      List<SourceMetadataScannerState.BeanCandidate> scannedCandidates) {
+      List<SourceMetadataScannerState.BeanCandidate> scannedCandidates,
+      Optional<String> requestedShape) {
     return context.bindingCandidates().stream()
         .filter(row -> scannedCandidates.stream()
             .noneMatch(candidate -> candidateMetadataMatches(scanner, row, candidate)))
-        .filter(row -> metadataCandidateTypeMatches(scanner, injectionFile, requestedType, row))
+        .filter(row -> metadataCandidateTypeMatches(
+            scanner, injectionFile, requestedType, row, requestedShape))
         .filter(row -> metadataCandidateQualifierMatches(requestedQualifiers, row))
         .toList();
   }
@@ -102,10 +104,23 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
-      AnalysisContext.BindingCandidateMetadata row) {
+      AnalysisContext.BindingCandidateMetadata row,
+      Optional<String> requestedShape) {
     Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
+    // Issue #61: the index metadata disjunct — the row's textual erased
+    // raw against the requested type's repair-only erased raw. Generics-
+    // gated (erased shapes cannot compare type arguments) and independent
+    // of the requested.isEmpty() early return below. The row side is the
+    // TEXTUAL arm only: metadata-only rows have no indexed declaration.
+    boolean indexMatch = !hasGenericArguments(requestedType)
+        && canonicalType(eraseGenericArguments(row.candidateType()), injectionFile, scanner)
+            .map(rowRaw -> erasedRequestedRaw(
+                requestedType, injectionFile, scanner, requestedShape)
+                .map(rowRaw::equals)
+                .orElse(false))
+            .orElse(false);
     if (requested.isEmpty()) {
-      return false;
+      return indexMatch;
     }
     if (canonicalType(row.candidateType(), injectionFile, scanner)
         .map(requested.get()::equals)
@@ -114,7 +129,18 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
     }
     return row.contracts().stream()
         .map(contract -> canonicalType(contract, injectionFile, scanner))
-        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()))
+        || indexMatch;
+  }
+
+  /** The requested type's repair-only erased raw resolution (issue #61). */
+  private static Optional<String> erasedRequestedRaw(
+      String requestedType,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      SourceMetadataScanner scanner,
+      Optional<String> requestedShape) {
+    return canonicalType(eraseGenericArguments(requestedType), injectionFile, scanner)
+        .or(() -> requestedShape);
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */

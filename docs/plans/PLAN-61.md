@@ -558,9 +558,21 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
 
 ## 7. Sanctioned test edits (the complete list; none others)
 
-- NONE at plan time. P3 may add enumerated fixture re-derivations —
-  each added edit is recorded HERE with the fixture name and the
-  before/after answer before GREEN proceeds.
+P3 (measured at GREEN, full suite) produced exactly two affected cells,
+both in `JavacSourceSymbolIndexTest` and both DIRECT pins of the old
+empty field `returnType` (the §3.2 extension's before/after):
+
+1. `declarationAnnotationsExposeCanonicalNamesAndValues:254` —
+   `field.returnType()` "" → `java.lang.String` (the fixture field's
+   declared type).
+2. `memberShapesUseCanonicalErasedNames:313-321` — the record component
+   `x` field shape "" → `int`, and the enum constant `RED` shape "" →
+   `demo.Shapes.Color`.
+
+No other golden churned (no injection/proxy/ServiceLoader fixture
+changed flag-on output — the repair-only policy left every
+textually-answered comparison intact, and the corpus's on-demand-import
+injection fixtures already resolved through source-type rungs).
 
 ## 8. Confidence
 

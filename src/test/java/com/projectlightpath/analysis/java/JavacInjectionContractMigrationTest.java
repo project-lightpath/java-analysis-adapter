@@ -70,8 +70,8 @@ class JavacInjectionContractMigrationTest {
           @Autowired public Consumer(List list) { }
         }
         """);
-    AnalysisContext context = springContext(sourceRoot, List.of(row(
-        "listBean", "java.util.List", "demo.Config")));
+    AnalysisContext context = springContext(sourceRoot, List.of(producerRow(
+        "listBean", "java.util.List", "demo.Config", "listBean")));
     System.setProperty(FLAG, "false");
     SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
@@ -322,10 +322,19 @@ class JavacInjectionContractMigrationTest {
     }
   }
 
-  // A8: a multi-type owner file never repairs (the owner is unprovable).
+  // A8: an ambiguous owner never repairs — the same FQN declared in two
+  // selected roots is a duplicate binary name (flagged unusable), so the
+  // unique-owner lookup declines. (A multi-type file whose owner name
+  // resolves uniquely repairs LEGITIMATELY — the lookup's owner guard is
+  // name-scoped, unlike the correlation seam's file-scoped guard; probe
+  // P-RED measured that repair as correct.)
   @Test
-  void multiTypeOwnerFileAbstains() throws IOException {
-    Path sourceRoot = root("a8");
+  void ambiguousOwnerDeclines() throws IOException {
+    Path project = temp.resolve("a8");
+    Path sourceRoot = Files.createDirectories(
+        project.resolve("src/main/java"));
+    Path generatedRoot = Files.createDirectories(
+        project.resolve("generated-src/main/java"));
     write(sourceRoot, "demo/Config.java", """
         package demo;
         import org.springframework.stereotype.Component;
@@ -342,18 +351,51 @@ class JavacInjectionContractMigrationTest {
         @Component public class Consumer {
           @Autowired public Consumer(List list) { }
         }
-        class Helper { }
         """);
-    AnalysisContext context = springContext(sourceRoot);
-    System.setProperty(FLAG, "false");
-    SemanticCallFacts off = analyze(context);
+    write(generatedRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    Path classes = Files.createDirectories(project.resolve("classes"));
+    AnalysisContext context = AnalysisContext.builder()
+        .id("a8")
+        .framework(AnalysisContext.Framework.SPRING_BOOT)
+        .frameworkVersion("2.7.18")
+        .fixtureId("javac-injection-contract-test")
+        .javaRelease(17)
+        .repositoryRoot(project)
+        .applicationClasses(classes)
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot,
+            AnalysisContext.Scope.PRODUCTION, true)
+        .generatedSourceRoot("generated-src/main/java", generatedRoot,
+            AnalysisContext.Scope.PRODUCTION, true, true,
+            "generated-root-fingerprint")
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
     System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.InjectionPoint point = injectionPoint(
+        scanner, "demo.Consumer", "<init>");
+    assertEquals(Optional.empty(),
+        JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
+        "a duplicate binary name is flagged unusable: the unique-owner "
+            + "lookup declines");
     SemanticCallFacts on = analyze(context);
-    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
-        injection(off, "demo.Consumer").certainty());
-    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
-        injection(on, "demo.Consumer").certainty(),
-        "a multi-type owner file abstains: flag-on is byte-identical");
+    assertTrue(injections(on, "demo.Consumer").stream()
+            .allMatch(fact -> fact.certainty()
+                == SemanticCallFacts.Certainty.UNRESOLVED),
+        "the ambiguous owner keeps the textual abstention: " + on);
   }
 
   // A9: an error-typed member (an unresolvable parameter elsewhere in the
@@ -533,26 +575,25 @@ class JavacInjectionContractMigrationTest {
   // ------------------------------------------------------------------
 
   // B1: the contract arm — an implements spelling that is a textual vacuum
-  // (JDK interface through an on-demand import) matches through the
-  // candidate's index supertype shapes.
+  // (a non-generic JDK interface through an on-demand import) matches
+  // through the candidate's index supertype shapes.
   @Test
   void contractSupertypeIndexShapeMatches() throws IOException {
     Path sourceRoot = root("b1");
-    write(sourceRoot, "demo/NameComparator.java", """
+    write(sourceRoot, "demo/RecordBean.java", """
         package demo;
-        import java.util.*;
+        import java.io.*;
         import org.springframework.stereotype.Component;
-        @Component public class NameComparator implements Comparator<String> {
-          public int compare(String a, String b) { return 0; }
+        @Component public class RecordBean implements Serializable {
         }
         """);
     write(sourceRoot, "demo/Consumer.java", """
         package demo;
-        import java.util.Comparator;
+        import java.io.Serializable;
         import org.springframework.beans.factory.annotation.Autowired;
         import org.springframework.stereotype.Component;
         @Component public class Consumer {
-          @Autowired public Consumer(Comparator<String> comparator) { }
+          @Autowired public Consumer(Serializable record) { }
         }
         """);
     AnalysisContext context = springContext(sourceRoot);
@@ -564,7 +605,7 @@ class JavacInjectionContractMigrationTest {
         injection(off, "demo.Consumer").certainty(),
         "flag-off golden: the candidate's implements spelling is a vacuum");
     assertTrue(injection(on, "demo.Consumer").callee()
-            .contains("NameComparator"),
+            .contains("RecordBean"),
         "flag-on: the direct supertype shape matches the requested contract");
   }
 
@@ -1193,6 +1234,15 @@ class JavacInjectionContractMigrationTest {
     return new AnalysisContext.BindingCandidateMetadata(
         id, candidateType, List.of(), List.of(), "bean", declaringType,
         null, null, List.of(), List.of(), true, false, false, null, null);
+  }
+
+  private static AnalysisContext.BindingCandidateMetadata producerRow(
+      String id, String candidateType, String declaringType,
+      String producerMethod) {
+    return new AnalysisContext.BindingCandidateMetadata(
+        id, candidateType, List.of(), List.of(), "producer", declaringType,
+        producerMethod, null, List.of(), List.of(), true, false, false,
+        null, null);
   }
 
   private static void write(Path root, String relative, String source)
