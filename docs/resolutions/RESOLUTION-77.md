@@ -6,7 +6,8 @@ behavior-changing follow-up of the three filed after #62).
 Branch: `issue-77-producer-anchor-normalization` from `origin/main` @
 `fb8a664` (#80 merge).
 Commits: PLAN_77 (+ 4 review-round amendments), RED_77, GREEN_77,
-EVIDENCE_77 (this commit), REVIEW_77_* (implementation review rounds).
+EVIDENCE_77, REVIEW_77_1..n (implementation review rounds, appended
+as they land).
 
 ## What changed
 
@@ -93,7 +94,10 @@ a nested type, the raw anchor resolved the NESTED type, so the
   (on-demand-import spelling); expected-green labeling for the
   controls. Confidence 0.82 → 0.88 (round 5: no new addressable
   findings).
-- **Implementation review**: see REVIEW_77 commits below.
+- **Implementation review**: round 1 (2 findings — the N1 fixture
+  duplication, the plan-review count — both addressed in
+  REVIEW_77_1); round 2 verified both fixes and found 1 NIT (a
+  forward reference in this record, addressed in REVIEW_77_2).
 
 ## Residuals
 
