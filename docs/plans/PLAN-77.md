@@ -151,37 +151,55 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
   `demo.ProducerConfig#build(1)`; the comment explaining the two
   derivations is updated (both seams now normalize; the two key
   families remain distinct because they describe different lookups).
-- New cells (RED_77) pinning the normalized behavior:
-  - N1 (anchor-divergence identity): the C4 fixture shape, asserted
-    on the bean_candidate evidence of a DIFFERENT framework arm
-    (Quarkus `@Produces`) so the identity change is pinned on both
-    frameworks — `javacProducerTypeAbstentionMember` names the
-    top-level owner, the code stays `multi_type_file`, and the
-    producer type keeps its textual spelling (the value-change arm
-    is unconstructible: divergence ⇒ multi-type file ⇒ blocked
-    correlation — see the preflight analysis). Scaffolding
-    (plan-review round 1, finding 3): `JavacAbstentionEvidenceTest`'s
-    `context()` hardcodes SPRING_BOOT, so N1 needs a Quarkus context
-    helper (precedent `DynamicCertaintyGuardTest:264-280`), and the
-    fixture MUST import the CDI `Produces` (e.g.
-    `jakarta.enterprise.inject.Produces`) — `cdiProducerAnnotation`
-    requires either an FQN match or a simple `@Produces` with a CDI
-    import in the file, or the cell silently produces no
-    bean_candidate.
-  - N2 (anchor-stability control): a producer in a file with NO
-    nested types — byte-identical output before/after (golden pin
-    of the producer type and the abstention-free evidence).
-- Flag-off twin for N1: `javac*` evidence absent, textual type.
+- New cells:
+  - N1 (anchor-divergence identity, RED cell): the C4 fixture shape
+    translated to the Quarkus CDI arm — `@ApplicationScoped` producer
+    class declaring `class Helper { }` before the `@Produces` method
+    (jakarta CDI import — `cdiProducerAnnotation` requires the FQN or
+    a simple `@Produces` with a CDI import), a `Thing` type file, and
+    an `@Inject` consumer so the `dependency_injection` fact with the
+    `bean_candidate` evidence exists (binding shape precedent:
+    `JavaAnalysisAdapterTest:2907-2943`). The Quarkus context helper
+    must carry the `quarkus-cdi-annotations` frameworkMetadata if the
+    binding needs it — verify at RED, don't pre-commit (review round
+    2, finding 1; the DynamicCertaintyGuardTest precedent lacks
+    frameworkMetadata and serves dynamic cells, not CDI binding).
+    Asserts: `javacProducerTypeAbstentionMember` names the top-level
+    owner, the code stays `multi_type_file`, and the producer type
+    keeps its textual spelling (the value-change arm is
+    unconstructible: divergence ⇒ multi-type file ⇒ blocked
+    correlation — see the preflight analysis). Fails red on the
+    pre-change tree (the raw anchor resolves the nested owner).
+  - N1 flag-off twin (expected-green control on BOTH trees, committed
+    with RED_77 and documented as such): `System.setProperty(FLAG,
+    "false")` on the N1 fixture, asserting
+    `assertNoAbstentionAttributes` (the D2/D4 sweep over every
+    `javac*Abstention*` key, `JavacAbstentionEvidenceTest:694-700`)
+    on the binding fact plus the textual `candidateType`
+    (review round 2, finding 4 — the sweep, not the two producer
+    keys).
+  - N2 (producer-arm clean-path control, expected-green on BOTH
+    trees, committed with RED_77 and documented as such — the D3
+    analog for the producer arm; review round 2, finding 3): a
+    single-type-file producer whose correlation succeeds, asserting
+    the `javac*Abstention*` keys are ABSENT and `candidateType` is
+    the CANONICAL correlated return type (the visible half of the
+    seam's purpose — currently pinned only in the descriptor tests,
+    not on `candidateType` in this test file).
 
 ## TDD items
 
 1. RED_77: N1 (fails on the pre-change tree: the raw anchor resolves
    the nested owner, so the identity names
-   `demo.<Owner>$<Nested>#<method>`). C4 is an expected-red
+   `demo.<Owner>$<Nested>#<method>`). The N1 flag-off twin and N2 are
+   expected-green controls on BOTH trees, committed with RED_77 and
+   documented as such in the commit message (the PLAN-76 E5
+   characterization-labeling precedent). C4 is an expected-red
    characterization edit sanctioned here (it fails under the change
    until updated to observed output).
-2. GREEN_77: the one-line normalization + comment + the C4/golden
-   updates captured from observed output.
+2. GREEN_77: the one-line normalization + comment updates (seam
+   comment, `JavacAbstentionEvidence.producerTypeAttributes` javadoc)
+   + the C4/golden updates captured from observed output.
 3. EVIDENCE_77: gates + mutation checks + RESOLUTION-77.md.
 
 ## Gates (after every item)
@@ -201,3 +219,11 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
 2. Break the identity rendering (nested-owner spelling) ⇒ N1's
    identity assertion fails in the OTHER direction (guards the
    assertion against vacuous pass).
+3. `ownerTypeFor(file, method)` → `file.typeName()`: SURVIVES N1 and
+   C4 — both fixtures declare the producer in the top-level type,
+   where the two derivations agree; no constructible fixture in the
+   suite distinguishes them for a producer (a producer inside the
+   nested type itself is filtered out by the single-type guard
+   differently, but its file is multi-type either way). Documented as
+   an equivalent-on-constructible-fixtures mutant (review round 2,
+   finding 5, cheapest honest option).
