@@ -21,15 +21,7 @@ adapter-test:
 	JAVA_TOOL_OPTIONS="$${JAVA_TOOL_OPTIONS:-} -Djunit.jupiter.execution.parallel.config.fixed.parallelism=$(ADAPTER_TEST_PARALLELISM)" \
 	"$${MAVEN_BIN}" -B -ntp test -f pom.xml -Dtest.heap=-Xmx$$(($(ADAPTER_TEST_PARALLELISM) * 1536))m
 	JAVA_BIN="$${JAVA_BIN:-$${JAVA:-$${JAVA_HOME:+$${JAVA_HOME}/bin/}java}}" && \
-<<<<<<< HEAD
-<<<<<<< HEAD
-	"$${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 757
-=======
-	"$${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 781
->>>>>>> 084d2d0 (GREEN_61: JavacInjectionTypeShapes seam, index field-type and supertype shapes, repair-only ladders)
-=======
-	"$${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 782
->>>>>>> 4e76808 (GREEN_61 addendum: C5-positive pin (metadata-only row counted through the shape), floor 782)
+	"${JAVA_BIN}" -cp target/classes com.projectlightpath.analysis.java.SurefireTestCounter 786
 e2e-test:
 	MAVEN_BIN="$$(bash spike/scripts/bootstrap-maven.sh)" && "$${MAVEN_BIN}" -B -ntp -Dtest=ServiceLoaderEndToEndTest test -f pom.xml
 

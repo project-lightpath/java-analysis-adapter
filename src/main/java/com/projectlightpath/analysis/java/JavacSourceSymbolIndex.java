@@ -818,12 +818,13 @@ final class JavacSourceSymbolIndex {
      * OMITTED (an unresolvable supertype chain must not publish a wrong
      * canonical spelling; the textual contract ladder still covers the
      * declared spelling) — omission is the conservative direction for an
-     * additional match source. The implicit supertypes every declaration
-     * carries ({@code java.lang.Object}, and {@code
-     * java.lang.annotation.Annotation} on annotation types) are omitted by
-     * CANONICAL comparison of the erased mirror — a type-annotated
-     * superclass ({@code extends @Marker Object}) must not slip past a
-     * raw toString check (review round 1, finding 3).
+     * additional match source. The omission set is UNCONDITIONAL — an
+     * explicit `implements Annotation` is dropped alongside the implicit
+     * one (conservative: omission can only lose matches, never fabricate;
+     * the textual contract ladder still covers the declared spelling) —
+     * and the comparison is on the erased mirror's CANONICAL rendering, so
+     * a type-annotated superclass ({@code extends @Marker Object}) cannot
+     * slip past a raw toString check (review rounds 1 and 2).
      */
     private List<String> supertypes(TypeElement element) {
       List<String> result = new ArrayList<>();

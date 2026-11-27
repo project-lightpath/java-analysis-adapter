@@ -1236,6 +1236,58 @@ class JavacInjectionContractMigrationTest {
             + "without the C5 disjunct this would be DEFINITE");
   }
 
+  // B6 (review round 2, finding 1): the implicit-supertype omission is
+  // pinned — a type-annotated `extends @Marker Object` must NOT publish
+  // java.lang.Object as a direct supertype (the canonical comparison, not
+  // a raw toString check, decides), and an annotation type's implicit
+  // java.lang.annotation.Annotation is omitted (explicit-or-implicit,
+  // conservative — the omission direction can only lose matches, never
+  // fabricate one).
+  @Test
+  void implicitSupertypesAreOmitted() throws IOException {
+    Path sourceRoot = root("b6");
+    write(sourceRoot, "demo/Marker.java", """
+        package demo;
+        import java.lang.annotation.ElementType;
+        import java.lang.annotation.Target;
+        @Target(ElementType.TYPE_USE) public @interface Marker { }
+        """);
+    write(sourceRoot, "demo/ObjectBean.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class ObjectBean extends @Marker Object { }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Object any) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.BeanCandidate candidate = scanner
+        .beanCandidates(AnalysisContext.Framework.SPRING_BOOT).stream()
+        .filter(item -> item.candidateType().equals("demo.ObjectBean"))
+        .findFirst().orElseThrow();
+    assertTrue(JavacInjectionTypeShapes.of(scanner)
+            .contractShapes(candidate).orElse(List.of()).isEmpty(),
+        "an @Marker-annotated Object superclass is omitted from the "
+            + "direct supertypes");
+    JavacSourceSymbolIndex.of(context).ifPresent(index ->
+        assertTrue(index.type("demo.Marker").get(0).supertypes().stream()
+                .noneMatch(name -> name.contains("Annotation")),
+            "an annotation type's implicit Annotation interface is omitted"));
+    // End to end: without the omission the Object supertype would match
+    // an Object-requested injection through the C4 disjunct.
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(on, "demo.Consumer").certainty(),
+        "java.lang.Object must not become a match source");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
