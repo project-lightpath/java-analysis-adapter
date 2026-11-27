@@ -53,6 +53,12 @@ Consumers (weakness-disposition audit — the COMPLETE set, rg-verified):
 | C5 | `metadataCandidateTypeMatches` | MetadataState:101 (metadataOnlyCandidates:95) | requested, row.candidateType, row contracts |
 | C6 | `metadataTypeMatches` | TypeSupport:32 | simple-name fallback, `declaredTypeNames` uniqueness, case-INSENSITIVE |
 
+C6's complete consumer set (weakness-disposition enumeration):
+`injectionOwnerMatches` (MetadataMatching:63-68, the resolved-binding owner
+filter), the `injectionTypesMatch` fallback (TypeSupport:137), and
+`candidateMetadataMatches` (CandidateMetadata:51/55 — candidateType and
+declaringType arms).
+
 Call paths into the surface (BoundedFrameworkModel.InjectionScanning):
 `matches` at :158 and :255, `typeMatchCertain` at :316 and :328
 (certainty gates for DEFINITE), `metadataOnlyCandidates` at :168,
@@ -115,7 +121,23 @@ NOT change flag-on (they are display/ID inputs, not matching inputs).
   (scratch checkout, not committed): enumerate every existing golden
   whose flag-on output changes. Each changed fixture is either (a)
   re-derived in the sanctioned-edits list (§7) or (b) the arm is
-  narrowed to keep it stable — decided per fixture, documented.
+  narrowed to keep it stable — decided per fixture, documented. The
+  sweep MUST include a reflection field-target golden
+  (`getField`-style site) to prove the kind filter that keeps
+  `JavacReflectionTargets.selectMember` (:221-226, reads
+  `returnBinaryType()` of its matched member) method/constructor-scoped
+  when field members gain type shapes.
+- P4: A5 reachability — run the textual extraction
+  (`scanner.parameters` → `FrameworkInjectionScanning.injectionParameters`)
+  on the exact TYPE_USE-annotated fixture; if no `Parameter` is produced,
+  the site is never created and the cell is replaced with the strongest
+  REACHABLE corruption (RESOLUTION-23's annotated-return lesson).
+- P5: varargs boundary probe — the index renders a varargs parameter as
+  an array (`MemberTypeShapes.canonicalType` ARRAY case,
+  JavacSourceSymbolIndex:961-964) while the textual `parameter.type()`
+  may retain `...` and `canonicalType` strips only `[]` (TypeParsing:41).
+  Probe `String... args` constructor and method injection empirically;
+  never verify by inspection (AGENTS boundary rule).
 
 ## 3. Design
 
@@ -136,9 +158,16 @@ every shape is javac's own resolution of an ACTUAL indexed declaration.
     `member.parameterTypes().get(parameterIndex)`.
   - field: same lookup with kind `field`, arity −1 → the member's FIELD
     TYPE SHAPE (§3.2 extension).
-  - constructor sites carry the extractor's `countsMatch` verdict
-    (§3.3) — a phantom-site file declines (empty), the same guard the
-    qualifier repair uses.
+  - constructor sites re-apply the extractor's phantom-site guard: the
+    seam recomputes the textual constructor site count through a
+    package-private helper extracted from
+    `FrameworkInjectionScanning.constructorInjectionPoints` (the SAME
+    regex, one implementation — no duplication) and compares it with
+    `javac.memberCount(owner, simpleTypeName, "constructor")`, the
+    identical `countsMatch` rule the qualifier repair uses (:80). A
+    mismatch declines the whole file's constructor shapes. NO
+    `InjectionPoint` record change is needed (review round 1, finding 8);
+    `equals`/`hashCode` on the record are untouched.
   - Any decline (ambiguous overload, error-typed member, multi-type
     owner, absent member, flag off, failed build) → empty.
 - **`candidateShape(candidate)`** — the canonical ERASED identity of the
@@ -159,11 +188,17 @@ every shape is javac's own resolution of an ACTUAL indexed declaration.
 
 1. **Field type shapes**: FIELD and ENUM_CONSTANT members record their
    declared type in `MemberTypes.returnType` / `returnBinaryType`
-   (currently `""`). Consumer audit (rg-verified): every current
-   `MemberInfo.returnType()` reader is method/constructor-scoped
-   (FrameworkBeanScanning:161 producer methods; JavacShapeDescriptors
-   method descriptors; reflection ladder). `memberHasErrorType` already
-   flags error-typed fields via the declared mirror.
+   (currently `""`). COMPLETE reader audit (weakness-disposition rule):
+   every current `MemberInfo.returnType()`/`returnBinaryType()` reader
+   is method/constructor-scoped — `FrameworkBeanScanning:161` (producer
+   methods only), `JavacShapeDescriptors` (method descriptors),
+   `JavacReflectionTargets.selectMember:221-226` (reads
+   `returnBinaryType()`; safe ONLY because its candidate streams are
+   kind-filtered to method/constructor at :136-144) — and P3's churn
+   sweep includes a reflection FIELD-target golden (`getField` site) to
+   prove that filter holds with field shapes populated.
+   `memberHasErrorType` already flags error-typed fields via the
+   declared mirror.
 2. **`TypeInfo.supertypes`**: `List<String>` canonical ERASED spellings
    of the DIRECT superclass (omitting `java.lang.Object`) and directly
    implemented interfaces. An ERROR-kind supertype entry is OMITTED (the
@@ -173,45 +208,64 @@ every shape is javac's own resolution of an ACTUAL indexed declaration.
 Both extensions change no existing reader's answer (audit at RED with
 the full suite; see P3).
 
-### 3.3 Threading (extraction-time site provenance)
+### 3.3 Threading
 
-`InjectionPoint` gains one additive component `boolean sitesMatchIndex`
-(compact default `true` for existing constructors): constructor sites
-carry the extractor's `countsMatch`; method/field sites carry `true`.
 `InjectionScanning.injectionFactsForParameter` computes
 `Optional<String> requestedShape` ONCE per parameter via the seam and
 passes it down. Signature changes are confined to the
 BoundedFrameworkModel family (`matches`, `typeMatchCertain`,
 `contractMatches`, `metadataOnlyCandidates`, `matchingBindings` →
 `injectionTypesMatch`); the textual parameters remain so the ladders
-below stay expressible.
+below stay expressible. No state-record changes (§3.1).
+
+**Abstention evidence decision** (review round 1, finding 9): the seam
+returns bare `Optional`s with NO evidence channel — a decline IS the
+textual fallback, and the issue requires no new visibility. Pinned by
+C3 (`scan.diagnostics()` empty, DEFINITE promotion untouched).
 
 ### 3.4 Comparison wiring (the load-bearing ladders)
 
-Substitution rule: an index shape may REPLACE a textual resolution only
-where the comparison is ERASED-raw (both sides erased); wherever
-GENERICS are retained, the index arm is an ADDITIONAL disjunct (the
-index is erased — substituting would lose true generic matches, the
-#23 round-2 no-true-answer-lost rule).
+Two rules govern every arm (review round 1, findings 1–3):
 
-- **C1 `directTypeCompatibility`**: `requestedRaw := requestedShape
-  .or(textual erased raw)`; `candidateRaw := candidateShape.or(textual
-  erased raw)`. The generic tail (producer signatures) stays textual.
-- **C2 `directTypesHaveDifferentRawTypes`**: the same two `or`-arms.
-- **C3 `injectionTypesMatch`**: in the ERASED branch,
-  `sourceRaw := requestedShape.or(textual erased raw)`; the metadata
-  side and the bothGeneric branch stay textual (generic binding rows are
-  a documented residual).
+- **Repair-only substitution**: an index shape fills a textual VACUUM —
+  `erasedRaw(spelling, file, shape) := canonicalType(eraseGeneric
+  Arguments(spelling), file, scanner).or(shape)`. When the textual
+  resolution SUCCEEDS, the textual answer wins and the shape is unused.
+  Consequences, stated explicitly: (a) no comparison that the textual
+  ladder answered can flip, in either direction — zero golden-churn
+  risk from substitution; (b) the both-present-divergent case keeps the
+  pre-existing textual answer (e.g. a same-compilation-unit type that
+  TextLayer14's import-first order misses — a documented residual, not
+  a regression); (c) mixed arms are impossible on the substituted
+  comparisons: a side with a shape either had no textual answer (the
+  shape fills it) or the shape is not consulted.
+- **Generics gate**: wherever the textual ladder treats generic
+  arguments as load-bearing (`contractMatchesType` TypeMatching:107,
+  `metadataCandidateTypeMatches` MetadataState:106-117), the index arm
+  is admitted ONLY when `!hasGenericArguments(requestedType)` — the
+  index is erased, and an erased comparison against a generic-retaining
+  textual semantics fabricates matches (and, through `typeMatchCertain`
+  TypeMatching:65-67, fabricated DEFINITE).
+
+- **C1 `directTypeCompatibility`**: `requestedRaw` and `candidateRaw`
+  use the repair-only helper (requested shape arm; candidate shape
+  arm). The generic tail (producer signatures) stays textual.
+- **C2 `directTypesHaveDifferentRawTypes`**: the same two helper arms.
+- **C3 `injectionTypesMatch`**: in the ERASED branch, `sourceRaw` uses
+  the repair-only helper (requested shape arm); the metadata side and
+  the bothGeneric branch stay textual (generic binding rows are a
+  documented residual).
 - **C4 `contractMatches`**: the textual ladder runs unchanged; ADD one
-  disjunct — `requestedShape.isPresent() && contractShapes(candidate)
-  .contains(requestedShape)` (erased-vs-erased, javac-resolved both
-  sides). Metadata-row contracts stay textual (external spellings,
-  residual).
+  disjunct — `!hasGenericArguments(requestedType) && requestedRaw.is
+  Present() && contractShapes(candidate).contains(requestedRaw.get())`
+  where `requestedRaw` is the repair-only helper result (erased). The
+  contract side's index shapes answer exactly the case the textual
+  contract resolution cannot (an unresolvable implements spelling);
+  Metadata-row contracts stay textual (external spellings, residual).
 - **C5 `metadataCandidateTypeMatches`**: the textual ladder runs
-  unchanged; ADD one disjunct — `requestedShape.isPresent() &&
-  canonicalType(eraseGenericArguments(row.candidateType())).equals(
-  requestedShape)` (the metadata spelling resolved textually as today,
-  compared against the javac-resolved requested shape).
+  unchanged; ADD one disjunct — `!hasGenericArguments(requestedType) &&
+  rowErasedRaw.isPresent() && rowErasedRaw.equals(requestedRaw.get())`
+  (both repair-only helper results, erased).
 - **C6 `metadataTypeMatches`**: UNCHANGED, dispositioned — its
   case-insensitive unique-simple-name arm is an over-approximation;
   tightening could lose true answers, and no index arm adds a match the
@@ -224,12 +278,15 @@ index is erased — substituting would lose true generic matches, the
 
 Every index shape is javac's resolution of an actual indexed declaration
 (the injection's own member parameter, the candidate's own type, the
-candidate's own direct supertypes). Wrong-attribution guards: unique
-usable owner, unique member in the name+kind+arity group, the extractor's
-phantom-constructor count guard, the producer's own-parameter-text
-overload identification, unique named-type filter for candidates. A
-decline leaves the exact pre-change textual behavior (flag-off
-equivalence by construction; the seam is empty flag-off).
+candidate's own direct supertypes), and every shape participates only
+as a repair of a textual VACUUM or as a generics-gated additional
+disjunct (§3.4) — a comparison the textual ladder answered is never
+flipped. Wrong-attribution guards: unique usable owner, unique member
+in the name+kind+arity group, the extractor's phantom-constructor count
+guard (recomputed through the same implementation), the producer's
+own-parameter-text overload identification, unique named-type filter
+for candidates. A decline leaves the exact pre-change textual behavior
+(flag-off equivalence by construction; the seam is empty flag-off).
 
 ## 4. Test matrix — `JavacInjectionContractMigrationTest` (NEW class)
 
@@ -246,8 +303,8 @@ identity strings are involved). Cells:
   - A4 import-style independence: two injection files, one explicit
     import, one on-demand import of the same source type — ONE
     identity; both match the same candidate flag-on.
-  - A5 annotation-corrupted parameter spelling (TYPE_USE `@Ann` the
-    textual stripper cannot consume) — flag-on shape repairs the match.
+  - A5 annotation-corrupted parameter spelling — REACHABILITY probed
+    first (P4); the cell pins the strongest reachable corruption.
   - A6 nested-type identity: candidate nested `Outer.Inner` — the
     candidate arm canonicalizes (P1 decides the exact cell form).
   - A7 same-arity overload ambiguity → seam abstains → textual result
@@ -257,12 +314,25 @@ identity strings are involved). Cells:
     → abstention cell.
   - A10 phantom-constructor guard: void method spelled like the class →
     the whole file's constructor shape arm declines.
+  - A11 varargs injection (`String... args`, constructor and method) —
+    pinned from the P5 probe, never by inspection.
+  - A12 type-parameter parameter (RES-23 CR-1/CR-9b class):
+    method-scoped `<T extends Number> void inject(T t)` and an
+    enclosing-class-scoped type variable — flag-on erased-bound shape
+    vs flag-off textual answer (the `T` spelling textually unresolvable
+    or import-resolved).
 - **B. Contract shapes**
   - B1 direct supertype match through index shapes where the implements
     spelling is unresolvable textually (on-demand import).
   - B2 transitive contract NOT matched (parity with the textual
     declared-contracts semantics — no new transitive matching).
   - B3 error supertype omitted; textual contract ladder still answers.
+  - B4 generics gate (C4): requested `Repo<User>` vs candidate
+    `implements Repo<Order>` — same ERASED contract, different type
+    argument → NO match flag-on (the disjunct is gated; red under a
+    gate-removal mutation).
+  - B5 generics gate (C5): requested `Repo<User>` vs metadata-only row
+    candidateType `Repo` → NO match flag-on.
 - **C. Certainty / blast radius**
   - C1 flag-on DEFINITE promotion through `typeMatchCertain` on an
     index-proven match (the #61 acceptance cell).
@@ -270,21 +340,51 @@ identity strings are involved). Cells:
     the JDK simple name) where javac resolves differently from the
     textual guess — the index arm must not manufacture a match
     (`reflectionParameterMatchingDoesNotMatchShadowedSimpleNames`
-    pattern).
+    pattern), AND the gated C4 disjunct must not match a same-erased
+    contract against the shadowed simple name.
   - C3 an abstaining fixture AND a ServiceLoader DEFINITE site in one
     scan: promotion untouched, `scan.diagnostics()` empty (#62 D1
-    pattern) — the abstention channel, if any is wired, never blocks.
+    pattern) — the seam carries no evidence channel, so diagnostics
+    stay empty by construction.
   - C4 full-suite zero-churn measurement (P3 receipt in EVIDENCE):
     every flag-on golden change is enumerated and sanctioned or the arm
     narrowed.
-- **D. JLS 6.5/6.4.1 name-resolution matrix (AGENTS rule)** — for the
-  parameter-type position, pairwise cells where the textual ladder and
-  javac can diverge: single-type import × same-package type;
-  on-demand × single-type import; java.lang × on-demand;
-  same-compilation-unit nested type × import. Each cell: flag-on
-  answer is the JLS-correct one; flag-off twin pins the textual answer.
+- **D. JLS 6.5/6.4.1 name-resolution matrix (AGENTS rule)** — the full
+  precedence ladder for the type-position scope, derived from JLS
+  6.5.5/6.4.1, weakest to strongest: on-demand import < same-package
+  type in another unit < single-type import < same-compilation-unit
+  type (and inherited member types). Cells, pairwise where the textual
+  ladder and javac can diverge (repair-only policy: divergence matters
+  only where the textual resolution FAILS, so each cell constructs the
+  weaker-scope spelling as the only candidate resolution):
+  D1 on-demand × same-package; D2 on-demand × single-type import;
+  D3 java.lang × on-demand; D4 java.lang × same-package;
+  D5 java.lang × single-type import; D6 same-CU type × import (the
+  TextLayer14 gap — pin the PRE-EXISTING textual answer flag-on as a
+  characterization of the residual); D7 single-type import of a
+  same-package type (legal Java; must resolve — parity cell).
+  Each cell: flag-on answer where the textual resolver fails is the
+  JLS-correct javac shape; flag-off twin pins the textual answer.
 
-Cell count target: 18–22; floor 754 → 754+N (re-derived at GREEN).
+Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
+
+## 4a. Plan-review record
+
+- **Round 1** (Engram-grounded adversarial subagent, full plan): 12
+  findings — 2 HIGH blocking (the C4/C5 disjuncts were generics-blind:
+  erased index comparisons against generic-retaining textual semantics
+  fabricate matches and, via `typeMatchCertain`, fabricated DEFINITE),
+  1 HIGH blocking (no policy for both-present-divergent and mixed-arm
+  substitution), 4 MEDIUM, 2 LOW, 1 NIT. All incorporated in this
+  revision: the repair-only substitution policy (index shapes fill
+  textual vacuums only — zero flip risk, the same-CU divergence becomes
+  a characterized residual), the `!hasGenericArguments` gates on C4/C5
+  with B4/B5 divergence cells, the `JavacReflectionTargets.selectMember`
+  kind-filter audit + getField churn golden, P4 (A5 reachability) and
+  P5 (varargs) probes, A11/A12 cells, the full D1–D7 JLS ladder, the
+  no-InjectionPoint-change threading (guard recomputed through one
+  shared implementation), the bare-Optional no-evidence-channel
+  decision, and the C6 consumer enumeration.
 
 ## 5. TDD sequence
 
@@ -325,9 +425,9 @@ Cell count target: 18–22; floor 754 → 754+N (re-derived at GREEN).
 
 ## 8. Confidence
 
-Pre-review confidence: **0.72** — the consumer inventory and seam
-reuse are verified against source, but three load-bearing facts are
-unmeasured at plan time (P1 nested spelling, P2 on-demand failure at
-HEAD, P3 churn), and the erased-vs-generics ladder composition is the
-kind of subtlety that review rounds have historically corrected (#23
-rounds 2–3).
+Post-round-1 confidence: **0.82** — the blocking fabrication risks are
+designed out (repair-only substitution + generics gates), the consumer
+inventory is verified complete by two independent passes, and the
+architecture matches the #23/#62/#76 precedent contracts. Remaining
+open facts are confined to the P1–P5 probes, each with a decision rule
+that cannot invalidate the ladder design.
