@@ -157,7 +157,8 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
     class declaring `class Helper { }` before the `@Produces` method
     (jakarta CDI import — `cdiProducerAnnotation` requires the FQN or
     a simple `@Produces` with a CDI import), a `Thing` type file, and
-    an `@Inject` consumer so the `dependency_injection` fact with the
+    an `@Inject` consumer (annotated `@ApplicationScoped`, per the
+    precedent) so the `dependency_injection` fact with the
     `bean_candidate` evidence exists (binding shape precedent:
     `JavaAnalysisAdapterTest:2907-2943`). The Quarkus context helper
     must carry the `quarkus-cdi-annotations` frameworkMetadata if the
@@ -183,9 +184,15 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
     analog for the producer arm; review round 2, finding 3): a
     single-type-file producer whose correlation succeeds, asserting
     the `javac*Abstention*` keys are ABSENT and `candidateType` is
-    the CANONICAL correlated return type (the visible half of the
-    seam's purpose — currently pinned only in the descriptor tests,
-    not on `candidateType` in this test file).
+    the CANONICAL correlated return type. Vacuous-pass guard (review
+    round 3, finding 1): the fixture's return spelling must make the
+    textual fallback demonstrably DIFFER — an on-demand-import
+    spelling (`import java.util.*;` and return `Optional`), where
+    `resolveReferenceType` returns empty (probe-verified,
+    RESOLUTION-23:180-182) so the textual `candidateType` would be
+    blank while the canonical is `java.util.Optional` — so the
+    assertion fails if the correlation silently fails or the owner
+    mis-resolves. Mutation check 4 pins it.
 
 ## TDD items
 
@@ -221,9 +228,16 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
    assertion against vacuous pass).
 3. `ownerTypeFor(file, method)` → `file.typeName()`: SURVIVES N1 and
    C4 — both fixtures declare the producer in the top-level type,
-   where the two derivations agree; no constructible fixture in the
-   suite distinguishes them for a producer (a producer inside the
-   nested type itself is filtered out by the single-type guard
-   differently, but its file is multi-type either way). Documented as
-   an equivalent-on-constructible-fixtures mutant (review round 2,
-   finding 5, cheapest honest option).
+   where the two derivations agree. Equivalence ground (review round
+   3, finding 2, reworded): the mutant is killed by any fixture
+   declaring a producer INSIDE a nested type (the owner reaches the
+   abstention member identity — that is exactly how C4 renders
+   `$Helper#build(1)` — so `ownerTypeFor` names the nested owner
+   while `typeName()` names the top level); no such fixture exists
+   in the suite today. Documented as a residual: the mutant is
+   equivalent on the current fixture set and killed by any future
+   nested-producer fixture.
+4. Drop the `correlation.memberOptional()` mapping (producerType
+   keeps the textual value) ⇒ N2's `candidateType` assertion fails
+   (`java.util.Optional` expected, blank observed) — guards N2
+   against vacuous pass (review round 3, finding 1).
