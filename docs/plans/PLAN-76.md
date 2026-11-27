@@ -31,7 +31,13 @@ Branch: `issue-76-member-level-diagnostics` from `origin/main` @
   - Real members carry exact spans (`broken` lines 3..3, `probe`
     6..6, `inner` 8..8), and the fixture's
     `compiler.err.doesnt.exist` error (line 3) falls INSIDE `broken`'s
-    span — the member-level join captures it.
+    span — the member-level join captures it. The implicit
+    constructor carried a VALID start (the class declaration line,
+    start=21 → line 2) with end=-1; synthetic members had null trees.
+    A `start == -1` position was NOT observed in the spike — the
+    unknown-position rule below treats ANY non-positive line as
+    unknown (defensive for the unobserved case, per AGENTS boundary
+    discipline).
   - Nested TYPE elements also appear in `getEnclosedElements` but are
     excluded by `isMember` (METHOD/CONSTRUCTOR/FIELD/ENUM_CONSTANT
     only) — type positions are irrelevant to `MemberInfo`.
@@ -97,8 +103,14 @@ List<String> errorCodesForMember(Path file, MemberInfo member)
 
 - Joins `errorLinesByFile` by the member's file, keeping the codes of
   rows whose line lies within `[startLine, endLine]` inclusive,
-  deduped in recording order.
-- Unknown position (`member.position() == null`) → the file-level set
+  deduped by code at JOIN time (the record-time map keeps EVERY
+  `(line, code)` row — the same code on multiple lines is one row
+  each; `errorCodesByFile`'s record-time code dedup stays as is for
+  the file-level API). Line numbers come from
+  `CompilationUnitTree.getLineMap()` at record time.
+- Unknown position — `member.position() == null` OR ANY non-positive
+  line (`startLine < 1`; defensively covers an unobserved
+  `start == -1`, plan-review round 1, finding 2) → the file-level set
   (`errorCodesFor(file)`): the conservative #62 behavior (a synthetic
   member cannot be narrowed; dropping codes would under-report).
 - Empty result when the file recorded no errors — same as today.
@@ -113,11 +125,18 @@ List<String> errorCodesForMember(Path file, MemberInfo member)
    found member is specific; same switch with the unique owner
    entry's file.
 3. **`JavacMemberCorrelation`**:
-   - `error_type_member`: the group's error-typed members are joined
-     by their owning files — the group construction pairs each member
-     with its declaring `TypeInfo` entry, and the abstention carries
-     the union of the error-typed members' member-level codes
-     (deduped, recording order).
+   - `error_type_member`: the current group construction
+     (`index.members(ownerType, indexName)`) returns bare `MemberInfo`
+     with NO owner file (plan-review round 1, finding 3) — the seam
+     changes to iterate `index.type(ownerType)` entries directly and
+     build `(file, member)` pairs, preserving the existing
+     kind/arity/name filters. The abstention carries the union of the
+     error-typed members' member-level codes (deduped, recording
+     order) — computed ONLY when the owner resolves to exactly one
+     `type(ownerType)` entry; with multiple same-name entries the
+     union stays `List.of()` (the #62 unique-owner guard and its
+     rationale — "the ambiguity is already the decline's story" — are
+     preserved verbatim; plan-review round 1, finding 4).
    - `member_absent`: NO member exists, so there is no span — the
      join stays FILE-level (unchanged #62 behavior, documented: a
      missing member's cause is often an error elsewhere in the file,
@@ -135,15 +154,28 @@ List<String> errorCodesForMember(Path file, MemberInfo member)
 ## Test matrix (append-only cells in `JavacAbstentionEvidenceTest`)
 
 - E1 **precision (the issue's core)**: one single-type file with TWO
-  error-typed members carrying DIFFERENT javac codes (e.g. two missing
-  package prefixes); each member's abstention carries ONLY its own
-  code (pre-change both abstentions carry both codes).
-- E2 **body-error attribution**: an error INSIDE a method body (an
-  unreachable/missing statement type) is attributed to that method's
-  span, not the file.
-- E3 **implicit-constructor point span**: an error on the implicit
-  constructor's declaration line is attributed (end=-1 handled as a
-  point span).
+  error-typed members carrying DISTINCT javac codes — one member with
+  a missing-PACKAGE return type (`compiler.err.doesnt.exist`), one
+  with an unresolvable SIMPLE-NAME parameter type in a resolvable
+  package (`compiler.err.cannot.find.symbol`) — two missing package
+  prefixes would yield the SAME code and dedupe, so the codes must
+  differ by KIND (plan-review round 1, finding 1). Each member's
+  abstention carries ONLY its own code (pre-change both abstentions
+  carry both codes).
+- E2 **body-error exclusion (plan-review round 1, finding 6)**:
+  member A error-typed at its signature; member B carries an error
+  INSIDE its body (e.g. an unreachable statement) without being
+  error-typed — A's abstention carries ONLY A's code, where the
+  file-level join carried both.
+- E3 **implicit-constructor point span**: DEMOTED to a probe-receipt /
+  code-inspection pin decided at RED (plan-review round 1, finding 5)
+  — an implicit constructor is never the abstaining member in any
+  consumer (correlation abstentions reference textual declarations,
+  which implicit constructors lack; mirror lookups target annotated
+  members), so the `end == -1` point-span rule is not observable
+  end-to-end. The rule stays in the implementation (the spike
+  receipt pins it) with a unit-level characterization if RED finds a
+  constructible path.
 - E4 **synthetic-member fallback**: unknown position falls back to the
   file-level set (characterized via an enum whose synthetic member is
   the abstaining one, or — if not constructible end-to-end — via the
@@ -187,9 +219,39 @@ shifts, enumerated at RED with observed values.
   member span) are visible only through the `member_absent` file-level
   join and the index diagnostics surface, not through member-level
   abstentions — the honest bound of a member-scoped join.
+- Nested-class attribution asymmetry (plan-review round 1, finding 7):
+  errors inside a NESTED class's members fall in no outer-member span
+  (dropped from member-level joins; the nested type is its own
+  `TypeInfo`), while anonymous-class bodies inside a method DO fall
+  inside the enclosing method's span (attributed to that method) —
+  documented as the honest bound.
 - The deprecated-for-removal `SourcePositions` accessors are the only
   portable position API at `--release 17`; revisit when the repo's
   release floor moves.
+- Parallel work (plan-review round 1, finding 8): #78 runs
+  concurrently on the scanner seams (disjoint sources; the shared
+  `JavacAbstentionEvidenceTest` gets append-only cells on both
+  branches); whichever of the two PRs merges SECOND must re-raise the
+  `adapter-test` floor from the first one's count.
+
+## Plan review record
+
+Round 1 (Engram-grounded adversarial subagent): 9 addressable findings
+(2 HIGH, 3 MEDIUM, 2 LOW, 2 NIT), all incorporated: E1's fixture
+re-specified for DISTINCT code kinds (two missing packages dedupe to
+one code — finding 1, HIGH); the unknown-position rule extended to any
+non-positive line, defensively covering the unobserved `start == -1`
+(finding 2, HIGH); the `error_type_member` group construction named as
+a seam change (iterate `type(ownerType)` entries for `(file, member)`
+pairs — finding 3); the unique-owner guard preserved verbatim for the
+union (finding 4); E3 demoted to a probe-receipt pin (finding 5); E2
+re-specified as the exclusion form (finding 6); the nested-class
+attribution asymmetry added to residuals (finding 7); the #78
+parallel-work floor note (finding 8); the `errorLinesByFile` row
+semantics and LineMap specified (finding 9). Verified clean: the
+single `typeInfo` caller, positions surviving `flaggedCopy`, no direct
+test constructions of `MemberInfo`.
+Confidence score after round 1: **0.87**.
 
 Confidence score (pre-plan-review): **0.82** — the design is grounded
 in a position spike on the exact boundary classes (null trees,
