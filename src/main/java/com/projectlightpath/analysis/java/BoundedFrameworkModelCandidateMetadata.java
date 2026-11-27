@@ -82,7 +82,7 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
     if (row.producerSignature() == null || row.producerSignature().isBlank()) {
       return producerOverloadCount(candidate) == 1;
     }
-    return producerDescriptor(scanner, candidate)
+    return producerDescriptor(scanner, candidate).descriptor()
         .map(row.producerSignature()::equals)
         .orElse(false);
   }
@@ -94,23 +94,40 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
         .count();
   }
 
-  /** Builds a JVM descriptor only when every reference type can be resolved. */
-  static Optional<String> methodDescriptor(
+  /**
+   * Builds a JVM descriptor only when every reference type can be
+   * resolved. Issue #62: the outcome carries the correlation abstention
+   * of the member the descriptor came from (visibility-only; the
+   * descriptor value is unchanged — a correlated member whose binary
+   * render abstains keeps the textual ladder, exactly the pre-#62
+   * flatMap semantics).
+   */
+  static JavacDescriptorOutcome methodDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.ProxyTarget target) {
     if (JavacSourceSymbolIndex.enabled()) {
       // Flag-on: the correlated member's index shapes render the descriptor
-      // directly; a non-correlating target keeps the textual ladder below.
-      Optional<String> fromIndex = JavacMemberCorrelation.of(scanner)
-          .correlatedJvmDescriptor(target.file(),
+      // directly; a non-correlating target — or a correlated member whose
+      // binary render abstains — keeps the textual ladder below.
+      JavacCorrelation correlation = JavacMemberCorrelation.of(scanner)
+          .correlation(target.file(),
               scanner.typeContaining(target.file(),
-                  SourceMetadataScanner.declarationStart(target.file(), target.method().start())),
+                  SourceMetadataScanner.declarationStart(target.file(),
+                      target.method().start())),
               target.method());
-      if (fromIndex.isPresent()) {
-        return fromIndex;
+      Optional<String> rendered = correlation.memberOptional()
+          .flatMap(JavacShapeDescriptors::jvmDescriptorFromMember);
+      if (rendered.isPresent()) {
+        return new JavacDescriptorOutcome(rendered, null, null);
       }
+      return new JavacDescriptorOutcome(
+          methodDescriptor(scanner, target.file(), target.method().parameters(),
+              target.method().returnType()),
+          correlation.abstentionOptional().orElse(JavacAbstentionEvidence.NONE), null);
     }
-    return methodDescriptor(scanner, target.file(), target.method().parameters(), target.method().returnType());
+    return new JavacDescriptorOutcome(
+        methodDescriptor(scanner, target.file(), target.method().parameters(),
+            target.method().returnType()), null, null);
   }
 
   /** Builds a JVM descriptor from one source method signature. */
@@ -132,24 +149,41 @@ abstract class BoundedFrameworkModelCandidateMetadata extends BoundedFrameworkMo
     return returnDescriptor.map(value -> descriptor.append(value).toString());
   }
 
-  /** Builds a JVM descriptor for a source producer candidate. */
-  static Optional<String> producerDescriptor(
+  /**
+   * Builds a JVM descriptor for a source producer candidate. Issue #62:
+   * the outcome carries the producer method's correlation abstention
+   * (a correlated member whose binary render abstains keeps the textual
+   * ladder — the pre-#62 flatMap semantics).
+   */
+  static JavacDescriptorOutcome producerDescriptor(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.BeanCandidate candidate) {
     if (JavacSourceSymbolIndex.enabled()) {
       // Flag-on: the correlated producer method's index shapes render the
-      // descriptor directly; a non-correlating candidate keeps textual.
-      Optional<String> fromIndex = JavacMemberCorrelation.of(scanner)
-          .producerJvmDescriptorFromIndex(candidate);
-      if (fromIndex.isPresent()) {
-        return fromIndex;
+      // descriptor directly; a non-correlating candidate — or a correlated
+      // member whose binary render abstains — keeps textual.
+      JavacCorrelation correlation = JavacMemberCorrelation.of(scanner)
+          .producerCorrelation(candidate);
+      Optional<String> rendered = correlation.memberOptional()
+          .flatMap(JavacShapeDescriptors::jvmDescriptorFromMember);
+      if (rendered.isPresent()) {
+        return new JavacDescriptorOutcome(rendered, null, null);
       }
+      return new JavacDescriptorOutcome(
+          methodDescriptor(
+              scanner,
+              candidate.file(),
+              candidate.producerParameters(),
+              candidate.producerSignature()),
+          correlation.abstentionOptional().orElse(JavacAbstentionEvidence.NONE), null);
     }
-    return methodDescriptor(
-        scanner,
-        candidate.file(),
-        candidate.producerParameters(),
-        candidate.producerSignature());
+    return new JavacDescriptorOutcome(
+        methodDescriptor(
+            scanner,
+            candidate.file(),
+            candidate.producerParameters(),
+            candidate.producerSignature()),
+        null, null);
   }
 
 

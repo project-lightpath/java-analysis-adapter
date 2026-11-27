@@ -454,7 +454,9 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       boolean primary,
       String producerMethod,
       String producerSignature,
-      String producerParameters) {
+      String producerParameters,
+      JavacAbstentionEvidence producerTypeAbstention,
+      JavacAbstentionEvidence mirrorAbstention) {
     BeanCandidate(SourceFile file, Set<String> contracts, String kind) {
       this(
           file,
@@ -469,7 +471,9 @@ static final List<String> SUPPORTED_HTTP_METHODS =
           false,
           null,
           null,
-          null);
+          null,
+          JavacAbstentionEvidence.NONE,
+          JavacAbstentionEvidence.NONE);
     }
 
     BeanCandidate {
@@ -477,6 +481,10 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       qualifiers = List.copyOf(qualifiers == null ? List.of() : qualifiers);
       profiles = List.copyOf(profiles == null ? List.of() : profiles);
       conditions = List.copyOf(conditions == null ? List.of() : conditions);
+      producerTypeAbstention = producerTypeAbstention == null
+          ? JavacAbstentionEvidence.NONE : producerTypeAbstention;
+      mirrorAbstention =
+          mirrorAbstention == null ? JavacAbstentionEvidence.NONE : mirrorAbstention;
     }
 
     boolean producer() {
@@ -512,7 +520,17 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       String kind,
       List<String> annotationSymbols) {}
 
-  record RepositoryMethod(String name, String signature, boolean guaranteed) {
+  record RepositoryMethod(
+      String name, String signature, boolean guaranteed,
+      JavacAbstentionEvidence abstention) {
+    RepositoryMethod(String name, String signature, boolean guaranteed) {
+      this(name, signature, guaranteed, JavacAbstentionEvidence.NONE);
+    }
+
+    RepositoryMethod {
+      abstention = abstention == null ? JavacAbstentionEvidence.NONE : abstention;
+    }
+
     String identity() {
       return guaranteed ? name : signature;
     }

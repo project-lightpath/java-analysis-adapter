@@ -157,7 +157,8 @@ class JavacBinaryNameMigrationTest {
     // producerDescriptor reads the flag at call time, not scanner-creation
     // time.
     Optional<String> offDescriptor =
-        BoundedFrameworkModelCandidateMetadata.producerDescriptor(offScanner, off);
+        BoundedFrameworkModelCandidateMetadata.producerDescriptor(offScanner, off)
+            .descriptor();
     System.setProperty(FLAG, "true");
     SourceMetadataScanner onScanner = new SourceMetadataScanner(context);
     SourceMetadataScannerState.BeanCandidate on = producer(onScanner, "entry");
@@ -173,7 +174,8 @@ class JavacBinaryNameMigrationTest {
         .filter(method -> method.name().equals("entry"))
         .findFirst().orElseThrow();
     assertTrue(JavacMemberCorrelation.of(onScanner)
-            .correlatedMethod(producerFile, "demo.Producer", entry).isPresent(),
+            .correlatedMethod(producerFile, "demo.Producer", entry)
+            .memberOptional().isPresent(),
         "the flag-on parity arm must run through the index path");
     // Dialect parity: the flag-off textual derivation (the type-qualified
     // spelling Outer.Inner resolves its qualifier through the explicit
@@ -184,7 +186,8 @@ class JavacBinaryNameMigrationTest {
         offDescriptor);
     assertEquals(
         Optional.of("()Louter/Outer$Inner;"),
-        BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, on));
+        BoundedFrameworkModelCandidateMetadata.producerDescriptor(onScanner, on)
+            .descriptor());
   }
 
   @Test
@@ -368,7 +371,8 @@ class JavacBinaryNameMigrationTest {
     // set jointly, so a cross-file top-level return is NOT an error type —
     // the member correlates and the canonical return is published.
     JavacSourceSymbolIndex.MemberInfo member = JavacMemberCorrelation.of(scanner)
-        .correlatedMethod(producer, "demo.Producer", make).orElseThrow();
+        .correlatedMethod(producer, "demo.Producer", make)
+        .memberOptional().orElseThrow();
     assertFalse(member.errorType());
     assertEquals("demo.Bean", member.returnType());
     List<SourceMetadataScannerState.BeanCandidate> on =
@@ -441,7 +445,8 @@ class JavacBinaryNameMigrationTest {
     // is published for it. (The textual bean type keeps its pre-existing
     // verbatim spelling; the abstention under test is the correlation.)
     assertTrue(JavacMemberCorrelation.of(scanner)
-            .correlatedMethod(producer, "demo.Producer", make).isEmpty(),
+            .correlatedMethod(producer, "demo.Producer", make)
+            .memberOptional().isEmpty(),
         "an unresolvable return type must abstain");
   }
 

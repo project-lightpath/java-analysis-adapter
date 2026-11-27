@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -33,35 +34,89 @@ final class JavacFrameworkAnnotations {
   /** Returns the type-level annotation mirrors of a file's first type. */
   Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> typeAnnotations(
       SourceMetadataScannerState.SourceFile file) {
-    List<JavacSourceSymbolIndex.TypeInfo> candidates =
-        JavacSourceSymbolIndex.of(context)
-            .map(index -> index.typesIn(file.path()))
-            .orElse(List.of()).stream()
+    return typeAnnotationsLookup(file).mirrors();
+  }
+
+  /** One seam-C mirror lookup: the mirrors, or the decline evidence (#62). */
+  record MirrorLookup(
+      Optional<List<JavacSourceSymbolIndex.AnnotationInfo>> mirrors,
+      Optional<JavacAbstentionEvidence> abstention) {
+
+    static final MirrorLookup EMPTY =
+        new MirrorLookup(Optional.empty(), Optional.empty());
+  }
+
+  /**
+   * The type-level mirror lookup with its decline evidence. The opt-out
+   * gate lives inside: with the flag off, no evidence is constructed.
+   * The three empty arms are distinguished: no name-matching candidate
+   * ({@code mirror_type_absent}), all matches shape-unusable
+   * ({@code mirror_owner_unusable}), more than one usable candidate
+   * ({@code mirror_owner_ambiguous}).
+   */
+  MirrorLookup typeAnnotationsLookup(
+      SourceMetadataScannerState.SourceFile file) {
+    if (!JavacSourceSymbolIndex.enabled()) {
+      return MirrorLookup.EMPTY;
+    }
+    Optional<JavacSourceSymbolIndex> index = JavacSourceSymbolIndex.of(context);
+    if (index.isEmpty()) {
+      return MirrorLookup.EMPTY;
+    }
+    List<JavacSourceSymbolIndex.TypeInfo> named =
+        index.orElseThrow().typesIn(file.path()).stream()
             .filter(type -> type.canonicalName().equals(file.typeName())
                 || type.binaryName().equals(file.typeName()))
-            .filter(JavacFrameworkAnnotations::shapeIsUsable)
             .toList();
-    return candidates.size() == 1
-        ? Optional.of(candidates.get(0).annotations())
-        : Optional.empty();
+    String identity = file.typeName();
+    if (named.isEmpty()) {
+      return withSilencedEvidence(index.orElseThrow(), new MirrorLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "mirror_type_absent", identity, List.of()))));
+    }
+    List<JavacSourceSymbolIndex.TypeInfo> usable =
+        named.stream().filter(JavacFrameworkAnnotations::shapeIsUsable).toList();
+    if (usable.isEmpty()) {
+      return withSilencedEvidence(index.orElseThrow(), new MirrorLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "mirror_owner_unusable", identity, List.of()))));
+    }
+    if (usable.size() > 1) {
+      return withSilencedEvidence(index.orElseThrow(), new MirrorLookup(
+          Optional.empty(), Optional.of(new JavacAbstentionEvidence(
+              "mirror_owner_ambiguous", identity, List.of()))));
+    }
+    return new MirrorLookup(
+        Optional.of(usable.get(0).annotations()), Optional.empty());
+  }
+
+  /**
+   * Suppresses the decline evidence when the index build failed while
+   * keeping the mirror result: a partial index still carries usable
+   * types (CodeRabbit CR-1, finding 4709913078).
+   */
+  private static MirrorLookup withSilencedEvidence(
+      JavacSourceSymbolIndex index, MirrorLookup lookup) {
+    if (lookup.mirrors().isPresent() || !index.buildFailed()) {
+      return lookup;
+    }
+    return MirrorLookup.EMPTY;
   }
 
   /** Returns the unique index member matching owner, name, kind, and arity. */
   Optional<JavacSourceSymbolIndex.MemberInfo> member(
       String owner, String name, String kind, int arity) {
-    return resolvedType(owner)
-        .map(type -> type.members().stream()
-            .filter(candidate -> candidate.name().equals(name))
-            .filter(candidate -> candidate.kind().equals(kind))
-            .filter(candidate -> arity < 0
-                || candidate.parameterTypes().size() == arity)
-            .toList())
-        // Count ALL same-arity overloads before rejecting error types:
-        // filtering first would create false uniqueness when an unresolved
-        // overload shadows a resolved one (the #22 ambiguity rule).
-        .filter(matches -> matches.size() == 1)
-        .map(matches -> matches.get(0))
-        .filter(found -> !found.errorType());
+    return memberLookup(owner, name, kind, arity).member();
+  }
+
+  /**
+   * The seam-C member lookup with its decline evidence (#62), delegated
+   * to {@link JavacFrameworkMemberLookup} (the PMD-forced extraction).
+   */
+  JavacFrameworkMemberLookup.MemberLookup memberLookup(
+      String owner, String name, String kind, int arity) {
+    return JavacFrameworkMemberLookup.forContext(context)
+        .lookup(owner, name, kind, arity);
   }
 
   /** Returns one member's declaration annotation mirrors. */
@@ -160,7 +215,8 @@ final class JavacFrameworkAnnotations {
     return candidates.size() == 1 ? Optional.of(candidates.get(0)) : Optional.empty();
   }
 
-  private static boolean shapeIsUsable(JavacSourceSymbolIndex.TypeInfo type) {
+  /** Reports whether one owner type's shape is usable for mirror correlation. */
+  static boolean shapeIsUsable(JavacSourceSymbolIndex.TypeInfo type) {
     return !type.shape().errorType()
         && !type.shape().duplicateBinaryName()
         && !"LOCAL".equals(type.nestingKind())

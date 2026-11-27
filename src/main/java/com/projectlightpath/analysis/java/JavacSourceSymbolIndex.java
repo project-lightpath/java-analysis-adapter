@@ -79,6 +79,7 @@ final class JavacSourceSymbolIndex {
   private final Map<String, List<TypeInfo>> typesByBinary;
   private final Map<Path, List<AnnotationInfo>> packageAnnotationsByFile;
   private final List<IndexDiagnostic> diagnostics;
+  private final Map<Path, List<String>> errorCodesByFile;
   private final long wallMillis;
   private final long peakHeapBytes;
 
@@ -88,6 +89,7 @@ final class JavacSourceSymbolIndex {
       Map<String, List<TypeInfo>> typesByBinary,
       Map<Path, List<AnnotationInfo>> packageAnnotationsByFile,
       List<IndexDiagnostic> diagnostics,
+      Map<Path, List<String>> errorCodesByFile,
       long wallMillis,
       long peakHeapBytes) {
     this.typesByFile = typesByFile;
@@ -95,6 +97,7 @@ final class JavacSourceSymbolIndex {
     this.typesByBinary = typesByBinary;
     this.packageAnnotationsByFile = packageAnnotationsByFile;
     this.diagnostics = diagnostics;
+    this.errorCodesByFile = errorCodesByFile;
     this.wallMillis = wallMillis;
     this.peakHeapBytes = peakHeapBytes;
   }
@@ -164,6 +167,40 @@ final class JavacSourceSymbolIndex {
   /** Returns the index-level and compiler diagnostics recorded at build time. */
   List<IndexDiagnostic> diagnostics() {
     return diagnostics;
+  }
+
+  /**
+   * The integrity codes that mark a failed index build (#25's
+   * fail-visible contract). Package-visible: {@code JavacReflectionTargets}
+   * and {@code buildFailed()} share ONE set so the two fail-close
+   * channels cannot drift (review round 3).
+   */
+  static final java.util.Set<String> INTEGRITY_CODES = java.util.Set.of(
+      "index_build_error", "javac_unavailable", "missing_source",
+      "missing_classpath", "missing_source_root", "javac_global_error");
+
+  /**
+   * Whether the index build failed (the #25 integrity codes): such an
+   * index is served fail-visible with empty maps, and every decline it
+   * causes is a BUILD failure, not a per-member abstention — the #62
+   * channel must stay silent rather than mislabel it.
+   */
+  boolean buildFailed() {
+    return diagnostics.stream().anyMatch(row -> INTEGRITY_CODES.contains(row.code()));
+  }
+
+  /**
+   * Returns the deduped compiler ERROR codes recorded for one source
+   * file (by absolute normalized path), in recording order — the #62
+   * per-member evidence join. Rendering stays display-only: the join is
+   * by {@link Path}, never by the rendered diagnostic row path.
+   */
+  List<String> errorCodesFor(Path sourceFile) {
+    if (sourceFile == null) {
+      return List.of();
+    }
+    return errorCodesByFile.getOrDefault(
+        sourceFile.toAbsolutePath().normalize(), List.of());
   }
 
   /** Wall time of the index build in milliseconds. */
@@ -254,13 +291,16 @@ final class JavacSourceSymbolIndex {
       }
       IndexRenderer.addCompilerDiagnostics(
           context, inputs.roots(), java.util.Set.copyOf(unitFiles), captured, diagnostics);
+      Map<Path, List<String>> errorCodesByFile = new LinkedHashMap<>();
+      IndexRenderer.recordErrorCodesByFile(captured, errorCodesByFile);
       Extractor extractor = new Extractor(
           Trees.instance(task), task.getElements(), task.getTypes());
       for (CompilationUnitTree unit : parsed) {
         extractor.scan(unit, null);
       }
       JavacSourceSymbolIndex index =
-          extractor.finish(diagnostics, startNano, Math.max(heapBefore, heapUsed()));
+          extractor.finish(diagnostics, errorCodesByFile, startNano,
+              Math.max(heapBefore, heapUsed()));
       COMPILATIONS.incrementAndGet();
       return index;
     } finally {
@@ -286,7 +326,7 @@ final class JavacSourceSymbolIndex {
   private static JavacSourceSymbolIndex failed(
       List<IndexDiagnostic> diagnostics, long startNano, long heapBefore) {
     return new JavacSourceSymbolIndex(
-        Map.of(), Map.of(), Map.of(), Map.of(), List.copyOf(diagnostics),
+        Map.of(), Map.of(), Map.of(), Map.of(), List.copyOf(diagnostics), Map.of(),
         elapsedMillis(startNano), Math.max(heapBefore, heapUsed()));
   }
 
@@ -480,6 +520,30 @@ final class JavacSourceSymbolIndex {
       }
     }
 
+    /**
+     * Records the per-file compiler ERROR codes for the #62 per-member
+     * evidence join, keyed by the normalized absolute path held at
+     * render time (never the rendered row path).
+     */
+    static void recordErrorCodesByFile(
+        List<Diagnostic<? extends JavaFileObject>> captured,
+        Map<Path, List<String>> errorCodesByFile) {
+      for (Diagnostic<? extends JavaFileObject> item : captured) {
+        if (item.getKind() != Diagnostic.Kind.ERROR || item.getSource() == null) {
+          continue;
+        }
+        Path path = sourcePath(item.getSource());
+        if (path == null || item.getCode() == null) {
+          continue;
+        }
+        List<String> codes = errorCodesByFile.computeIfAbsent(
+            path, ignored -> new ArrayList<>());
+        if (!codes.contains(item.getCode())) {
+          codes.add(item.getCode());
+        }
+      }
+    }
+
     static Path sourcePath(JavaFileObject source) {
       try {
         return Path.of(source.toUri()).toAbsolutePath().normalize();
@@ -584,7 +648,8 @@ final class JavacSourceSymbolIndex {
     }
 
     JavacSourceSymbolIndex finish(
-        List<IndexDiagnostic> diagnostics, long startNano, long peakHeap) {
+        List<IndexDiagnostic> diagnostics, Map<Path, List<String>> errorCodesByFile,
+        long startNano, long peakHeap) {
       List<TypeInfo> all = typesByFile.values().stream()
           .flatMap(List::stream)
           .toList();
@@ -597,7 +662,18 @@ final class JavacSourceSymbolIndex {
           copyOfLists(groupedByCanonical(flagged)),
           copyOfLists(flaggedByBinary),
           copyOfLists(packageAnnotationsByFile), List.copyOf(diagnostics),
+          copyOfCodeLists(errorCodesByFile),
           elapsedMillis(startNano), peakHeap);
+    }
+
+    /** Deep-copies the per-file error-code lists (no live aliases escape). */
+    private static Map<Path, List<String>> copyOfCodeLists(
+        Map<Path, List<String>> codes) {
+      Map<Path, List<String>> result = new LinkedHashMap<>();
+      for (Map.Entry<Path, List<String>> entry : codes.entrySet()) {
+        result.put(entry.getKey(), List.copyOf(entry.getValue()));
+      }
+      return Map.copyOf(result);
     }
 
     private static Map<String, List<TypeInfo>> flagDuplicates(

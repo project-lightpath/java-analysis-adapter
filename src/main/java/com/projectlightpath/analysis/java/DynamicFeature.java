@@ -13,7 +13,7 @@ public record DynamicFeature(
     int sourceLine,
     int sourceOffset,
     String targetDescriptor,
-    JavacTargetEvidence targetEvidence) {
+    JavacFeatureEvidence javacEvidence) {
   /** Compatibility constructor for callers that provide source-site coordinates only. */
   public DynamicFeature(
       Kind kind,
@@ -25,7 +25,7 @@ public record DynamicFeature(
       int sourceLine,
       int sourceOffset) {
     this(kind, caller, target, sourcePath, symbols, limitation, sourceLine, sourceOffset,
-        "", JavacTargetEvidence.NONE);
+        "", JavacFeatureEvidence.NONE);
   }
 
   /** Compatibility constructor for provider callers that do not have source-site coordinates. */
@@ -37,7 +37,7 @@ public record DynamicFeature(
       List<String> symbols,
       String limitation) {
     this(kind, caller, target, sourcePath, symbols, limitation, 0, 0,
-        "", JavacTargetEvidence.NONE);
+        "", JavacFeatureEvidence.NONE);
   }
 
   public enum Kind {
@@ -59,6 +59,16 @@ public record DynamicFeature(
     sourceLine = Math.max(0, sourceLine);
     sourceOffset = Math.max(0, sourceOffset);
     targetDescriptor = targetDescriptor == null ? "" : targetDescriptor;
-    targetEvidence = targetEvidence == null ? JavacTargetEvidence.NONE : targetEvidence;
+    javacEvidence = javacEvidence == null ? JavacFeatureEvidence.NONE : javacEvidence;
+  }
+
+  /** The #25 target evidence (grouped under {@link #javacEvidence}). */
+  public JavacTargetEvidence targetEvidence() {
+    return javacEvidence.target();
+  }
+
+  /** The #62 per-member abstentions (grouped under {@link #javacEvidence}). */
+  public JavacFeatureAbstentions abstentions() {
+    return javacEvidence.abstentions();
   }
 }

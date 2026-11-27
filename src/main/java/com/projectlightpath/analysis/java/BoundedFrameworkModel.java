@@ -513,8 +513,20 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
       attributes.put("profiles", String.join(",", candidate.profiles()));
       attributes.put("conditions", String.join(",", candidate.conditions()));
       if (candidate.producer()) {
-        model.producerDescriptor(scanner, candidate)
-            .ifPresent(descriptor -> attributes.put("targetDescriptor", descriptor));
+        JavacDescriptorOutcome descriptor = model.producerDescriptor(scanner, candidate);
+        descriptor.descriptor()
+            .ifPresent(value -> attributes.put("targetDescriptor", value));
+        // Issue #62: the producer method's correlation abstention (seam A)
+        // and the mirror decline (seam C) ride the bean_candidate
+        // evidence under their own keys — both lookups can decline for
+        // the same candidate, and neither ever enters scan.diagnostics().
+        descriptor.mergeAbstentionsInto(attributes);
+        attributes.putAll(candidate.producerTypeAbstention().producerTypeAttributes());
+        if (candidate.mirrorAbstention().present()) {
+          attributes.put("javacMirrorAbstention", candidate.mirrorAbstention().code());
+          attributes.put("javacMirrorAbstentionMember",
+              candidate.mirrorAbstention().member());
+        }
       }
       addCandidateMetadata(attributes, candidateMetadata);
       addBindingMetadata(attributes, binding);
@@ -617,13 +629,18 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
       String prefix = model.framework == AnalysisContext.Framework.QUARKUS
           ? "quarkus:arc-client-proxy:" : "spring:aop-proxy:";
       String rule = proxyRule(model, exact);
+      JavacDescriptorOutcome descriptor = model.methodDescriptor(scanner, target);
+      Map<String, String> attributes = new HashMap<>(model.proxyAttributes(
+          metadataId, target, metadata, descriptor.descriptor().orElse(null)));
+      // Issue #62: the descriptor member's javac abstention rides the
+      // proxy fact's evidence (never scan.diagnostics()).
+      descriptor.mergeAbstentionsInto(attributes);
       SemanticCallFacts.Evidence evidence = new SemanticCallFacts.Evidence(
           model.framework == AnalysisContext.Framework.QUARKUS ? "bean_scope" : "advisor_annotation",
           target.file().displayPath(),
           proxySymbols(model, scanner, target),
           target.method().line(),
-          model.proxyAttributes(metadataId, target, metadata,
-              model.methodDescriptor(scanner, target).orElse(null)));
+          attributes);
       SemanticCallFacts.Fact fact = SemanticCallFacts.Fact.framework(
           model.proxyFactId(scanner, target),
           context,

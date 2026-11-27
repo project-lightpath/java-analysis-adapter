@@ -169,6 +169,9 @@ abstract class BoundedFrameworkModelSpringFacts extends BoundedFrameworkModelDyn
         "repositoryContract", delegation.repositoryContract(),
         "repositoryMethod", methodIdentity,
         "backingTarget", selection.target()));
+    // Issue #62: the declared method's javac abstention rides the fact
+    // (blast-radius-safe: it never enters scan.diagnostics()).
+    delegation.repositoryMethod().abstention().mergeInto(attributes);
     if (selection.diagnosticCode() != null) {
       attributes.put("diagnosticCode", selection.diagnosticCode());
     }
