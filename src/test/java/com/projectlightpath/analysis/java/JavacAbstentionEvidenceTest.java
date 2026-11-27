@@ -101,6 +101,69 @@ class JavacAbstentionEvidenceTest {
     assertTrue(facts.diagnostics().isEmpty(), facts.diagnostics().toString());
   }
 
+  // E1 (#76): the diagnostics join is MEMBER-level — two error-typed
+  // members in one file, each carrying a DISTINCT javac code kind (a
+  // missing package prefix vs. an unresolvable simple name in a
+  // resolvable package; probe-verified literals: doesnotexist vs.
+  // cannot.find.symbol). Each member's abstention carries ONLY its own
+  // code; the file-level join carried both to each.
+  @Test
+  void errorDiagnosticsAreMemberScoped() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.scheduling.annotation.Async;
+        import org.springframework.stereotype.Service;
+        @Async @Service public class ErrorPair {
+          public missing.Thing first() { return null; }
+          public void second(java.util.NoSuch arg) { }
+        }
+        """));
+    SemanticCallFacts.Fact first = frameworkFact(facts, "proxy_dispatch",
+        "demo.ErrorPair#first");
+    assertEquals("error_type_member", attribute(first, "javacAbstention"),
+        first.evidence().toString());
+    assertEquals("compiler.err.doesnt.exist",
+        attribute(first, "javacAbstentionDiagnostics"),
+        "first()'s abstention carries ONLY its own missing-package code: "
+            + first.evidence());
+    SemanticCallFacts.Fact second = frameworkFact(facts, "proxy_dispatch",
+        "demo.ErrorPair#second");
+    assertEquals("error_type_member", attribute(second, "javacAbstention"),
+        second.evidence().toString());
+    assertEquals("compiler.err.cannot.find.symbol",
+        attribute(second, "javacAbstentionDiagnostics"),
+        "second()'s abstention carries ONLY its own unresolvable-symbol code: "
+            + second.evidence());
+  }
+
+  // E2 (#76): a BODY error (an unresolvable variable inside a method
+  // body — that method is NOT error-typed, its signature is clean) is
+  // excluded from the error-typed sibling's member-scoped diagnostics;
+  // the file-level join carried both codes to the abstaining member.
+  @Test
+  void bodyErrorsAreExcludedFromSiblingDiagnostics() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.scheduling.annotation.Async;
+        import org.springframework.stereotype.Service;
+        @Async @Service public class BodyError {
+          public missing.Thing broken() { return null; }
+          public void clean() { int y = zzz; }
+        }
+        """));
+    SemanticCallFacts.Fact broken = frameworkFact(facts, "proxy_dispatch",
+        "demo.BodyError#broken");
+    assertEquals("error_type_member", attribute(broken, "javacAbstention"),
+        broken.evidence().toString());
+    assertEquals("compiler.err.doesnt.exist",
+        attribute(broken, "javacAbstentionDiagnostics"),
+        "broken()'s abstention excludes clean()'s body error: "
+            + broken.evidence());
+    assertNull(attribute(frameworkFact(facts, "proxy_dispatch",
+            "demo.BodyError#clean"), "javacAbstention"),
+        "a body error does not error-type the member's signature");
+  }
+
   // C3: mirrored overloads whose textual vectors hit a type parameter
   // (the unresolved-bounds class) abstain with their own code.
   @Test
