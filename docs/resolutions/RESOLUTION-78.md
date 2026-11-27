@@ -24,8 +24,10 @@ site-scoped instead of inquiry-scoped:
   Layer05): the current bodies, capture-inert. The parameter-match arm
   records `captureSiteOffset` (when set) instead of its own inquiry
   offset.
-- **The inference callers switch to the cores**:
-  `isClassLoaderResultExpression` (Layer05:159),
+- **The inference callers switch to the cores** (line references below
+  are MAIN-relative, from the pre-GREEN tree; in the shipped file the
+  calls sit at Layer05:229, :245/:251, :300, and :64):
+  `isClassLoaderResultExpression` (main Layer05:159),
   `isRecognizedClassLoaderLookup` (:176 + its owner check at :174),
   `isRecognizedClassLookup` (:221), and `isJdkClassForNameExpression`'s
   owner check (:40).
@@ -88,20 +90,26 @@ promotion, silent on flag-off and failed builds.
   helios08 log is the lint plugin's own `Fixture.java` self-test);
   `make evidence-validate` pass.
 
-## Mutation checks (executed, all red under exactly their own mutation)
+## Mutation checks (executed, all red under exactly their own mutation;
+receipts re-derived on the final 6-cell suite after E6 landed)
 
 1. Core captures the inquiry `offset` instead of `captureSiteOffset` ⇒
-   E1/E2/E3/E5 red (a capture still occurs, at the initializer-internal
-   offset — the attribute is lost AND E2's set pin sees the dead entry
-   return); E4 (flag-off control) unaffected.
-2. Capture removed entirely (`&& false` on the guard) ⇒ 8 cells red: the
-   #62 cells C10 (`reflectionCallerAbstentionIsVisibleAndCausal`), D6
-   (`proxyCallerAbstentionIsVisible`), D1, D4 plus the new E-cells — the
-   direct arm stays pinned by the existing suite.
-3. `isClassLoaderResultExpression`'s inference call (Layer05:159) uses
-   the site entry (field reset) ⇒ exactly ONE cell red, E2's set pin;
-   E1 stays green (its chain crosses Layer05:221, not :159) — gap A is
-   isolated from gap B.
+   E1/E2/E3/E5/E6 red (a capture still occurs, at the initializer-internal
+   offset — the attribute is lost AND the set pins see the dead entry
+   return); E4 (flag-off control) unaffected. 5 cells red.
+2. Capture removed entirely (`&& false` on the guard) ⇒ 9 cells red: the
+   five attribute-bearing E-cells (E1/E2/E3/E5/E6; E4 unaffected) plus
+   the #62 cells C10 (`reflectionCallerAbstentionIsVisibleAndCausal`),
+   D6 (`proxyCallerAbstentionIsVisible`), D1, D4 — the direct arm stays
+   pinned by the existing suite.
+3. `isClassLoaderResultExpression`'s inference call (main's Layer05:159)
+   uses the site entry (field reset) ⇒ exactly ONE cell red, E2's set pin;
+   E1 stays green (its chain crosses main's Layer05:221, not :159) — gap A
+   is isolated from gap B.
+4. `isRecognizedClassLoaderLookup`'s classify call (shipped Layer05:251)
+   reverted to the setting entry ⇒ exactly ONE cell red, E6 — the same
+   isolation per switched caller, re-verified independently in
+   implementation review round 2.
 
 ## Review record
 
@@ -149,6 +157,6 @@ promotion, silent on flag-off and failed builds.
 
 Confidence score: **0.92** — both gaps reproduced probe-first on main and
 closed by one mechanism whose direct-site behavior is byte-identical;
-every delta is mutation-pinned end-to-end (gap A and gap B isolated
-separately); zero golden churn on the full 740-execution suite; the
+every delta is mutation-pinned end-to-end (gap A and gap B isolated separately, per switched
+caller); zero golden churn on the full 741-execution suite; the
 blast-radius contract is pinned by E5 and the E4 flag-off twin.

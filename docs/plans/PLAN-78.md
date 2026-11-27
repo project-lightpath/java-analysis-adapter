@@ -10,8 +10,12 @@ Two gaps at the `isDeclaredVariableBefore` choke point
 (`SourceMetadataScannerReflectionLayer05`):
 
 - **Gap A (dead entries)**: the type-INFERENCE callers of
-  `isDeclaredVariableBefore` — `isClassLoaderResultExpression` (Layer05:159),
-  `isRecognizedClassLoaderLookup` (Layer05:176, plus its `isJdkApiOwner` call
+  `isDeclaredVariableBefore` — `isClassLoaderResultExpression` (Layer05:159;
+  all Layer05 line references in this plan are MAIN-relative, from the
+  pre-GREEN tree; in the shipped file the switched calls sit at
+  Layer05:229, :245/:251, :300, and :64),
+  `isRecognizedClassLoaderLookup` (Layer05:176,
+  plus its `isJdkApiOwner` call
   at Layer05:174), and `isRecognizedClassLookup` (Layer05:221) — pass
   initializer-internal offsets into the `hasParameter` arm's
   `parameterArmOffsets` capture. Those offsets are file offsets of the
@@ -249,10 +253,11 @@ whose var initializers consult parameters.
   `var c = loader.loadClass("X"); var m = c.getMethod("run");
   m.invoke(...)`) pins `isRecognizedClassLoaderLookup`'s classify arm —
   all three facts carry the abstention and the set equals the three site
-  offsets. Mutation-verified per caller: reverting Layer05:247 to the
+  offsets. Mutation-verified per caller: reverting Layer05:251 to the
   setting entry makes exactly E6 red; reverting Layer05:300 or the
   `isJdkClassForNameExpression` owner check makes E3 red. The Makefile
-  floor is 741 (6 cells over main's 735).
+  floor is 741 (6 cells over main's 735). Mutation receipts 1 and 2 were
+  re-derived on the final 6-cell suite (5 and 9 cells red respectively).
 
 ## Plan review record
 
