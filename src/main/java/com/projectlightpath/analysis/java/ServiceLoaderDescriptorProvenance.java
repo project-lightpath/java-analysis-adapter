@@ -1,5 +1,6 @@
 package com.projectlightpath.analysis.java;
 
+import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -13,6 +14,15 @@ final class ServiceLoaderDescriptorProvenance {
    * Returns the explicitly selected service descriptor locations: observed
    * metadata paths that stay inside the repository root and are not the root
    * itself.
+   *
+   * <p>Issue #69 decision record: paths selected here override root-scope
+   * exclusion BY DESIGN (see {@link ServiceLoaderDescriptorAuthorization
+   * #authorizedPath}) — an owner-declared OBSERVED location is visible for
+   * investigation even when it sits inside an excluded or out-of-scope
+   * root, and every descriptor admitted through it is provenance-labeled
+   * ({@code descriptorProvenance=selected_metadata} always, plus the
+   * root-scope label when the path falls under a declared root) so the
+   * override can never include anything silently.
    */
   static List<Path> selectedLocations(AnalysisContext context) {
     Path repositoryRoot = context.repositoryRoot().toAbsolutePath().normalize();
@@ -40,10 +50,63 @@ final class ServiceLoaderDescriptorProvenance {
     return List.copyOf(result);
   }
 
-  /** True when {@code normalized} is one of the explicitly selected locations. */
+  /**
+   * True when {@code normalized} is one of the explicitly selected locations
+   * — the issue #69 override arm: explicit selection beats root-scope
+   * exclusion (see {@link ServiceLoaderDescriptorAuthorization#authorizedPath}
+   * for the decision record), with the admission provenance-labeled.
+   */
   static boolean explicitlySelected(AnalysisContext context, Path normalized) {
     return selectedLocations(context).stream()
         .anyMatch(selected -> ServiceLoaderDescriptorAuthorization.sameRealPath(selected, normalized));
+  }
+
+  /**
+   * The provenance scope label for one descriptor path (issue #69):
+   * {@code <scope>/<included|excluded>} of the MOST-SPECIFIC declared root
+   * containing the path (#68's specificity order, labeling role only — this
+   * never gates admission), or {@code null} when the path is under no
+   * declared root (dependency entries, application classes outside roots,
+   * synthetic archive paths) or the context is unknown.
+   *
+   * <p>Containment compares REAL paths (CodeRabbit CR-1 on PR #73): the
+   * admission gates ({@code under}/{@code sameRealPath}) resolve with
+   * {@code toRealPath()}, and a descriptor selected through a
+   * symbolic-link parent that aliases an excluded root must be labeled by
+   * where the file really lies, not by the lexical spelling of the alias.
+   * When the DESCRIPTOR path itself cannot be resolved (CodeRabbit CR-2:
+   * the bytes are read before the label is computed, so a delete-race can
+   * leave the file gone), the label is ABSENT — the lexical spelling could
+   * alias an included root and fabricate a label for bytes read from an
+   * excluded target. Declared roots keep the lexical fallback: a root that
+   * fails resolution still contains what it lexically contains.
+   */
+  static String rootScopeLabel(AnalysisContext context, Path path) {
+    if (context == null || path == null) {
+      return null;
+    }
+    Path normalized;
+    try {
+      normalized = path.toRealPath();
+    } catch (IOException | SecurityException error) {
+      return null;
+    }
+    for (AnalysisContext.SourceRoot root : context.declaredRootsBySpecificity()) {
+      if (normalized.startsWith(resolvedPath(root.path()))) {
+        return root.scope().name().toLowerCase(java.util.Locale.ROOT)
+            + "/" + (root.included() ? "included" : "excluded");
+      }
+    }
+    return null;
+  }
+
+  /** Real-path resolution for declared roots; lexical on failure. */
+  private static Path resolvedPath(Path path) {
+    try {
+      return path.toRealPath();
+    } catch (IOException | SecurityException error) {
+      return path.toAbsolutePath().normalize();
+    }
   }
 
   /**

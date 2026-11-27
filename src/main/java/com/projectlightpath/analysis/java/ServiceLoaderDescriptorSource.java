@@ -41,6 +41,8 @@ final class ServiceLoaderDescriptorSource {
   /**
    * Scans one selected classpath entry. {@code descriptors} must be mutable: a
    * retention rollback removes the descriptors this source contributed.
+   * The short forms are test/back-compat entries (unclassified origin);
+   * production callers use the 7-arg form with the admission mechanism.
    */
   static void scanClasspathEntry(
       Path entry,
@@ -51,7 +53,21 @@ final class ServiceLoaderDescriptorSource {
     // PMD GodClass forces the file-kind probing to live in
     // ServiceLoaderDescriptorReader; behavior is identical.
     ServiceLoaderDescriptorReader.scanSelectedEntry(
-        entry, descriptors, visited, state, diagnoseUnavailable);
+        entry, descriptors, visited, state, diagnoseUnavailable,
+        "unclassified", null);
+  }
+
+  /** Scans one selected classpath entry with its admission mechanism (issue #69). */
+  static void scanClasspathEntry(
+      Path entry,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      Set<String> visited,
+      ScanState state,
+      boolean diagnoseUnavailable,
+      String mechanism,
+      AnalysisContext context) {
+    ServiceLoaderDescriptorReader.scanSelectedEntry(
+        entry, descriptors, visited, state, diagnoseUnavailable, mechanism, context);
   }
 
   static void scanServiceDirectory(
@@ -60,7 +76,9 @@ final class ServiceLoaderDescriptorSource {
       String kind,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
-      ScanState state) {
+      ScanState state,
+      String mechanism,
+      AnalysisContext context) {
     Path normalized = directory.toAbsolutePath().normalize();
     if (!ServiceLoaderDescriptorAuthorization.readableDirectory(normalized, state)) {
       return;
@@ -71,7 +89,7 @@ final class ServiceLoaderDescriptorSource {
             int descriptorStart = descriptors.size();
             addServiceFile(path,
                 label + "/" + SERVICES_DIRECTORY + "/" + path.getFileName(),
-                kind, descriptors, visited, state);
+                kind, descriptors, visited, state, mechanism, context);
             if (descriptors.size() == descriptorStart) {
               state.releaseRetained();
             }
@@ -143,7 +161,9 @@ final class ServiceLoaderDescriptorSource {
       String kind,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       Set<String> visited,
-      ScanState state) {
+      ScanState state,
+      String mechanism,
+      AnalysisContext context) {
     Path normalized = path.toAbsolutePath().normalize();
     if (!visited.add("descriptor:" + normalized)
         || normalized.getFileName() == null
@@ -164,7 +184,10 @@ final class ServiceLoaderDescriptorSource {
           displayPath,
           sha256(bytes),
           kind,
-          parsed.malformedEntries()));
+          parsed.malformedEntries(),
+          new ServiceLoaderDescriptorScanner.DescriptorOrigin(
+              mechanism,
+              ServiceLoaderDescriptorProvenance.rootScopeLabel(context, normalized))));
     } catch (IOException | UnsupportedOperationException | SecurityException error) {
       state.diagnostic("descriptor_read_error", normalized.toString(), message(error));
     }
@@ -173,7 +196,9 @@ final class ServiceLoaderDescriptorSource {
   static boolean scanModuleInfo(
       Path classpathDirectory,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
-      ScanState state) {
+      ScanState state,
+      String mechanism,
+      AnalysisContext context) {
     Path module = classpathDirectory.resolve(MODULE_INFO);
     if (!Files.isRegularFile(module, LinkOption.NOFOLLOW_LINKS)) {
       if (!Files.notExists(module, LinkOption.NOFOLLOW_LINKS)) {
@@ -192,7 +217,7 @@ final class ServiceLoaderDescriptorSource {
     try (var input = Files.newInputStream(module, LinkOption.NOFOLLOW_LINKS)) {
       byte[] bytes = ServiceLoaderDescriptorArchiveSource.readEntry(input, state, path);
       if (bytes != null) {
-        return addModuleBytes(bytes, path, descriptors, state);
+        return addModuleBytes(bytes, path, descriptors, state, mechanism, context);
       }
       return true;
     } catch (IOException | UnsupportedOperationException | SecurityException error) {
@@ -223,6 +248,16 @@ final class ServiceLoaderDescriptorSource {
       String path,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ScanState state) {
+    return addModuleBytes(bytes, path, descriptors, state, "unclassified", null);
+  }
+
+  static boolean addModuleBytes(
+      byte[] bytes,
+      String path,
+      List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
+      ScanState state,
+      String mechanism,
+      AnalysisContext context) {
     try {
       ModuleDescriptor module = ModuleDescriptor.read(new ByteArrayInputStream(bytes));
       String digest = sha256(bytes);
@@ -240,7 +275,11 @@ final class ServiceLoaderDescriptorSource {
               path,
               digest,
               "module_info",
-              List.of()));
+              List.of(),
+              new ServiceLoaderDescriptorScanner.DescriptorOrigin(
+                  mechanism,
+                  ServiceLoaderDescriptorProvenance.rootScopeLabel(
+                      context, Path.of(path)))));
         }
       }
       descriptors.addAll(produced);

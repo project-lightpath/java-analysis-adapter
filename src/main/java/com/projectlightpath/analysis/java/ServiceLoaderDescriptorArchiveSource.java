@@ -28,18 +28,23 @@ final class ServiceLoaderDescriptorArchiveSource {
       Path archive,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state) {
-    scan(archive, descriptors, state, ServiceLoaderDescriptorArchiveConfig.defaults());
+    scan(archive, descriptors, state, ServiceLoaderDescriptorArchiveConfig.defaults(),
+        "unclassified");
   }
 
   /**
    * Scans one archive into {@code descriptors}, which must be mutable: a
    * retention-budget rollback removes the descriptors this archive contributed.
+   * Archive descriptors carry synthetic {@code archive!/entry} paths, so their
+   * origin is (mechanism, no root scope) — the admission mechanism only
+   * (issue #69).
    */
   static void scan(
       Path archive,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) {
+      ServiceLoaderDescriptorArchiveConfig config,
+      String mechanism) {
     Path normalized = archive.toAbsolutePath().normalize();
     long size;
     try {
@@ -79,10 +84,11 @@ final class ServiceLoaderDescriptorArchiveSource {
         return;
       }
       readDescriptors(
-          directory, normalized, entries.descriptors(), descriptors, state, config);
+          directory, normalized, entries.descriptors(), descriptors, state, config,
+          mechanism);
       complete = readModule(
           directory, normalized, entries.module(), entries.versionedModule(),
-          descriptors, state, config);
+          descriptors, state, config, mechanism);
     } catch (ServiceLoaderDescriptorZipDirectory.ZipFormatException error) {
       state.diagnostic("invalid_archive", normalized.toString(), sanitized(error, config));
     } catch (ServiceLoaderDescriptorZipDirectory.RawIoLimitException error) {
@@ -253,7 +259,8 @@ final class ServiceLoaderDescriptorArchiveSource {
       List<ServiceLoaderDescriptorZipEntry> entries,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
+      ServiceLoaderDescriptorArchiveConfig config,
+      String mechanism) throws IOException {
     int processed = 0;
     for (ServiceLoaderDescriptorZipEntry entry : entries) {
       if (!state.hasDecompressedBudget()) {
@@ -263,7 +270,7 @@ final class ServiceLoaderDescriptorArchiveSource {
         break;
       }
       int descriptorStart = descriptors.size();
-      addDescriptor(directory, archive, entry, descriptors, state, config);
+      addDescriptor(directory, archive, entry, descriptors, state, config, mechanism);
       if (descriptors.size() == descriptorStart) {
         release(state, entry);
       }
@@ -289,7 +296,8 @@ final class ServiceLoaderDescriptorArchiveSource {
       String versionedModule,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
+      ServiceLoaderDescriptorArchiveConfig config,
+      String mechanism) throws IOException {
     if (module == null) {
       if (versionedModule != null) {
         state.diagnostic(
@@ -309,8 +317,9 @@ final class ServiceLoaderDescriptorArchiveSource {
       if (bytes == null) {
         return true;
       }
+      // Synthetic archive path: no root-scope label by construction.
       return ServiceLoaderDescriptorSource.addModuleBytes(
-          bytes, modulePath, descriptors, state);
+          bytes, modulePath, descriptors, state, mechanism, null);
     } catch (InterruptedIOException | ServiceLoaderDescriptorZipDirectory.RawIoLimitException error) {
       throw error;
     } catch (IOException error) {
@@ -326,7 +335,8 @@ final class ServiceLoaderDescriptorArchiveSource {
       ServiceLoaderDescriptorZipEntry entry,
       List<ServiceLoaderDescriptorScanner.Descriptor> descriptors,
       ServiceLoaderDescriptorSource.ScanState state,
-      ServiceLoaderDescriptorArchiveConfig config) throws IOException {
+      ServiceLoaderDescriptorArchiveConfig config,
+      String mechanism) throws IOException {
     String serviceType = entry.name().substring(
         ServiceLoaderDescriptorSource.SERVICES_DIRECTORY.length() + 1);
     if (!ServiceLoaderDescriptorAuthorization.isBinaryClassName(serviceType)) {
@@ -346,7 +356,9 @@ final class ServiceLoaderDescriptorArchiveSource {
           path,
           ServiceLoaderDescriptorSource.sha256(bytes),
           "meta_inf_services",
-          parsed.malformedEntries()));
+          parsed.malformedEntries(),
+          // Synthetic archive!/entry paths carry no root-scope label.
+          new ServiceLoaderDescriptorScanner.DescriptorOrigin(mechanism, null)));
     } catch (InterruptedIOException | ServiceLoaderDescriptorZipDirectory.RawIoLimitException error) {
       throw error;
     } catch (IOException error) {
