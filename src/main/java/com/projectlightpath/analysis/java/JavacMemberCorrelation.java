@@ -213,7 +213,7 @@ final class JavacMemberCorrelation {
     if (group.stream().anyMatch(JavacSourceSymbolIndex.MemberInfo::errorType)) {
       return JavacCorrelation.abstained(new JavacAbstentionEvidence(
           "error_type_member", identity,
-          errorCodesFor(index, ownerType)));
+          errorCodesForErrorMembers(index, ownerType, indexName, kind, arity)));
     }
     if (group.size() == 1) {
       return JavacCorrelation.correlated(group.get(0));
@@ -225,6 +225,34 @@ final class JavacMemberCorrelation {
     }
     return new JavacOverloadBijection(scanner).correlate(
         file, declaration, declarations, group, indexName, identity);
+  }
+
+  /**
+   * The member-scoped javac error codes for the error-typed members of
+   * one name+arity group (#76): each member is joined against its OWN
+   * declaring file and line span. The union is computed only when the
+   * owner name resolves to exactly one index type — with same-name
+   * types across files, javac errors cannot be attributed, and the
+   * ambiguity is already the decline's story (the #62 unique-owner
+   * guard, preserved verbatim).
+   */
+  private static List<String> errorCodesForErrorMembers(
+      JavacSourceSymbolIndex index, String ownerType, String indexName,
+      String kind, int arity) {
+    List<JavacSourceSymbolIndex.TypeInfo> entries = index.type(ownerType);
+    if (entries.size() != 1) {
+      return List.of();
+    }
+    JavacSourceSymbolIndex.TypeInfo owner = entries.get(0);
+    LinkedHashSet<String> codes = new LinkedHashSet<>();
+    for (JavacSourceSymbolIndex.MemberInfo member : owner.members()) {
+      if (member.kind().equals(kind)
+          && member.parameterTypes().size() == arity
+          && member.errorType()) {
+        codes.addAll(index.errorCodesForMember(owner.file(), member));
+      }
+    }
+    return List.copyOf(codes);
   }
 
   /**

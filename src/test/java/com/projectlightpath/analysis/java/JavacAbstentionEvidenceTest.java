@@ -130,7 +130,10 @@ class JavacAbstentionEvidenceTest {
         "demo.ErrorPair#second");
     assertEquals("error_type_member", attribute(second, "javacAbstention"),
         second.evidence().toString());
-    assertEquals("compiler.err.cannot.find.symbol",
+    // The javac CODE for an unresolvable simple name in a resolvable
+    // package is cant.resolve.location (the message reads "cannot find
+    // symbol"; the CODE differs — probed at RED, as the plan requires).
+    assertEquals("compiler.err.cant.resolve.location",
         attribute(second, "javacAbstentionDiagnostics"),
         "second()'s abstention carries ONLY its own unresolvable-symbol code: "
             + second.evidence());

@@ -100,8 +100,10 @@ final class JavacFrameworkMemberLookup {
     }
     JavacSourceSymbolIndex.MemberInfo found = matches.get(0);
     if (found.errorType()) {
+      // #76: the found member's own line span, joined against the
+      // unique owner entry's file (the #62 unique-owner guard stands).
       List<String> codes = raw.size() == 1
-          ? index.errorCodesFor(raw.get(0).file())
+          ? index.errorCodesForMember(raw.get(0).file(), found)
           : List.of();
       return withSilencedEvidence(index, new MemberLookup(
           Optional.empty(), Optional.of(new JavacAbstentionEvidence(

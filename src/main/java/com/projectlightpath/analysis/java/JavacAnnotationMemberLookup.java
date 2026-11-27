@@ -65,7 +65,7 @@ final class JavacAnnotationMemberLookup {
       return withSilencedEvidence(index.orElseThrow(), new MemberLookup(
           Optional.empty(), Optional.of(new JavacAbstentionEvidence(
               "annotation_member_error_type", identity,
-              uniqueOwnerErrorCodes(index.orElseThrow(), typeName)))));
+              memberScopedErrorCodes(index.orElseThrow(), typeName, found)))));
     }
     return new MemberLookup(Optional.of(found), Optional.empty());
   }
@@ -85,17 +85,18 @@ final class JavacAnnotationMemberLookup {
   }
 
   /**
-   * The declaring file's error codes, only when the owner name resolves
-   * to exactly one index type (same-name types across files cannot be
-   * attributed to one member's file — the ambiguity is already the
-   * decline's story).
+   * The member-scoped javac error codes for the found error member
+   * (#76): joined against the unique owner entry's file and the
+   * member's own line span. With multiple same-name owner entries the
+   * join stays empty (the #62 unique-owner guard).
    */
-  private static List<String> uniqueOwnerErrorCodes(
-      JavacSourceSymbolIndex index, String typeName) {
+  private static List<String> memberScopedErrorCodes(
+      JavacSourceSymbolIndex index, String typeName,
+      JavacSourceSymbolIndex.MemberInfo found) {
     List<JavacSourceSymbolIndex.TypeInfo> entries = index.type(typeName);
     if (entries.size() != 1) {
       return List.of();
     }
-    return index.errorCodesFor(entries.get(0).file());
+    return index.errorCodesForMember(entries.get(0).file(), found);
   }
 }

@@ -80,6 +80,7 @@ final class JavacSourceSymbolIndex {
   private final Map<Path, List<AnnotationInfo>> packageAnnotationsByFile;
   private final List<IndexDiagnostic> diagnostics;
   private final Map<Path, List<String>> errorCodesByFile;
+  private final Map<Path, List<ErrorCodeRow>> errorLinesByFile;
   private final long wallMillis;
   private final long peakHeapBytes;
 
@@ -90,6 +91,7 @@ final class JavacSourceSymbolIndex {
       Map<Path, List<AnnotationInfo>> packageAnnotationsByFile,
       List<IndexDiagnostic> diagnostics,
       Map<Path, List<String>> errorCodesByFile,
+      Map<Path, List<ErrorCodeRow>> errorLinesByFile,
       long wallMillis,
       long peakHeapBytes) {
     this.typesByFile = typesByFile;
@@ -98,6 +100,7 @@ final class JavacSourceSymbolIndex {
     this.packageAnnotationsByFile = packageAnnotationsByFile;
     this.diagnostics = diagnostics;
     this.errorCodesByFile = errorCodesByFile;
+    this.errorLinesByFile = errorLinesByFile;
     this.wallMillis = wallMillis;
     this.peakHeapBytes = peakHeapBytes;
   }
@@ -203,6 +206,20 @@ final class JavacSourceSymbolIndex {
         sourceFile.toAbsolutePath().normalize(), List.of());
   }
 
+  /**
+   * The member-scoped javac error codes (#76): the codes of the rows
+   * whose line lies within the member's inclusive span, deduped by
+   * code at join time (the record-time rows keep every (line, code)
+   * pair). A row with a NON-POSITIVE line (NOPOSITION) joins every
+   * member-level lookup for the file — never silently dropped. An
+   * UNKNOWN member position (null, or a non-positive line) falls back
+   * to the file-level set: the conservative #62 behavior.
+   */
+  List<String> errorCodesForMember(Path sourceFile, MemberInfo member) {
+    return JavacMemberDiagnostics.memberCodes(
+        errorLinesByFile, errorCodesByFile, sourceFile, member);
+  }
+
   /** Wall time of the index build in milliseconds. */
   long wallMillis() {
     return wallMillis;
@@ -292,14 +309,15 @@ final class JavacSourceSymbolIndex {
       IndexRenderer.addCompilerDiagnostics(
           context, inputs.roots(), java.util.Set.copyOf(unitFiles), captured, diagnostics);
       Map<Path, List<String>> errorCodesByFile = new LinkedHashMap<>();
-      IndexRenderer.recordErrorCodesByFile(captured, errorCodesByFile);
+      Map<Path, List<ErrorCodeRow>> errorLinesByFile = new LinkedHashMap<>();
+      IndexRenderer.recordErrorCodesByFile(captured, errorCodesByFile, errorLinesByFile);
       Extractor extractor = new Extractor(
           Trees.instance(task), task.getElements(), task.getTypes());
       for (CompilationUnitTree unit : parsed) {
         extractor.scan(unit, null);
       }
       JavacSourceSymbolIndex index =
-          extractor.finish(diagnostics, errorCodesByFile, startNano,
+          extractor.finish(diagnostics, errorCodesByFile, errorLinesByFile, startNano,
               Math.max(heapBefore, heapUsed()));
       COMPILATIONS.incrementAndGet();
       return index;
@@ -327,6 +345,7 @@ final class JavacSourceSymbolIndex {
       List<IndexDiagnostic> diagnostics, long startNano, long heapBefore) {
     return new JavacSourceSymbolIndex(
         Map.of(), Map.of(), Map.of(), Map.of(), List.copyOf(diagnostics), Map.of(),
+        Map.of(),
         elapsedMillis(startNano), Math.max(heapBefore, heapUsed()));
   }
 
@@ -523,11 +542,14 @@ final class JavacSourceSymbolIndex {
     /**
      * Records the per-file compiler ERROR codes for the #62 per-member
      * evidence join, keyed by the normalized absolute path held at
-     * render time (never the rendered row path).
+     * render time (never the rendered row path). The #76 line-keyed
+     * companion keeps EVERY (line, code) row — no record-time dedup —
+     * for the member-scoped join.
      */
     static void recordErrorCodesByFile(
         List<Diagnostic<? extends JavaFileObject>> captured,
-        Map<Path, List<String>> errorCodesByFile) {
+        Map<Path, List<String>> errorCodesByFile,
+        Map<Path, List<ErrorCodeRow>> errorLinesByFile) {
       for (Diagnostic<? extends JavaFileObject> item : captured) {
         if (item.getKind() != Diagnostic.Kind.ERROR || item.getSource() == null) {
           continue;
@@ -541,6 +563,8 @@ final class JavacSourceSymbolIndex {
         if (!codes.contains(item.getCode())) {
           codes.add(item.getCode());
         }
+        errorLinesByFile.computeIfAbsent(path, ignored -> new ArrayList<>())
+            .add(new ErrorCodeRow(item.getLineNumber(), item.getCode()));
       }
     }
 
@@ -607,7 +631,7 @@ final class JavacSourceSymbolIndex {
 
     Extractor(Trees trees, Elements elements, Types types) {
       this.trees = trees;
-      this.reader = new ElementReader(elements, types);
+      this.reader = new ElementReader(trees, elements, types);
     }
 
     @Override
@@ -617,7 +641,7 @@ final class JavacSourceSymbolIndex {
         Path file = IndexRenderer.sourcePath(path.getCompilationUnit().getSourceFile());
         if (file != null) {
           typesByFile.computeIfAbsent(file, ignored -> new ArrayList<>())
-              .add(reader.typeInfo(element, file));
+              .add(reader.typeInfo(element, file, path.getCompilationUnit()));
         }
       }
       return super.visitClass(node, unused);
@@ -649,6 +673,7 @@ final class JavacSourceSymbolIndex {
 
     JavacSourceSymbolIndex finish(
         List<IndexDiagnostic> diagnostics, Map<Path, List<String>> errorCodesByFile,
+        Map<Path, List<ErrorCodeRow>> errorLinesByFile,
         long startNano, long peakHeap) {
       List<TypeInfo> all = typesByFile.values().stream()
           .flatMap(List::stream)
@@ -663,6 +688,7 @@ final class JavacSourceSymbolIndex {
           copyOfLists(flaggedByBinary),
           copyOfLists(packageAnnotationsByFile), List.copyOf(diagnostics),
           copyOfCodeLists(errorCodesByFile),
+          JavacMemberDiagnostics.copyOfRows(errorLinesByFile),
           elapsedMillis(startNano), peakHeap);
     }
 
@@ -748,11 +774,13 @@ final class JavacSourceSymbolIndex {
 
   /** Element-to-record conversion: names, kinds, types, and annotation values. */
   private static final class ElementReader {
+    private final Trees trees;
     private final Elements elements;
     private final Types types;
     private final MemberTypeShapes shapes;
 
-    ElementReader(Elements elements, Types types) {
+    ElementReader(Trees trees, Elements elements, Types types) {
+      this.trees = trees;
       this.elements = elements;
       this.types = types;
       this.shapes = new MemberTypeShapes(elements, types);
@@ -762,7 +790,7 @@ final class JavacSourceSymbolIndex {
       return elements.getPackageElement(name);
     }
 
-    TypeInfo typeInfo(TypeElement element, Path file) {
+    TypeInfo typeInfo(TypeElement element, Path file, CompilationUnitTree unit) {
       return new TypeInfo(
           element.getQualifiedName().toString(),
           elements.getBinaryName(element).toString(),
@@ -772,7 +800,7 @@ final class JavacSourceSymbolIndex {
               .map(AnnotationRenderer::info).toList(),
           element.getEnclosedElements().stream()
               .filter(ElementReader::isMember)
-              .map(this::memberInfo)
+              .map(member -> memberInfo(member, unit))
               .toList(),
           new TypeShape(declarationKind(element), isError(element.asType()), false,
               // Reflection sees a synthetic enclosing-instance parameter on
@@ -781,7 +809,7 @@ final class JavacSourceSymbolIndex {
               element.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)));
     }
 
-    private MemberInfo memberInfo(Element element) {
+    private MemberInfo memberInfo(Element element, CompilationUnitTree unit) {
       boolean executable = element.getKind() == ElementKind.METHOD
           || element.getKind() == ElementKind.CONSTRUCTOR;
       List<? extends VariableElement> parameters =
@@ -807,7 +835,16 @@ final class JavacSourceSymbolIndex {
           memberHasErrorType(element, executable),
           // getMethod/getConstructor return public members only, so the
           // reflection-target ladder (issue #25) needs the visibility.
-          element.getModifiers().contains(javax.lang.model.element.Modifier.PUBLIC));
+          element.getModifiers().contains(javax.lang.model.element.Modifier.PUBLIC),
+          memberPosition(element, unit));
+    }
+
+    /**
+     * The member's source line span (#76), delegated to
+     * {@link JavacMemberDiagnostics} (the PMD-forced extraction).
+     */
+    private MemberPosition memberPosition(Element element, CompilationUnitTree unit) {
+      return JavacMemberDiagnostics.position(trees, element, unit);
     }
 
     private static boolean isMember(Element element) {
@@ -1043,7 +1080,8 @@ final class JavacSourceSymbolIndex {
       MemberTypes types,
       List<List<AnnotationInfo>> parameterAnnotations,
       boolean errorType,
-      boolean publicMember) {
+      boolean publicMember,
+      MemberPosition position) {
 
     /** Canonical erased parameter spellings ({@code java.lang.String[]}). */
     List<String> parameterTypes() {
@@ -1075,6 +1113,26 @@ final class JavacSourceSymbolIndex {
 
   /** One annotation with its rendered element values. */
   record AnnotationInfo(String canonicalName, Map<String, String> values) {}
+
+  /**
+   * The source line span of one indexed member (issue #76): inclusive
+   * 1-based lines for the per-member javac diagnostics join. Null (or
+   * a non-positive line) means UNKNOWN position — synthetic members
+   * have no tree, and an implicit constructor's end is NOPOSITION (a
+   * point span at its start).
+   */
+  record MemberPosition(long startLine, long endLine) {
+
+    static final MemberPosition UNKNOWN = null;
+
+    /** The point-span form for members whose end position is NOPOSITION. */
+    static MemberPosition point(long line) {
+      return new MemberPosition(line, line);
+    }
+  }
+
+  /** One recorded javac error row for the per-member join (#76). */
+  record ErrorCodeRow(long line, String code) {}
 
   /** One diagnostic row; path is never absolute. */
   record IndexDiagnostic(String code, String message, String path, long line, long column) {}
