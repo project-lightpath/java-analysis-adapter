@@ -20,12 +20,33 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
   /** Confirms that a source owner resolves to the JDK API rather than an application type. */
   boolean isJdkApiOwner(
       SourceFile file, String spelling, int offset, String expectedType) {
+    // Issue #78 site entry: the classification of a receiver whose owner
+    // is being proven starts here, so the choke-point capture anchors this
+    // offset for any parameter-arm consultation beneath it. Nested site
+    // entries pass an equal offset, so the save/restore is idempotent.
+    int previous = captureSiteOffset;
+    captureSiteOffset = offset;
+    try {
+      return isJdkApiOwnerUncaptured(file, spelling, offset, expectedType);
+    } finally {
+      captureSiteOffset = previous;
+    }
+  }
+
+  /**
+   * The {@link #isJdkApiOwner} core for the inference paths (#78): the
+   * classification serves a var-initializer type inference, so any
+   * parameter-arm consultation beneath it belongs to the OUTER site's
+   * capture, not this inquiry's own offset.
+   */
+  boolean isJdkApiOwnerUncaptured(
+      SourceFile file, String spelling, int offset, String expectedType) {
     if (spelling != null
         && spelling.matches("[A-Za-z_$][\\w$]*")
         && hasVisibleValueNamed(file, spelling, offset)) {
       String expectedSimpleName = jdkSimpleName(expectedType);
       return expectedSimpleName != null
-          && isDeclaredVariableBefore(file, expectedSimpleName, spelling, offset);
+          && classifyDeclaredVariable(file, expectedSimpleName, spelling, offset);
     }
     return resolveOwnerType(spelling, file, offset)
         .map(expectedType::equals)
@@ -37,7 +58,10 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
     if (owner.find()) {
       int closing = matchingDelimiter(expression, owner.end() - 1, '(', ')');
       if (closing == expression.length() - 1
-          && isJdkApiOwner(file, owner.group(1), offset, "java.lang.Class")) {
+          // Issue #78: the uncaptured owner core — this inquiry serves a
+          // var initializer's type inference, so any parameter-arm
+          // consultation records the outer site's offset, not this one.
+          && isJdkApiOwnerUncaptured(file, owner.group(1), offset, "java.lang.Class")) {
         return true;
       }
     }
@@ -66,6 +90,29 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
 
   boolean isDeclaredVariableBefore(
       SourceFile file, String type, String variable, int offset) {
+    // Issue #78 site entry: receiver classification for a candidate site
+    // starts here, so the choke-point capture anchors this offset. Nested
+    // site entries (isJdkApiOwner internally, the chained-receiver arms)
+    // pass an equal offset, so the save/restore is idempotent.
+    int previous = captureSiteOffset;
+    captureSiteOffset = offset;
+    try {
+      return classifyDeclaredVariable(file, type, variable, offset);
+    } finally {
+      captureSiteOffset = previous;
+    }
+  }
+
+  /**
+   * The {@link #isDeclaredVariableBefore} core (#78): the body is
+   * capture-inert. Site entries set {@link #captureSiteOffset} before
+   * calling it; the inference paths call it directly so a parameter-arm
+   * consultation beneath a var-initializer type inference records the
+   * OUTER site's offset (transitive coverage) and never an
+   * initializer-internal offset (dead entries).
+   */
+  boolean classifyDeclaredVariable(
+      SourceFile file, String type, String variable, int offset) {
     MethodInfo owner = methodContaining(file, offset);
     if (owner.name().equals("<unknown>")) {
       return false;
@@ -76,8 +123,17 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
       // at extraction time so the feature-build re-query stays causal —
       // feature-time re-derivation of the receiver is prohibited (the
       // admitting extractor arm is not recoverable from the site alone).
-      parameterArmOffsets.computeIfAbsent(
-          file.path(), ignored -> new LinkedHashSet<>()).add(offset);
+      // Issue #78: the recorded offset is the classification's site entry
+      // offset, so transitively inferred receivers capture their own
+      // site's offset, and inference-internal inquiries record nothing.
+      // The guard is an invariant assertion: while the caller-map
+      // invariant holds (every inference root sits beneath a site entry),
+      // captureSiteOffset is always set here — a drop is impossible, not
+      // a silent skip.
+      if (captureSiteOffset >= 0) {
+        parameterArmOffsets.computeIfAbsent(
+            file.path(), ignored -> new LinkedHashSet<>()).add(captureSiteOffset);
+      }
       return parameterMatchesType(file, owner, type, variable, offset);
     }
     Optional<LocalDeclaration> local = activeLocalDeclaration(file, owner, variable, offset);
@@ -93,6 +149,17 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
     }
     return hasVisibleField(file, type, variable, offset);
   }
+
+  /**
+   * The offset whose receiver classification owns the choke-point capture
+   * (#78): set by the site-classification entries
+   * ({@link #isDeclaredVariableBefore} and {@link #isJdkApiOwner}), read by
+   * the parameter-match arm in {@link #classifyDeclaredVariable}. The
+   * inference paths never set it, so a transitive parameter-arm
+   * consultation records the outer site offset. Invariant: nested site
+   * entries pass an equal offset, keeping save/restore idempotent.
+   */
+  private int captureSiteOffset = -1;
 
   /**
    * The per-file offsets whose receiver classification consulted the
@@ -156,7 +223,10 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
     return isStandaloneClassForNameExpression(file, receiver, offset)
         || isStandaloneLoadClassExpression(file, receiver, offset)
         || receiver.matches("^[A-Za-z_$][\\w$.]*\\s*\\.\\s*class$")
-        || isDeclaredVariableBefore(file, "Class", receiver, offset)
+        // Issue #78: the uncaptured core — this inquiry serves the var
+        // initializer's type inference, so any parameter-arm consultation
+        // records the outer site's offset, not this initializer-internal one.
+        || classifyDeclaredVariable(file, "Class", receiver, offset)
         || receiver.matches("^(?:getClass\\s*\\(\\s*\\)|[A-Za-z_$][\\w$]*\\s*\\.\\s*"
             + "getClass\\s*\\(\\s*\\))$");
   }
@@ -171,9 +241,15 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
     }
     String receiver = lookup.group(1);
     if (receiver.equals("ClassLoader") || receiver.equals("java.lang.ClassLoader")) {
-      return isJdkApiOwner(file, receiver, offset + lookup.start(1), "java.lang.ClassLoader");
+      // Issue #78: the uncaptured owner core — same reason as below.
+      return isJdkApiOwnerUncaptured(
+          file, receiver, offset + lookup.start(1), "java.lang.ClassLoader");
     }
-    return isDeclaredVariableBefore(file, "ClassLoader", receiver, offset + lookup.start(1));
+    // Issue #78: the uncaptured core — this inquiry serves the var
+    // initializer's type inference, so any parameter-arm consultation
+    // records the outer site's offset, not this initializer-internal one.
+    return classifyDeclaredVariable(
+        file, "ClassLoader", receiver, offset + lookup.start(1));
   }
 
   boolean isStandaloneLoadClassExpression(SourceFile file, String expression, int offset) {
@@ -218,6 +294,9 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
         || normalizedReceiver.endsWith(".class")
         || isJdkClassForNameExpression(file, receiver, offset + lookup.start(1))
         || isJdkClassFieldReceiver(file, receiver, offset + lookup.start(1))
-        || isDeclaredVariableBefore(file, "Class", receiver, offset + lookup.start(1));
+        // Issue #78: the uncaptured core — this inquiry serves the var
+        // initializer's type inference, so any parameter-arm consultation
+        // records the outer site's offset, not this initializer-internal one.
+        || classifyDeclaredVariable(file, "Class", receiver, offset + lookup.start(1));
   }
 }

@@ -1,0 +1,179 @@
+# RESOLUTION-78 — Caller-abstention coverage for transitively inferred receivers
+
+Issue: project-lightpath/java-analysis-adapter#78 (follow-up from #62 /
+PR #72 residuals, `docs/resolutions/RESOLUTION-62.md`).
+Branch: `issue-78-caller-abstention-coverage` from `origin/main` @
+`1a2486f`. Commits: PLAN_78 (+ 4 plan-review amendments), RED_78,
+GREEN_78, EVIDENCE_78 (+ implementation-review amendments if any).
+
+## What changed
+
+The #62 choke-point capture at `isDeclaredVariableBefore` is now
+site-scoped instead of inquiry-scoped:
+
+- **`captureSiteOffset`** (new scanner field, Layer05): set by the two
+  site-classification entries — `isDeclaredVariableBefore` and
+  `isJdkApiOwner` — in a `try/finally` save/restore, read by the
+  parameter-match arm. The only remaining entry nesting is
+  `isSupportedChainedReceiver` → `startsWithJdkClassForName` →
+  `isJdkApiOwner` (Layer06), which threads one receiver start, so the
+  restore is idempotent; `isJdkApiOwner` itself delegates to its
+  uncaptured core, so its internal classification never re-enters a site
+  entry.
+- **`classifyDeclaredVariable` / `isJdkApiOwnerUncaptured`** (new cores,
+  Layer05): the current bodies, capture-inert. The parameter-match arm
+  records `captureSiteOffset` (when set) instead of its own inquiry
+  offset.
+- **The inference callers switch to the cores** (line references below
+  are MAIN-relative, from the pre-GREEN tree; in the shipped file the
+  calls sit at Layer05:229, :245/:251, :300, and :64):
+  `isClassLoaderResultExpression` (main Layer05:159),
+  `isRecognizedClassLoaderLookup` (:176 + its owner check at :174),
+  `isRecognizedClassLookup` (:221), and `isJdkClassForNameExpression`'s
+  owner check (:40).
+
+Consequences (exactly the two issue gaps):
+
+- **Gap A (dead entries)**: a parameter-arm consultation beneath a
+  var-initializer type inference no longer records its
+  initializer-internal offset (the file offset of the initializer's
+  sub-receiver — verified: `LocalDeclaration.initializerOffset` is
+  `matcher.start(2)`, file-absolute — which coincided with a site offset
+  only by accident).
+- **Gap B (transitive coverage)**: the same consultation records the
+  OUTER site entry's offset, so a reflection site whose receiver type was
+  transitively inferred from a parameter-initialized local now carries
+  `javacCallerAbstention` when the caller member's correlation abstains.
+  Multi-hop chains (`var c = klass.forName(...); var m =
+  c.getMethod(...); m.invoke(...)`) thread the site offset through every
+  nested var arm.
+
+Direct-site captures are byte-identical (every site caller passes the
+offset it passed before; the involved patterns are group-1-anchored so
+`matcher.start() == matcher.start(1)`). The channel remains
+visibility-only: never `scan.diagnostics()`, never blocking DEFINITE
+promotion, silent on flag-off and failed builds.
+
+## Acceptance evidence (issue #78)
+
+- E1: the `Method.invoke` fact over a var-inferred parameter-initialized
+  receiver carries `javacCallerAbstention=multi_type_file` and member
+  `demo.Sites#call(1)`; a field-initialized twin carries none on either
+  fact (causality).
+- E2: the ClassLoader chain (`var cl = klass.getClassLoader();
+  cl.loadClass(...)`) carries the abstention, and
+  `parameterReceiverOffsets(file)` equals exactly the loadClass site
+  offset — the dead entry is pinned gone.
+- E3: the two-hop chain carries the abstention on the invoke fact, and the
+  capture set equals exactly the three site offsets (forName, getMethod,
+  invoke) — pinning the `isRecognizedClassLookup` and
+  `isJdkClassForNameExpression` switched callers.
+- E6 (implementation review round 1): the loadClass-initializer chain (`var c = loader.loadClass("X");
+  var m = c.getMethod("run"); m.invoke(...)`) — all THREE facts carry the
+  abstention (the loadClass site directly, getMethod and invoke through the
+  var-inferred chain) and the capture set equals exactly the three site
+  offsets, pinning `isRecognizedClassLoaderLookup`'s classify arm.
+- E4: the flag-off twin sweeps every `javac*Abstention*` key on the
+  transitive fixture — none.
+- E5: the transitive abstention and a ServiceLoader DEFINITE site in one
+  scan: promotion untouched, diagnostics empty, the abstention rides the
+  invoke fact.
+- Gates: `make adapter-test` **741 executions** (main floor 735 + 6 cells:
+  E1–E5 plus E6 from the implementation review; Makefile counter raised
+  twice, 740 then 741), zero failures, **zero golden churn**
+  (the pre-GREEN audit class `JavaAnalysisAdapterTest` — including
+  `varUnrelated`, whose transitive consultation is rejected by
+  `parameterMatchesType` (`Router` ≠ `ClassLoader`) so its site is not
+  admitted — is green, churn none as predicted); `make java-lint` PASS
+  with 0 new findings on BOTH local JDK 27 and helios08 Temurin 17
+  scratch checkout (the #64 discipline; the only FAIL line in the
+  helios08 log is the lint plugin's own `Fixture.java` self-test);
+  `make evidence-validate` pass.
+
+## Mutation checks (executed, all red under exactly their own mutation;
+receipts re-derived on the final 6-cell suite after E6 landed)
+
+1. Core captures the inquiry `offset` instead of `captureSiteOffset` ⇒
+   E1/E2/E3/E5/E6 red (a capture still occurs, at the initializer-internal
+   offset — the attribute is lost AND the set pins see the dead entry
+   return); E4 (flag-off control) unaffected. 5 cells red.
+2. Capture removed entirely (`&& false` on the guard) ⇒ 9 cells red: the
+   five attribute-bearing E-cells (E1/E2/E3/E5/E6; E4 unaffected) plus
+   the #62 cells C10 (`reflectionCallerAbstentionIsVisibleAndCausal`),
+   D6 (`proxyCallerAbstentionIsVisible`), D1, D4 — the direct arm stays
+   pinned by the existing suite.
+3. `isClassLoaderResultExpression`'s inference call (main's Layer05:159)
+   uses the site entry (field reset) ⇒ exactly ONE cell red, E2's set pin;
+   E1 stays green (its chain crosses main's Layer05:221, not :159) — gap A
+   is isolated from gap B.
+4. `isRecognizedClassLoaderLookup`'s classify call (shipped Layer05:251)
+   reverted to the setting entry ⇒ exactly ONE cell red, E6 — the same
+   isolation per switched caller, re-verified independently in
+   implementation review round 2.
+
+## Review record
+
+- **Plan review**: 4 rounds (round 1: 4 findings — the golden-churn
+  surface named, the chained-receiver residual corrected, the dead-entry
+  scoping, `try/finally`; round 2: 4 findings — the `varUnrelated`
+  rejection trace, the site-offset dead-entry rescoping, the
+  nesting-idempotence invariant, mutation-3's named caller; round 3: 3
+  findings — the vacuous-RED fact-selection pin (MEDIUM), the #76
+  coordination step, the E4 race note; round 4: clean, named the concrete
+  symbols-based selection predicate). Confidence 0.82 → **0.92**, loop
+  closed.
+- **Implementation review**: round 1 (fresh Engram-grounded adversarial
+  subagent): caller map, threading, cross-file keying, offset-0, and test
+  quality all verified clean; 3 findings addressed in REVIEW_78_1: (1)
+  MEDIUM — gap A was pinned on only one of the four switched inference
+  callers: E3 gained an exact-set pin over its three site offsets (crosses
+  `isRecognizedClassLookup` and `isJdkClassForNameExpression`) and the new
+  E6 cell (loadClass-initializer chain) pins `isRecognizedClassLoaderLookup`
+  — all three facts carry the abstention and the set equals the three site
+  offsets;
+  (2) LOW — the resolution's nesting description corrected (the
+  `isJdkApiOwner` internal nesting was removed by the split; the remaining
+  nesting is the chained-receiver path); (3) NIT — the capture guard is
+  now documented as an invariant assertion, not a silent skip. Round 2
+  (fresh subagent): the round-1 incorporations verified end-to-end with
+  independently re-executed per-caller mutations (Layer05:251 → exactly E6
+  red; :300 and the owner check → E3 red); 3 LOW doc findings addressed in
+  REVIEW_78_2 (the E6 description, the 741 gate receipt, the plan's
+  implementation-amendments section). Round 3: 4 doc findings addressed in
+  REVIEW_78_3 — the mutation receipts re-derived on the final 6-cell suite
+  (mutation 1: 5 cells red; mutation 2: 9 cells red; a fourth receipt
+  recorded), the :251 line anchor, the 741 count, and the MAIN-relative
+  line-reference map. Round 4 verified every incorporation against the
+  shipped tree, origin/main, and the recorded history — **NO ADDRESSABLE
+  FINDINGS, loop closed**.
+
+## Residuals
+
+- Dead-entry shapes remain reachable at SITE offsets for transitive
+  chains (a capture for a site later rejected after a parameter-arm hit,
+  or admitted by the InvocationHandler arm of the METHOD_INVOKE `||`):
+  pre-existing for direct sites, newly reachable at site offsets here —
+  no behavior impact (the gate only annotates existing facts).
+- Chained-receiver shapes outside the choke point: terminal
+  `invoke`/`newInstance` chained sites are emitted at `terminalStart`
+  while their classification ran at `receiver.start()`, and non-SIMPLE
+  chained kinds never reach `isDeclaredVariableBefore` (the SIMPLE arm's
+  capture is live — `addChainedLookupSites` skips SIMPLE receivers as
+  already emitted by `addReceiverCallSites`).
+- Proxy transitive receivers remain unclassifiable (the inference grammar
+  yields only Method/Constructor/Class/ClassLoader) — no capture to gate.
+- #76 coordination: EXECUTED — after #76 merged as PR #79 (2026-11-27),
+  this branch rebased onto the new main. The rebase touched only the
+  Makefile floor (resolved 748 + 6 cells = 754; the sources were disjoint
+  as planned). Re-verified on the post-#76 base: the shared
+  `JavacAbstentionEvidenceTest` is 27/27 green (the
+  `javacCallerAbstentionMember` format pin survives #76's `MemberInfo`
+  position component — the identity format is unchanged), the full suite
+  reports **754 executions** with zero failures, `make java-lint` PASS,
+  `make evidence-validate` pass.
+
+Confidence score: **0.92** — both gaps reproduced probe-first on main and
+closed by one mechanism whose direct-site behavior is byte-identical;
+every delta is mutation-pinned end-to-end (gap A and gap B isolated separately, per switched
+caller); zero golden churn on the full 741-execution suite; the
+blast-radius contract is pinned by E5 and the E4 flag-off twin.
