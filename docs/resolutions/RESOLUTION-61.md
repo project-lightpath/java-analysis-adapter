@@ -6,7 +6,8 @@ out of #23's scope in PLAN-23 Non-goals).
 Branch: `issue-61-injection-javac-shapes` from `origin/main` @ `fb8a664`.
 Commits: PLAN_61 `21c5499` (+ rounds 1-5 amendments through `5d45148`),
 RED_61 `3dfd7c8`, GREEN_61 `084d2d0` (+ `4e76808`), EVIDENCE_61
-`f288fe1`.
+`f288fe1`, REVIEW_61_1 `5f04789`, REVIEW_61_2 `cc62d12`,
+REVIEW_61_3 `af36022`.
 
 ## What changed
 
@@ -68,8 +69,9 @@ decline-fallback:
   mutations); the phantom-constructor guard holds (A10 red under its
   removal); the qualifier ladder is never bypassed (A5's end-to-end
   twin).
-- Gates: `make adapter-test` **782 executions** (floor raised
-  754 → 782: the 28 new cells, zero other churn), zero failures;
+- Gates: `make adapter-test` **784 executions** (floor raised
+  754 → 784: the 30 new cells — 28 at GREEN plus the B6/B7 review
+  pins — zero other churn), zero failures;
   `make java-lint` PASS with 0 new findings on BOTH local JDK 27 and
   helios08 Temurin 17 (scratch checkout, identical measurements — the
   #64 discipline); `make evidence-validate` pass.
@@ -133,8 +135,25 @@ No other existing test was edited.
   raw-mismatch FALSE (round 4 — C1's generics-tail exit); the C4
   reach corrected to the code's real control flow (round 5). Loop
   closed at confidence **0.90**.
-- **Implementation review**: recorded in REVIEW_61_n commits (see the
-  git history and the round summaries below).
+- **Implementation review** (fresh Engram-grounded adversarial subagent
+  each round): round 1, 6 findings (2 MEDIUM — eager seam lookups on the
+  textual-answer path, fixed with a lazy Supplier ladder; missing
+  flag-off twins, fixed; 2 LOW — the toString-based Object omission and
+  the per-call regex, fixed with canonical comparison and per-file
+  memoization; 2 NIT — the triple erased-raw helper consolidated, the
+  Annotation implicit supertype omitted), all addressed in REVIEW_61_1;
+  round 2 verified every incorporation (lazy restructure semantically
+  equivalent, memoization sound, twins non-vacuous) and found 2 LOW
+  (the omission fix unpinned — B6 added; the omission-scope doc),
+  addressed in REVIEW_61_2; round 3 found 1 MEDIUM blocking — a REAL
+  flag-off leak: the C5 disjunct's row-side erasure is purely textual,
+  so a raw requested type could match a generic metadata row with the
+  seam entirely absent — fixed by requiring the requested side to be a
+  textual vacuum filled by the shape (B7 pins both flag states),
+  addressed in REVIEW_61_3; round 4 verified the fix closes the leak
+  completely (C4's contract side is seam-backed and dead flag-off;
+  C1/C2/C3 reduce byte-for-byte) — **no new addressable findings;
+  loop closed**.
 
 ## Behavior facts discovered at GREEN
 
@@ -168,7 +187,10 @@ No other existing test was edited.
   answers are kept by repair-only (characterized by D6a/D8p/D10).
 - Same-arity overload pairs never repair (fail-closed, A7).
 
-Confidence score: **0.88** — the ladder design survived five
-adversarial plan rounds and eight mutation checks; the flag-off path
-is pinned in every cell; the residual surface (metadata spellings,
-generic rows, proxy rows) is enumerated with reasons.
+Confidence score: **0.91** — the ladder design survived five adversarial
+plan rounds and four implementation rounds (the round-3 flag-off leak
+was the last falsifiable defect class, and its fix is pinned in both
+flag states); the flag-off path is byte-identical by construction and
+pinned in every cell; eight mutation receipts hold; the residual
+surface (metadata spellings, generic rows, proxy rows) is enumerated
+with reasons.
