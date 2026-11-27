@@ -113,7 +113,10 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
    * (an implements spelling that is a textual vacuum). Generics-gated
    * (the shapes are erased; a generic requested type keeps the
    * generic-retaining textual semantics, which alone can compare type
-   * arguments).
+   * arguments). CodeRabbit 4724039692: when javac's requested shape is
+   * KNOWN and diverges from the textual identity (a nested-type shadow
+   * over an imported name — the 2-arg resolver has no nested rung), the
+   * disjunct declines: no index match is built on a divergent identity.
    */
   private static boolean indexContract(
       SourceMetadataScanner scanner,
@@ -126,11 +129,17 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
     }
     Optional<String> requestedRaw = erasedRaw(
         requestedType, injectionFile, scanner, () -> requestedShape);
-    return requestedRaw.isPresent()
-        && JavacInjectionTypeShapes.of(scanner)
-            .contractShapes(candidate)
-            .map(supertypes -> supertypes.contains(requestedRaw.get()))
-            .orElse(false);
+    if (requestedRaw.isEmpty()) {
+      return false;
+    }
+    if (requestedShape.isPresent()
+        && !requestedRaw.get().equals(requestedShape.get())) {
+      return false;
+    }
+    return JavacInjectionTypeShapes.of(scanner)
+        .contractShapes(candidate)
+        .map(supertypes -> supertypes.contains(requestedRaw.get()))
+        .orElse(false);
   }
 
   /** Compares generic contract arguments whenever either side provides them. */

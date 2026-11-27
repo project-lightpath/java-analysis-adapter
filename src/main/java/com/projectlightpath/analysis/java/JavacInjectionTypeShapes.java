@@ -47,6 +47,39 @@ final class JavacInjectionTypeShapes {
         || parameterIndex >= injection.parameters().size()) {
       return Optional.empty();
     }
+    // CodeRabbit 4724039702: an explicit receiver parameter
+    // (`Consumer this` / `Outer.Consumer this`) is kept by the textual
+    // split — it inflates the lookup arity and misaligns the formal
+    // index, attributing a sibling overload's type. Receiver parameters
+    // are reserved-position (first, name `this` or `Qual.this`), so the
+    // whole site abstains.
+    if (hasReceiverParameter(injection)) {
+      return Optional.empty();
+    }
+    return memberFor(injection)
+        .filter(member -> shapeUsable(injection, member, parameterIndex))
+        .map(member -> parameterShape(injection, member, parameterIndex))
+        .orElse(Optional.empty());
+  }
+
+  /** Reports whether the first parameter is an explicit receiver. */
+  private static boolean hasReceiverParameter(
+      SourceMetadataScannerState.InjectionPoint injection) {
+    if (injection.parameters().isEmpty()) {
+      return false;
+    }
+    String firstName = injection.parameters().get(0).name();
+    return "this".equals(firstName) || firstName.endsWith(".this");
+  }
+
+  /**
+   * The unique index member for one injection site, or empty on every
+   * decline: constructor sites re-apply the extractor's phantom-site
+   * guard through the SHARED extraction rule; method and field sites
+   * look up by owner, name, kind, and arity.
+   */
+  private Optional<JavacSourceSymbolIndex.MemberInfo> memberFor(
+      SourceMetadataScannerState.InjectionPoint injection) {
     String kind = injection.kind();
     String memberName;
     int arity;
@@ -71,21 +104,31 @@ final class JavacInjectionTypeShapes {
     } else {
       return Optional.empty();
     }
-    JavacFrameworkMemberLookup.MemberLookup lookup =
-        JavacFrameworkMemberLookup.of(scanner)
-            .lookup(injection.ownerType(), memberName, kind, arity);
-    if (lookup.member().isEmpty()) {
-      return Optional.empty();
+    return JavacFrameworkMemberLookup.of(scanner)
+        .lookup(injection.ownerType(), memberName, kind, arity)
+        .member();
+  }
+
+  /** Reports whether the found member carries a shape at the index. */
+  private static boolean shapeUsable(
+      SourceMetadataScannerState.InjectionPoint injection,
+      JavacSourceSymbolIndex.MemberInfo member,
+      int parameterIndex) {
+    if ("field".equals(injection.kind())) {
+      return !member.returnType().isEmpty();
     }
-    JavacSourceSymbolIndex.MemberInfo member = lookup.member().orElseThrow();
-    if ("field".equals(kind)) {
-      return member.returnType().isEmpty()
-          ? Optional.empty()
-          : Optional.of(member.returnType());
+    return parameterIndex < member.parameterTypes().size();
+  }
+
+  /** The shape itself: a field's declared type, or one formal type. */
+  private static Optional<String> parameterShape(
+      SourceMetadataScannerState.InjectionPoint injection,
+      JavacSourceSymbolIndex.MemberInfo member,
+      int parameterIndex) {
+    if ("field".equals(injection.kind())) {
+      return Optional.of(member.returnType());
     }
-    return parameterIndex < member.parameterTypes().size()
-        ? Optional.of(member.parameterTypes().get(parameterIndex))
-        : Optional.empty();
+    return Optional.of(member.parameterTypes().get(parameterIndex));
   }
 
   /**

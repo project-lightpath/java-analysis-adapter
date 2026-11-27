@@ -131,13 +131,16 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
   }
 
   /**
-   * The index metadata comparison (issue #61): the row's textual erased
-   * raw against the requested type's index shape. The disjunct fires ONLY
-   * when the requested side is a textual VACUUM filled by the shape
-   * (review round 3: the row side is purely textual, so without the
-   * vacuum requirement a raw requested type could match a generic row
-   * FLAG-OFF — a byte-identity violation). Generics-gated — erased shapes
-   * cannot compare type arguments.
+   * The index metadata comparison (issue #61): the row's concrete type or
+   * contract spellings against the requested type's index shape. The
+   * disjunct fires ONLY when the requested side is a textual VACUUM
+   * filled by the shape (review round 3: the row side is purely textual,
+   * so without the vacuum requirement a raw requested type could match a
+   * generic row FLAG-OFF — a byte-identity violation). Generics-gated on
+   * BOTH sides — the requested type AND the row spelling (CodeRabbit
+   * 4724039721: a parameterized row must be rejected identically under
+   * every import form — the shape must not erase the row's type
+   * arguments into an admission the explicit-import form refuses).
    */
   private static boolean indexMetadataMatch(
       SourceMetadataScanner scanner,
@@ -152,9 +155,30 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
         .isPresent()) {
       return false;
     }
-    Optional<String> rowRaw = canonicalType(
-        eraseGenericArguments(row.candidateType()), injectionFile, scanner);
-    return rowRaw.isPresent() && rowRaw.get().equals(requestedShape.get());
+    String shape = requestedShape.get();
+    // CodeRabbit 4724039678: the CONTRACT arm — a row matching only
+    // through its declared contracts must be honestly counted when the
+    // shape proves the requested type, exactly as the textual ladder
+    // counts it when the requested type resolves (an invisible active
+    // competitor would otherwise yield an unopposed DEFINITE).
+    return nonGenericRawEquals(scanner, injectionFile, row.candidateType(), shape)
+        || row.contracts().stream()
+            .anyMatch(contract -> nonGenericRawEquals(
+                scanner, injectionFile, contract, shape));
+  }
+
+  /** One non-generic row spelling whose erased raw equals the shape. */
+  private static boolean nonGenericRawEquals(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String spelling,
+      String shape) {
+    if (hasGenericArguments(spelling)) {
+      return false;
+    }
+    return canonicalType(eraseGenericArguments(spelling), injectionFile, scanner)
+        .map(shape::equals)
+        .orElse(false);
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */
