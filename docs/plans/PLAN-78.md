@@ -120,7 +120,12 @@ the channel still never blocks DEFINITE promotion; flag-off stays silent.
   loader.getMethod("run"); method.invoke(this);` with `loader` a parameter,
   multi-type-file caller — the `Method.invoke` fact carries
   `javacCallerAbstention=multi_type_file` and member
-  `demo.<Type>#call(1)`; diagnostics stay empty. Field-receiver twin
+  `demo.<Type>#call(1)`; diagnostics stay empty. FACT-SELECTION PIN (plan
+  review round 3, finding 1): the fixture yields TWO reflection facts in
+  the same caller (`getMethod`, which already carries the attribute on
+  main, sorted first) — select the invoke fact by its distinguishing
+  target/symbol, never by `findFirst()` on the caller filter, or RED_78 is
+  vacuously green. Field-receiver twin
   (`Class<?> loader;` field): the `Method.invoke` fact carries NO caller
   abstention (causality — the transitive chain consulted a field arm, not
   the parameter arm).
@@ -133,12 +138,14 @@ the channel still never blocks DEFINITE promotion; flag-off stays silent.
 - **E3 (two-hop transitive)**: `var c = klass.forName("X");
   var m = c.getMethod("run"); m.invoke(this);` — the `Method.invoke` fact
   carries the caller abstention (the capture threads through two inference
-  hops and a nested var arm).
+  hops and a nested var arm). Same fact-selection pin as E1: three facts in
+  one caller; assert the INVOKE fact specifically.
 - **E4 (flag-off twin)**: the E1 fixture with the flag off — no
   `javac*Abstention*` key on any fact (D2-style sweep).
 - **E5 (blast radius twin)**: the E1 fixture and a ServiceLoader DEFINITE
-  site in one scan — promotion untouched, diagnostics empty, the transitive
-  abstention rides the fact (D1-style).
+  site in one scan (D1-style, real javac compile + provider jar + full
+  `analyze`) — promotion untouched, diagnostics empty, the transitive
+  abstention rides the INVOKE fact (same selection pin).
 
 Fixture-shape pins (from the #62 record and the harness): declare
 `class Nested` AFTER the caller method (a type immediately before the
@@ -170,6 +177,17 @@ diff safety net (other members could churn).
 - Zero edits to existing tests; additions only.
 - Adversarial review: plan review loop and post-implementation review loop
   with fresh Engram-grounded subagents until no addressable findings.
+- **#76 coordination (plan review round 3, finding 2)**: #76 appends cells
+  to the same `JavacAbstentionEvidenceTest` and bumps the same Makefile
+  floor literal — after any rebase onto a base that includes #76, re-run
+  E1–E5, re-derive the floor from what the new main reports, and re-verify
+  the `javacCallerAbstentionMember` format pin against #76's
+  `JavacSourceSymbolIndex`/`MemberInfo` changes rather than carrying it
+  over.
+- E4 (flag-off twin) doubles the pre-existing flag-mutation race window in
+  the concurrently-executing class (D2 mutates the system property with
+  only `@AfterEach` cleanup); if it flakes, serialize the flag-mutating
+  cells or fold E4's sweep into D2's flag-off phase.
 
 ## Mutation checks (EVIDENCE_78)
 
@@ -244,3 +262,15 @@ nest (`isJdkApiOwner` → `isDeclaredVariableBefore`;
 idempotence, now stated; (4) NIT — mutation check 3 names its caller
 (Layer05:159) so the RED expectation is unambiguous. Confidence after
 round 2: **0.90**.
+
+Round 3 (fresh adversarial subagent): all round-2 amendments verified
+against source (including the full `varUnrelated` rejection trace through
+`parameterMatchesType`/`isJdkTypeOrSubclass`, and the E2 single-site
+single-capture walk). 3 findings, all incorporated: (1) MEDIUM — E1/E3/E5
+must pin INVOKE-fact selection by target/symbol, not the caller-filter
+`findFirst()` idiom (the `getMethod` fact sorts first and already carries
+the attribute on main, making RED vacuous otherwise); (2) LOW — #76 shares
+the test file and the Makefile floor literal: re-run E1–E5, re-derive the
+floor, and re-verify the member-format pin after any rebase onto a
+post-#76 base; (3) NIT — E4 widens the pre-existing flag-off race window;
+mitigation documented. Confidence after round 3: **0.92**.
