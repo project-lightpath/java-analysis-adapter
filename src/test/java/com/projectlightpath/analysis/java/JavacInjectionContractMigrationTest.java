@@ -1324,6 +1324,156 @@ class JavacInjectionContractMigrationTest {
             + "resolved textually, so no index participation");
   }
 
+  // CR-1 (CodeRabbit 4724039678): a metadata-only row matching only
+  // through its CONTRACTS must be honestly counted when the shape proves
+  // the requested type — otherwise an active competitor is invisible in
+  // the vacuum case and an unopposed DEFINITE is emitted (the textual
+  // ladder counts the same row when the requested type resolves).
+  @Test
+  void metadataOnlyRowContractsAreCountedThroughTheRequestedShape()
+      throws IOException {
+    Path sourceRoot = root("cr1");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        contractRow("array-list", "java.util.ArrayList", "demo.Outside",
+            "java.util.List")));
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the textual vacuum hides the row");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "flag-on: the shape-proven contract row is honestly counted in "
+            + "the eligible set (a downgrade, never a fabrication) — "
+            + "without the contract arm this would be DEFINITE");
+  }
+
+  // CR-2 (CodeRabbit 4724039692): a nested-type shadow over an imported
+  // name makes the textual identity diverge from javac's shape (JLS:
+  // the same-CU member type wins over the single-type import; the 2-arg
+  // textual resolver has no nested rung). The index contract disjunct
+  // must not build a match on the divergent textual identity.
+  @Test
+  void nestedShadowContractDoesNotMatchThroughTheIndex() throws IOException {
+    Path sourceRoot = root("cr2");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.io.Serializable;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          public interface Serializable { }
+          @Autowired public Consumer(Serializable record) { }
+        }
+        """);
+    write(sourceRoot, "demo/RecordBean.java", """
+        package demo;
+        import java.io.*;
+        import org.springframework.stereotype.Component;
+        @Component public class RecordBean implements Serializable {
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot);
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the candidate's implements spelling is a "
+            + "textual vacuum");
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(on, "demo.Consumer").certainty(),
+        "the index disjunct declines when the requested shape "
+            + "(demo.Consumer.Serializable) diverges from the textual "
+            + "identity (java.io.Serializable)");
+  }
+
+  // CR-3 (CodeRabbit 4724039702): an explicit receiver parameter inflates
+  // the textual arity and misaligns the shape lookup — a same-arity
+  // sibling overload would attribute the WRONG formal type. The seam
+  // abstains for receiver-parameter injections.
+  @Test
+  void receiverParameterAbstains() throws IOException {
+    Path sourceRoot = root("cr3");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public void wire(Consumer this, List list) { }
+          public void wire(java.util.Map map, java.util.Set set) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.InjectionPoint point = injectionPoint(
+        scanner, "demo.Consumer", "wire");
+    assertEquals(Optional.empty(),
+        JavacInjectionTypeShapes.of(scanner).requestedShape(point, 1),
+        "a receiver-parameter injection abstains: the inflated arity must "
+            + "not attribute the sibling overload's formal type");
+  }
+
+  // CR-4 (CodeRabbit 4724039721): a PARAMETERIZED metadata row must be
+  // rejected identically under both import forms — the wildcard form's
+  // shape must not erase the row's type arguments into an admission the
+  // explicit form refuses (the ONE-identity acceptance).
+  @Test
+  void wildcardImportRejectsParameterizedMetadataRow() throws IOException {
+    Path sourceRoot = root("cr4");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        row("parameterized-row", "java.util.List<java.lang.String>",
+            "demo.Outside")));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
+        injection(on, "demo.Consumer").certainty(),
+        "the wildcard form rejects the parameterized row exactly like "
+            + "the explicit-import form — one identity across import "
+            + "styles");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
@@ -1425,6 +1575,15 @@ class JavacInjectionContractMigrationTest {
         id, candidateType, List.of(), List.of(), "producer", declaringType,
         producerMethod, null, List.of(), List.of(), true, false, false,
         null, null);
+  }
+
+  private static AnalysisContext.BindingCandidateMetadata contractRow(
+      String id, String candidateType, String declaringType,
+      String contract) {
+    return new AnalysisContext.BindingCandidateMetadata(
+        id, candidateType, List.of(contract), List.of(), "bean",
+        declaringType, null, null, List.of(), List.of(), true, false,
+        false, null, null);
   }
 
   private static void write(Path root, String relative, String source)
