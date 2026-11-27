@@ -113,6 +113,10 @@ List<String> errorCodesForMember(Path file, MemberInfo member)
   `start == -1`, plan-review round 1, finding 2) → the file-level set
   (`errorCodesFor(file)`): the conservative #62 behavior (a synthetic
   member cannot be narrowed; dropping codes would under-report).
+  Symmetrically, a diagnostic ROW with a non-positive line
+  (`Diagnostic.getLineNumber() == NOPOS`, plan-review round 2, F1) is
+  treated like unknown position: its code joins EVERY member-level
+  lookup for that file, never silently dropped.
 - Empty result when the file recorded no errors — same as today.
 
 ### The consumers
@@ -159,9 +163,13 @@ List<String> errorCodesForMember(Path file, MemberInfo member)
   with an unresolvable SIMPLE-NAME parameter type in a resolvable
   package (`compiler.err.cannot.find.symbol`) — two missing package
   prefixes would yield the SAME code and dedupe, so the codes must
-  differ by KIND (plan-review round 1, finding 1). Each member's
-  abstention carries ONLY its own code (pre-change both abstentions
-  carry both codes).
+  differ by KIND (plan-review round 1, finding 1). The exact javac
+  code literals are enumerated at RED from a probe (plan-review round
+  2, F2: the repo pins `doesnt.exist` for missing packages; the
+  simple-name failure literal — `cannot.find.symbol` or
+  `cant.resolve.location` — is probed, not pre-committed). Each
+  member's abstention carries ONLY its own code (pre-change both
+  abstentions carry both codes).
 - E2 **body-error exclusion (plan-review round 1, finding 6)**:
   member A error-typed at its signature; member B carries an error
   INSIDE its body (e.g. an unreachable statement) without being
@@ -252,6 +260,20 @@ semantics and LineMap specified (finding 9). Verified clean: the
 single `typeInfo` caller, positions surviving `flaggedCopy`, no direct
 test constructions of `MemberInfo`.
 Confidence score after round 1: **0.87**.
+
+Round 2 (fresh adversarial subagent): 2 addressable findings (1
+MEDIUM, 1 LOW), both incorporated: a diagnostic ROW with a
+non-positive line (`NOPOS`) joins every member-level lookup for its
+file rather than being silently dropped (F1 — the symmetric
+under-report guard); E1's javac code literals are probed at RED, not
+pre-committed (F2 — the repo pins `doesnt.exist` only; the
+simple-name failure literal is probed). Verified clean: the (file,
+member) pairing preserves the bijection's inputs exactly (identical
+group list and order); the unique-owner guard holds on both
+`error_type_member` and `member_absent`; no `MemberInfo`
+equality/hashCode consumers; a single `ElementReader` instantiation;
+E1's two members produce two distinguishable end-to-end abstentions.
+Confidence score after round 2: **0.90**.
 
 Confidence score (pre-plan-review): **0.82** — the design is grounded
 in a position spike on the exact boundary classes (null trees,
