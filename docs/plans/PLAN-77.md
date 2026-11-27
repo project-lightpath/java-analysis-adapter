@@ -50,15 +50,19 @@ already apply.
   (FrameworkBeanScanning.java:170, `javac.memberLookup(
   scanner.typeContaining(file, method.start()), ...)`) — a different
   seam (seam C member lookup) feeding `javacMirrorAbstention` and the
-  annotation-mirror value families. [SCOPE DECISION — see plan review]
+  annotation-mirror value families (same over-abstention defect
+  class, safe direction; candidate follow-up with the two below).
 - `FrameworkInjectionScanning.methodInjectionPoints:159` — the
   injection-point seam's owner (raw anchor, same defect class,
   different seam; candidate follow-up).
-- `FrameworkRouteScanning.routesForMethod:186` — anchor-safe by
-  construction: `routesForFile:114-118` filters to methods whose
-  `declarationStart`-normalized owner IS the top-level type before the
-  raw-anchor mirror lookup runs, so the two anchors cannot diverge
-  there (verified by reading, see plan review).
+- `FrameworkRouteScanning.routesForMethod:186` — the route mirror
+  lookup's raw anchor CAN diverge from the `declarationStart` filter
+  at `routesForFile:112-118`: that filter constrains only the
+  NORMALIZED owner (a top-level route method declared after
+  `class Helper { }` passes it), so the raw anchor at :186 still
+  resolves `Ctrl$Helper` (plan-review round 1, finding 2 — the
+  original "anchor-safe by construction" claim was wrong). Same
+  over-abstention defect class; candidate follow-up.
 - Everything else the #62 channel pinned: never `scan.diagnostics()`,
   never blocking DEFINITE promotion, flag-off emits no evidence,
   `withSilencedEvidence` failed-build handling, unique-owner guards.
@@ -91,6 +95,16 @@ inventory is the check that no unconsidered divergence shape (a
 type-like construct `typeContaining` credits but the index does not
 count) contradicts it.
 
+The closure is structural, not just fixture coverage (plan-review
+round 1, finding 4): `typeDeclarations`/`typeContaining` run on
+comment-stripped, literal-masked source (`structuralSource` from
+`stripComments`, `TextLayer07.read:59` / `FileExtracts:86-87`), so
+commented-out or string-literal "types" are never credited; and the
+index's `visitClass` (`JavacSourceSymbolIndex:637-648`) records EVERY
+`TypeElement` with no nesting filter — nested, local, anonymous,
+enum, record, interface all count toward `typesIn`. Divergence ⇒
+`typesIn ≥ 2` in every constructible shape.
+
 [PROBE RESULTS — executed 2026-11-27, this main @ fb8a664]
 
 - Baseline: green, 754 executions (default=640, large=1, sootup=113).
@@ -118,10 +132,17 @@ count) contradicts it.
    same package — accessible). Update the inline comment: the owner now
    derives through the declarationStart normalization like every other
    correlation consumer.
-2. No signature, wiring, attribute-key, or channel changes: the
+2. Comment updates (plan-review round 1, finding 1): the
+   `JavacAbstentionEvidence.producerTypeAttributes` javadoc
+   (`JavacAbstentionEvidence.java:95-102`) justifies the separate key
+   family by the two-seams-two-derivations argument — now false. New
+   rationale: the families describe DIFFERENT lookups (the descriptor
+   member vs the producer bean type) that can both decline for one
+   candidate.
+3. No signature, wiring, attribute-key, or channel changes: the
    producer-type abstention still rides the bean_candidate evidence
    under `javacProducerTypeAbstention*`, never `scan.diagnostics()`.
-3. Golden/characterization updates captured from observed output only.
+4. Golden/characterization updates captured from observed output only.
 
 ## Test matrix
 
@@ -138,7 +159,15 @@ count) contradicts it.
     top-level owner, the code stays `multi_type_file`, and the
     producer type keeps its textual spelling (the value-change arm
     is unconstructible: divergence ⇒ multi-type file ⇒ blocked
-    correlation — see the preflight analysis).
+    correlation — see the preflight analysis). Scaffolding
+    (plan-review round 1, finding 3): `JavacAbstentionEvidenceTest`'s
+    `context()` hardcodes SPRING_BOOT, so N1 needs a Quarkus context
+    helper (precedent `DynamicCertaintyGuardTest:264-280`), and the
+    fixture MUST import the CDI `Produces` (e.g.
+    `jakarta.enterprise.inject.Produces`) — `cdiProducerAnnotation`
+    requires either an FQN match or a simple `@Produces` with a CDI
+    import in the file, or the cell silently produces no
+    bean_candidate.
   - N2 (anchor-stability control): a producer in a file with NO
     nested types — byte-identical output before/after (golden pin
     of the producer type and the abstention-free evidence).
