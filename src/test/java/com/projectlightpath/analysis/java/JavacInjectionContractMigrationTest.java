@@ -723,7 +723,10 @@ class JavacInjectionContractMigrationTest {
   }
 
   // B5: the generics gate (C5) — a metadata-only row with the bare erased
-  // type must not match a generic requested type through the disjunct.
+  // type must not match a generic requested type through the disjunct
+  // (with a producer match present, the row would otherwise enter the
+  // eligible set and downgrade the DEFINITE). Red under a gate-removal
+  // mutation.
   @Test
   void genericRequestedTypeDoesNotMatchErasedMetadataRow() throws IOException {
     Path sourceRoot = root("b5");
@@ -731,22 +734,32 @@ class JavacInjectionContractMigrationTest {
         package demo;
         public interface Repo<T> { }
         """);
+    write(sourceRoot, "demo/User.java", "package demo; public class User { }\n");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public Repo<User> repoBean() { return null; }
+        }
+        """);
     write(sourceRoot, "demo/Consumer.java", """
         package demo;
         import org.springframework.beans.factory.annotation.Autowired;
         import org.springframework.stereotype.Component;
         @Component public class Consumer {
-          @Autowired public Consumer(Repo<demo.User> repo) { }
+          @Autowired public Consumer(Repo<User> repo) { }
         }
         """);
-    write(sourceRoot, "demo/User.java", "package demo; public class User { }\n");
-    AnalysisContext context = springContext(sourceRoot, List.of(row(
-        "erased-row", "Repo", "demo.Repo")));
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("repoBean", "demo.Repo", "demo.Config", "repoBean"),
+        row("erased-row", "Repo", "demo.Outside")));
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
-    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
         injection(on, "demo.Consumer").certainty(),
-        "the metadata-row disjunct is gated on generic requested types");
+        "the metadata-row disjunct is gated on generic requested types: "
+            + "the erased Repo row must not enter the eligible set");
   }
 
   // ------------------------------------------------------------------
