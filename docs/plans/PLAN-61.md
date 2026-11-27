@@ -273,12 +273,24 @@ Two rules govern every arm (review round 1, findings 1–3):
   round-2 dead-code disposition is REVERSED). Rationale: with C2 left
   textual, a shape-filled FALSE in C1 short-circuits `matches`
   (TypeMatching:46-47) through a textual C2 that still sees the vacuum
-  — flipping a previously-TRUE `matches` to FALSE. With the identical
-  helper, C1's FALSE entails C2's TRUE, the null and FALSE branches of
-  `matches`/`typeMatchCertain` become behaviorally identical (both
-  reduce to `contractMatches`), and the `typeMatchCertain` promotion
-  path at TypeMatching:65-67 becomes reachable exactly when every
-  input is javac-proven (see §3.5).
+  — flipping a previously-TRUE `matches` to FALSE. SCOPE of the
+  uniformity claim (review round 4, finding 1): C1 has a SECOND FALSE
+  exit — the generics tail (TypeSupport:80-92, equal raws + generic
+  producer signatures with differing full canonicals) — where C2
+  correctly stays false. That tail is byte-identical pre/post change:
+  it requires both full canonicals textually PRESENT, and a
+  canonical-present spelling has a present erased raw through the same
+  base-name resolver (TypeParsing:52-55; `eraseGenericArguments`
+  yields the same base), so the helper returns the textual value and
+  the shapes are unused. The entailment "C1 FALSE ⟹ C2 TRUE" holds
+  exactly for the raw-mismatch FALSE (TypeSupport:77-78); the
+  generics-tail FALSE is a pre-existing textual residual where C2
+  stays false by design — an implementer must NOT drop the
+  `directCompatibility == Boolean.FALSE` guard at TypeMatching:65 as
+  "redundant," or a C1=null + purely-textual contract match could
+  promote to DEFINITE. With the identical helper, the null and
+  raw-mismatch-FALSE branches of `matches`/`typeMatchCertain` are
+  behaviorally identical (both reduce to `contractMatches`).
 - **C3 `injectionTypesMatch`**: in the ERASED branch, `sourceRaw` uses
   the repair-only helper (requested shape arm); the metadata side and
   the bothGeneric branch stay textual (generic binding rows are a
@@ -291,9 +303,13 @@ Two rules govern every arm (review round 1, findings 1–3):
   disjunct is evaluated independent of the `requested.isEmpty()` early
   return (TypeMatching:77-80) — the shape arm fires precisely when
   that early return would (the A1/B1 defect class), so the early
-  return must not preempt it. REACH (with C2 helper-armed): the
-  disjunct is consultable from BOTH the null and the FALSE branch of
-  `matches`/`typeMatchCertain` (they reduce to `contractMatches`);
+  return must not preempt it. REACH (with C2 helper-armed; review
+  round 4, finding 1): the disjunct is consultable from `matches`'s
+  null branch and from the FALSE branches of both `matches` and
+  `typeMatchCertain` (which reduce to `contractMatches`); it is NEVER
+  consultable from `typeMatchCertain`'s null branch (TypeMatching:65
+  short-circuits a null directCompatibility to false without
+  consulting `contractMatches` — pre-existing behavior, unchanged);
   `typeMatchCertain`'s producer-blank early return (:62-64) keeps the
   pre-existing producer rule. The contract side's index shapes answer
   exactly the case the textual contract resolution cannot (an
@@ -417,11 +433,15 @@ identity strings are involved). Cells:
   D6b same-CU type with no matching import (textual FAILS — the repair
   resolves the CU's own nested type); D7 single-type import of a
   same-package type (legal Java; must resolve — parity cell);
-  D8 same-package × same-CU and D9 on-demand × same-CU (constructed
-  with an EMPTY or external weaker rung — an on-demand import of a
-  package absent from `files()` — so the textual resolver fails and
-  the repair resolves the CU's own nested type; the populated-rung
-  variants are kept-residual characterizations like D6a);
+  D8 same-package × same-CU and D9 on-demand × same-CU — each cell
+  carries TWO assertions: the repair form (constructed with an EMPTY
+  or EXTERNAL weaker rung — D9: an on-demand import of a package
+  absent from `files()`; D8: a same-package simple name whose only
+  declaring type sits OUTSIDE the selected file set — so the textual
+  resolver fails and the repair resolves the CU's own nested type)
+  and a populated-rung CHARACTERIZATION twin (the weaker rung answers
+  JLS-wrong; the textual answer is kept by repair-only, pinned as the
+  residual, symmetric with D6a/D10);
   D10 java.lang × same-CU — CHARACTERIZATION cell (the java.lang rung
   always answers for a `String`-named nested type; JLS-wrong textual
   answer kept by repair-only, pinned as the residual);
@@ -481,6 +501,20 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
   empty/external weaker rungs); 1 LOW (nested canonical form folded
   into the P1/P5 probe receipts); 1 NIT (the invariant restated at the
   resolution level; C3's both directions enumerated).
+- **Round 4** (convergence check): 3 findings — 1 HIGH plan-truth
+  defect (the uniformity claim was falsified by C1's SECOND FALSE
+  exit, the generics tail at TypeSupport:80-92, where C2 correctly
+  stays false — the tail is byte-identical pre/post because
+  canonical-present implies raw-present, so the shapes are unused
+  there; the claim is now scoped to the raw-mismatch FALSE, the tail
+  recorded as a pre-existing textual residual, and the
+  `directCompatibility == Boolean.FALSE` guard at TypeMatching:65 is
+  explicitly NOT droppable); 2 LOW (the "exactly when" reachability
+  overclaim corrected to §3.5's accurate form — the :65-67 conjunction
+  was already reachable with purely textual inputs; D8/D9 gained
+  their populated-rung characterization twins and D8's external-rung
+  construction is now spelled out). No behavioral flip found in any
+  arm — the design stands.
 
 ## 5. TDD sequence
 
@@ -521,9 +555,8 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
 
 ## 8. Confidence
 
-Post-round-3 confidence: **0.88** — the C1/C2 helper-uniformity fix
-removes the last falsifiable path in the invariant (the null and FALSE
-branches of `matches`/`typeMatchCertain` are behaviorally identical),
-the promotion argument now matches the code's real reachability, and
-the remaining open facts are confined to the P1–P5 probes with
-decision rules that cannot invalidate the ladder design.
+Post-round-4 confidence: **0.89** — four adversarial rounds have
+falsified and repaired every stated invariant down to the code's real
+control flow (including C1's generics-tail FALSE exit); no behavioral
+flip remains in any arm; the open facts are confined to the P1–P5
+probes with decision rules that cannot invalidate the ladder design.
