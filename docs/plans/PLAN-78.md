@@ -82,10 +82,15 @@ One mechanism, extending the #62 choke-point capture with a
   parameters (no PMD ExcessiveParameterList pressure, no wide churn).
 - Re-entrancy: the field is saved/restored by every site entry in a
   `try/finally` (a throw mid-classification must not leak the field and
-  mis-attribute later captures); the inference graph calls only the core
-  variants (verified by caller map: every inference helper is reached only
-  through the var arm or each other, and no extraction loop calls an
-  inference helper directly, so no nested site entries exist and the field
+  mis-attribute later captures). Site entries DO nest (`isJdkApiOwner`
+  internally calls `isDeclaredVariableBefore` with the same offset;
+  `isSupportedChainedReceiver` → `startsWithJdkClassForName` →
+  `isJdkApiOwner` nests three deep) — harmless because every nested site
+  entry passes an EQUAL offset, making save/restore idempotent; that
+  idempotence (not nesting absence) is the invariant a future site entry
+  must preserve. The inference graph calls only the core variants (every
+  inference helper is reached only through the var arm or each other, and
+  no extraction loop calls an inference helper directly, so the field
   cannot be reset mid-inference). Determinism is unchanged: both rebuilds
   re-derive the same captures from the same cached extracts
   (`DynamicScanning` iterates files sequentially; no parallel streams in
@@ -143,14 +148,16 @@ files after the FIRST type declaration; `analyzeDynamic` auto-writes
 `SourceMetadataScanner`, run `dynamicFeatures()`, then read
 `parameterReceiverOffsets`) — no new accessor needed.
 
-**Pre-GREEN golden-churn audit (plan review round 1, finding 1)**:
+**Pre-GREEN golden-churn audit (plan review round 1, finding 1; rationale
+corrected in round 2)**:
 `JavaAnalysisAdapterTest.dynamicSitesKeepCallersAndEquivalentReflectionSpellings`
 holds `varUnrelated(Router router) { var type = router.loadClass(); return
-type.getMethod("GET"); }` — a transitive parameter-receiver site whose fact
-gains `javacCallerAbstention` under this change if that member's
-correlation declines. Before GREEN, run that test class and diff its golden
-evidence strings; any churn there must be an intended, reviewed attribute
-addition (correlation declines on that fixture) or none at all.
+type.getMethod("GET"); }` — the transitive parameter-arm consultation fires
+but `parameterMatchesType` rejects it (`Router` ≠ `ClassLoader`), the site
+is NOT admitted, and that test already pins `#varUnrelated` produces no
+reflection fact. Expected churn from that member is therefore NONE; churn
+appearing there would be a bug. The audit stays as a whole-class golden
+diff safety net (other members could churn).
 
 ## Methodology
 
@@ -171,9 +178,10 @@ addition (correlation declines on that fixture) or none at all.
    (dead entry returns).
 2. Remove the capture entirely ⇒ C10/D6 red (existing #62 cells pin the
    direct arm).
-3. Let an inference caller use the site entry (field reset) ⇒ E2's set pin
-   red (dead entries return) while E1 may stay green — isolates gap A from
-   gap B.
+3. Let `isClassLoaderResultExpression`'s inference call (Layer05:159) use
+   the site entry (field reset) ⇒ E2's set pin red (dead entries return)
+   while E1 stays green — isolates gap A from gap B (mutating Layer05:221
+   instead would turn E1 red too).
 
 ## Residuals (to document in RESOLUTION-78.md)
 
@@ -186,9 +194,13 @@ addition (correlation declines on that fixture) or none at all.
   `terminalStart` while their classification ran at `receiver.start()`, and
   the non-SIMPLE kinds, which never reach `isDeclaredVariableBefore` at
   all.
-- Residual dead-entry shapes (unchanged, pre-existing): captures recorded
-  for sites rejected after a parameter-arm hit, and the METHOD_INVOKE `||`
-  ordering where the InvocationHandler arm admits the site.
+- Residual dead-entry shapes: captures recorded for sites rejected after a
+  parameter-arm hit, and the METHOD_INVOKE `||` ordering where the
+  InvocationHandler arm admits the site. Pre-existing for DIRECT sites;
+  newly reachable at SITE offsets for transitive chains under this change
+  (a transitive capture can land on an offset whose site is then rejected,
+  or admitted by the InvocationHandler arm) — no behavior regression (the
+  gate only annotates existing facts), but not strictly "pre-existing".
 - Proxy transitive receivers remain unclassifiable (inference grammar has no
   Proxy arm) — no capture to gate.
 
@@ -214,3 +226,21 @@ invoke/newInstance sites and non-SIMPLE kinds), corrected; (3) LOW —
 behavior-delta 1 scoped to initializer-internal entries with the
 pre-existing dead-entry shapes documented; (4) LOW — save/restore specified
 exception-safe (`try/finally`). Confidence after round 1: **0.88**.
+
+Round 2 (fresh adversarial subagent): all round-1 amendments verified
+against source; the `isJdkApiOwner` split, E1–E3 fixture walks, and the E2
+exact-set pin all hold (the `getClassLoader` expression matches no site
+pattern; exactly one site and one capture). 4 findings, all incorporated:
+(1) LOW — the golden-churn rationale was wrong: `varUnrelated`'s parameter
+consultation is REJECTED by `parameterMatchesType` (`Router` ≠
+`ClassLoader`), the site is not admitted, and that test pins no fact from
+`#varUnrelated`; expected churn from that member is none, so the audit is a
+safety net, not an intended-change prediction; (2) LOW — the residual
+dead-entry shapes are newly reachable at SITE offsets for transitive chains
+(pre-existing only for direct sites), rescoped; (3) NIT — site entries DO
+nest (`isJdkApiOwner` → `isDeclaredVariableBefore`;
+`isSupportedChainedReceiver` → `startsWithJdkClassForName` →
+`isJdkApiOwner`); the true invariant is offset-equal save/restore
+idempotence, now stated; (4) NIT — mutation check 3 names its caller
+(Layer05:159) so the RED expectation is unambiguous. Confidence after
+round 2: **0.90**.
