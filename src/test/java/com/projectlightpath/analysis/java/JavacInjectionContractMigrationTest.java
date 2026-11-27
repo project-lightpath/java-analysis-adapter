@@ -1288,6 +1288,42 @@ class JavacInjectionContractMigrationTest {
         "java.lang.Object must not become a match source");
   }
 
+  // B7 (review round 3): the C5 leak pin — a RAW requested type must not
+  // match a GENERIC metadata row through erasure, in EITHER flag state
+  // (the disjunct requires the requested side to be a textual vacuum
+  // filled by the shape; the textual ladder compares full canonicals).
+  @Test
+  void rawRequestedTypeDoesNotMatchGenericRow() throws IOException {
+    Path sourceRoot = root("b7");
+    write(sourceRoot, "demo/Repo.java", """
+        package demo;
+        public interface Repo<T> { }
+        """);
+    write(sourceRoot, "demo/User.java", "package demo; public class User { }\n");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Repo repo) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(row(
+        "generic-row", "Repo<demo.User>", "demo.Outside")));
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the textual ladder compares full canonicals — "
+            + "a raw requested type does not match a generic row");
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(on, "demo.Consumer").certainty(),
+        "the C5 disjunct requires a textual vacuum: the raw requested type "
+            + "resolved textually, so no index participation");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------

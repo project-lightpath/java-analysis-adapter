@@ -1105,7 +1105,7 @@ final class JavacSourceSymbolIndex {
   record TypeShape(String declarationKind, boolean errorType, boolean duplicateBinaryName,
       boolean staticType) {}
 
-  /** The implicit supertypes omitted from {@link TypeInfo#supertypes()}. */
+  /** Supertypes omitted from {@link TypeInfo#supertypes()}, implicit or explicit. */
   private static final java.util.Set<String> IMPLICIT_SUPERTYPES =
       java.util.Set.of("java.lang.Object", "java.lang.annotation.Annotation");
 

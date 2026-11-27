@@ -132,9 +132,12 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
 
   /**
    * The index metadata comparison (issue #61): the row's textual erased
-   * raw against the requested type's repair-only erased raw (the shared
-   * TypeSupport ladder policy). Generics-gated — erased shapes cannot
-   * compare type arguments.
+   * raw against the requested type's index shape. The disjunct fires ONLY
+   * when the requested side is a textual VACUUM filled by the shape
+   * (review round 3: the row side is purely textual, so without the
+   * vacuum requirement a raw requested type could match a generic row
+   * FLAG-OFF — a byte-identity violation). Generics-gated — erased shapes
+   * cannot compare type arguments.
    */
   private static boolean indexMetadataMatch(
       SourceMetadataScanner scanner,
@@ -142,17 +145,16 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       String requestedType,
       AnalysisContext.BindingCandidateMetadata row,
       Optional<String> requestedShape) {
-    if (hasGenericArguments(requestedType)) {
+    if (hasGenericArguments(requestedType) || requestedShape.isEmpty()) {
+      return false;
+    }
+    if (canonicalType(eraseGenericArguments(requestedType), injectionFile, scanner)
+        .isPresent()) {
       return false;
     }
     Optional<String> rowRaw = canonicalType(
         eraseGenericArguments(row.candidateType()), injectionFile, scanner);
-    if (rowRaw.isEmpty()) {
-      return false;
-    }
-    return erasedRaw(requestedType, injectionFile, scanner, () -> requestedShape)
-        .map(rowRaw.get()::equals)
-        .orElse(false);
+    return rowRaw.isPresent() && rowRaw.get().equals(requestedShape.get());
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */
