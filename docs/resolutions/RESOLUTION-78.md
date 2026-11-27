@@ -134,7 +134,18 @@ receipts re-derived on the final 6-cell suite after E6 landed)
   (2) LOW — the resolution's nesting description corrected (the
   `isJdkApiOwner` internal nesting was removed by the split; the remaining
   nesting is the chained-receiver path); (3) NIT — the capture guard is
-  now documented as an invariant assertion, not a silent skip.
+  now documented as an invariant assertion, not a silent skip. Round 2
+  (fresh subagent): the round-1 incorporations verified end-to-end with
+  independently re-executed per-caller mutations (Layer05:251 → exactly E6
+  red; :300 and the owner check → E3 red); 3 LOW doc findings addressed in
+  REVIEW_78_2 (the E6 description, the 741 gate receipt, the plan's
+  implementation-amendments section). Round 3: 4 doc findings addressed in
+  REVIEW_78_3 — the mutation receipts re-derived on the final 6-cell suite
+  (mutation 1: 5 cells red; mutation 2: 9 cells red; a fourth receipt
+  recorded), the :251 line anchor, the 741 count, and the MAIN-relative
+  line-reference map. Round 4 verified every incorporation against the
+  shipped tree, origin/main, and the recorded history — **NO ADDRESSABLE
+  FINDINGS, loop closed**.
 
 ## Residuals
 
