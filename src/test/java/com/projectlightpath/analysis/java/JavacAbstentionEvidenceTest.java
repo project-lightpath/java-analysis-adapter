@@ -268,16 +268,17 @@ class JavacAbstentionEvidenceTest {
         .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
     assertEquals("multi_type_file", attribute(binding, "javacAbstention"),
         binding.evidence().toString());
-    // The descriptor seam derives the owner through the declarationStart
-    // normalization; the producer-TYPE seam keeps its historical
-    // raw-extraction anchor — two different derivations, two key
-    // families, both visible (review round 1, finding 2).
+    // Both the descriptor seam and the producer-TYPE seam derive the
+    // owner through the declarationStart normalization (#77), so the
+    // two identities agree on the owner — they remain distinct key
+    // families because they describe different lookups that can both
+    // decline for one candidate (review round 1, finding 2).
     assertEquals("demo.ProducerConfig#build(1)",
         attribute(binding, "javacAbstentionMember"), binding.evidence().toString());
     assertEquals("multi_type_file",
         attribute(binding, "javacProducerTypeAbstention"),
         binding.evidence().toString());
-    assertEquals("demo.ProducerConfig$Helper#build(1)",
+    assertEquals("demo.ProducerConfig#build(1)",
         attribute(binding, "javacProducerTypeAbstentionMember"),
         binding.evidence().toString());
     boolean textualCandidateType = binding.evidence().stream()
