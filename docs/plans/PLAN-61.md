@@ -288,9 +288,13 @@ Two rules govern every arm (review round 1, findings 1–3):
   stays false by design — an implementer must NOT drop the
   `directCompatibility == Boolean.FALSE` guard at TypeMatching:65 as
   "redundant," or a C1=null + purely-textual contract match could
-  promote to DEFINITE. With the identical helper, the null and
-  raw-mismatch-FALSE branches of `matches`/`typeMatchCertain` are
-  behaviorally identical (both reduce to `contractMatches`).
+  promote to DEFINITE. With the identical helper, the `matches` null
+  branch, the `matches` raw-mismatch-FALSE branch, and the
+  `typeMatchCertain` raw-mismatch-FALSE branch are behaviorally
+  identical (all three reduce to `contractMatches`); the
+  `typeMatchCertain` NULL branch is not — it returns false at
+  TypeMatching:65 without consulting `contractMatches` (pre-existing,
+  see the C4 REACH note).
 - **C3 `injectionTypesMatch`**: in the ERASED branch, `sourceRaw` uses
   the repair-only helper (requested shape arm); the metadata side and
   the bothGeneric branch stay textual (generic binding rows are a
@@ -515,6 +519,11 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
   their populated-rung characterization twins and D8's external-rung
   construction is now spelled out). No behavioral flip found in any
   arm — the design stands.
+- **Round 5** (convergence): 1 LOW wording residual (the C2 summary
+  sentence still named `typeMatchCertain`'s null branch among the
+  `contractMatches`-reducing branches — scoped to the three real ones)
+  — **no new addressable findings; plan-review loop closed at
+  confidence 0.90**.
 
 ## 5. TDD sequence
 
@@ -555,7 +564,7 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
 
 ## 8. Confidence
 
-Post-round-4 confidence: **0.89** — four adversarial rounds have
+Post-review-loop confidence: **0.90** — five adversarial rounds have
 falsified and repaired every stated invariant down to the code's real
 control flow (including C1's generics-tail FALSE exit); no behavioral
 flip remains in any arm; the open facts are confined to the P1–P5
