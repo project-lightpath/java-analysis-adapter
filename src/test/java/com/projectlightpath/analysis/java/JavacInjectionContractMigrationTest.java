@@ -714,8 +714,14 @@ class JavacInjectionContractMigrationTest {
         }
         """);
     AnalysisContext context = springContext(sourceRoot);
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the textual generic comparison refuses the "
+            + "same-erased candidate");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
         injection(on, "demo.Consumer").certainty(),
         "the erased index disjunct is gated on generic requested types: "
@@ -754,8 +760,14 @@ class JavacInjectionContractMigrationTest {
     AnalysisContext context = springContext(sourceRoot, List.of(
         producerRow("repoBean", "demo.Repo", "demo.Config", "repoBean"),
         row("erased-row", "Repo", "demo.Outside")));
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.DEFINITE,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the producer matches textually and the erased "
+            + "row does not");
     assertEquals(SemanticCallFacts.Certainty.DEFINITE,
         injection(on, "demo.Consumer").certainty(),
         "the metadata-row disjunct is gated on generic requested types: "
@@ -786,8 +798,14 @@ class JavacInjectionContractMigrationTest {
         }
         """);
     AnalysisContext context = springContext(sourceRoot);
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "app.Consumer").certainty(),
+        "flag-off golden: the java.lang rung resolves and does not match "
+            + "the source candidate");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
         injection(on, "app.Consumer").certainty(),
         "the index shape is a canonical identity, not a simple-name match");
@@ -964,6 +982,13 @@ class JavacInjectionContractMigrationTest {
         JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
         "an external same-package type is invisible to the textual rung "
             + "(files() only); javac resolves the nested type");
+    System.setProperty(FLAG, "false");
+    SourceMetadataScanner textual =
+        new SourceMetadataScanner(springContext(sourceRoot));
+    assertEquals(Optional.empty(),
+        JavacInjectionTypeShapes.of(textual).requestedShape(
+            injectionPoint(textual, "demo.Consumer", "<init>"), 0),
+        "flag-off: the seam is empty");
   }
 
   // D8 populated twin: the same-package rung ANSWERS (a selected file
@@ -1029,6 +1054,13 @@ class JavacInjectionContractMigrationTest {
         JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
         "an on-demand import of an absent package leaves the textual rung "
             + "empty; javac resolves the nested type");
+    System.setProperty(FLAG, "false");
+    SourceMetadataScanner offScanner =
+        new SourceMetadataScanner(springContext(sourceRoot));
+    assertEquals(Optional.empty(),
+        JavacInjectionTypeShapes.of(offScanner).requestedShape(
+            injectionPoint(offScanner, "demo.Consumer", "<init>"), 0),
+        "flag-off: the seam is empty");
   }
 
   // D10: java.lang x same-CU — CHARACTERIZATION: the java.lang rung always
@@ -1093,6 +1125,13 @@ class JavacInjectionContractMigrationTest {
         JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
         "javac resolves the inherited member type where the textual "
             + "resolver has no rung");
+    System.setProperty(FLAG, "false");
+    SourceMetadataScanner textual =
+        new SourceMetadataScanner(springContext(sourceRoot));
+    assertEquals(Optional.empty(),
+        JavacInjectionTypeShapes.of(textual).requestedShape(
+            injectionPoint(textual, "demo.Consumer", "<init>"), 0),
+        "flag-off: the seam is empty");
   }
 
   // D1-D5, D7: resolver-rung ORDER parity — the textual rungs are

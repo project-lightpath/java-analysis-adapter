@@ -818,14 +818,18 @@ final class JavacSourceSymbolIndex {
      * OMITTED (an unresolvable supertype chain must not publish a wrong
      * canonical spelling; the textual contract ladder still covers the
      * declared spelling) — omission is the conservative direction for an
-     * additional match source.
+     * additional match source. The implicit supertypes every declaration
+     * carries ({@code java.lang.Object}, and {@code
+     * java.lang.annotation.Annotation} on annotation types) are omitted by
+     * CANONICAL comparison of the erased mirror — a type-annotated
+     * superclass ({@code extends @Marker Object}) must not slip past a
+     * raw toString check (review round 1, finding 3).
      */
     private List<String> supertypes(TypeElement element) {
       List<String> result = new ArrayList<>();
       TypeMirror superclass = element.getSuperclass();
       if (superclass != null
-          && superclass.getKind() == javax.lang.model.type.TypeKind.DECLARED
-          && !"java.lang.Object".equals(superclass.toString())) {
+          && superclass.getKind() == javax.lang.model.type.TypeKind.DECLARED) {
         addSupertype(result, superclass);
       }
       for (TypeMirror mirror : element.getInterfaces()) {
@@ -835,8 +839,12 @@ final class JavacSourceSymbolIndex {
     }
 
     private void addSupertype(List<String> result, TypeMirror mirror) {
-      if (!isError(mirror)) {
-        result.add(shapes.canonicalType(mirror));
+      if (isError(mirror)) {
+        return;
+      }
+      String canonical = shapes.canonicalType(mirror);
+      if (!IMPLICIT_SUPERTYPES.contains(canonical)) {
+        result.add(canonical);
       }
     }
 
@@ -1095,6 +1103,10 @@ final class JavacSourceSymbolIndex {
   /** Declaration kind plus the error and duplicate-binary-name flags of one type. */
   record TypeShape(String declarationKind, boolean errorType, boolean duplicateBinaryName,
       boolean staticType) {}
+
+  /** The implicit supertypes omitted from {@link TypeInfo#supertypes()}. */
+  private static final java.util.Set<String> IMPLICIT_SUPERTYPES =
+      java.util.Set.of("java.lang.Object", "java.lang.annotation.Annotation");
 
   /** One indexed type declaration. */
   record TypeInfo(

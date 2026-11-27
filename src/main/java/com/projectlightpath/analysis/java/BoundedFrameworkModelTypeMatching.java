@@ -83,18 +83,12 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScannerState.BeanCandidate candidate,
       Optional<String> requestedShape) {
     Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
-    // Issue #61: the index contract disjunct — the candidate's direct
-    // supertype shapes against the repair-only erased raw of the requested
-    // type. Generics-gated (the shapes are erased; a generic requested type
-    // keeps the generic-retaining textual semantics, which alone can
-    // compare type arguments) and independent of the requested.isEmpty()
-    // early return below: the shape arm fires precisely when that return
-    // would (the textual vacuum case).
-    boolean indexContract = !hasGenericArguments(requestedType)
-        && contractShapesMatch(scanner, injectionFile, requestedType,
-            requestedShape, candidate);
     if (requested.isEmpty()) {
-      return indexContract;
+      // Issue #61: the index contract disjunct is evaluated BEFORE this
+      // early return can preempt it — the shape arm fires precisely in
+      // this textual-vacuum case.
+      return indexContract(scanner, injectionFile, requestedType,
+          requestedShape, candidate);
     }
     boolean sourceContract = candidate.contracts().stream()
         .anyMatch(contract -> contractMatchesType(
@@ -103,7 +97,12 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
         .flatMap(row -> row.contracts().stream())
         .anyMatch(contract -> contractMatchesType(
             requestedType, requested, contract, candidate.file(), scanner));
-    return sourceContract || metadataContract || indexContract;
+    // The textual arms run first; the index disjunct is consulted only
+    // when they decline (review round 1, finding 1 — no eager seam lookup
+    // on the textual-answer path).
+    return sourceContract || metadataContract
+        || indexContract(scanner, injectionFile, requestedType,
+            requestedShape, candidate);
   }
 
   /**
@@ -111,17 +110,22 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
    * supertype shapes contain the requested type's repair-only erased raw
    * resolution. Both sides are canonical, erased, and javac-resolved —
    * this answers exactly the case the textual contract resolution cannot
-   * (an implements spelling that is a textual vacuum).
+   * (an implements spelling that is a textual vacuum). Generics-gated
+   * (the shapes are erased; a generic requested type keeps the
+   * generic-retaining textual semantics, which alone can compare type
+   * arguments).
    */
-  private static boolean contractShapesMatch(
+  private static boolean indexContract(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
       Optional<String> requestedShape,
       SourceMetadataScannerState.BeanCandidate candidate) {
-    Optional<String> requestedRaw = canonicalType(
-        eraseGenericArguments(requestedType), injectionFile, scanner)
-        .or(() -> requestedShape);
+    if (hasGenericArguments(requestedType)) {
+      return false;
+    }
+    Optional<String> requestedRaw = erasedRaw(
+        requestedType, injectionFile, scanner, () -> requestedShape);
     return requestedRaw.isPresent()
         && JavacInjectionTypeShapes.of(scanner)
             .contractShapes(candidate)

@@ -56,14 +56,19 @@ abstract class BoundedFrameworkModelTypeSupport extends BoundedFrameworkModelTyp
    * The erased raw resolution with the repair-only index arm (issue #61):
    * the textual resolution wins when it answers; the index shape fills a
    * textual VACUUM only — a non-null textual answer is never overridden.
+   * The shape arm is a SUPPLIER: the seam lookup runs only when the
+   * textual resolution is empty (review round 1, finding 1 — no eager
+   * correlation on the textual-answer path). Package-private: the C4/C5
+   * disjuncts in TypeMatching and MetadataState share this ONE ladder
+   * policy (review round 1, finding 5).
    */
-  private static Optional<String> erasedRaw(
+  static Optional<String> erasedRaw(
       String spelling,
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScanner scanner,
-      Optional<String> shape) {
+      java.util.function.Supplier<Optional<String>> shape) {
     return canonicalType(eraseGenericArguments(spelling), file, scanner)
-        .or(() -> shape);
+        .or(shape);
   }
 
   /** Compares erased raw types before checking known generic arguments. */
@@ -83,10 +88,10 @@ abstract class BoundedFrameworkModelTypeSupport extends BoundedFrameworkModelTyp
       return null;
     }
     Optional<String> requestedRaw = erasedRaw(
-        requestedType, injectionFile, scanner, requestedShape);
+        requestedType, injectionFile, scanner, () -> requestedShape);
     Optional<String> candidateRaw = erasedRaw(
         candidateType, candidate.file(), scanner,
-        JavacInjectionTypeShapes.of(scanner).candidateShape(candidate));
+        () -> JavacInjectionTypeShapes.of(scanner).candidateShape(candidate));
     if (requestedRaw.isEmpty() || candidateRaw.isEmpty()) {
       return null;
     }
@@ -125,10 +130,10 @@ abstract class BoundedFrameworkModelTypeSupport extends BoundedFrameworkModelTyp
       return false;
     }
     Optional<String> requestedRaw = erasedRaw(
-        requestedType, injectionFile, scanner, requestedShape);
+        requestedType, injectionFile, scanner, () -> requestedShape);
     Optional<String> candidateRaw = erasedRaw(
         candidateType, candidate.file(), scanner,
-        JavacInjectionTypeShapes.of(scanner).candidateShape(candidate));
+        () -> JavacInjectionTypeShapes.of(scanner).candidateShape(candidate));
     return requestedRaw.isPresent() && candidateRaw.isPresent()
         && !requestedRaw.get().equals(candidateRaw.get());
   }
@@ -149,7 +154,7 @@ abstract class BoundedFrameworkModelTypeSupport extends BoundedFrameworkModelTyp
     Optional<String> metadataRaw = canonicalType(
         eraseGenericArguments(metadataType), sourceFile, scanner);
     Optional<String> sourceRaw = erasedRaw(
-        sourceType, sourceFile, scanner, requestedShape);
+        sourceType, sourceFile, scanner, () -> requestedShape);
     if (metadataRaw.isPresent() && sourceRaw.isPresent()) {
       return metadataRaw.get().equals(sourceRaw.get());
     }

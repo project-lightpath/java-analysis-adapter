@@ -107,40 +107,52 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       AnalysisContext.BindingCandidateMetadata row,
       Optional<String> requestedShape) {
     Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
-    // Issue #61: the index metadata disjunct — the row's textual erased
-    // raw against the requested type's repair-only erased raw. Generics-
-    // gated (erased shapes cannot compare type arguments) and independent
-    // of the requested.isEmpty() early return below. The row side is the
-    // TEXTUAL arm only: metadata-only rows have no indexed declaration.
-    boolean indexMatch = !hasGenericArguments(requestedType)
-        && canonicalType(eraseGenericArguments(row.candidateType()), injectionFile, scanner)
-            .map(rowRaw -> erasedRequestedRaw(
-                requestedType, injectionFile, scanner, requestedShape)
-                .map(rowRaw::equals)
-                .orElse(false))
-            .orElse(false);
     if (requested.isEmpty()) {
-      return indexMatch;
+      // Issue #61: the index metadata disjunct is evaluated BEFORE this
+      // early return can preempt it — the shape arm fires precisely in
+      // this textual-vacuum case. The row side is the TEXTUAL arm only:
+      // metadata-only rows have no indexed declaration.
+      return indexMetadataMatch(scanner, injectionFile, requestedType,
+          row, requestedShape);
     }
     if (canonicalType(row.candidateType(), injectionFile, scanner)
         .map(requested.get()::equals)
         .orElse(false)) {
       return true;
     }
-    return row.contracts().stream()
+    boolean textualContract = row.contracts().stream()
         .map(contract -> canonicalType(contract, injectionFile, scanner))
-        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()))
-        || indexMatch;
+        .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+    // The textual arms run first; the index disjunct is consulted only
+    // when they decline (review round 1, finding 1).
+    return textualContract
+        || indexMetadataMatch(scanner, injectionFile, requestedType,
+            row, requestedShape);
   }
 
-  /** The requested type's repair-only erased raw resolution (issue #61). */
-  private static Optional<String> erasedRequestedRaw(
-      String requestedType,
-      SourceMetadataScannerState.SourceFile injectionFile,
+  /**
+   * The index metadata comparison (issue #61): the row's textual erased
+   * raw against the requested type's repair-only erased raw (the shared
+   * TypeSupport ladder policy). Generics-gated — erased shapes cannot
+   * compare type arguments.
+   */
+  private static boolean indexMetadataMatch(
       SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String requestedType,
+      AnalysisContext.BindingCandidateMetadata row,
       Optional<String> requestedShape) {
-    return canonicalType(eraseGenericArguments(requestedType), injectionFile, scanner)
-        .or(() -> requestedShape);
+    if (hasGenericArguments(requestedType)) {
+      return false;
+    }
+    Optional<String> rowRaw = canonicalType(
+        eraseGenericArguments(row.candidateType()), injectionFile, scanner);
+    if (rowRaw.isEmpty()) {
+      return false;
+    }
+    return erasedRaw(requestedType, injectionFile, scanner, () -> requestedShape)
+        .map(rowRaw.get()::equals)
+        .orElse(false);
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */
