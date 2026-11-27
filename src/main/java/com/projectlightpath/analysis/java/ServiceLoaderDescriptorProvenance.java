@@ -74,14 +74,23 @@ final class ServiceLoaderDescriptorProvenance {
    * {@code toRealPath()}, and a descriptor selected through a
    * symbolic-link parent that aliases an excluded root must be labeled by
    * where the file really lies, not by the lexical spelling of the alias.
-   * Resolution failure falls back to the lexical form (the pre-fix
-   * behavior; the label can then be absent, never fabricated).
+   * When the DESCRIPTOR path itself cannot be resolved (CodeRabbit CR-2:
+   * the bytes are read before the label is computed, so a delete-race can
+   * leave the file gone), the label is ABSENT — the lexical spelling could
+   * alias an included root and fabricate a label for bytes read from an
+   * excluded target. Declared roots keep the lexical fallback: a root that
+   * fails resolution still contains what it lexically contains.
    */
   static String rootScopeLabel(AnalysisContext context, Path path) {
     if (context == null || path == null) {
       return null;
     }
-    Path normalized = resolvedPath(path);
+    Path normalized;
+    try {
+      normalized = path.toRealPath();
+    } catch (IOException | SecurityException error) {
+      return null;
+    }
     for (AnalysisContext.SourceRoot root : context.declaredRootsBySpecificity()) {
       if (normalized.startsWith(resolvedPath(root.path()))) {
         return root.scope().name().toLowerCase(java.util.Locale.ROOT)
@@ -91,7 +100,7 @@ final class ServiceLoaderDescriptorProvenance {
     return null;
   }
 
-  /** Real-path resolution matching the admission gates; lexical on failure. */
+  /** Real-path resolution for declared roots; lexical on failure. */
   private static Path resolvedPath(Path path) {
     try {
       return path.toRealPath();

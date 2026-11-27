@@ -2,6 +2,7 @@ package com.projectlightpath.analysis.java;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -215,6 +216,25 @@ class ServiceLoaderDescriptorProvenanceTest {
         evidence.attributes().toString());
     assertEquals("production/excluded", evidence.attributes().get("descriptorRootScope"),
         evidence.attributes().toString());
+  }
+
+  @Test
+  void unresolvableDescriptorPathCarriesNoScopeLabel() throws IOException {
+    // CodeRabbit CR-2 on PR #73: the bytes are read before the label is
+    // computed — if the file is gone by then (delete-race), the lexical
+    // spelling could alias an included root and fabricate a label for
+    // bytes read from an excluded target. The label must be ABSENT: a
+    // path that cannot be resolved yields null even when its LEXICAL
+    // form falls under the included root.
+    Path root = temp.resolve("p8");
+    Path sourceRoot = root.resolve("src/main/java");
+    writeBridge(sourceRoot);
+    AnalysisContext context = baseBuilder(root, sourceRoot).build();
+    Path unresolvable = sourceRoot.resolve("gone/META-INF/services/demo.Provider");
+    assertFalse(Files.exists(unresolvable));
+    assertTrue(unresolvable.toAbsolutePath().normalize()
+        .startsWith(sourceRoot.toAbsolutePath().normalize()));
+    assertNull(ServiceLoaderDescriptorProvenance.rootScopeLabel(context, unresolvable));
   }
 
   @Test
