@@ -1474,6 +1474,192 @@ class JavacInjectionContractMigrationTest {
             + "styles");
   }
 
+  // CR2-8566 (CodeRabbit 4724438566): the mirror of the divergence guard —
+  // when the shape lookup DECLINES (here: a same-arity constructor
+  // overload pair makes the unique-member lookup ambiguous), the
+  // requested identity is UNVERIFIED and the index contract arm must
+  // abstain rather than admit the unverified textual identity.
+  @Test
+  void absentShapeDoesNotAdmitAnUnverifiedIdentity() throws IOException {
+    Path sourceRoot = root("cr2b");
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.io.Serializable;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          public interface Serializable { }
+          @Autowired public Consumer(Serializable record) { }
+          @Autowired public Consumer(java.util.List list) { }
+        }
+        """);
+    write(sourceRoot, "demo/RecordBean.java", """
+        package demo;
+        import java.io.*;
+        import org.springframework.stereotype.Component;
+        @Component public class RecordBean implements Serializable {
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot);
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.InjectionPoint point = injectionPoint(
+        scanner, "demo.Consumer", "<init>");
+    assertEquals(Optional.empty(),
+        JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
+        "the same-arity constructor overloads make the lookup ambiguous");
+    SemanticCallFacts on = analyze(context);
+    List<SemanticCallFacts.Fact> serializableInjections =
+        injections(on, "demo.Consumer#<init>(Serializable");
+    assertFalse(serializableInjections.isEmpty(),
+        "the Serializable constructor's injection fact exists: "
+            + on.frameworkFacts());
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        serializableInjections.get(0).certainty(),
+        "an absent requested shape abstains: the unverified textual "
+            + "identity (java.io.Serializable) must not match the "
+            + "candidate's supertype shapes");
+  }
+
+  // CR2-8554 (CodeRabbit 4724438554): an UNQUALIFIED row contract that the
+  // consumer file cannot resolve (wildcard import) must keep the row's
+  // eligibility — import-style independence for the contract arm.
+  @Test
+  void unqualifiedRowContractKeepsEligibility() throws IOException {
+    Path sourceRoot = root("cr4b");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        contractRow("array-list", "java.util.ArrayList", "demo.Outside",
+            "List")));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "an unqualified row contract resolves against the shape "
+            + "(C6-style simple-name semantics) exactly like the "
+            + "qualified spelling under an explicit import — one "
+            + "eligibility answer across import styles");
+  }
+
+  // CR2-8561 (CodeRabbit 4724438561): the vacuum path must count a
+  // SCANNED producer whose ASSOCIATED row declares the requested
+  // contract — the textual path counts it, so the vacuum repair must not
+  // hide a competitor and leave an unopposed DEFINITE.
+  @Test
+  void vacuumPathCountsProducersWithMatchingContractRows()
+      throws IOException {
+    Path sourceRoot = root("cr5");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/ArrayListConfig.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayListConfig {
+          @org.springframework.context.annotation.Bean
+          public java.util.ArrayList<String> arrayBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        producerContractRow("arrayBean", "java.util.ArrayList",
+            "demo.ArrayListConfig", "arrayBean", "java.util.List")));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "the ArrayList producer's contract row keeps it in the eligible "
+            + "set in the vacuum case, exactly as the textual path counts "
+            + "it — no unopposed DEFINITE");
+  }
+
+  // CR2-8597 (CodeRabbit 4724438597): a focused C5 generic-guard pin at
+  // the seam — the erased spelling does NOT resolve textually (wildcard
+  // JDK import), so the vacuum guard cannot block; ONLY the generics
+  // guard holds the row admission back. (An end-to-end certainty cell is
+  // unconstructible here: a generic requested type with a vacuum base
+  // cannot match any scanned candidate — the generic tail needs the full
+  // canonical, which needs the base resolved — a pre-existing
+  // limitation, so the row's admission is pinned directly.)
+  @Test
+  void genericGuardAloneHoldsTheVacuumRow() throws IOException {
+    Path sourceRoot = root("cr6");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.Comparator<String> comparatorBean() {
+            return null;
+          }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Comparator<String> comparator) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(row(
+        "erased-row", "java.util.Comparator", "demo.Outside")));
+    System.setProperty(FLAG, "true");
+    SourceMetadataScanner scanner = new SourceMetadataScanner(context);
+    SourceMetadataScannerState.SourceFile consumer =
+        file(scanner, sourceRoot, "demo/Consumer.java");
+    // The vacuum premise: the erased spelling does not resolve textually.
+    assertEquals(Optional.empty(),
+        scanner.resolveReferenceType("Comparator", consumer));
+    SourceMetadataScannerState.InjectionPoint point = injectionPoint(
+        scanner, "demo.Consumer", "<init>");
+    Optional<String> shape =
+        JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0);
+    assertEquals(Optional.of("java.util.Comparator"), shape);
+    // Only the generics guard holds this row back — red under exactly a
+    // gate-removal mutation.
+    assertFalse(BoundedFrameworkModelMetadataState
+        .metadataCandidateTypeMatches(scanner, consumer,
+            "Comparator<String>",
+            row("erased-row", "java.util.Comparator", "demo.Outside"),
+            shape),
+        "the generic requested type keeps the erased row out even though "
+            + "its erased spelling is a textual vacuum and the shape is "
+            + "present");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
@@ -1506,6 +1692,14 @@ class JavacInjectionContractMigrationTest {
         .filter(point -> point.member().equals(member))
         .findFirst()
         .orElseThrow();
+  }
+
+  private SourceMetadataScannerState.SourceFile file(
+      SourceMetadataScanner scanner, Path sourceRoot, String relative) {
+    Path root = sourceRoot.resolve(relative);
+    return scanner.files().stream()
+        .filter(item -> item.path().equals(root))
+        .findFirst().orElseThrow();
   }
 
   private Path root(String id) throws IOException {
@@ -1584,6 +1778,15 @@ class JavacInjectionContractMigrationTest {
         id, candidateType, List.of(contract), List.of(), "bean",
         declaringType, null, null, List.of(), List.of(), true, false,
         false, null, null);
+  }
+
+  private static AnalysisContext.BindingCandidateMetadata producerContractRow(
+      String id, String candidateType, String declaringType,
+      String producerMethod, String contract) {
+    return new AnalysisContext.BindingCandidateMetadata(
+        id, candidateType, List.of(contract), List.of(), "producer",
+        declaringType, producerMethod, null, List.of(), List.of(), true,
+        false, false, null, null);
   }
 
   private static void write(Path root, String relative, String source)
