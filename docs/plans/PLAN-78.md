@@ -80,16 +80,25 @@ One mechanism, extending the #62 choke-point capture with a
 - The var-declaration arm, `inferredReflectionType`, and every helper under
   it keep their signatures: the capture target flows through the field, not
   parameters (no PMD ExcessiveParameterList pressure, no wide churn).
-- Re-entrancy: the field is saved/restored by every site entry; the
-  inference graph calls only the core variants (verified by caller map:
-  `isJdkClassForNameExpression`, `isStandaloneClassForNameExpression`,
-  `isClassLoaderResultExpression`, `isRecognizedClassLoaderLookup`,
-  `isStandaloneLoadClassExpression`, `isRecognizedClassLookup` are reached
-  only through the var arm or each other). Determinism is unchanged: both
-  rebuilds re-derive the same captures from the same cached extracts.
+- Re-entrancy: the field is saved/restored by every site entry in a
+  `try/finally` (a throw mid-classification must not leak the field and
+  mis-attribute later captures); the inference graph calls only the core
+  variants (verified by caller map: every inference helper is reached only
+  through the var arm or each other, and no extraction loop calls an
+  inference helper directly, so no nested site entries exist and the field
+  cannot be reset mid-inference). Determinism is unchanged: both rebuilds
+  re-derive the same captures from the same cached extracts
+  (`DynamicScanning` iterates files sequentially; no parallel streams in
+  `src/main`).
 
 Behavior deltas (exactly two, both intended):
-1. Dead initializer-internal entries no longer recorded.
+1. Initializer-internal dead entries no longer recorded (gap A). Other
+   dead-entry shapes are PRE-EXISTING and unchanged: a capture recorded for
+   a site later rejected after a parameter-arm hit (the capture precedes
+   `parameterMatchesType`'s result), and the METHOD_INVOKE loop's `||`
+   ordering (`SourceMetadataScanner:114-115`), where
+   `isInvocationHandlerParameterBefore` can admit a site after
+   `isDeclaredVariableBefore` already recorded a capture.
 2. A transitive parameter-arm consultation records the site offset, so the
    site's reflection fact gains `javacCallerAbstention` when the caller's
    correlation abstains.
@@ -126,6 +135,23 @@ the channel still never blocks DEFINITE promotion; flag-off stays silent.
   site in one scan — promotion untouched, diagnostics empty, the transitive
   abstention rides the fact (D1-style).
 
+Fixture-shape pins (from the #62 record and the harness): declare
+`class Nested` AFTER the caller method (a type immediately before the
+caller breaks the textual `methodContaining` anchor); `writeSources` names
+files after the FIRST type declaration; `analyzeDynamic` auto-writes
+`demo/Account.java`. E2's capture-set pin uses the D9 pattern (construct
+`SourceMetadataScanner`, run `dynamicFeatures()`, then read
+`parameterReceiverOffsets`) — no new accessor needed.
+
+**Pre-GREEN golden-churn audit (plan review round 1, finding 1)**:
+`JavaAnalysisAdapterTest.dynamicSitesKeepCallersAndEquivalentReflectionSpellings`
+holds `varUnrelated(Router router) { var type = router.loadClass(); return
+type.getMethod("GET"); }` — a transitive parameter-receiver site whose fact
+gains `javacCallerAbstention` under this change if that member's
+correlation declines. Before GREEN, run that test class and diff its golden
+evidence strings; any churn there must be an intended, reviewed attribute
+addition (correlation declines on that fixture) or none at all.
+
 ## Methodology
 
 - TDD: RED_78 (E1–E5 failing on main) → GREEN_78 (the field-threaded core
@@ -151,18 +177,40 @@ the channel still never blocks DEFINITE promotion; flag-off stays silent.
 
 ## Residuals (to document in RESOLUTION-78.md)
 
-- Chained-receiver site entries still capture the classified offset, not the
-  emitted chained-site offset (pre-existing #62 shape, unchanged here).
+- Chained-receiver coverage (plan review round 1, finding 2, corrected):
+  the SIMPLE chained arm's capture at `receiver.start()` is LIVE —
+  `addChainedLookupSites` skips SIMPLE receivers as already emitted by
+  `addReceiverCallSites` (Layer02), so the capture anchors the same
+  identifier start as the emitted site. The actually-uncovered chained
+  shapes are terminal `invoke`/`newInstance` sites emitted at
+  `terminalStart` while their classification ran at `receiver.start()`, and
+  the non-SIMPLE kinds, which never reach `isDeclaredVariableBefore` at
+  all.
+- Residual dead-entry shapes (unchanged, pre-existing): captures recorded
+  for sites rejected after a parameter-arm hit, and the METHOD_INVOKE `||`
+  ordering where the InvocationHandler arm admits the site.
 - Proxy transitive receivers remain unclassifiable (inference grammar has no
   Proxy arm) — no capture to gate.
-- `isSupportedChainedReceiver` and the `startsWithJdkClassForName` /
-  `isJdkClassFieldReceiver` arms are outside the choke-point capture by
-  construction (they do not reach `isDeclaredVariableBefore`'s parameter arm
-  for field receivers).
 
 Confidence score (pre-plan-review): **0.82** — the design is grounded in a
 probe-verified reproduction of both gaps on main and the #62 plan's
-choke-point rationale; the main uncertainty is hidden callers of the
+choke-point rationale; the main uncertainties were hidden callers of the
 inference helpers outside the mapped set and golden churn from fixtures
-whose var initializers consult parameters (the full-suite gate will pin
-both).
+whose var initializers consult parameters.
+
+## Plan review record
+
+Round 1 (fresh Engram-grounded adversarial subagent): caller map verified
+complete; all site-entry offsets coincide with emitted site/proxy offsets
+(every involved pattern is group-1-anchored, `matcher.start() ==
+matcher.start(1)`); E1–E3 fixture chains verified against the grammar.
+4 addressable findings, all incorporated as plan amendments: (1) MEDIUM —
+the concrete golden-churn surface in
+`JavaAnalysisAdapterTest.dynamicSitesKeepCallersAndEquivalentReflectionSpellings`
+(`varUnrelated`'s transitive parameter receiver), now a named pre-GREEN
+audit step; (2) LOW — the chained-receiver residual text was wrong for the
+SIMPLE arm (its capture is live; the uncovered shapes are terminal
+invoke/newInstance sites and non-SIMPLE kinds), corrected; (3) LOW —
+behavior-delta 1 scoped to initializer-internal entries with the
+pre-existing dead-entry shapes documented; (4) LOW — save/restore specified
+exception-safe (`try/finally`). Confidence after round 1: **0.88**.
