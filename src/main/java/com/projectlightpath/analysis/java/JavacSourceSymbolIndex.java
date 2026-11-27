@@ -1123,8 +1123,6 @@ final class JavacSourceSymbolIndex {
    */
   record MemberPosition(long startLine, long endLine) {
 
-    static final MemberPosition UNKNOWN = null;
-
     /** The point-span form for members whose end position is NOPOSITION. */
     static MemberPosition point(long line) {
       return new MemberPosition(line, line);

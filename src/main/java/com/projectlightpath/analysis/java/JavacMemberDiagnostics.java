@@ -64,18 +64,23 @@ final class JavacMemberDiagnostics {
       Map<Path, List<String>> errorCodesByFile,
       Path sourceFile,
       JavacSourceSymbolIndex.MemberInfo member) {
-    if (sourceFile == null || member == null) {
+    if (sourceFile == null) {
       return List.of();
     }
     Path normalized = sourceFile.toAbsolutePath().normalize();
+    // A null member is the unknown-input arm of the same contract as an
+    // unknown position: the conservative file-level set, never a
+    // silent under-report (no caller passes null today — defensive
+    // symmetry, review round 1, finding 5).
+    JavacSourceSymbolIndex.MemberPosition position = member == null
+        ? null : member.position();
+    if (position == null || position.startLine() < 1) {
+      return errorCodesByFile.getOrDefault(normalized, List.of());
+    }
     List<JavacSourceSymbolIndex.ErrorCodeRow> rows =
         errorLinesByFile.getOrDefault(normalized, List.of());
     if (rows.isEmpty()) {
       return List.of();
-    }
-    JavacSourceSymbolIndex.MemberPosition position = member.position();
-    if (position == null || position.startLine() < 1) {
-      return errorCodesByFile.getOrDefault(normalized, List.of());
     }
     LinkedHashSet<String> codes = new LinkedHashSet<>();
     for (JavacSourceSymbolIndex.ErrorCodeRow row : rows) {

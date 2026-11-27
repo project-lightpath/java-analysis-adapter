@@ -167,6 +167,35 @@ class JavacAbstentionEvidenceTest {
         "a body error does not error-type the member's signature");
   }
 
+  // E3 (#76 review round 1, finding 1): the error-codes union is
+  // NAME-filtered — two same-arity, different-name error members (the
+  // distinct-code-kind discipline) must not leak each other's codes
+  // through the (owner, name, arity) identity.
+  @Test
+  void errorDiagnosticsUnionIsNameFiltered() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        import org.springframework.scheduling.annotation.Async;
+        import org.springframework.stereotype.Service;
+        @Async @Service public class ErrorNames {
+          public void alpha(missing.Thing arg) { }
+          public void beta(java.util.NoSuch arg) { }
+        }
+        """));
+    SemanticCallFacts.Fact alpha = frameworkFact(facts, "proxy_dispatch",
+        "demo.ErrorNames#alpha");
+    assertEquals("compiler.err.doesnt.exist",
+        attribute(alpha, "javacAbstentionDiagnostics"),
+        "alpha()'s abstention must not carry beta()'s code (same arity, "
+            + "different name): " + alpha.evidence());
+    SemanticCallFacts.Fact beta = frameworkFact(facts, "proxy_dispatch",
+        "demo.ErrorNames#beta");
+    assertEquals("compiler.err.cant.resolve.location",
+        attribute(beta, "javacAbstentionDiagnostics"),
+        "beta()'s abstention must not carry alpha()'s code (same arity, "
+            + "different name): " + beta.evidence());
+  }
+
   // C3: mirrored overloads whose textual vectors hit a type parameter
   // (the unresolved-bounds class) abstain with their own code.
   @Test

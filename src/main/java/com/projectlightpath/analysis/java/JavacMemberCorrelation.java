@@ -246,7 +246,12 @@ final class JavacMemberCorrelation {
     JavacSourceSymbolIndex.TypeInfo owner = entries.get(0);
     LinkedHashSet<String> codes = new LinkedHashSet<>();
     for (JavacSourceSymbolIndex.MemberInfo member : owner.members()) {
-      if (member.kind().equals(kind)
+      // The NAME filter is load-bearing (review round 1, finding 1):
+      // the union must reproduce the group's member set — same owner,
+      // name, kind, and arity — or a same-arity different-name error
+      // member's codes would leak through this group's identity.
+      if (member.name().equals(indexName)
+          && member.kind().equals(kind)
           && member.parameterTypes().size() == arity
           && member.errorType()) {
         codes.addAll(index.errorCodesForMember(owner.file(), member));
