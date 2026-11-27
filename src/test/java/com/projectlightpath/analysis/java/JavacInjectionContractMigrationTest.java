@@ -1142,6 +1142,48 @@ class JavacInjectionContractMigrationTest {
     }
   }
 
+  // C5-positive: the metadata-row disjunct's observable — a metadata-only
+  // row whose type matches only through the requested shape is HONESTLY
+  // counted in the eligible set, downgrading an otherwise-DEFINITE match
+  // to POSSIBLE (flag-off: the row does not match, DEFINITE).
+  @Test
+  void metadataOnlyRowIsCountedThroughTheRequestedShape() throws IOException {
+    Path sourceRoot = root("c5");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        row("other-list", "java.util.List", "demo.OtherConfig")));
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the requested type is a textual vacuum, so no "
+            + "match and no metadata-only row");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "flag-on: the shape-proven metadata-only row is honestly counted "
+            + "in the eligible set (a downgrade, never a fabrication) — "
+            + "without the C5 disjunct this would be DEFINITE");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
