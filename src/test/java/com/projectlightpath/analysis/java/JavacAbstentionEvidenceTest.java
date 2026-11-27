@@ -288,6 +288,132 @@ class JavacAbstentionEvidenceTest {
             + binding.evidence());
   }
 
+  // N1 (#77): the producer-type seam's owner anchor is normalized — a
+  // Quarkus producer method declared after a nested type carries the
+  // TOP-LEVEL owner in its abstention identity, not the nested type
+  // the raw extraction start anchored on. The code stays
+  // multi_type_file (divergence requires a second same-file type, so
+  // the correlation is blocked regardless) and the producer type
+  // keeps its textual spelling.
+  @Test
+  void quarkusProducerAbstentionNamesTheNormalizedOwner() throws IOException {
+    SemanticCallFacts facts = analyzeQuarkus(List.of("""
+        package demo;
+        public class Thing { }
+        """, """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class ProducerConfig {
+          class Helper { }
+          @jakarta.enterprise.inject.Produces public Thing build(java.lang.String value) {
+            return null;
+          }
+        }
+        """, """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject Thing thing;
+        }
+        """));
+    SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            "demo.ProducerConfig#build(java.lang.String value)".equals(
+                evidence.attributes().get("candidateId"))))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals("multi_type_file",
+        attribute(binding, "javacProducerTypeAbstention"),
+        binding.evidence().toString());
+    assertEquals("demo.ProducerConfig#build(1)",
+        attribute(binding, "javacProducerTypeAbstentionMember"),
+        binding.evidence().toString());
+    boolean textualCandidateType = binding.evidence().stream()
+        .anyMatch(evidence -> "demo.Thing".equals(
+            evidence.attributes().get("candidateType")));
+    assertTrue(textualCandidateType,
+        "divergence blocks the correlation, so the producer type keeps "
+            + "its textual spelling: " + binding.evidence());
+  }
+
+  // N1 flag-off twin (expected-green on both trees): the opt-out arm
+  // emits NO javac*Abstention* evidence anywhere on the binding fact
+  // (the assertNoAbstentionAttributes sweep) and the producer type
+  // stays textual.
+  @Test
+  void quarkusProducerAbstentionIsFlagGated() throws IOException {
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts optedOut = analyzeQuarkus(List.of("""
+        package demo;
+        public class Thing { }
+        """, """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class ProducerConfig {
+          class Helper { }
+          @jakarta.enterprise.inject.Produces public Thing build(java.lang.String value) {
+            return null;
+          }
+        }
+        """, """
+        package demo;
+        import jakarta.inject.Inject;
+        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
+          @Inject Thing thing;
+        }
+        """));
+    SemanticCallFacts.Fact binding = optedOut.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            "demo.ProducerConfig#build(java.lang.String value)".equals(
+                evidence.attributes().get("candidateId"))))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(optedOut.frameworkFacts().toString()));
+    assertNoAbstentionAttributes(binding, "flag-off producer seam");
+    boolean textualCandidateType = binding.evidence().stream()
+        .anyMatch(evidence -> "demo.Thing".equals(
+            evidence.attributes().get("candidateType")));
+    assertTrue(textualCandidateType,
+        "the producer type keeps its textual spelling: " + binding.evidence());
+  }
+
+  // N2 (#77, producer-arm D3 analog; expected-green on both trees):
+  // a single-type-file producer whose correlation succeeds gets the
+  // CANONICAL correlated return type as its candidate type — asserted
+  // at the beanCandidates() level, because the injection binding
+  // match consults the raw producerSignature, not the normalized
+  // candidateType. The on-demand-import return spelling makes the
+  // textual fallback blank, so a silently failing correlation (or a
+  // mis-resolved owner) fails this cell instead of passing vacuously.
+  @Test
+  void correlatingProducerCarriesTheCanonicalReturnType() throws IOException {
+    Path sourceRoot = temp.resolve("abstention-n2/src/main/java");
+    writeSources(sourceRoot, List.of("""
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import java.util.*;
+        public class OptionalProducer {
+          @Bean public Optional make() { return null; }
+        }
+        """));
+    AnalysisContext scanContext =
+        context(sourceRoot, temp.resolve("abstention-n2/classes"), List.of());
+    SourceMetadataScannerState.BeanCandidate producer =
+        new SourceMetadataScanner(scanContext)
+            .beanCandidates(AnalysisContext.Framework.SPRING_BOOT)
+            .stream()
+            .filter(candidate -> candidate.producerMethod().equals("make"))
+            .findFirst()
+            .orElseThrow();
+    assertEquals("java.util.Optional", producer.candidateType(),
+        "the correlated member's canonical return type is the producer "
+            + "bean type (the textual on-demand spelling resolves empty): "
+            + producer);
+    assertEquals(JavacAbstentionEvidence.NONE, producer.producerTypeAbstention(),
+        "a correlating producer carries no abstention: " + producer);
+  }
+
   // C6: the interface-method descriptor of a JDK dynamic proxy feature
   // abstains when the interface file declares a nested type.
   @Test
@@ -1286,6 +1412,33 @@ class JavacAbstentionEvidenceTest {
     writeSources(sourceRoot, sources);
     return new JavaAnalysisAdapter().analyze(
         context(sourceRoot, temp.resolve("abstention/classes"), List.of()),
+        AnalysisGraph.empty());
+  }
+
+  /** The N1 cells bind CDI producers, which need the Quarkus arm's
+   * CDI-annotation metadata (the JavaAnalysisAdapterTest CDI precedent). */
+  private SemanticCallFacts analyzeQuarkus(List<String> sources) throws IOException {
+    Path sourceRoot = temp.resolve("abstention-quarkus/src/main/java");
+    writeSources(sourceRoot, sources);
+    return new JavaAnalysisAdapter().analyze(
+        AnalysisContext.builder()
+            .id("quarkus-production")
+            .framework(AnalysisContext.Framework.QUARKUS)
+            .frameworkVersion("3.8.4")
+            .fixtureId("fsi-quarkus")
+            .javaRelease(17)
+            .repositoryRoot(temp)
+            .applicationClasses(temp.resolve("abstention-quarkus/classes"))
+            .selectedProfile("production")
+            .analysisScope(AnalysisContext.Scope.PRODUCTION)
+            .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+            .dependencyClasspath(List.of())
+            .dependencyClasspathRequired(false)
+            .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+                "quarkus-cdi-annotations", "source_annotations",
+                AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+            .provenance(AnalysisContext.Provenance.forTesting())
+            .build(),
         AnalysisGraph.empty());
   }
 
