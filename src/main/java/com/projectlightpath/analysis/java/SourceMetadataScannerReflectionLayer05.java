@@ -126,6 +126,10 @@ abstract class SourceMetadataScannerReflectionLayer05 extends SourceMetadataScan
       // Issue #78: the recorded offset is the classification's site entry
       // offset, so transitively inferred receivers capture their own
       // site's offset, and inference-internal inquiries record nothing.
+      // The guard is an invariant assertion: while the caller-map
+      // invariant holds (every inference root sits beneath a site entry),
+      // captureSiteOffset is always set here — a drop is impossible, not
+      // a silent skip.
       if (captureSiteOffset >= 0) {
         parameterArmOffsets.computeIfAbsent(
             file.path(), ignored -> new LinkedHashSet<>()).add(captureSiteOffset);

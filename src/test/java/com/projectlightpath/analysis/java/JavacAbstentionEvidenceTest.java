@@ -1051,10 +1051,18 @@ class JavacAbstentionEvidenceTest {
 
   // E3 (#78): two inference hops (var c = klass.forName(...);
   // var m = c.getMethod(...); m.invoke(...)) — the capture threads through
-  // a nested var arm to the invoke site.
+  // a nested var arm to the invoke site. The exact-set pin (implementation
+  // review round 1) holds all THREE site offsets — it crosses
+  // isRecognizedClassLookup and isJdkClassForNameExpression's owner check,
+  // so reverting either switched inference caller to the setting entry
+  // loses the invoke offset (and its fact's attribute) while dead
+  // initializer-internal entries return.
   @Test
   void twoHopTransitiveChainCarriesCallerAbstention() throws IOException {
-    SemanticCallFacts facts = analyzeDynamic(List.of("""
+    Path sourceRoot = temp.resolve("transitive-chain/src/main/java");
+    write(sourceRoot.resolve("demo/Account.java"),
+        "package demo; public class Account {}\n");
+    write(sourceRoot.resolve("demo/ChainSites.java"), """
         package demo;
         public class ChainSites {
           void call(Class<?> klass) throws Exception {
@@ -1064,12 +1072,81 @@ class JavacAbstentionEvidenceTest {
           }
           class Nested { }
         }
-        """));
-    SemanticCallFacts.Fact invoke = invokeFact(facts, "demo.ChainSites#");
+        """);
+    AnalysisContext scanContext =
+        context(sourceRoot, temp.resolve("transitive-chain/classes"), List.of());
+    SourceMetadataScanner scanner = new SourceMetadataScanner(scanContext);
+    SemanticCallFacts facts = dynamicScanWith(scanner, scanContext);
+    SemanticCallFacts.Fact invoke = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("reflection"))
+        .filter(item -> item.caller().startsWith("demo.ChainSites#"))
+        .filter(item -> item.evidence().stream()
+            .anyMatch(evidence -> evidence.symbols().contains("Method.invoke")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
     assertEquals("multi_type_file", attribute(invoke, "javacCallerAbstention"),
         invoke.evidence().toString());
     assertEquals("demo.ChainSites#call(1)",
         attribute(invoke, "javacCallerAbstentionMember"), invoke.evidence().toString());
+    SourceMetadataScannerState.SourceFile file = scanner.files().stream()
+        .filter(candidate -> candidate.typeName().equals("demo.ChainSites"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    java.util.Set<Integer> siteOffsets = scanner.reflectionSites(file).stream()
+        .map(SourceMetadataScannerState.DynamicSite::offset)
+        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+    assertEquals(siteOffsets, scanner.parameterReceiverOffsets(file),
+        "the capture holds exactly the three site offsets (forName, getMethod, "
+            + "invoke) — no initializer-internal dead entry: "
+            + scanner.parameterReceiverOffsets(file));
+  }
+
+  // E6 (#78, implementation review round 1): the loadClass-initializer
+  // path crosses isRecognizedClassLoaderLookup's classify arm — the
+  // loadClass fact carries the abstention directly, the getMethod and
+  // invoke facts through the var-inferred chain, and the capture set
+  // holds exactly the three real site offsets.
+  @Test
+  void loadClassInitializerChainCapturesOnlySiteOffsets() throws IOException {
+    Path sourceRoot = temp.resolve("transitive-load/src/main/java");
+    write(sourceRoot.resolve("demo/Account.java"),
+        "package demo; public class Account {}\n");
+    write(sourceRoot.resolve("demo/LoadSites.java"), """
+        package demo;
+        public class LoadSites {
+          void call(ClassLoader loader) throws Exception {
+            var c = loader.loadClass("X");
+            var m = c.getMethod("run");
+            m.invoke(this);
+          }
+          class Nested { }
+        }
+        """);
+    AnalysisContext scanContext =
+        context(sourceRoot, temp.resolve("transitive-load/classes"), List.of());
+    SourceMetadataScanner scanner = new SourceMetadataScanner(scanContext);
+    SemanticCallFacts facts = dynamicScanWith(scanner, scanContext);
+    List<SemanticCallFacts.Fact> sites = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("reflection"))
+        .filter(item -> item.caller().startsWith("demo.LoadSites#"))
+        .toList();
+    assertEquals(3, sites.size(), facts.providerFacts().toString());
+    assertTrue(sites.stream()
+            .allMatch(item -> "multi_type_file".equals(
+                attribute(item, "javacCallerAbstention"))),
+        "the direct loadClass site and both var-inferred sites carry the "
+            + "caller abstention: " + sites);
+    SourceMetadataScannerState.SourceFile file = scanner.files().stream()
+        .filter(candidate -> candidate.typeName().equals("demo.LoadSites"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    java.util.Set<Integer> siteOffsets = scanner.reflectionSites(file).stream()
+        .map(SourceMetadataScannerState.DynamicSite::offset)
+        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+    assertEquals(siteOffsets, scanner.parameterReceiverOffsets(file),
+        "the capture holds exactly the three real site offsets (loadClass, "
+            + "getMethod, invoke) — no initializer-internal dead entry: "
+            + scanner.parameterReceiverOffsets(file));
   }
 
   // E4 (#78): the flag-off twin of E1 — no javac*Abstention* key on any

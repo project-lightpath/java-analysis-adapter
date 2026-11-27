@@ -14,10 +14,12 @@ site-scoped instead of inquiry-scoped:
 - **`captureSiteOffset`** (new scanner field, Layer05): set by the two
   site-classification entries — `isDeclaredVariableBefore` and
   `isJdkApiOwner` — in a `try/finally` save/restore, read by the
-  parameter-match arm. Nested site entries pass an equal offset
-  (`isJdkApiOwner` internally calls the `isDeclaredVariableBefore` entry
-  with the same offset; the chained-receiver arms thread one receiver
-  start), so the restore is idempotent.
+  parameter-match arm. The only remaining entry nesting is
+  `isSupportedChainedReceiver` → `startsWithJdkClassForName` →
+  `isJdkApiOwner` (Layer06), which threads one receiver start, so the
+  restore is idempotent; `isJdkApiOwner` itself delegates to its
+  uncaptured core, so its internal classification never re-enters a site
+  entry.
 - **`classifyDeclaredVariable` / `isJdkApiOwnerUncaptured`** (new cores,
   Layer05): the current bodies, capture-inert. The parameter-match arm
   records `captureSiteOffset` (when set) instead of its own inquiry
@@ -60,7 +62,15 @@ promotion, silent on flag-off and failed builds.
   cl.loadClass(...)`) carries the abstention, and
   `parameterReceiverOffsets(file)` equals exactly the loadClass site
   offset — the dead entry is pinned gone.
-- E3: the two-hop chain carries the abstention on the invoke fact.
+- E3: the two-hop chain carries the abstention on the invoke fact, and the
+  capture set equals exactly the three site offsets (forName, getMethod,
+  invoke) — pinning the `isRecognizedClassLookup` and
+  `isJdkClassForNameExpression` switched callers.
+- E3b/E6: the loadClass-initializer chain (`var c = loader.loadClass("X");
+  var m = c.getMethod("run"); m.invoke(...)`) — all THREE facts carry the
+  abstention (the loadClass site directly, getMethod and invoke through the
+  var-inferred chain) and the capture set equals exactly the three site
+  offsets, pinning `isRecognizedClassLoaderLookup`'s classify arm.
 - E4: the flag-off twin sweeps every `javac*Abstention*` key on the
   transitive fixture — none.
 - E5: the transitive abstention and a ServiceLoader DEFINITE site in one
@@ -103,7 +113,18 @@ promotion, silent on flag-off and failed builds.
   coordination step, the E4 race note; round 4: clean, named the concrete
   symbols-based selection predicate). Confidence 0.82 → **0.92**, loop
   closed.
-- **Implementation review**: see the amendments appended below.
+- **Implementation review**: round 1 (fresh Engram-grounded adversarial
+  subagent): caller map, threading, cross-file keying, offset-0, and test
+  quality all verified clean; 3 findings addressed in REVIEW_78_1: (1)
+  MEDIUM — gap A was pinned on only one of the four switched inference
+  callers: E3 gained an exact-set pin over its three site offsets (crosses
+  `isRecognizedClassLookup` and `isJdkClassForNameExpression`) and the new
+  E6 cell pins the loadClass-initializer path (`isRecognizedClassLoaderLookup`
+  — both facts carry the abstention, set equals the two site offsets);
+  (2) LOW — the resolution's nesting description corrected (the
+  `isJdkApiOwner` internal nesting was removed by the split; the remaining
+  nesting is the chained-receiver path); (3) NIT — the capture guard is
+  now documented as an invariant assertion, not a silent skip.
 
 ## Residuals
 
