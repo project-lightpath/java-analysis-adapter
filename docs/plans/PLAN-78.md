@@ -128,7 +128,14 @@ the channel still never blocks DEFINITE promotion; flag-off stays silent.
   vacuously green. Field-receiver twin
   (`Class<?> loader;` field): the `Method.invoke` fact carries NO caller
   abstention (causality — the transitive chain consulted a field arm, not
-  the parameter arm).
+  the parameter arm). Fact-selection predicate (plan review round 4,
+  verified against the fact pipeline): filter
+  `relationshipType().equals("reflection")` + caller prefix + an evidence
+  `symbols().contains("Method.invoke")` — `relationshipType` does not
+  discriminate (both facts are "reflection"), and the site symbol is
+  copied through `ProviderFactNormalizer.dynamicFact` into the single
+  `reflection_api` evidence (`SourceMetadataScanner.java:155`,
+  `ProviderFactNormalizer.java:206-211`).
 - **E2 (transitive ClassLoader chain + capture-set pin)**:
   `var cl = klass.getClassLoader(); cl.loadClass("X");` — the `loadClass`
   fact carries the caller abstention, and `parameterReceiverOffsets(file)`
@@ -187,13 +194,17 @@ diff safety net (other members could churn).
 - E4 (flag-off twin) doubles the pre-existing flag-mutation race window in
   the concurrently-executing class (D2 mutates the system property with
   only `@AfterEach` cleanup); if it flakes, serialize the flag-mutating
-  cells or fold E4's sweep into D2's flag-off phase.
+  cells or fold E4's sweep into D2's flag-off phase. Round 4 verified the
+incorporations and named the concrete symbols-based fact-selection
+predicate; no addressable findings — plan review loop closed at round 4.
+Confidence after round 3: **0.92**.
 
 ## Mutation checks (EVIDENCE_78)
 
 1. Capture the inquiry offset instead of the field in the core's
-   `hasParameter` arm ⇒ E1/E2/E3 red (no site capture) and E2's set pin red
-   (dead entry returns).
+   `hasParameter` arm ⇒ E1/E3 red (the attribute is lost) and E2 red both
+   ways (the attribute is lost AND the dead initializer-internal entry
+   returns to the set).
 2. Remove the capture entirely ⇒ C10/D6 red (existing #62 cells pin the
    direct arm).
 3. Let `isClassLoaderResultExpression`'s inference call (Layer05:159) use
@@ -274,3 +285,13 @@ the test file and the Makefile floor literal: re-run E1–E5, re-derive the
 floor, and re-verify the member-format pin after any rebase onto a
 post-#76 base; (3) NIT — E4 widens the pre-existing flag-off race window;
 mitigation documented. Confidence after round 3: **0.92**.
+
+Round 4 (fresh adversarial subagent): verified all round-3 incorporations
+and named the concrete fact-selection predicate — evidence
+`symbols().contains("Method.invoke")` on the `reflection_api` evidence
+(`relationshipType` does not discriminate; the site symbol flows
+`DynamicSite.symbol` → `reflectionFeatures` → `ProviderFactNormalizer.
+dynamicFact`). One wording NIT folded into mutation check 1 (under that
+mutation a capture DOES occur, at the inquiry offset — which is why both
+E2 assertions go red). **NO ADDRESSABLE FINDINGS — plan review loop closed
+at round 4. Final confidence: 0.92.**
