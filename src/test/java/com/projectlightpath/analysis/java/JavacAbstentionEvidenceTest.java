@@ -953,6 +953,228 @@ class JavacAbstentionEvidenceTest {
         "each Grid declaration selects its OWN member's vector");
   }
 
+  // E1 (#78): a reflection site whose receiver type was transitively
+  // INFERRED from a parameter-initialized local (var method =
+  // loader.getMethod(...); method.invoke(...)) — the INVOKE fact carries
+  // the caller abstention; a field-initialized twin stays clean (the
+  // transitive chain consulted a field arm, not the parameter arm). The
+  // invoke fact is selected by its site symbol: the getMethod fact sorts
+  // first and already carries the attribute (the direct arm), so a
+  // caller-filter findFirst() would assert the wrong fact.
+  @Test
+  void transitiveInvokeCallerAbstentionIsVisibleAndCausal() throws IOException {
+    SemanticCallFacts parameter = analyzeDynamic(List.of("""
+        package demo;
+        public class Sites {
+          void call(Class<?> loader) throws Exception {
+            var method = loader.getMethod("run");
+            method.invoke(this);
+          }
+          class Nested { }
+        }
+        """));
+    SemanticCallFacts.Fact invoke = invokeFact(parameter, "demo.Sites#");
+    assertEquals("multi_type_file", attribute(invoke, "javacCallerAbstention"),
+        invoke.evidence().toString());
+    assertEquals("demo.Sites#call(1)",
+        attribute(invoke, "javacCallerAbstentionMember"), invoke.evidence().toString());
+    assertTrue(parameter.diagnostics().isEmpty(),
+        "the transitive abstention never enters scan.diagnostics(): "
+            + parameter.diagnostics());
+
+    SemanticCallFacts field = analyzeDynamic(List.of("""
+        package demo;
+        public class FieldSites {
+          Class<?> loader;
+          void call() throws Exception {
+            var method = loader.getMethod("run");
+            method.invoke(this);
+          }
+          class Nested { }
+        }
+        """));
+    SemanticCallFacts.Fact fieldInvoke = invokeFact(field, "demo.FieldSites#");
+    assertNull(attribute(fieldInvoke, "javacCallerAbstention"),
+        "a field-initialized transitive chain never consulted the parameter "
+            + "arm: " + fieldInvoke.evidence());
+    SemanticCallFacts.Fact fieldLookup = lookupFact(field, "demo.FieldSites#");
+    assertNull(attribute(fieldLookup, "javacCallerAbstention"),
+        "the field twin's direct site stays clean too: " + fieldLookup.evidence());
+  }
+
+  // E2 (#78): the ClassLoader chain (var cl = klass.getClassLoader();
+  // cl.loadClass(...)) — the loadClass fact carries the caller abstention,
+  // and the choke-point capture holds ONLY the site offset: the dead
+  // initializer-internal entry from the inference caller is gone.
+  @Test
+  void transitiveClassLoaderChainCapturesOnlyTheSiteOffset() throws IOException {
+    Path sourceRoot = temp.resolve("transitive-loader/src/main/java");
+    write(sourceRoot.resolve("demo/Account.java"),
+        "package demo; public class Account {}\n");
+    write(sourceRoot.resolve("demo/LoaderSites.java"), """
+        package demo;
+        public class LoaderSites {
+          void call(Class<?> klass) {
+            var cl = klass.getClassLoader();
+            cl.loadClass("X");
+          }
+          class Nested { }
+        }
+        """);
+    AnalysisContext scanContext =
+        context(sourceRoot, temp.resolve("transitive-loader/classes"), List.of());
+    SourceMetadataScanner scanner = new SourceMetadataScanner(scanContext);
+    SemanticCallFacts facts = dynamicScanWith(scanner, scanContext);
+    SemanticCallFacts.Fact load = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("reflection"))
+        .filter(item -> item.caller().startsWith("demo.LoaderSites#"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals("multi_type_file", attribute(load, "javacCallerAbstention"),
+        load.evidence().toString());
+    assertEquals("demo.LoaderSites#call(1)",
+        attribute(load, "javacCallerAbstentionMember"), load.evidence().toString());
+    SourceMetadataScannerState.SourceFile file = scanner.files().stream()
+        .filter(candidate -> candidate.typeName().equals("demo.LoaderSites"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    int siteOffset = scanner.reflectionSites(file).stream()
+        .filter(site -> site.symbol().equals("ClassLoader.loadClass"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.reflectionSites(file).toString()))
+        .offset();
+    assertEquals(java.util.Set.of(siteOffset), scanner.parameterReceiverOffsets(file),
+        "the capture holds only the loadClass site offset — the "
+            + "initializer-internal dead entry is gone: "
+            + scanner.parameterReceiverOffsets(file));
+  }
+
+  // E3 (#78): two inference hops (var c = klass.forName(...);
+  // var m = c.getMethod(...); m.invoke(...)) — the capture threads through
+  // a nested var arm to the invoke site.
+  @Test
+  void twoHopTransitiveChainCarriesCallerAbstention() throws IOException {
+    SemanticCallFacts facts = analyzeDynamic(List.of("""
+        package demo;
+        public class ChainSites {
+          void call(Class<?> klass) throws Exception {
+            var c = klass.forName("X");
+            var m = c.getMethod("run");
+            m.invoke(this);
+          }
+          class Nested { }
+        }
+        """));
+    SemanticCallFacts.Fact invoke = invokeFact(facts, "demo.ChainSites#");
+    assertEquals("multi_type_file", attribute(invoke, "javacCallerAbstention"),
+        invoke.evidence().toString());
+    assertEquals("demo.ChainSites#call(1)",
+        attribute(invoke, "javacCallerAbstentionMember"), invoke.evidence().toString());
+  }
+
+  // E4 (#78): the flag-off twin of E1 — no javac*Abstention* key on any
+  // fact of the transitive fixture.
+  @Test
+  void transitiveCallerAbstentionIsFlagGated() throws IOException {
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts facts = analyzeDynamic(List.of("""
+        package demo;
+        public class OptOutSites {
+          void call(Class<?> loader) throws Exception {
+            var method = loader.getMethod("run");
+            method.invoke(this);
+          }
+          class Nested { }
+        }
+        """));
+    for (SemanticCallFacts.Fact fact : facts.providerFacts()) {
+      assertNoAbstentionAttributes(fact, "flag-off transitive re-query");
+    }
+  }
+
+  // E5 (#78): the blast-radius twin — the transitive abstention AND a
+  // ServiceLoader DEFINITE site in one scan: promotion untouched,
+  // diagnostics empty, the abstention rides the INVOKE fact.
+  @Test
+  void transitiveAbstentionDoesNotBlockServiceLoaderDefinitePromotion() throws IOException {
+    Path source = Files.createDirectories(temp.resolve("blast78/src/main/java"));
+    Path classes = Files.createDirectories(temp.resolve("blast78/classes"));
+    Path dependencies = Files.createDirectories(temp.resolve("blast78/deps"));
+    Path provider = source.resolve("demo/Handler.java");
+    Path implementation = source.resolve("demo/HandlerImpl.java");
+    Path app = source.resolve("demo/App.java");
+    write(provider, "package demo; public interface Handler { void record(); }\n");
+    write(implementation,
+        "package demo; public class HandlerImpl implements Handler { public void record() {} }\n");
+    write(app, """
+        package demo;
+        import java.util.ServiceLoader;
+        class App {
+          void call() { ServiceLoader.load(Handler.class).forEach(h -> h.record()); }
+          void reflect(Class<?> loader) throws Exception {
+            var method = loader.getMethod("record");
+            method.invoke(this);
+          }
+          class Nested { }
+        }
+        """);
+    assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null,
+        "--release", "17", "-g", "-d", classes.toString(), provider.toString(),
+        implementation.toString(), app.toString()));
+    Path unique = dependencies.resolve("unique.jar");
+    jar(unique, "demo.HandlerImpl");
+    AnalysisContext context = context(source, classes, List.of(unique));
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(context);
+    List<SemanticCallFacts.Fact> serviceLoaderFacts = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("service_loader"))
+        .toList();
+    assertFalse(serviceLoaderFacts.isEmpty(),
+        "the ServiceLoader site must produce facts: " + facts.providerFacts());
+    assertTrue(serviceLoaderFacts.stream()
+            .allMatch(item -> item.certainty() == SemanticCallFacts.Certainty.DEFINITE),
+        "the transitive abstention must not block DEFINITE promotion: "
+            + serviceLoaderFacts);
+    assertTrue(facts.diagnostics().isEmpty(),
+        "the channel must never enter scan.diagnostics(): " + facts.diagnostics());
+    SemanticCallFacts.Fact invoke = facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("reflection"))
+        .filter(item -> item.caller().startsWith("demo.App#reflect"))
+        .filter(item -> item.evidence().stream()
+            .anyMatch(evidence -> evidence.symbols().contains("Method.invoke")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+    assertEquals("multi_type_file", attribute(invoke, "javacCallerAbstention"),
+        "the transitive abstention rides the invoke fact: " + invoke.evidence());
+  }
+
+  /** The Method.invoke reflection fact of one caller (E1/E3/E5 pin). */
+  private SemanticCallFacts.Fact invokeFact(SemanticCallFacts facts, String callerPrefix) {
+    return reflectionFactBySymbol(facts, callerPrefix, "Method.invoke");
+  }
+
+  /** The method-lookup reflection fact of one caller (the E1 field twin). */
+  private SemanticCallFacts.Fact lookupFact(SemanticCallFacts facts, String callerPrefix) {
+    return reflectionFactBySymbol(facts, callerPrefix, "getMethod");
+  }
+
+  private static SemanticCallFacts.Fact reflectionFactBySymbol(
+      SemanticCallFacts facts, String callerPrefix, String symbol) {
+    return facts.providerFacts().stream()
+        .filter(item -> item.relationshipType().equals("reflection"))
+        .filter(item -> item.caller().startsWith(callerPrefix))
+        .filter(item -> item.evidence().stream()
+            .anyMatch(evidence -> evidence.symbols().contains(symbol)))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.providerFacts().toString()));
+  }
+
+  /** dynamicScan over one shared scanner, so capture state is observable. */
+  private SemanticCallFacts dynamicScanWith(
+      SourceMetadataScanner scanner, AnalysisContext scanContext) {
+    return new JavaAnalysisAdapter().analyze(scanContext, new AnalysisGraph(
+        List.of(), scanner.dynamicFeatures(), java.util.Set.of(), "SootUp", "3.0.1", 0, 0));
+  }
+
   private SemanticCallFacts.Fact frameworkFact(
       SemanticCallFacts facts, String relationship, String callee) {
     return facts.frameworkFacts().stream()
