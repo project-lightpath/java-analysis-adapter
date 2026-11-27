@@ -268,13 +268,17 @@ Two rules govern every arm (review round 1, findings 1–3):
 - **C1 `directTypeCompatibility`**: `requestedRaw` and `candidateRaw`
   use the repair-only helper (requested shape arm; candidate shape
   arm). The generic tail (producer signatures) stays textual.
-- **C2 `directTypesHaveDifferentRawTypes`**: NO shape arms — DISPOSITION
-  (review round 2, finding 2): both call sites (TypeMatching:46,:66)
-  are guarded by `directCompatibility == Boolean.FALSE`, which (under
-  the identical helper) already entails both raws present and
-  different, so arms here are constant-true dead code with no
-  mutation-receiptable cell. The function stays fully textual and
-  unchanged.
+- **C2 `directTypesHaveDifferentRawTypes`**: the SAME repair-only
+  helper arms as C1 (review round 3, finding 1, option (b) — the
+  round-2 dead-code disposition is REVERSED). Rationale: with C2 left
+  textual, a shape-filled FALSE in C1 short-circuits `matches`
+  (TypeMatching:46-47) through a textual C2 that still sees the vacuum
+  — flipping a previously-TRUE `matches` to FALSE. With the identical
+  helper, C1's FALSE entails C2's TRUE, the null and FALSE branches of
+  `matches`/`typeMatchCertain` become behaviorally identical (both
+  reduce to `contractMatches`), and the `typeMatchCertain` promotion
+  path at TypeMatching:65-67 becomes reachable exactly when every
+  input is javac-proven (see §3.5).
 - **C3 `injectionTypesMatch`**: in the ERASED branch, `sourceRaw` uses
   the repair-only helper (requested shape arm); the metadata side and
   the bothGeneric branch stay textual (generic binding rows are a
@@ -283,14 +287,18 @@ Two rules govern every arm (review round 1, findings 1–3):
   disjunct — `!hasGenericArguments(requestedType) && requestedRaw.is
   Present() && contractShapes(candidate).contains(requestedRaw.get())`
   where `requestedRaw` is the repair-only helper result (erased).
-  PLACEMENT (review round 2, finding 5): the disjunct is evaluated
-  independent of the `requested.isEmpty()` early return
-  (TypeMatching:77-80) — the shape arm fires precisely when that early
-  return would (the A1/B1 defect class), so the early return must not
-  preempt it. The contract side's index shapes answer exactly the case
-  the textual contract resolution cannot (an unresolvable implements
-  spelling); metadata-row contracts stay textual (external spellings,
-  residual).
+  PLACEMENT (review round 2, finding 5; round 3, finding 3): the
+  disjunct is evaluated independent of the `requested.isEmpty()` early
+  return (TypeMatching:77-80) — the shape arm fires precisely when
+  that early return would (the A1/B1 defect class), so the early
+  return must not preempt it. REACH (with C2 helper-armed): the
+  disjunct is consultable from BOTH the null and the FALSE branch of
+  `matches`/`typeMatchCertain` (they reduce to `contractMatches`);
+  `typeMatchCertain`'s producer-blank early return (:62-64) keeps the
+  pre-existing producer rule. The contract side's index shapes answer
+  exactly the case the textual contract resolution cannot (an
+  unresolvable implements spelling); metadata-row contracts stay
+  textual (external spellings, residual).
 - **C5 `metadataCandidateTypeMatches`**: the textual ladder runs
   unchanged; ADD one disjunct — `!hasGenericArguments(requestedType) &&
   rowErasedRaw.isPresent() && rowErasedRaw.equals(requestedRaw.get())`
@@ -313,21 +321,24 @@ Every index shape is javac's resolution of an actual indexed declaration
 (the injection's own member parameter, the candidate's own type, the
 candidate's own direct supertypes), and every shape participates only
 as a repair of a textual VACUUM or as a generics-gated additional
-disjunct (§3.4) — a comparison the textual ladder answered with a
-VALUE is never flipped. The vacuum-fill promotion paths and their
-no-fabrication arguments: null→TRUE in `directTypeCompatibility`
-(javac-proven raw equality); null→FALSE plus
-`directTypesHaveDifferentRawTypes` plus `contractMatches` in
-`typeMatchCertain` (TypeMatching:65-67 — the FALSE and the raw
-difference are javac-proven, and the contract disjunct runs its own
-gated ladder); the C3 fallback suppression (javac-proven correction of
-the C6 case-insensitive over-approximation). Wrong-attribution guards:
-unique usable owner, unique member in the name+kind+arity group, the
-extractor's phantom-constructor count guard (recomputed through the
-same implementation), the producer's own-parameter-text overload
-identification, unique named-type filter for candidates. A decline
-leaves the exact pre-change textual behavior (flag-off equivalence by
-construction; the seam is empty flag-off).
+disjunct (§3.4). The invariant holds at the RESOLUTION level (review
+round 3, finding 6): no side that resolved textually to a value is ever
+overridden — the boolean function answers above it (null→TRUE/FALSE,
+false→true disjuncts) change by design. The vacuum-fill promotion paths
+and their no-fabrication arguments: null→TRUE in `directType
+Compatibility` (javac-proven raw equality); null→FALSE in C1 plus
+C2's helper-proven raw difference plus `contractMatches` in
+`typeMatchCertain` (TypeMatching:65-67 — with C2 armed through the
+identical helper, every input to that conjunction is javac-proven or
+runs its own gated ladder); the C3 erased-branch corrections in BOTH
+directions (fallback suppression when javac proves the raws differ, and
+fallback-false → shape-proven raw equality TRUE). Wrong-attribution
+guards: unique usable owner, unique member in the name+kind+arity
+group, the extractor's phantom-constructor count guard (recomputed
+through the same implementation), the producer's own-parameter-text
+overload identification, unique named-type filter for candidates. A
+decline leaves the exact pre-change textual behavior (flag-off
+equivalence by construction; the seam is empty flag-off).
 
 ## 4. Test matrix — `JavacInjectionContractMigrationTest` (NEW class)
 
@@ -401,19 +412,28 @@ identity strings are involved). Cells:
   D1 on-demand × same-package; D2 on-demand × single-type import;
   D3 java.lang × on-demand; D4 java.lang × same-package;
   D5 java.lang × single-type import; D6a same-CU type × single-type
-  import (textual RESOLVES to the import — pin the pre-existing
-  textual answer flag-on as a characterization of the residual);
+  import (textual RESOLVES to the import — CHARACTERIZATION cell: pin
+  the pre-existing textual answer flag-on as the residual);
   D6b same-CU type with no matching import (textual FAILS — the repair
   resolves the CU's own nested type); D7 single-type import of a
   same-package type (legal Java; must resolve — parity cell);
-  D8 same-package × same-CU (no import — textual same-package lookup
-  misses the CU's own nested type, repair fixes);
-  D9 on-demand × same-CU; D10 java.lang × same-CU;
+  D8 same-package × same-CU and D9 on-demand × same-CU (constructed
+  with an EMPTY or external weaker rung — an on-demand import of a
+  package absent from `files()` — so the textual resolver fails and
+  the repair resolves the CU's own nested type; the populated-rung
+  variants are kept-residual characterizations like D6a);
+  D10 java.lang × same-CU — CHARACTERIZATION cell (the java.lang rung
+  always answers for a `String`-named nested type; JLS-wrong textual
+  answer kept by repair-only, pinned as the residual);
   D11 inherited member type (cross-file, single level — the AGENTS
   scope; the unqualified spelling of a superclass's nested type fails
   the 2-arg textual resolver, javac resolves it flag-on).
-  Each cell: flag-on answer where the textual resolver fails is the
-  JLS-correct javac shape; flag-off twin pins the textual answer.
+  The flag-on TRUE answers of D6b/D8/D9/D11 depend on the index's
+  nested-type canonical form (dots vs `$`) matching the other side's
+  comparison spelling — decided per cell by the P1/P5 probe receipts,
+  never by inspection. Each cell: flag-on answer where the textual
+  resolver fails is the JLS-correct javac shape; flag-off twin pins the
+  textual answer.
 
 Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
 
@@ -448,6 +468,20 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
   early return — specified independent); 1 LOW (A12's erased-bound
   expectation folded into P5's probe receipt); 1 NIT (guard count name
   vs lookup name — stated separately).
+- **Round 3** (delta-only): 6 findings — 1 HIGH (with C2 left textual,
+  a shape-filled FALSE in C1 short-circuited `matches` through the
+  textual C2 vacuum, flipping a previously-TRUE match to FALSE —
+  fixed by option (b): C2 routed through the identical repair-only
+  helper, reversing the round-2 dead-code disposition; the null and
+  FALSE branches of `matches`/`typeMatchCertain` become behaviorally
+  identical); 2 MEDIUM (the §3.5 :65-67 promotion argument was
+  unreachable as written — corrected, now reachable with every input
+  javac-proven; the C4 disjunct's real reach stated); 1 MEDIUM (D10
+  re-labeled a characterization cell, D8/D9 re-constructed with
+  empty/external weaker rungs); 1 LOW (nested canonical form folded
+  into the P1/P5 probe receipts); 1 NIT (the invariant restated at the
+  resolution level; C3's both directions enumerated).
+
 ## 5. TDD sequence
 
 1. **PLAN_61** (this document) + adversarial plan-review rounds
@@ -487,8 +521,9 @@ Cell count target: 22–26; floor 754 → 754+N (re-derived at GREEN).
 
 ## 8. Confidence
 
-Post-round-2 confidence: **0.86** — both blocking defect classes are
-designed out with precise invariants (no non-null textual answer flips;
-generics-gated disjuncts), the dead C2 arms are dispositioned rather
-than wired, and the remaining open facts are confined to the P1–P5
-probes with decision rules that cannot invalidate the ladder design.
+Post-round-3 confidence: **0.88** — the C1/C2 helper-uniformity fix
+removes the last falsifiable path in the invariant (the null and FALSE
+branches of `matches`/`typeMatchCertain` are behaviorally identical),
+the promotion argument now matches the code's real reachability, and
+the remaining open facts are confined to the P1–P5 probes with
+decision rules that cannot invalidate the ladder design.
