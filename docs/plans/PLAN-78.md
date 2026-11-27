@@ -188,13 +188,12 @@ diff safety net (other members could churn).
 - Zero edits to existing tests; additions only.
 - Adversarial review: plan review loop and post-implementation review loop
   with fresh Engram-grounded subagents until no addressable findings.
-- **#76 coordination (plan review round 3, finding 2)**: #76 appends cells
-  to the same `JavacAbstentionEvidenceTest` and bumps the same Makefile
-  floor literal — after any rebase onto a base that includes #76, re-run
-  E1–E5, re-derive the floor from what the new main reports, and re-verify
-  the `javacCallerAbstentionMember` format pin against #76's
-  `JavacSourceSymbolIndex`/`MemberInfo` changes rather than carrying it
-  over.
+- **#76 coordination (plan review round 3, finding 2; executed
+  post-merge)**: #76 merged as PR #79; this branch rebased (Makefile floor
+  conflict only, resolved to 754 = 748 + 6 cells) and re-verified on the
+  new base — 27/27 in the shared test class, 754 executions zero failures,
+  lint and evidence gates pass. The member-format pin survived #76's
+  `MemberInfo` position component.
 - E4 (flag-off twin) doubles the pre-existing flag-mutation race window in
   the concurrently-executing class (D2 mutates the system property with
   only `@AfterEach` cleanup); if it flakes, serialize the flag-mutating

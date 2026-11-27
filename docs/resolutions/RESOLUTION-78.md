@@ -162,9 +162,15 @@ receipts re-derived on the final 6-cell suite after E6 landed)
   already emitted by `addReceiverCallSites`).
 - Proxy transitive receivers remain unclassifiable (the inference grammar
   yields only Method/Constructor/Class/ClassLoader) — no capture to gate.
-- #76 coordination: after any rebase onto a post-#76 base, re-run E1–E5,
-  re-derive the Makefile floor, and re-verify the
-  `javacCallerAbstentionMember` format pin against #76's index changes.
+- #76 coordination: EXECUTED — after #76 merged as PR #79 (2026-11-27),
+  this branch rebased onto the new main. The rebase touched only the
+  Makefile floor (resolved 748 + 6 cells = 754; the sources were disjoint
+  as planned). Re-verified on the post-#76 base: the shared
+  `JavacAbstentionEvidenceTest` is 27/27 green (the
+  `javacCallerAbstentionMember` format pin survives #76's `MemberInfo`
+  position component — the identity format is unchanged), the full suite
+  reports **754 executions** with zero failures, `make java-lint` PASS,
+  `make evidence-validate` pass.
 
 Confidence score: **0.92** — both gaps reproduced probe-first on main and
 closed by one mechanism whose direct-site behavior is byte-identical;
