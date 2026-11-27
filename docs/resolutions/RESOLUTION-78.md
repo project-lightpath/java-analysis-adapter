@@ -66,7 +66,7 @@ promotion, silent on flag-off and failed builds.
   capture set equals exactly the three site offsets (forName, getMethod,
   invoke) — pinning the `isRecognizedClassLookup` and
   `isJdkClassForNameExpression` switched callers.
-- E3b/E6: the loadClass-initializer chain (`var c = loader.loadClass("X");
+- E6 (implementation review round 1): the loadClass-initializer chain (`var c = loader.loadClass("X");
   var m = c.getMethod("run"); m.invoke(...)`) — all THREE facts carry the
   abstention (the loadClass site directly, getMethod and invoke through the
   var-inferred chain) and the capture set equals exactly the three site
@@ -76,8 +76,9 @@ promotion, silent on flag-off and failed builds.
 - E5: the transitive abstention and a ServiceLoader DEFINITE site in one
   scan: promotion untouched, diagnostics empty, the abstention rides the
   invoke fact.
-- Gates: `make adapter-test` **740 executions** (main floor 735 + 5
-  cells; Makefile counter raised), zero failures, **zero golden churn**
+- Gates: `make adapter-test` **741 executions** (main floor 735 + 6 cells:
+  E1–E5 plus E6 from the implementation review; Makefile counter raised
+  twice, 740 then 741), zero failures, **zero golden churn**
   (the pre-GREEN audit class `JavaAnalysisAdapterTest` — including
   `varUnrelated`, whose transitive consultation is rejected by
   `parameterMatchesType` (`Router` ≠ `ClassLoader`) so its site is not
@@ -119,8 +120,9 @@ promotion, silent on flag-off and failed builds.
   MEDIUM — gap A was pinned on only one of the four switched inference
   callers: E3 gained an exact-set pin over its three site offsets (crosses
   `isRecognizedClassLookup` and `isJdkClassForNameExpression`) and the new
-  E6 cell pins the loadClass-initializer path (`isRecognizedClassLoaderLookup`
-  — both facts carry the abstention, set equals the two site offsets);
+  E6 cell (loadClass-initializer chain) pins `isRecognizedClassLoaderLookup`
+  — all three facts carry the abstention and the set equals the three site
+  offsets;
   (2) LOW — the resolution's nesting description corrected (the
   `isJdkApiOwner` internal nesting was removed by the split; the remaining
   nesting is the chained-receiver path); (3) NIT — the capture guard is

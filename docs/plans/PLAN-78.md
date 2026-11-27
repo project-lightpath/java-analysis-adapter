@@ -239,6 +239,21 @@ choke-point rationale; the main uncertainties were hidden callers of the
 inference helpers outside the mapped set and golden churn from fixtures
 whose var initializers consult parameters.
 
+## Implementation amendments (outside the plan-review rounds)
+
+- **E3 strengthened and E6 added (implementation review round 1, finding
+  1)**: gap A is now pinned on ALL FOUR switched inference callers. E3
+  gained an exact-set pin (capture set equals its three site offsets —
+  crosses `isRecognizedClassLookup` and `isJdkClassForNameExpression`'s
+  owner check); E6 (`loadClassInitializerChainCapturesOnlySiteOffsets`,
+  `var c = loader.loadClass("X"); var m = c.getMethod("run");
+  m.invoke(...)`) pins `isRecognizedClassLoaderLookup`'s classify arm —
+  all three facts carry the abstention and the set equals the three site
+  offsets. Mutation-verified per caller: reverting Layer05:247 to the
+  setting entry makes exactly E6 red; reverting Layer05:300 or the
+  `isJdkClassForNameExpression` owner check makes E3 red. The Makefile
+  floor is 741 (6 cells over main's 735).
+
 ## Plan review record
 
 Round 1 (fresh Engram-grounded adversarial subagent): caller map verified
