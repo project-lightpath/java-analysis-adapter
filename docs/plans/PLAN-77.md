@@ -182,17 +182,27 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
   - N2 (producer-arm clean-path control, expected-green on BOTH
     trees, committed with RED_77 and documented as such — the D3
     analog for the producer arm; review round 2, finding 3): a
-    single-type-file producer whose correlation succeeds, asserting
-    the `javac*Abstention*` keys are ABSENT and `candidateType` is
-    the CANONICAL correlated return type. Vacuous-pass guard (review
-    round 3, finding 1): the fixture's return spelling must make the
-    textual fallback demonstrably DIFFER — an on-demand-import
-    spelling (`import java.util.*;` and return `Optional`), where
-    `resolveReferenceType` returns empty (probe-verified,
-    RESOLUTION-23:180-182) so the textual `candidateType` would be
-    blank while the canonical is `java.util.Optional` — so the
-    assertion fails if the correlation silently fails or the owner
-    mis-resolves. Mutation check 4 pins it.
+    single-type-file producer whose correlation succeeds. ANCHOR
+    (review round 4, finding F1 — the injection-fact anchor is
+    unconstructible with a divergent spelling, because the binding
+    match consults the RAW `producerSignature`, not the normalized
+    `candidateType`, so no `dependency_injection` fact carries the
+    candidate): assert at the `beanCandidates()` level directly
+    (`new SourceMetadataScanner(context).beanCandidates(...)` — the
+    `JavacTypeShapeMigrationTest:249-251/288-332` precedent), NOT on
+    `frameworkFacts()`. Asserts `candidateType()` is the CANONICAL
+    correlated return and `producerTypeAbstention()` is NONE.
+    Vacuous-pass guard (review round 3, finding 1): the fixture's
+    return spelling makes the textual fallback demonstrably DIFFER —
+    an on-demand-import spelling (`import java.util.*;` and return
+    `Optional`), where `resolveReferenceType` returns empty
+    (probe-verified, RESOLUTION-23:180-182) so the textual
+    `candidateType` would be blank while the canonical is
+    `java.util.Optional` — the assertion fails if the correlation
+    silently fails or the owner mis-resolves. Mutation check 4 pins
+    it (failure mode: the candidateType assertion fails — blank
+    observed — at the beanCandidates level, no binding anchor
+    involved).
 
 ## TDD items
 
@@ -238,6 +248,8 @@ enum, record, interface all count toward `typesIn`. Divergence ⇒
    equivalent on the current fixture set and killed by any future
    nested-producer fixture.
 4. Drop the `correlation.memberOptional()` mapping (producerType
-   keeps the textual value) ⇒ N2's `candidateType` assertion fails
-   (`java.util.Optional` expected, blank observed) — guards N2
-   against vacuous pass (review round 3, finding 1).
+   keeps the textual value) ⇒ N2's `candidateType()` assertion fails
+   at the `beanCandidates()` level (`java.util.Optional` expected,
+   blank observed) — guards N2 against vacuous pass (review round 3,
+   finding 1; failure-mode wording fixed per round 4's subsumed nit:
+   no binding anchor is involved).
