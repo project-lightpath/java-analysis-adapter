@@ -1025,6 +1025,15 @@ class JavacAbstentionEvidenceTest {
         context(sourceRoot, temp.resolve("transitive-loader/classes"), List.of());
     SourceMetadataScanner scanner = new SourceMetadataScanner(scanContext);
     SemanticCallFacts facts = dynamicScanWith(scanner, scanContext);
+    // CodeRabbit (PR #80 review): snapshot the capture set BEFORE
+    // reflectionSites re-runs extraction — the re-run can extend the live
+    // set, so a post-run read could pass vacuously.
+    SourceMetadataScannerState.SourceFile loaderFile = scanner.files().stream()
+        .filter(candidate -> candidate.typeName().equals("demo.LoaderSites"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    java.util.Set<Integer> captured =
+        java.util.Set.copyOf(scanner.parameterReceiverOffsets(loaderFile));
     SemanticCallFacts.Fact load = facts.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("reflection"))
         .filter(item -> item.caller().startsWith("demo.LoaderSites#"))
@@ -1034,19 +1043,14 @@ class JavacAbstentionEvidenceTest {
         load.evidence().toString());
     assertEquals("demo.LoaderSites#call(1)",
         attribute(load, "javacCallerAbstentionMember"), load.evidence().toString());
-    SourceMetadataScannerState.SourceFile file = scanner.files().stream()
-        .filter(candidate -> candidate.typeName().equals("demo.LoaderSites"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
-    int siteOffset = scanner.reflectionSites(file).stream()
+    int siteOffset = scanner.reflectionSites(loaderFile).stream()
         .filter(site -> site.symbol().equals("ClassLoader.loadClass"))
         .findFirst()
-        .orElseThrow(() -> new AssertionError(scanner.reflectionSites(file).toString()))
+        .orElseThrow(() -> new AssertionError(scanner.reflectionSites(loaderFile).toString()))
         .offset();
-    assertEquals(java.util.Set.of(siteOffset), scanner.parameterReceiverOffsets(file),
+    assertEquals(java.util.Set.of(siteOffset), captured,
         "the capture holds only the loadClass site offset — the "
-            + "initializer-internal dead entry is gone: "
-            + scanner.parameterReceiverOffsets(file));
+            + "initializer-internal dead entry is gone: " + captured);
   }
 
   // E3 (#78): two inference hops (var c = klass.forName(...);
@@ -1077,6 +1081,14 @@ class JavacAbstentionEvidenceTest {
         context(sourceRoot, temp.resolve("transitive-chain/classes"), List.of());
     SourceMetadataScanner scanner = new SourceMetadataScanner(scanContext);
     SemanticCallFacts facts = dynamicScanWith(scanner, scanContext);
+    // CodeRabbit (PR #80 review): snapshot before reflectionSites re-runs
+    // extraction (see E2).
+    SourceMetadataScannerState.SourceFile chainFile = scanner.files().stream()
+        .filter(candidate -> candidate.typeName().equals("demo.ChainSites"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    java.util.Set<Integer> captured =
+        java.util.Set.copyOf(scanner.parameterReceiverOffsets(chainFile));
     SemanticCallFacts.Fact invoke = facts.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("reflection"))
         .filter(item -> item.caller().startsWith("demo.ChainSites#"))
@@ -1088,17 +1100,12 @@ class JavacAbstentionEvidenceTest {
         invoke.evidence().toString());
     assertEquals("demo.ChainSites#call(1)",
         attribute(invoke, "javacCallerAbstentionMember"), invoke.evidence().toString());
-    SourceMetadataScannerState.SourceFile file = scanner.files().stream()
-        .filter(candidate -> candidate.typeName().equals("demo.ChainSites"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
-    java.util.Set<Integer> siteOffsets = scanner.reflectionSites(file).stream()
+    java.util.Set<Integer> siteOffsets = scanner.reflectionSites(chainFile).stream()
         .map(SourceMetadataScannerState.DynamicSite::offset)
         .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-    assertEquals(siteOffsets, scanner.parameterReceiverOffsets(file),
+    assertEquals(siteOffsets, captured,
         "the capture holds exactly the three site offsets (forName, getMethod, "
-            + "invoke) — no initializer-internal dead entry: "
-            + scanner.parameterReceiverOffsets(file));
+            + "invoke) — no initializer-internal dead entry: " + captured);
   }
 
   // E6 (#78, implementation review round 1): the loadClass-initializer
@@ -1126,6 +1133,14 @@ class JavacAbstentionEvidenceTest {
         context(sourceRoot, temp.resolve("transitive-load/classes"), List.of());
     SourceMetadataScanner scanner = new SourceMetadataScanner(scanContext);
     SemanticCallFacts facts = dynamicScanWith(scanner, scanContext);
+    // CodeRabbit (PR #80 review): snapshot before reflectionSites re-runs
+    // extraction (see E2).
+    SourceMetadataScannerState.SourceFile loadFile = scanner.files().stream()
+        .filter(candidate -> candidate.typeName().equals("demo.LoadSites"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
+    java.util.Set<Integer> captured =
+        java.util.Set.copyOf(scanner.parameterReceiverOffsets(loadFile));
     List<SemanticCallFacts.Fact> sites = facts.providerFacts().stream()
         .filter(item -> item.relationshipType().equals("reflection"))
         .filter(item -> item.caller().startsWith("demo.LoadSites#"))
@@ -1136,17 +1151,12 @@ class JavacAbstentionEvidenceTest {
                 attribute(item, "javacCallerAbstention"))),
         "the direct loadClass site and both var-inferred sites carry the "
             + "caller abstention: " + sites);
-    SourceMetadataScannerState.SourceFile file = scanner.files().stream()
-        .filter(candidate -> candidate.typeName().equals("demo.LoadSites"))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(scanner.files().toString()));
-    java.util.Set<Integer> siteOffsets = scanner.reflectionSites(file).stream()
+    java.util.Set<Integer> siteOffsets = scanner.reflectionSites(loadFile).stream()
         .map(SourceMetadataScannerState.DynamicSite::offset)
         .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-    assertEquals(siteOffsets, scanner.parameterReceiverOffsets(file),
+    assertEquals(siteOffsets, captured,
         "the capture holds exactly the three real site offsets (loadClass, "
-            + "getMethod, invoke) — no initializer-internal dead entry: "
-            + scanner.parameterReceiverOffsets(file));
+            + "getMethod, invoke) — no initializer-internal dead entry: " + captured);
   }
 
   // E4 (#78): the flag-off twin of E1 — no javac*Abstention* key on any
