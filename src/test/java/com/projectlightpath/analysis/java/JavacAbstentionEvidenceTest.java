@@ -298,25 +298,7 @@ class JavacAbstentionEvidenceTest {
   // keeps its textual spelling.
   @Test
   void quarkusProducerAbstentionNamesTheNormalizedOwner() throws IOException {
-    SemanticCallFacts facts = analyzeQuarkus(List.of("""
-        package demo;
-        public class Thing { }
-        """, """
-        package demo;
-        import jakarta.inject.Inject;
-        @jakarta.enterprise.context.ApplicationScoped public class ProducerConfig {
-          class Helper { }
-          @jakarta.enterprise.inject.Produces public Thing build(java.lang.String value) {
-            return null;
-          }
-        }
-        """, """
-        package demo;
-        import jakarta.inject.Inject;
-        @jakarta.enterprise.context.ApplicationScoped public class Consumer {
-          @Inject Thing thing;
-        }
-        """));
+    SemanticCallFacts facts = analyzeQuarkus(quarkusDivergenceSources());
     SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
         .filter(item -> item.evidence().stream().anyMatch(evidence ->
@@ -345,7 +327,26 @@ class JavacAbstentionEvidenceTest {
   @Test
   void quarkusProducerAbstentionIsFlagGated() throws IOException {
     System.setProperty(FLAG, "false");
-    SemanticCallFacts optedOut = analyzeQuarkus(List.of("""
+    SemanticCallFacts optedOut = analyzeQuarkus(quarkusDivergenceSources());
+    SemanticCallFacts.Fact binding = optedOut.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            "demo.ProducerConfig#build(java.lang.String value)".equals(
+                evidence.attributes().get("candidateId"))))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(optedOut.frameworkFacts().toString()));
+    assertNoAbstentionAttributes(binding, "flag-off producer seam");
+    boolean textualCandidateType = binding.evidence().stream()
+        .anyMatch(evidence -> "demo.Thing".equals(
+            evidence.attributes().get("candidateType")));
+    assertTrue(textualCandidateType,
+        "the producer type keeps its textual spelling: " + binding.evidence());
+  }
+
+  /** The N1 divergence fixture, shared by the cell and its flag-off
+   * twin so the twin cannot drift from the cell it gates. */
+  private static List<String> quarkusDivergenceSources() {
+    return List.of("""
         package demo;
         public class Thing { }
         """, """
@@ -363,20 +364,7 @@ class JavacAbstentionEvidenceTest {
         @jakarta.enterprise.context.ApplicationScoped public class Consumer {
           @Inject Thing thing;
         }
-        """));
-    SemanticCallFacts.Fact binding = optedOut.frameworkFacts().stream()
-        .filter(item -> item.relationshipType().equals("dependency_injection"))
-        .filter(item -> item.evidence().stream().anyMatch(evidence ->
-            "demo.ProducerConfig#build(java.lang.String value)".equals(
-                evidence.attributes().get("candidateId"))))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError(optedOut.frameworkFacts().toString()));
-    assertNoAbstentionAttributes(binding, "flag-off producer seam");
-    boolean textualCandidateType = binding.evidence().stream()
-        .anyMatch(evidence -> "demo.Thing".equals(
-            evidence.attributes().get("candidateType")));
-    assertTrue(textualCandidateType,
-        "the producer type keeps its textual spelling: " + binding.evidence());
+        """);
   }
 
   // N2 (#77, producer-arm D3 analog; expected-green on both trees):

@@ -82,7 +82,8 @@ a nested type, the raw anchor resolved the NESTED type, so the
 
 ## Review record
 
-- **Plan review**: 5 rounds, 15 findings total, all incorporated.
+- **Plan review**: 5 rounds, 13 findings total (4 + 5 + 3 + 1,
+  round 5 closed with none), all incorporated.
   Material corrections: the route seam's raw anchor CAN diverge (the
   original anchor-safe-by-construction claim was wrong — the
   `declarationStart` filter constrains only the normalized owner);
