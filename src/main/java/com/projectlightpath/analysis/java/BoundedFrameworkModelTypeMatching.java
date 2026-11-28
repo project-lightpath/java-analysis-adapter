@@ -141,7 +141,7 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
     return matchingCandidateMetadata(context, scanner, candidate).stream()
         .flatMap(row -> row.contracts().stream())
         .anyMatch(contract -> BoundedFrameworkModelMetadataState
-            .nonGenericRawEquals(scanner, candidate.file(), contract,
+            .erasedRawContractEquals(scanner, candidate.file(), contract,
                 requestedShape.get(), !forCertainty));
   }
 

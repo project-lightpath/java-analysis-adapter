@@ -1807,6 +1807,60 @@ class JavacInjectionContractMigrationTest {
             + "but the certainty stays POSSIBLE, never DEFINITE");
   }
 
+  // CR5-8561 (CodeRabbit 4724720338): a GENERIC-SPELLED associated row
+  // contract must stay an eligible competitor for a RAW request — the
+  // textual arm it mirrors (contractMatchesType) ERASES the contract for
+  // non-generic requests, so dropping it in the vacuum case hides a
+  // competitor and yields an unopposed DEFINITE. Red at HEAD (the
+  // generics gate on the row spelling rejects it -> DEFINITE).
+  @Test
+  void genericSpelledRowContractStaysEligibleForRawRequests()
+      throws IOException {
+    Path sourceRoot = root("cr9");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/ArrayListConfig.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class ArrayListConfig {
+          @org.springframework.context.annotation.Bean
+          public java.util.ArrayList<String> arrayBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        producerContractRow("arrayBean", "java.util.ArrayList",
+            "demo.ArrayListConfig", "arrayBean",
+            "java.util.List<java.lang.String>")));
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the textual vacuum abstains");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "a generic-spelled row contract is ERASED for a raw request "
+            + "(mirroring contractMatchesType) and stays an eligible "
+            + "competitor — no unopposed DEFINITE");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------

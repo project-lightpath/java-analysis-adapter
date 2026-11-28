@@ -228,6 +228,34 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
     return simpleName(shape).equalsIgnoreCase(spelling.trim());
   }
 
+  /**
+   * One associated-row CONTRACT spelling compared for a RAW request,
+   * mirroring the textual semantics of {@code contractMatchesType}:
+   * a non-generic request ERASES the contract before comparing, so a
+   * generic-spelled row contract ({@code java.util.List<String>}) is
+   * counted exactly like its raw spelling (CodeRabbit 4724720338 — the
+   * associated arm must not apply the metadata-only arm's
+   * generic-retaining policy, whose textual ladder differs). The
+   * simple-name fallback is ELIGIBILITY-only: the certainty path
+   * requires the erased spelling to resolve.
+   */
+  static boolean erasedRawContractEquals(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile resolutionFile,
+      String contract,
+      String shape,
+      boolean allowSimpleNameFallback) {
+    String erased = eraseGenericArguments(contract);
+    Optional<String> raw = canonicalType(erased, resolutionFile, scanner);
+    if (raw.isPresent()) {
+      return raw.get().equals(shape);
+    }
+    if (erased.contains(".") || !allowSimpleNameFallback) {
+      return false;
+    }
+    return simpleName(shape).equalsIgnoreCase(erased.trim());
+  }
+
   /** Applies only conservative metadata qualifier filtering for external candidates. */
   boolean metadataCandidateQualifierMatches(
       List<String> requestedQualifiers,
