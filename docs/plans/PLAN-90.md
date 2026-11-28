@@ -72,13 +72,22 @@ never committed; fixtures below are the probe fixtures):
   (`BoundedFrameworkModelIdentity.injectionFactId` :71), input name
   (`spring:injection:owner#member(type)`, `injectionFact` :493),
   evidence symbol (:475), the per-owner injection-site uniqueness count
-  (`injectionFacts` :104-107, gating `legacyIdAllowed` :208), and the
-  member/parameter mirror lookups. Normalizing CORRECTS a
-  misattributed owner (the fact named the nested type for a member of
-  the top-level type). Certainty, status, target, and the
-  #62/#76 channel contract are untouched; no new DEFINITE becomes
-  reachable (the owner spelling selects mirrors/fact identity, never a
-  call target that was not already source-visible).
+  (`injectionFacts` :104-107, gating `legacyIdAllowed` :208), the
+  binding-metadata row match
+  (`BoundedFrameworkModelMetadataMatching.injectionOwnerMatches` :41 —
+  a row naming the TRUE owner cannot match a misattributed nested
+  owner today), the type-shape bijection member lookup
+  (`JavacInjectionTypeShapes.memberFor` :108), the legacy-ID gate
+  (`legacyInjectionFactId` :95 requires `ownerType` ==
+  `file.typeName()`), and the member/parameter mirror lookups.
+  Normalizing CORRECTS a misattributed owner (the fact named the
+  nested type for a member of the top-level type), and can thereby
+  RESTORE a binding-row match the misattribution blocked — a
+  correctness repair identical to what every non-divergent member
+  already gets, pinned by M2's binding-row arm. The #62/#76 channel
+  contract is untouched; no fabricated call target becomes reachable
+  (the matched row is external metadata that names the true owner,
+  the same evidence class that promotes non-divergent injections).
 - Route seam: the member mirror lookup succeeds against the true
   owner, so mirror-resolved route values (e.g. folded-constant paths)
   apply; the raw anchor silently forced the textual fallback.
@@ -132,11 +141,20 @@ mutant: `ownerTypeFor` vs `file.typeName()`).
   present with the `$Helper` identity).
 - **M2 — injection-point owner (Spring)**:
   `JavacAbstentionEvidenceTest`. Fixture: `@Component class Consumer`
-  with `class Helper { }` then `@Autowired void setThing(Thing thing)`.
-  RED: the injection fact's evidence symbols contain
-  `demo.Consumer#setThing(Thing)` and the fact input/caller is
-  `spring:injection:demo.Consumer#setThing(Thing)`; kind `method`,
-  `injectionKind=method` attribute. Today: `$Helper` spellings — red.
+  with `class Helper { }` then `@Autowired void setThing(Thing thing)`,
+  a `Thing` producer candidate, and ONE resolved-binding row naming
+  the TRUE owner (`demo.Consumer`, member `setThing`, selected+active,
+  shape mirroring `JavaAnalysisAdapterTest
+  .resolvedBindingMatchesNestedInjectionOwner` :2291-2361 — that cell
+  pins the nested-owner row match for a FIELD inside the nested type,
+  where raw and normalized anchors agree; M2 pins the complementary
+  top-level-member shape). RED: the injection fact's evidence symbols
+  contain `demo.Consumer#setThing(Thing)`, the fact input/caller is
+  `spring:injection:demo.Consumer#setThing(Thing)`, and the binding
+  row SELECTS (callee resolved to the producer candidate, certainty
+  raised from today's UNRESOLVED — the misattributed
+  `demo.Consumer$Helper` owner cannot match the row today). Today all
+  three assertions are red.
 - **M3 — route mirror owner (Quarkus)**:
   `JavacFrameworkAnnotationMigrationTest`, next to
   `quarkusFoldedPathIsResolvedFlagOnOnly`. Fixture: `@Path("/items")`
@@ -220,6 +238,31 @@ nested type's end and resolve the true owner; documented as residuals
 only if the review confirms), reflection-layer raw `typeContaining`
 uses that are site-offset semantics (not member-declaration anchors),
 any refactor of the seams.
+
+## 7. Plan review record
+
+Round 1 (adversarial self-review — the harness blocks nested
+subagents at depth 1, so the review rounds were conducted by the
+implementing agent with fresh verification passes through
+engram-zvec-grep and engram_docs_recall; deviation recorded here and
+in RESOLUTION-90):
+
+- **MAJOR (incorporated)**: "no new DEFINITE becomes reachable" was
+  wrong — `injection.ownerType()` feeds `injectionOwnerMatches`
+  (MetadataMatching:41) and `JavacInjectionTypeShapes.memberFor:108`;
+  normalization can RESTORE a binding-row match the misattribution
+  blocked. §1 rewritten honestly; M2 strengthened with the
+  binding-row arm (RED today: the row cannot match `$Helper`).
+- **Verified**: no test pins `javacMirrorAbstentionMember` (rg over
+  src/test: no matches); `resolvedBindingMatchesNestedInjectionOwner`
+  pins a nested-owner row for a field INSIDE the nested type (anchors
+  agree there — unaffected); constructor/field injection anchors are
+  non-divergent for the after-nested-type shape (the constructor
+  regex's match cannot start on `}`; INJECT_FIELD requires a leading
+  `@`, so its start sits after the nested type's end).
+- **Verified**: METHOD's regex starts `(?:^|[;{}\n])` — it consumes
+  the previous member's closing `}`, confirming the divergence
+  mechanism claimed in §1.
 
 Confidence score: **0.88** — every claimed fact is line-cited and the
 three divergences are probe-observed on the clean tree; the fix is
