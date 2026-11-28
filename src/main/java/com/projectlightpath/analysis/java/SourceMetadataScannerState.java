@@ -520,6 +520,19 @@ static final List<String> SUPPORTED_HTTP_METHODS =
       String kind,
       List<String> annotationSymbols) {}
 
+  /** Issue #84: one framework-invoked entrypoint root (listener/scheduled/main). */
+  record FrameworkEntrypointMethod(
+      SourceFile file,
+      MethodInfo method,
+      String declaringType,
+      String kind,
+      String mechanism,
+      List<String> symbols) {
+    FrameworkEntrypointMethod {
+      symbols = List.copyOf(symbols == null ? List.of() : symbols);
+    }
+  }
+
   record RepositoryMethod(
       String name, String signature, boolean guaranteed,
       JavacAbstentionEvidence abstention) {

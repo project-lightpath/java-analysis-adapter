@@ -44,6 +44,23 @@ final class SourceMetadataScanner extends SourceMetadataScannerFrameworkSupport 
     return FrameworkScanning.routes(this, framework);
   }
 
+  /** Issue #84: message-listener entrypoint methods (per framework). */
+  List<SourceMetadataScannerState.FrameworkEntrypointMethod> messageListenerMethods(
+      AnalysisContext.Framework framework) {
+    return FrameworkEntrypointScanning.messageListenerMethods(this, framework);
+  }
+
+  /** Issue #84: scheduled-task entrypoint methods (per framework). */
+  List<SourceMetadataScannerState.FrameworkEntrypointMethod> scheduledTaskMethods(
+      AnalysisContext.Framework framework) {
+    return FrameworkEntrypointScanning.scheduledTaskMethods(this, framework);
+  }
+
+  /** Issue #84: main-method entrypoints, Quarkus runner usage marked. */
+  List<SourceMetadataScannerState.FrameworkEntrypointMethod> mainMethods() {
+    return FrameworkEntrypointScanning.mainMethods(this);
+  }
+
   List<InjectionPoint> injectionPoints(AnalysisContext.Framework framework) {
     return FrameworkScanning.injectionPoints(this, framework);
   }

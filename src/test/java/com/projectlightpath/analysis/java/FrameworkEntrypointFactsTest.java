@@ -695,10 +695,15 @@ final class FrameworkEntrypointFactsTest {
     SemanticCallFacts facts = analyze(AnalysisContext.Framework.SPRING_BOOT, root, List.of());
     for (String callee : List.of(
         "demo.Varargs#main", "demo.Qualified#main", "demo.FinalParam#main",
-        "demo.CStyle#main", "demo.AnnotatedParam#main")) {
+        "demo.AnnotatedParam#main")) {
       assertEquals(SemanticCallFacts.Certainty.POSSIBLE, entrypoint(facts, callee).certainty(),
           callee);
     }
+    // C-style `String args[]` declines: the shared parameters() normalization
+    // (the CommandLineRunner lifecycle precedent) does not fold the trailing
+    // [] into the type, so the bounded shape set abstains.
+    assertTrue(entrypoints(facts, "demo.CStyle#main").isEmpty(),
+        facts.frameworkFacts().toString());
   }
 
   /** M4: Quarkus runner usage in the main body ⇒ quarkus-main-runner. */
@@ -928,13 +933,16 @@ final class FrameworkEntrypointFactsTest {
     SemanticCallFacts facts = analyze(
         AnalysisContext.Framework.SPRING_BOOT, root,
         List.of(metadata("spring-web-annotations"), metadata("spring-listener-annotations")));
-    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
-        entrypoint(facts, "demo.RouteAndListener#orders").certainty());
-    assertTrue(facts.frameworkFacts().stream()
-        .anyMatch(item -> item.relationshipType().equals("framework_entrypoint")
-            && item.callee().equals("demo.RouteAndListener#orders")
-            && item.modelRule().equals("spring-message-listener")),
-        facts.frameworkFacts().toString());
+    List<SemanticCallFacts.Fact> matches = entrypoints(facts, "demo.RouteAndListener#orders");
+    assertEquals(2, matches.size(), facts.frameworkFacts().toString());
+    SemanticCallFacts.Fact route = matches.stream()
+        .filter(item -> item.modelRule().equals("spring-unique-mvc-route"))
+        .findFirst().orElseThrow();
+    SemanticCallFacts.Fact listener = matches.stream()
+        .filter(item -> item.modelRule().equals("spring-message-listener"))
+        .findFirst().orElseThrow();
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, route.certainty());
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, listener.certainty());
   }
 
   /** I3: a main inside a @Component class stays a plain main fact. */
