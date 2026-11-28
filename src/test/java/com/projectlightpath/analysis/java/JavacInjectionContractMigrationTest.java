@@ -1758,6 +1758,55 @@ class JavacInjectionContractMigrationTest {
             + "the certainty stays POSSIBLE, never an unopposed DEFINITE");
   }
 
+  // CR4-8554 (CodeRabbit 4724642492): the certainty distinction — an
+  // unresolved simple-name contract may keep a scanned producer in the
+  // eligibility set (the fallback is retained for competitor counting),
+  // but it must NEVER establish certainty: a java.awt.List producer with
+  // an ambiguous "List" contract row must not become a DEFINITE match
+  // for a java.util.List injection. Red at HEAD (the fallback feeds
+  // typeMatchCertain -> DEFINITE).
+  @Test
+  void unresolvedContractCannotEstablishCertainty() throws IOException {
+    Path sourceRoot = root("cr8");
+    write(sourceRoot, "demo/AwtConfig.java", """
+        package demo;
+        import java.awt.*;
+        import org.springframework.stereotype.Component;
+        @Component public class AwtConfig {
+          @org.springframework.context.annotation.Bean
+          public List awtListBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerContractRow("awtListBean", "java.awt.List", "demo.AwtConfig",
+            "awtListBean", "List")));
+    System.setProperty(FLAG, "false");
+    SemanticCallFacts off = analyze(context);
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
+        injection(off, "demo.Consumer").certainty(),
+        "flag-off golden: the textual vacuum abstains");
+    assertTrue(injection(on, "demo.Consumer").callee()
+            .contains("awtListBean"),
+        "flag-on: the ambiguous-contract producer stays in the match set "
+            + "for competitor eligibility");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "an unresolved contract cannot establish certainty — the "
+            + "java.awt.List producer is retained as a potential match "
+            + "but the certainty stays POSSIBLE, never DEFINITE");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------

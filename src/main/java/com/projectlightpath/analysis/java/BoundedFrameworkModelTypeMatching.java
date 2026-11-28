@@ -43,12 +43,14 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
     }
     if (directCompatibility == null) {
       return contractMatches(
-          context, scanner, injectionFile, requestedType, candidate, requestedShape);
+          context, scanner, injectionFile, requestedType, candidate, requestedShape,
+          false);
     }
     return directTypesHaveDifferentRawTypes(
             scanner, injectionFile, requestedType, candidate, requestedShape)
         && contractMatches(
-            context, scanner, injectionFile, requestedType, candidate, requestedShape);
+            context, scanner, injectionFile, requestedType, candidate, requestedShape,
+            false);
   }
 
   /** Returns whether source and metadata establish a type match strongly enough for definiteness. */
@@ -71,7 +73,8 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
         && directTypesHaveDifferentRawTypes(
             scanner, injectionFile, requestedType, candidate, requestedShape)
         && contractMatches(
-            context, scanner, injectionFile, requestedType, candidate, requestedShape);
+            context, scanner, injectionFile, requestedType, candidate, requestedShape,
+            true);
   }
 
   /** Matches source and metadata contracts without using an ambiguous package suffix. */
@@ -81,7 +84,8 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
       SourceMetadataScannerState.BeanCandidate candidate,
-      Optional<String> requestedShape) {
+      Optional<String> requestedShape,
+      boolean forCertainty) {
     Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
     if (requested.isEmpty()) {
       // Issue #61: the index contract disjunct is evaluated BEFORE this
@@ -91,10 +95,16 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       // runs (a scanned producer whose binding row declares the
       // requested contract stays in the match set, so a competitor is
       // never hidden and an unopposed DEFINITE is never emitted).
+      // CodeRabbit 4724642492: forCertainty separates the two roles —
+      // the eligibility role keeps the simple-name fallback (a potential
+      // competitor is retained), while the CERTAINTY role requires the
+      // row contract to RESOLVE to the shape (an unresolved contract
+      // must never prove a match).
       return indexContract(scanner, injectionFile, requestedType,
           requestedShape, candidate)
           || associatedContractMatches(
-              context, scanner, requestedType, requestedShape, candidate);
+              context, scanner, requestedType, requestedShape, candidate,
+              forCertainty);
     }
     boolean sourceContract = candidate.contracts().stream()
         .anyMatch(contract -> contractMatchesType(
@@ -123,7 +133,8 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
       SourceMetadataScanner scanner,
       String requestedType,
       Optional<String> requestedShape,
-      SourceMetadataScannerState.BeanCandidate candidate) {
+      SourceMetadataScannerState.BeanCandidate candidate,
+      boolean forCertainty) {
     if (hasGenericArguments(requestedType) || requestedShape.isEmpty()) {
       return false;
     }
@@ -131,7 +142,7 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
         .flatMap(row -> row.contracts().stream())
         .anyMatch(contract -> BoundedFrameworkModelMetadataState
             .nonGenericRawEquals(scanner, candidate.file(), contract,
-                requestedShape.get()));
+                requestedShape.get(), !forCertainty));
   }
 
   /**

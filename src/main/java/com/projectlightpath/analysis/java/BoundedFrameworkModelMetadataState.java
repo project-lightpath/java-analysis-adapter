@@ -186,6 +186,34 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       SourceMetadataScannerState.SourceFile injectionFile,
       String spelling,
       String shape) {
+    return nonGenericRawEquals(scanner, injectionFile, spelling, shape, true);
+  }
+
+  /**
+   * One non-generic row spelling whose erased raw equals the shape.
+   * Package-private: the TypeMatching associated-row arm shares this ONE
+   * row-spelling policy (CodeRabbit 4724438561). CodeRabbit 4724438554 /
+   * 4724558598 / 4724642492: an UNQUALIFIED spelling the resolution file
+   * cannot resolve falls back to simple-name comparison against the
+   * javac-proven shape — but ONLY for competitor ELIGIBILITY (the
+   * fallback keeps a potential competitor in the eligible set, a
+   * downgrade). The CERTAINTY path passes allowSimpleNameFallback=false:
+   * an unresolved contract must never prove a match (a java.awt.List
+   * producer with an ambiguous "List" contract row must not become a
+   * DEFINITE match for a java.util.List injection). The C6
+   * declaredTypeNames count guard is deliberately NOT mirrored in the
+   * eligibility fallback: C6 rejects on ambiguity to avoid fabricating a
+   * MATCH, but here rejection fabricates CERTAINTY (an excluded potential
+   * competitor can yield an unopposed DEFINITE) — the safety direction is
+   * inverted. A QUALIFIED unresolvable spelling always declines
+   * (conservative).
+   */
+  static boolean nonGenericRawEquals(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String spelling,
+      String shape,
+      boolean allowSimpleNameFallback) {
     if (hasGenericArguments(spelling)) {
       return false;
     }
@@ -194,7 +222,7 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
     if (raw.isPresent()) {
       return raw.get().equals(shape);
     }
-    if (spelling.contains(".")) {
+    if (spelling.contains(".") || !allowSimpleNameFallback) {
       return false;
     }
     return simpleName(shape).equalsIgnoreCase(spelling.trim());
