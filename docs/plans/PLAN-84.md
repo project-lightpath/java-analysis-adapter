@@ -206,10 +206,20 @@ BOTH frameworks (families dispatch internally by framework, like
 - `Quarkus.run(` matching on the literal-masked body (string literals
   masked), receiver-word boundary `(?<![\w$.])Quarkus\s*\.\s*run\s*\(`
   plus the qualified `io.quarkus.runtime.Quarkus.run` spelling.
-- Main parameter shape check normalizes whitespace and `final`, then
-  matches the bounded set; wrong shapes (`String a`, no params, non-void
+- Main parameter shape check reuses the existing paren-safe
+  normalization: exactly one `Parameter` with type `String[]` or
+  `java.lang.String[]` from `parameters(method.parameters())`
+  (`SourceMetadataScannerTextLayer20` → `TextLayer19:170-192`, which does
+  `maskAnnotationArguments` then strips `@Names`/`final` and normalizes
+  `...` → `[]`) — a naive regex strip would break on `@Foo(")")`-style
+  arguments. Wrong shapes (`String a`, no params, non-void
   return, missing modifiers) decline (no fact — a main the JVM cannot
-  launch is not an entrypoint).
+  launch under the classic protocol is not an entrypoint).
+- The Quarkus runner check is bounded to the MAIN METHOD'S OWN BODY: the
+  brace-matched range from `method.end()` (the METHOD regex terminates at
+  the body's opening brace) to its matching `}` on the structural source,
+  then literal-masked — never file-level matching, which would let a
+  `Quarkus.run` in a sibling method mislabel every main in the file.
 
 ### 2.4 Metadata-id wiring (documentation-only; spike contracts are ephemeral)
 
@@ -289,9 +299,12 @@ literal → plain main fact only; M6 two mains in one scan → two distinct
 bounded candidates; M7 qualified spelling
 `io.quarkus.runtime.Quarkus.run(args)` in the body → `quarkus-main-runner`
 fact; M8 lookalike receiver `com.example.Quarkus.run(args)` in the body →
-plain main fact only.
+plain main fact only; M9 `Quarkus.run(` in a SIBLING method of the same
+file → plain `jvm-main-entrypoint` fact only (body-extent containment).
 Interactions: I1 @KafkaListener + @Scheduled on one method → two facts
-(kind separation); I2 listener method that is also a @GetMapping route →
+(kind separation); I1b @KafkaListener + @RabbitListener on one method
+(same kind, two mechanisms) → two facts with distinct ids; I2 listener
+method that is also a @GetMapping route →
 route fact and entrypoint fact coexist; I3 main inside a @Component class
 → bean families and main fact independent.
 Nested types: N1 @KafkaListener on a method of a nested static
@@ -352,10 +365,11 @@ lives in the `mechanism` attribute + caller string
   gate to always-observed ⇒ L2/S2; (e) runner check on structural instead
   of literal-masked source ⇒ M5; (f) slice `parameters()` from the masked
   source ⇒ Q2; (g) collapse the per-framework FQN tables to one shared
-  table ⇒ Q8; (h) remove parameter-annotation stripping from the main
-  shape normalization ⇒ M3; (i) collapse kind/mechanism in the fact
-  identity ⇒ I1/M6; (j) first-annotation-occurrence-only matching (skip
-  repeatable containers) ⇒ L10/Q10. Gates after every item:
+  table ⇒ Q8; (h) bypass the `parameters()` normalization for the main
+  shape (raw parameter text) ⇒ M3; (i) collapse kind/mechanism in the fact
+  identity ⇒ I1/I1b/M6; (j) first-annotation-occurrence-only matching (skip
+  repeatable containers) ⇒ L10/Q10; (k) runner check at file scope instead
+  of the brace-matched method body ⇒ M9. Gates after every item:
   `make adapter-test` (floor read
   off main: 801 executions; raised by the new cell count),
   `make java-lint` (0 new findings), `make evidence-validate`.
