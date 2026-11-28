@@ -796,6 +796,39 @@ class JavacFrameworkAnnotationMigrationTest {
   }
 
   @Test
+  void octalSpelledQuoteQualifierKeepsSourceDistinctness() throws IOException {
+    // CodeRabbit 85-1: a decoded quote (here octal-spelled \042) renders
+    // escaped, and the escape-blind QUOTED extraction truncates BOTH
+    // spellings to the same prefix — distinct source spellings would
+    // collapse to one qualifier value flag-on. The mirror must decline
+    // decoded quotes so the textual spelling survives.
+    Map<String, String> files = Map.of(
+        "org/springframework/stereotype/Component.java",
+        "package org.springframework.stereotype; public @interface Component {}",
+        "org/springframework/beans/factory/annotation/Autowired.java",
+        "package org.springframework.beans.factory.annotation; public @interface Autowired {}",
+        "org/springframework/beans/factory/annotation/Qualifier.java",
+        "package org.springframework.beans.factory.annotation; public @interface Qualifier {"
+            + " String value() default \"\"; }",
+        "demo/Octal.java", """
+            package demo;
+            import org.springframework.stereotype.Component;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.beans.factory.annotation.Qualifier;
+            @Component public class Octal {
+              @Autowired @Qualifier("\042red") private String value;
+            }
+            """);
+    AnalysisContext context = springContext("octal-quote", files);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
+    List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
+    System.setProperty(FLAG, "true");
+    List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
+    assertEquals(off, on);
+    assertTrue(off.toString().contains("\\042red"), off.toString());
+  }
+
+  @Test
   void escapedQuoteInRenderedValueKeepsMirrorParity() throws IOException {
     Map<String, String> files = Map.of(
         "org/springframework/stereotype/Component.java",
