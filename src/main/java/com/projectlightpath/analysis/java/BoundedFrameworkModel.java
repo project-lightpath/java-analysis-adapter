@@ -21,7 +21,7 @@ import java.util.Set;
  * possible or unresolved when the corresponding runtime/build metadata is not
  * captured.
  */
-abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
+abstract class BoundedFrameworkModel extends BoundedFrameworkModelEntrypointFacts {
 
   BoundedFrameworkModel(AnalysisContext.Framework framework) {
     super(framework);
@@ -767,6 +767,7 @@ abstract class BoundedFrameworkModel extends BoundedFrameworkModelSpringFacts {
     facts.addAll(proxyFacts(context, scanner));
     facts.addAll(generatedFacts(context, scanner));
     facts.addAll(dynamicProxyFacts(context, scanner));
+    facts.addAll(entrypointFacts(context, scanner));
     if (framework == AnalysisContext.Framework.SPRING_BOOT) {
       facts.addAll(springRepositoryFacts(context, scanner));
       facts.addAll(springLifecycleFacts(context, scanner));
