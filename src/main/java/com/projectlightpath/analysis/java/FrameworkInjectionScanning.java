@@ -46,20 +46,7 @@ final class FrameworkInjectionScanning {
     private static List<InjectionPoint> constructorInjectionPoints(
         SourceMetadataScanner scanner, AnalysisContext.Framework framework, SourceFile file,
         JavacFrameworkAnnotations javac) {
-      Pattern constructor = Pattern.compile(
-          "(?s)((?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)*))"
-              + "(?:public|protected|private)?\\s*"
-              + Pattern.quote(file.simpleTypeName())
-              + "\\s*\\(([^)]*)\\)\\s*(?:throws\\s+[^\\{]+)?\\s*\\{");
-      String maskedSource = scanner.maskAnnotationArguments(file.structuralSource());
-      Matcher matcher = constructor.matcher(maskedSource);
-      List<ConstructorInfo> constructors = new ArrayList<>();
-      while (matcher.find()) {
-        constructors.add(new ConstructorInfo(
-            file.source().substring(matcher.start(1), matcher.end(1)),
-            file.source().substring(matcher.start(2), matcher.end(2)),
-            matcher.start()));
-      }
+      List<ConstructorInfo> constructors = constructorInfos(scanner, file);
       boolean explicit = constructors.stream()
           .anyMatch(item -> scanner.hasInjectionAnnotation(item.annotations()));
       List<InjectionPoint> result = new ArrayList<>();
@@ -224,6 +211,44 @@ final class FrameworkInjectionScanning {
       return List.copyOf(result);
     }
 
-    private record ConstructorInfo(String annotations, String parameters, int start) {}
+    /** One constructor site; package-private for the shape seam's guard. */
+    record ConstructorInfo(String annotations, String parameters, int start) {}
+
+    /** Memoized constructor sites per file (review round 1, finding 4). */
+    private static final Map<SourceFile, List<ConstructorInfo>> CONSTRUCTOR_SITES =
+        java.util.Collections.synchronizedMap(
+            new java.util.WeakHashMap<>());
+
+    /**
+     * The constructor sites of one file through the ONE extraction rule
+     * (issue #61): the injection extractor and the shape seam's
+     * phantom-site guard share this implementation so the counts they
+     * compare can never drift. Memoized per file — the seam recomputes the
+     * guard per injection parameter.
+     */
+    static List<ConstructorInfo> constructorInfos(
+        SourceMetadataScanner scanner, SourceFile file) {
+      List<ConstructorInfo> cached = CONSTRUCTOR_SITES.get(file);
+      if (cached != null) {
+        return cached;
+      }
+      Pattern constructor = Pattern.compile(
+          "(?s)((?:(?:@[A-Za-z_][\\w.]*(?:\\([^)]*\\))?\\s*)*))"
+              + "(?:public|protected|private)?\\s*"
+              + Pattern.quote(file.simpleTypeName())
+              + "\\s*\\(([^)]*)\\)\\s*(?:throws\\s+[^\\{]+)?\\s*\\{");
+      String maskedSource = scanner.maskAnnotationArguments(file.structuralSource());
+      Matcher matcher = constructor.matcher(maskedSource);
+      List<ConstructorInfo> constructors = new ArrayList<>();
+      while (matcher.find()) {
+        constructors.add(new ConstructorInfo(
+            file.source().substring(matcher.start(1), matcher.end(1)),
+            file.source().substring(matcher.start(2), matcher.end(2)),
+            matcher.start()));
+      }
+      List<ConstructorInfo> frozen = List.copyOf(constructors);
+      CONSTRUCTOR_SITES.put(file, frozen);
+      return frozen;
+    }
 
 }

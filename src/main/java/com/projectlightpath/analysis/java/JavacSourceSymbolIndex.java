@@ -729,7 +729,8 @@ final class JavacSourceSymbolIndex {
       return new TypeInfo(entry.canonicalName(), entry.binaryName(), entry.nestingKind(),
           entry.file(), entry.annotations(), entry.members(),
           new TypeShape(entry.shape().declarationKind(), entry.shape().errorType(), true,
-              entry.shape().staticType()));
+              entry.shape().staticType()),
+          entry.supertypes());
     }
 
     private static Map<String, List<TypeInfo>> groupedByBinary(List<TypeInfo> entries) {
@@ -806,7 +807,46 @@ final class JavacSourceSymbolIndex {
               // Reflection sees a synthetic enclosing-instance parameter on
               // non-static nested constructors; the static flag lets the
               // reflection-target ladder compare in the reflection domain.
-              element.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)));
+              element.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)),
+          supertypes(element));
+    }
+
+    /**
+     * The DIRECT supertypes of one indexed type (issue #61): the superclass
+     * (omitting {@code java.lang.Object}) then the directly implemented
+     * interfaces, canonical and erased. An ERROR-kind supertype entry is
+     * OMITTED (an unresolvable supertype chain must not publish a wrong
+     * canonical spelling; the textual contract ladder still covers the
+     * declared spelling) — omission is the conservative direction for an
+     * additional match source. The omission set is UNCONDITIONAL — an
+     * explicit `implements Annotation` is dropped alongside the implicit
+     * one (conservative: omission can only lose matches, never fabricate;
+     * the textual contract ladder still covers the declared spelling) —
+     * and the comparison is on the erased mirror's CANONICAL rendering, so
+     * a type-annotated superclass ({@code extends @Marker Object}) cannot
+     * slip past a raw toString check (review rounds 1 and 2).
+     */
+    private List<String> supertypes(TypeElement element) {
+      List<String> result = new ArrayList<>();
+      TypeMirror superclass = element.getSuperclass();
+      if (superclass != null
+          && superclass.getKind() == javax.lang.model.type.TypeKind.DECLARED) {
+        addSupertype(result, superclass);
+      }
+      for (TypeMirror mirror : element.getInterfaces()) {
+        addSupertype(result, mirror);
+      }
+      return List.copyOf(result);
+    }
+
+    private void addSupertype(List<String> result, TypeMirror mirror) {
+      if (isError(mirror)) {
+        return;
+      }
+      String canonical = shapes.canonicalType(mirror);
+      if (!IMPLICIT_SUPERTYPES.contains(canonical)) {
+        result.add(canonical);
+      }
     }
 
     private MemberInfo memberInfo(Element element, CompilationUnitTree unit) {
@@ -879,7 +919,10 @@ final class JavacSourceSymbolIndex {
       if (element.getKind() == ElementKind.METHOD) {
         return shapes.canonicalType(((ExecutableElement) element).getReturnType());
       }
-      return "";
+      // Fields and enum constants carry their declared type (issue #61:
+      // field injection shape matching); the empty string only remains
+      // for member kinds with no type at all.
+      return shapes.canonicalType(element.asType());
     }
 
     private String memberBinaryReturnType(Element element) {
@@ -889,7 +932,7 @@ final class JavacSourceSymbolIndex {
       if (element.getKind() == ElementKind.METHOD) {
         return shapes.binaryType(((ExecutableElement) element).getReturnType());
       }
-      return "";
+      return shapes.binaryType(element.asType());
     }
 
     private boolean memberHasErrorType(Element element, boolean executable) {
@@ -1062,6 +1105,10 @@ final class JavacSourceSymbolIndex {
   record TypeShape(String declarationKind, boolean errorType, boolean duplicateBinaryName,
       boolean staticType) {}
 
+  /** Supertypes omitted from {@link TypeInfo#supertypes()}, implicit or explicit. */
+  private static final java.util.Set<String> IMPLICIT_SUPERTYPES =
+      java.util.Set.of("java.lang.Object", "java.lang.annotation.Annotation");
+
   /** One indexed type declaration. */
   record TypeInfo(
       String canonicalName,
@@ -1070,7 +1117,8 @@ final class JavacSourceSymbolIndex {
       Path file,
       List<AnnotationInfo> annotations,
       List<MemberInfo> members,
-      TypeShape shape) {}
+      TypeShape shape,
+      List<String> supertypes) {}
 
   /** One indexed member declaration. */
   record MemberInfo(

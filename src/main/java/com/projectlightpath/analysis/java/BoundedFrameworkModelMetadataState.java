@@ -88,11 +88,13 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
       List<String> requestedQualifiers,
-      List<SourceMetadataScannerState.BeanCandidate> scannedCandidates) {
+      List<SourceMetadataScannerState.BeanCandidate> scannedCandidates,
+      Optional<String> requestedShape) {
     return context.bindingCandidates().stream()
         .filter(row -> scannedCandidates.stream()
             .noneMatch(candidate -> candidateMetadataMatches(scanner, row, candidate)))
-        .filter(row -> metadataCandidateTypeMatches(scanner, injectionFile, requestedType, row))
+        .filter(row -> metadataCandidateTypeMatches(
+            scanner, injectionFile, requestedType, row, requestedShape))
         .filter(row -> metadataCandidateQualifierMatches(requestedQualifiers, row))
         .toList();
   }
@@ -102,19 +104,156 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String requestedType,
-      AnalysisContext.BindingCandidateMetadata row) {
+      AnalysisContext.BindingCandidateMetadata row,
+      Optional<String> requestedShape) {
     Optional<String> requested = canonicalType(requestedType, injectionFile, scanner);
     if (requested.isEmpty()) {
-      return false;
+      // Issue #61: the index metadata disjunct is evaluated BEFORE this
+      // early return can preempt it — the shape arm fires precisely in
+      // this textual-vacuum case. The row side is the TEXTUAL arm only:
+      // metadata-only rows have no indexed declaration.
+      return indexMetadataMatch(scanner, injectionFile, requestedType,
+          row, requestedShape);
     }
     if (canonicalType(row.candidateType(), injectionFile, scanner)
         .map(requested.get()::equals)
         .orElse(false)) {
       return true;
     }
-    return row.contracts().stream()
+    boolean textualContract = row.contracts().stream()
         .map(contract -> canonicalType(contract, injectionFile, scanner))
         .anyMatch(value -> value.isPresent() && value.get().equals(requested.get()));
+    // The textual arms run first; the index disjunct is consulted only
+    // when they decline (review round 1, finding 1).
+    return textualContract
+        || indexMetadataMatch(scanner, injectionFile, requestedType,
+            row, requestedShape);
+  }
+
+  /**
+   * The index metadata comparison (issue #61): the row's concrete type or
+   * contract spellings against the requested type's index shape. The
+   * disjunct fires ONLY when the requested side is a textual VACUUM
+   * filled by the shape (review round 3: the row side is purely textual,
+   * so without the vacuum requirement a raw requested type could match a
+   * generic row FLAG-OFF — a byte-identity violation). Generics-gated on
+   * BOTH sides — the requested type AND the row spelling (CodeRabbit
+   * 4724039721: a parameterized row must be rejected identically under
+   * every import form — the shape must not erase the row's type
+   * arguments into an admission the explicit-import form refuses).
+   */
+  private static boolean indexMetadataMatch(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String requestedType,
+      AnalysisContext.BindingCandidateMetadata row,
+      Optional<String> requestedShape) {
+    if (hasGenericArguments(requestedType) || requestedShape.isEmpty()) {
+      return false;
+    }
+    if (canonicalType(eraseGenericArguments(requestedType), injectionFile, scanner)
+        .isPresent()) {
+      return false;
+    }
+    String shape = requestedShape.get();
+    // CodeRabbit 4724039678: the CONTRACT arm — a row matching only
+    // through its declared contracts must be honestly counted when the
+    // shape proves the requested type, exactly as the textual ladder
+    // counts it when the requested type resolves (an invisible active
+    // competitor would otherwise yield an unopposed DEFINITE).
+    return nonGenericRawEquals(scanner, injectionFile, row.candidateType(), shape)
+        || row.contracts().stream()
+            .anyMatch(contract -> nonGenericRawEquals(
+                scanner, injectionFile, contract, shape));
+  }
+
+  /**
+   * One non-generic row spelling whose erased raw equals the shape.
+   * Package-private: the TypeMatching associated-row arm shares this ONE
+   * row-spelling policy (CodeRabbit 4724438561). CodeRabbit 4724438554 /
+   * 4724558598: an UNQUALIFIED spelling the resolution file cannot
+   * resolve falls back to simple-name comparison against the
+   * javac-proven shape. The C6 declaredTypeNames count guard is
+   * deliberately NOT mirrored: C6 rejects on ambiguity to avoid
+   * fabricating a MATCH, but here rejection fabricates CERTAINTY (an
+   * excluded potential competitor can yield an unopposed DEFINITE) —
+   * the safety direction is inverted, so ambiguity resolves toward
+   * COUNTING the row (a downgrade to POSSIBLE, never a fabrication). A
+   * QUALIFIED unresolvable spelling still declines (conservative).
+   */
+  static boolean nonGenericRawEquals(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String spelling,
+      String shape) {
+    return nonGenericRawEquals(scanner, injectionFile, spelling, shape, true);
+  }
+
+  /**
+   * One non-generic row spelling whose erased raw equals the shape.
+   * Package-private: the TypeMatching associated-row arm shares this ONE
+   * row-spelling policy (CodeRabbit 4724438561). CodeRabbit 4724438554 /
+   * 4724558598 / 4724642492: an UNQUALIFIED spelling the resolution file
+   * cannot resolve falls back to simple-name comparison against the
+   * javac-proven shape — but ONLY for competitor ELIGIBILITY (the
+   * fallback keeps a potential competitor in the eligible set, a
+   * downgrade). The CERTAINTY path passes allowSimpleNameFallback=false:
+   * an unresolved contract must never prove a match (a java.awt.List
+   * producer with an ambiguous "List" contract row must not become a
+   * DEFINITE match for a java.util.List injection). The C6
+   * declaredTypeNames count guard is deliberately NOT mirrored in the
+   * eligibility fallback: C6 rejects on ambiguity to avoid fabricating a
+   * MATCH, but here rejection fabricates CERTAINTY (an excluded potential
+   * competitor can yield an unopposed DEFINITE) — the safety direction is
+   * inverted. A QUALIFIED unresolvable spelling always declines
+   * (conservative).
+   */
+  static boolean nonGenericRawEquals(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile injectionFile,
+      String spelling,
+      String shape,
+      boolean allowSimpleNameFallback) {
+    if (hasGenericArguments(spelling)) {
+      return false;
+    }
+    Optional<String> raw = canonicalType(
+        eraseGenericArguments(spelling), injectionFile, scanner);
+    if (raw.isPresent()) {
+      return raw.get().equals(shape);
+    }
+    if (spelling.contains(".") || !allowSimpleNameFallback) {
+      return false;
+    }
+    return simpleName(shape).equalsIgnoreCase(spelling.trim());
+  }
+
+  /**
+   * One associated-row CONTRACT spelling compared for a RAW request,
+   * mirroring the textual semantics of {@code contractMatchesType}:
+   * a non-generic request ERASES the contract before comparing, so a
+   * generic-spelled row contract ({@code java.util.List<String>}) is
+   * counted exactly like its raw spelling (CodeRabbit 4724720338 — the
+   * associated arm must not apply the metadata-only arm's
+   * generic-retaining policy, whose textual ladder differs). The
+   * simple-name fallback is ELIGIBILITY-only: the certainty path
+   * requires the erased spelling to resolve.
+   */
+  static boolean erasedRawContractEquals(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile resolutionFile,
+      String contract,
+      String shape,
+      boolean allowSimpleNameFallback) {
+    String erased = eraseGenericArguments(contract);
+    Optional<String> raw = canonicalType(erased, resolutionFile, scanner);
+    if (raw.isPresent()) {
+      return raw.get().equals(shape);
+    }
+    if (erased.contains(".") || !allowSimpleNameFallback) {
+      return false;
+    }
+    return simpleName(shape).equalsIgnoreCase(erased.trim());
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */

@@ -251,7 +251,8 @@ class JavacSourceSymbolIndexTest {
     JavacSourceSymbolIndex.MemberInfo field =
         index.members("demo.App", "field").get(0);
     assertEquals("field", field.kind());
-    assertEquals("", field.returnType());
+    // Issue #61: field members carry their declared type shape (was "").
+    assertEquals("java.lang.String", field.returnType());
     assertTrue(field.parameterTypes().isEmpty());
     assertEquals("\"field\"", field.annotations().get(0).values().get("name"));
 
@@ -310,15 +311,18 @@ class JavacSourceSymbolIndexTest {
         .shape().declarationKind());
     List<JavacSourceSymbolIndex.MemberInfo> components =
         index.members("demo.Shapes.Point", "x");
+    // Issue #61: record component fields carry their declared type shape
+    // (was "").
     assertTrue(components.stream().anyMatch(member -> member.kind().equals("field")
-        && member.returnType().isEmpty()), components.toString());
+        && "int".equals(member.returnType())), components.toString());
 
     assertEquals("enum", index.type("demo.Shapes.Color").get(0)
         .shape().declarationKind());
     JavacSourceSymbolIndex.MemberInfo constant =
         index.members("demo.Shapes.Color", "RED").get(0);
     assertEquals("enum_constant", constant.kind());
-    assertEquals("", constant.returnType());
+    // Issue #61: enum constants carry their enum type shape (was "").
+    assertEquals("demo.Shapes.Color", constant.returnType());
 
     List<JavacSourceSymbolIndex.MemberInfo> overloads =
         index.members("demo.Shapes", "foo");

@@ -35,11 +35,14 @@ abstract class BoundedFrameworkModelMetadataMatching extends BoundedFrameworkMod
       SourceMetadataScannerState.InjectionPoint injection,
       SourceMetadataScannerState.Parameter parameter,
       int parameterIndex,
-      List<SourceMetadataScannerState.BeanCandidate> candidates) {
+      List<SourceMetadataScannerState.BeanCandidate> candidates,
+      Optional<String> requestedShape) {
     return context.resolvedBindings().stream()
         .filter(row -> injectionOwnerMatches(scanner, row.injectionOwner(), injection.ownerType()))
         .filter(row -> memberMatches(row.injectionMember(), injection.member()))
-        .filter(row -> injectionTypesMatch(scanner, injection.file(), row.injectionType(), parameter.type()))
+        .filter(row -> injectionTypesMatch(
+            scanner, injection.file(), row.injectionType(), parameter.type(),
+            requestedShape))
         .filter(row -> row.parameterIndex() == null || row.parameterIndex() == parameterIndex)
         .filter(row -> resolvedQualifiersCompatible(
             row.qualifiers(), mergeQualifiers(injection.qualifiers(), parameter.qualifiers())))
