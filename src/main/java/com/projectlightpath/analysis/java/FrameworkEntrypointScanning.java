@@ -102,11 +102,18 @@ final class FrameworkEntrypointScanning {
       String kind,
       List<SourceMetadataScannerState.FrameworkEntrypointMethod> result) {
     for (Map.Entry<String, List<String>> entry : annotations.entrySet()) {
-      if (scanner.canonicalAnnotation(
-          file, block, entry.getKey(), entry.getValue().toArray(String[]::new))) {
+      // Evidence symbols preserve the exact source spellings (a fully
+      // qualified occurrence stays qualified), the lifecycle precedent.
+      List<String> symbols = SourceMetadataScanner
+          .canonicalAnnotationOccurrences(file, block, entry.getKey(),
+              Set.copyOf(entry.getValue()))
+          .stream()
+          .map(SourceMetadataScannerState.AnnotationOccurrence::source)
+          .distinct()
+          .toList();
+      if (!symbols.isEmpty()) {
         result.add(new SourceMetadataScannerState.FrameworkEntrypointMethod(
-            file, method, declaringType, kind, entry.getKey(),
-            List.of("@" + entry.getKey())));
+            file, method, declaringType, kind, entry.getKey(), symbols));
       }
     }
   }
@@ -149,7 +156,25 @@ final class FrameworkEntrypointScanning {
       return scanner.springComponent(file, declaringType)
           || registeredBeanTypes.contains(declaringType);
     }
-    return scanner.cdiBean(scanner.typeAnnotationBlock(file, declaringType));
+    return cdiBeanDeclared(scanner, file, declaringType);
+  }
+
+  /**
+   * CDI bean gate for the declaring type. Local classes cannot be CDI
+   * bean classes, so they decline (the springComponent local-type filter,
+   * mirrored); anonymous types resolve to no declaration and decline.
+   */
+  private static boolean cdiBeanDeclared(
+      SourceMetadataScanner scanner,
+      SourceMetadataScannerState.SourceFile file,
+      String declaringType) {
+    if (file.typeName().equals(declaringType)) {
+      return scanner.cdiBean(file.classAnnotationBlock());
+    }
+    return scanner.typeDeclaration(file, declaringType)
+        .filter(type -> !scanner.isLocalType(file, type))
+        .map(type -> scanner.cdiBean(scanner.typeAnnotationBlock(file, type.start())))
+        .orElse(false);
   }
 
   /** Spring @Bean-registered types; Quarkus has no bounded equivalent here. */
@@ -192,7 +217,16 @@ final class FrameworkEntrypointScanning {
     }
     String body = JavaSourceText.maskStringLiterals(
         structural.substring(method.end(), closing));
-    return QUARKUS_RUN_SIMPLE.matcher(body).find()
-        || QUARKUS_RUN_QUALIFIED.matcher(body).find();
+    // The qualified spelling is self-identifying. The simple spelling can
+    // resolve to a user-defined same-simple-name class (JLS 6.5), so it
+    // requires an explicit canonical import in the declaring file — the
+    // same lookalike discipline the annotation mechanisms enforce.
+    if (QUARKUS_RUN_QUALIFIED.matcher(body).find()) {
+      return true;
+    }
+    if (!scanner.importedTypes("Quarkus", file).contains("io.quarkus.runtime.Quarkus")) {
+      return false;
+    }
+    return QUARKUS_RUN_SIMPLE.matcher(body).find();
   }
 }

@@ -224,8 +224,11 @@ final class FrameworkEntrypointFactsTest {
         """);
 
     SemanticCallFacts facts = analyze(AnalysisContext.Framework.SPRING_BOOT, root, SPRING_LISTENER);
-    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
-        entrypoint(facts, "demo.Qualified#onKafka").certainty());
+    SemanticCallFacts.Fact fact = entrypoint(facts, "demo.Qualified#onKafka");
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE, fact.certainty());
+    assertTrue(fact.evidence().get(0).symbols().stream()
+            .anyMatch(symbol -> symbol.startsWith("@org.springframework.kafka.annotation.KafkaListener")),
+        fact.evidence().toString());
   }
 
   /** L8: on-demand import never resolves a canonical occurrence. */
@@ -815,6 +818,29 @@ final class FrameworkEntrypointFactsTest {
     assertEquals("jvm-main-entrypoint", entrypoint(facts, "demo.LookalikeApp#main").modelRule());
   }
 
+  /** M8b: same-package simple-spelling Quarkus lookalike does not mark the runner. */
+  @Test
+  void samePackageSimpleQuarkusLookalikeDeclines() throws IOException {
+    Path root = quarkusRoot("main-quarkus-simple-lookalike/src/main/java");
+    write(root, "demo/Quarkus.java", """
+        package demo;
+        public class Quarkus {
+          public static void run(String[] args) { }
+        }
+        """);
+    write(root, "demo/SimpleLookalikeApp.java", """
+        package demo;
+        public class SimpleLookalikeApp {
+          public static void main(String[] args) {
+            Quarkus.run(args);
+          }
+        }
+        """);
+
+    SemanticCallFacts facts = analyze(AnalysisContext.Framework.QUARKUS, root, List.of());
+    assertEquals("jvm-main-entrypoint", entrypoint(facts, "demo.SimpleLookalikeApp#main").modelRule());
+  }
+
   /** M9: Quarkus.run in a sibling method does not tag the main. */
   @Test
   void quarkusRunInSiblingMethodDoesNotTagMain() throws IOException {
@@ -1028,6 +1054,33 @@ final class FrameworkEntrypointFactsTest {
     SemanticCallFacts facts = analyze(AnalysisContext.Framework.QUARKUS, root, QUARKUS_OBSERVER);
     assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
         entrypoint(facts, "demo.Outer$Nested#onEvent").certainty());
+  }
+
+  /** N4: a method-local class cannot be a CDI bean, so its observer declines. */
+  @Test
+  void localClassObserverDeclines() throws IOException {
+    Path root = quarkusRoot("local-observer/src/main/java");
+    write(root, "demo/LocalObserver.java", """
+        package demo;
+        import jakarta.enterprise.context.ApplicationScoped;
+        import jakarta.enterprise.event.Observes;
+        @ApplicationScoped
+        public class LocalObserver {
+          void dispatch() {
+            @ApplicationScoped
+            class Local {
+              void onEvent(@Observes Object event) { }
+            }
+            new Local().onEvent(new Object());
+          }
+        }
+        """);
+
+    SemanticCallFacts facts = analyze(AnalysisContext.Framework.QUARKUS, root, QUARKUS_OBSERVER);
+    assertTrue(facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("framework_entrypoint"))
+        .noneMatch(item -> item.callee().contains("Local#onEvent")),
+        facts.frameworkFacts().toString());
   }
 
   // ------------------------------------------------------------------

@@ -49,8 +49,8 @@ abstract class BoundedFrameworkModelEntrypointFacts extends BoundedFrameworkMode
   private List<SemanticCallFacts.Fact> listenerFacts(
       AnalysisContext context, SourceMetadataScanner scanner) {
     List<SemanticCallFacts.Fact> facts = new ArrayList<>();
-    boolean metadataAvailable = LISTENER_METADATA.get(framework.id()).stream()
-        .anyMatch(context::metadataObserved);
+    String metadataId = LISTENER_METADATA.get(framework.id()).get(0);
+    boolean metadataAvailable = context.metadataObserved(metadataId);
     for (SourceMetadataScannerState.FrameworkEntrypointMethod listener
         : scanner.messageListenerMethods(framework)) {
       String rule = framework == AnalysisContext.Framework.QUARKUS
@@ -67,9 +67,7 @@ abstract class BoundedFrameworkModelEntrypointFacts extends BoundedFrameworkMode
           framework == AnalysisContext.Framework.QUARKUS
               ? "observer_parameter_annotation"
               : "listener_annotation",
-          framework == AnalysisContext.Framework.QUARKUS
-              ? "quarkus-cdi-observer-annotations"
-              : "spring-listener-annotations",
+          metadataId,
           "Message listener registration is runtime container state;"
               + " no build-time registry is captured for this mechanism.")));
     }

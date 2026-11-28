@@ -130,13 +130,28 @@ N1-N3 (nested declaring types), A2 (Spring fixture replica main).
 
 ## Gates
 
-`make adapter-test` **842 executions** (default=728, large=1, sootup=113;
-main's floor 801 + the 41 new cells), zero failures, zero churn in
-existing tests; `make java-lint` PASS with 0 new findings (the initial
-run's two findings — ExcessiveParameterList, CognitiveComplexity 33 —
-were refactored away with the EntrypointEmission record and the shared
-entrypointMethods/addMatchingMechanisms helpers before GREEN landed);
-`make evidence-validate` pass (no spike/ inputs touched).
+`make adapter-test` **844 executions** (default=730, large=1, sootup=113;
+main's floor 801 + the 43 cells after the review round below), zero
+failures, zero churn in existing tests; `make java-lint` PASS with 0 new
+findings (the initial run's two findings — ExcessiveParameterList,
+CognitiveComplexity 33 — were refactored away with the EntrypointEmission
+record and the shared entrypointMethods/addMatchingMechanisms helpers
+before GREEN landed); `make evidence-validate` pass (no spike/ inputs
+touched).
+
+## Additional residuals (review round 1)
+
+- The static-import runner spelling (`import static
+  io.quarkus.runtime.Quarkus.run; … run(args);`) declines (the bounded
+  patterns require the receiver or qualified spelling) — safe abstention,
+  not modeled.
+- Interface `static void main` without an explicit `public` keyword
+  declines (the classic-protocol check requires the explicit modifier) —
+  safe abstention.
+- `mainMethods()` is framework-independent: a Spring-framework scan of a
+  main calling `io.quarkus.runtime.Quarkus.run` emits a
+  `quarkus-main-runner` fact under a `spring-boot-…` id. The launch
+  protocol is framework-agnostic; recorded as intended behavior.
 
 ## Review record
 
@@ -148,12 +163,30 @@ entrypointMethods/addMatchingMechanisms helpers before GREEN landed);
   brace-matched runner body extent, wildcard-import and JEP 512
   residuals, repeatable containers, cross-framework decline. Loop closed
   at confidence **0.93**.
+- **Implementation review round 1** (fresh Engram-grounded adversarial
+  subagent): 5 findings, all addressed red-first in REVIEW_84_1 —
+  (1) MAJOR: the simple-spelling `Quarkus.run(` receiver had no import
+  gate, so a JLS-legal same-package/user-defined `Quarkus` class
+  fabricated a `quarkus-main-runner` fact (the file's own lookalike
+  rule, violated); fixed by requiring an explicit
+  `import io.quarkus.runtime.Quarkus;` for the simple spelling (the
+  qualified spelling stays unguarded — it is self-identifying), pinned
+  by M8b; (2) MINOR: the Quarkus bean gate admitted method-local
+  classes (local classes cannot be CDI beans); fixed with the
+  springComponent local-type filter mirrored (`cdiBeanDeclared`),
+  pinned by N4; (3) MINOR: evidence symbols were synthesized simple
+  spellings; now the exact `canonicalAnnotationOccurrences` source
+  spellings (the lifecycle precedent), pinned by the L7 symbol
+  assertion; (4) NIT: listener metadata-id attribute now derived from
+  LISTENER_METADATA instead of duplicated literals; (5) NIT: the
+  residuals above recorded. Gates re-run green at 844.
 - **CodeRabbit full review** (post-push): see the PR thread; findings
   are dispositioned there red-first.
 
-Confidence score: **0.90** — the ladder is enforced at one seam, eleven
-mutation receipts hold, the full suite shows exactly the 41 new cells
-and zero churn, and every design claim in the plan cites code that was
-read or probed. The residual 0.10: the always-POSSIBLE main ladder and
-the private-method over-approximation are judgment calls documented
-above, not mechanically pinned truths.
+Confidence score: **0.92** — the ladder is enforced at one seam, eleven
+mutation receipts hold, the full suite shows exactly the new cells and
+zero churn, every design claim in the plan cites code that was read or
+probed, and the round-1 lookalike hole in the runner check is closed
+with its own red-first cell. The residual 0.08: the always-POSSIBLE main
+ladder and the private-method over-approximation are judgment calls
+documented above, not mechanically pinned truths.
