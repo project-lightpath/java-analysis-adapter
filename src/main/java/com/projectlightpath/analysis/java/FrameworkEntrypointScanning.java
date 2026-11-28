@@ -45,6 +45,10 @@ final class FrameworkEntrypointScanning {
   private static final Pattern QUARKUS_RUN_QUALIFIED =
       Pattern.compile("(?<![\\w$])io\\.quarkus\\.runtime\\.Quarkus\\s*\\.\\s*run\\s*\\(");
 
+  /** C-style single String-array parameter: the [] sits on the name. */
+  private static final Pattern C_STYLE_STRING_ARRAY = Pattern.compile(
+      "^(?:(?:final|@[\\w.]+)\\s+)*(?:java\\.lang\\.)?String\\s+\\w+\\s*\\[\\]\\s*$");
+
   /** Extracts Spring and Quarkus message-listener entrypoint methods. */
   static List<SourceMetadataScannerState.FrameworkEntrypointMethod> messageListenerMethods(
       SourceMetadataScanner scanner, AnalysisContext.Framework framework) {
@@ -195,7 +199,17 @@ final class FrameworkEntrypointScanning {
         || !SourceMetadataScanner.hasModifier(method.annotationBlock(), "static")) {
       return false;
     }
-    return scanner.commandLineRunnerParameters(method.parameters());
+    // The shared commandLineRunnerParameters normalization does not fold a
+    // C-style trailing [] on the parameter name into the type; the exact
+    // shape below covers that variant here ONLY (the CommandLineRunner
+    // lifecycle path keeps its behavior), because a silently skipped
+    // launchable main would lose a reachability root without a diagnostic.
+    // Annotation arguments are masked first so an annotated parameter
+    // (@SuppressWarnings("x") String args[]) matches like the type-position
+    // variant does.
+    return scanner.commandLineRunnerParameters(method.parameters())
+        || C_STYLE_STRING_ARRAY.matcher(SourceMetadataScanner
+            .maskAnnotationArguments(method.parameters()).trim()).matches();
   }
 
   /** Runner evidence bounded to the main method's own body, literal-masked. */

@@ -120,15 +120,15 @@ fixture replica main).
   "fact IDs must be unique within a relationship set".
 - (j) per-occurrence emission: L10+Q10 error (duplicate ids), L1 green.
 - (k) runner check at file scope: M9 red, M4 green.
+- (l) C-style main arm dropped: M3 red (CODERABBIT_84_1).
 
 ## Deviations from RED (documented in GREEN_84)
 
-- The C-style `String args[]` main variant expects NO fact: the shared
-  parameters() normalization (the CommandLineRunner lifecycle precedent)
-  does not fold a trailing [] on the name into the type, so the bounded
-  shape set abstains; the M3 cell pins the decline.
 - The I2 cell asserts exactly two framework_entrypoint facts for the
   route+listener callee — the coexistence the cell exists to pin.
+- (Superseded by CODERABBIT_84_1: the C-style `String args[]` decline
+  recorded at GREEN time was a silently skipped launchable main — see
+  the CodeRabbit record below; the shape now emits.)
 
 ## Gates
 
@@ -191,13 +191,24 @@ touched).
   addMatchingMechanisms, stale cell-count heading), addressed in
   REVIEW_84_2; gates re-run green at 844. **No new addressable findings;
   loop closed.**
-- **CodeRabbit full review** (post-push): see the PR thread; findings
-  are dispositioned there red-first.
+- **CodeRabbit full review** (post-push): 1 Minor finding — a legal
+  C-style `String args[]` main produced no fact and no diagnostic, a
+  silently skipped launchable main that would lose a reachability root
+  (the GREEN-time deviation had recorded this decline as intended).
+  Addressed red-first in CODERABBIT_84_1: `isClassicMain` gained an
+  exact-shape C-style arm (`final`/annotations interleaved, single
+  String-array with the [] on the name, `String a[][]` and `int a[]`
+  still decline — boundary-probed on fifteen spellings), scoped to the
+  main check ONLY so the CommandLineRunner lifecycle path keeps its
+  behavior; M3 now expects facts for `demo.CStyle#main` and the
+  annotated C-style variant, and mutation receipt (l) pins the arm.
+  Gates re-run green at 844.
 
-Confidence score: **0.92** — the ladder is enforced at one seam, eleven
-mutation receipts hold, the full suite shows exactly the new cells and
-zero churn, every design claim in the plan cites code that was read or
-probed, and the round-1 lookalike hole in the runner check is closed
-with its own red-first cell. The residual 0.08: the always-POSSIBLE main
-ladder and the private-method over-approximation are judgment calls
-documented above, not mechanically pinned truths.
+Confidence score: **0.93** — the ladder is enforced at one seam, twelve
+mutation receipts hold, the full suite shows zero churn in existing
+tests, every design claim in the plan cites code that was read or
+probed, the round-1 lookalike hole in the runner check is closed with
+its own red-first cell, and the CodeRabbit silent-skip finding is
+closed with a boundary-probed shape arm. The residual 0.07: the
+always-POSSIBLE main ladder and the private-method over-approximation
+are judgment calls documented above, not mechanically pinned truths.

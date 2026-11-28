@@ -694,19 +694,20 @@ final class FrameworkEntrypointFactsTest {
           public static void main(final @SuppressWarnings("x") String[] args) { }
         }
         """);
+    write(root, "demo/CStyleAnnotated.java", """
+        package demo;
+        public class CStyleAnnotated {
+          public static void main(final @SuppressWarnings("x") String args[]) { }
+        }
+        """);
 
     SemanticCallFacts facts = analyze(AnalysisContext.Framework.SPRING_BOOT, root, List.of());
     for (String callee : List.of(
         "demo.Varargs#main", "demo.Qualified#main", "demo.FinalParam#main",
-        "demo.AnnotatedParam#main")) {
+        "demo.CStyle#main", "demo.AnnotatedParam#main", "demo.CStyleAnnotated#main")) {
       assertEquals(SemanticCallFacts.Certainty.POSSIBLE, entrypoint(facts, callee).certainty(),
           callee);
     }
-    // C-style `String args[]` declines: the shared parameters() normalization
-    // (the CommandLineRunner lifecycle precedent) does not fold the trailing
-    // [] into the type, so the bounded shape set abstains.
-    assertTrue(entrypoints(facts, "demo.CStyle#main").isEmpty(),
-        facts.frameworkFacts().toString());
   }
 
   /** M4: Quarkus runner usage in the main body ⇒ quarkus-main-runner. */
