@@ -439,8 +439,11 @@ class JavacAbstentionEvidenceTest {
   void injectionPointAfterANestedTypeNamesTheTrueOwnerAndSelectsItsRow()
       throws IOException {
     Path sourceRoot = temp.resolve("abstention-m2/src/main/java");
-    write(sourceRoot.resolve("demo/Thing.java"),
-        "package demo; public class Thing {}\n");
+    write(sourceRoot.resolve("demo/Thing.java"), """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Thing { }
+        """);
     writeSources(sourceRoot, List.of("""
         package demo;
         import org.springframework.beans.factory.annotation.Autowired;

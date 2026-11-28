@@ -169,7 +169,11 @@ final class FrameworkBeanScanning {
       JavacFrameworkAnnotations.MirrorLookup classMirrors =
           javac.typeAnnotationsLookup(file);
       JavacFrameworkMemberLookup.MemberLookup methodMirrors = javac.memberLookup(
-          scanner.typeContaining(file, method.start()), method.name(), "method",
+          // The mirror lookup shares the #77/#90 ownerTypeFor
+          // normalization: a member declared after a nested type
+          // looks up its mirrors against the true owner, not the
+          // nested type the raw extraction start anchored on.
+          scanner.ownerTypeFor(file, method), method.name(), "method",
           JavacFrameworkAnnotations.parameterArity(method.parameters()));
       JavacAbstentionEvidence mirrorAbstention = methodMirrors.abstention()
           .or(() -> classMirrors.abstention())
