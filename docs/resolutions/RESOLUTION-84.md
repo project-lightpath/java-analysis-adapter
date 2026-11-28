@@ -86,17 +86,19 @@ by the Q9 characterization cell).
   frameworks; scanner facades and one record on
   `SourceMetadataScannerState`; Makefile floor 801 → 842.
 
-## Cells (41, `FrameworkEntrypointFactsTest`)
+## Cells (43, `FrameworkEntrypointFactsTest`)
 
 L1-L10 (Spring listeners: ladder, lookalike, non-bean, mechanisms,
 @Bean-registered, FQN spelling, wildcard-import abstention, private
 characterization, repeatable container), Q1-Q10 (CDI observers: ladder,
 argument fidelity, lookalike, javax, non-bean, Quarkus @Scheduled,
 lookalike, cross-framework decline, cdiBean residual, @Schedules
-container), S1-S4, M1-M9 (main shapes, runner containment incl.
-sibling-method and string-literal negatives), I1/I1b/I2/I3 (interactions
-incl. route coexistence — two framework_entrypoint facts for one callee),
-N1-N3 (nested declaring types), A2 (Spring fixture replica main).
+container), S1-S4, M1-M9 + M8b (main shapes, runner containment incl.
+sibling-method, string-literal, and same-package simple-spelling
+lookalike negatives), I1/I1b/I2/I3 (interactions incl. route
+coexistence — two framework_entrypoint facts for one callee), N1-N4
+(nested declaring types; method-local CDI class declines), A2 (Spring
+fixture replica main).
 
 ## Mutation receipts (executed, red under exactly their own mutation)
 
@@ -180,6 +182,15 @@ touched).
   assertion; (4) NIT: listener metadata-id attribute now derived from
   LISTENER_METADATA instead of duplicated literals; (5) NIT: the
   residuals above recorded. Gates re-run green at 844.
+- **Implementation review round 2** (incorporation verification + final
+  pass): all five round-1 fixes verified correct and complete (the
+  import gate opens for M4, declines on-demand imports, and is
+  suffix-overlap safe; cdiBeanDeclared mirrors springComponent; symbol
+  fidelity verified; map keys cover the Framework enum). 3 new findings,
+  all NIT (unused import, dead `scanner` parameter on
+  addMatchingMechanisms, stale cell-count heading), addressed in
+  REVIEW_84_2; gates re-run green at 844. **No new addressable findings;
+  loop closed.**
 - **CodeRabbit full review** (post-push): see the PR thread; findings
   are dispositioned there red-first.
 

@@ -1,7 +1,6 @@
 package com.projectlightpath.analysis.java;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,7 +83,7 @@ final class FrameworkEntrypointScanning {
           continue;
         }
         String block = parameterPosition ? method.parameters() : method.annotationBlock();
-        addMatchingMechanisms(scanner, file, method, declaringType, annotations, block,
+        addMatchingMechanisms(file, method, declaringType, annotations, block,
             kind, result);
       }
     }
@@ -93,7 +92,6 @@ final class FrameworkEntrypointScanning {
 
   /** Adds one entrypoint method per canonically resolved mechanism. */
   private static void addMatchingMechanisms(
-      SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile file,
       SourceMetadataScannerState.MethodInfo method,
       String declaringType,
