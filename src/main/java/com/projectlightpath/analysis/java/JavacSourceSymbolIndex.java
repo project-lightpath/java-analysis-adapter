@@ -1099,14 +1099,20 @@ final class JavacSourceSymbolIndex {
      * JLS letter escapes for the control characters b t n f r, a
      * backslash-u hex spelling for any remaining control character,
      * and the raw character otherwise (non-ASCII included). The
-     * are fed to the UNCHANGED textual leaf functions, which read the
-     * source spelling — emitting the literal spelling keeps the mirror
-     * extraction identical to the textual one. A source that spells the
-     * spells the same value through backslash-u hex or octal escapes
-     * is a documented residual (PLAN-85 section 3).
+     * rendered values are fed to the UNCHANGED textual leaf functions,
+     * which read the source spelling — emitting the literal spelling
+     * keeps the mirror extraction identical to the textual one. A source
+     * that spells the same value through backslash-u hex or octal
+     * escapes is a documented residual (PLAN-85 section 3).
+     *
+     * <p>Every backslash in renderer output comes from this helper, so
+     * each is followed by its escaped character — the precondition
+     * {@code renderIsUsable}'s skip rule rests on. New render arms must
+     * route backslash- or quote-bearing values through here (or quote-
+     * wrap them escaped) to keep that invariant.
      */
     private static String escaped(String text) {
-      StringBuilder rendered = new StringBuilder(text.length() + 2);
+      StringBuilder rendered = new StringBuilder(text.length() * 2 + 2);
       for (int index = 0; index < text.length(); index++) {
         char character = text.charAt(index);
         switch (character) {

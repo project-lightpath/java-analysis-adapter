@@ -820,9 +820,12 @@ class JavacFrameworkAnnotationMigrationTest {
     List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
     // #48 fixed: the renderer re-escapes the quote inside "a\"b", so the
     // rendered arguments keep an even effective quote count and the
-    // mirror stands in for the Label occurrence; Foo/Role still decline
-    // per occurrence via the nested-@ rule (not quotes). The textual
-    // answer and the mirror answer stay equal.
+    // mirror no longer declines the Label occurrence on quote count
+    // (Foo/Role still decline via the nested-@ rule). This cell pins
+    // OUTPUT parity only — the mirror-stands-in mechanism itself is
+    // pinned by the unit cells (rendered spellings, renderIsUsable
+    // tolerance) and their mutation receipts; the textual answer and
+    // the mirror answer stay equal either way.
     assertEquals(off, on);
     assertTrue(on.contains("Label") && on.contains("Foo") && on.contains("Role"),
         on.toString());
