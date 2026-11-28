@@ -149,10 +149,16 @@ values containing `"` or `\` (today the mirror diverges or declines).
 
 `renderIsUsable` must become escape-aware (skip the character after
 `\`), else the escaped rendering `"a\"b"` still counts three quote
-characters and declines — the fix would be inert. The skip rule is
-sound because backslashes occur only inside string values in renderer
-output (enum/class/number renderings contain none); stated in the
-javadoc.
+characters and declines — the fix would be inert. The skip rule's
+precondition — backslashes occur in renderer output ONLY inside escaped
+string/char contexts, each immediately followed by their escaped
+character — is made true by construction: the Character arm of `render`
+(`String.valueOf(unwrapped)`, :1086) currently emits a BARE backslash
+for `@Val(c = '\\')`; it is routed through the same escape helper
+(and a char value is wrapped in quotes, matching the source spelling
+`'\\'` → the rendered argument spelling `c="\\"`). Enum/class/number
+renderings contain no backslashes. Precondition and rule stated in the
+javadoc; pinned by the char arm of cell 1.
 
 ### Documented residual (plan-review round 1, finding 1)
 
@@ -161,10 +167,13 @@ mirror: a value can be spelled many ways in source (`\n` vs `\u000a`,
 `"` vs `\u0022`, octal escapes, `\uXXXX`-spelled non-ASCII). The escape
 set above restores parity for every STANDARD spelling (letter escapes,
 `\"`, `\\`, raw non-ASCII). A source that spells a value through
-`\uXXXX`/octal escapes diverges mirror-vs-textual after the fix where
-the quote cases declined before — a value-spelling divergence in the
-mirror-replaced answer, never a fabricated call fact, and strictly
-rarer than the constructs the fix repairs. Recorded on #85 with the
+`\uXXXX`/octal escapes diverges mirror-vs-textual: `\u0022`-spelled
+quotes declined before, while `\uXXXX`-spelled control chars and
+backslashes ALREADY diverged silently pre-fix (the mirror stood in with
+the raw character) — the fix neither creates nor worsens that class.
+The divergence is a value-spelling difference in the mirror-replaced
+answer, never a fabricated call fact, and strictly rarer than the
+constructs the fix repairs. Recorded on #85 with the
 QUOTED wontfix family; a fixture that needs it reopens both.
 
 
@@ -189,7 +198,7 @@ QUOTED wontfix family; a fixture that needs it reopens both.
    renamed to pin mirror-stands-in parity (the on/off equality assertion
    itself is unchanged and stays load-bearing).
 
-Floor: 798 → 802 (4 cells; Makefile:24 literal raised with EVIDENCE).
+Floor: 798 → 800 (two new test methods — cell 1 and cell 2; cell 3 renames an existing method, no count change; Makefile:24 literal raised with EVIDENCE).
 
 ### GREEN_85
 
