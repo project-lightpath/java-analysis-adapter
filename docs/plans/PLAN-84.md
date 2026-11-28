@@ -68,7 +68,7 @@ mechanisms, delivered in this PR:**
   vocabulary no fixture pins.
 - Non-Spring/non-Quarkus schedulers (Quartz, EJB `@Schedule`): same
   contract-boundedness reason.
-- DEFERNITE promotion for any family: no registration metadata exists
+- DEFINITE promotion for any family: no registration metadata exists
   (§0); the ladder ceiling is documented, not an out-of-scope kind.
 
 **Why one PR instead of per-family issues (pressure-test target):** the
@@ -183,6 +183,42 @@ BOTH frameworks (families dispatch internally by framework, like
   return, missing modifiers) decline (no fact — a main the JVM cannot
   launch is not an entrypoint).
 
+### 2.4 Contract wiring (the metadata ids must be documented, not invented)
+
+`metadataObserved` reads `AnalysisContext.frameworkMetadata`, which the
+CALLER supplies (the spike contracts record the two pinned fixtures;
+production contexts for #71 are built by VPE from their own sources —
+`AnalysisContextLoaderTest` pins that flow). Two honest facts constrain
+the wiring:
+
+- The pinned fixtures contain **none** of the new listener/scheduler
+  vocabularies (verified: `spring-boot-example-application` has only
+  `SpringApplication.run(Application.class, args)` in `Application#main`;
+  `spike/java21-quarkus` has only REST/reflection/ServiceLoader shapes).
+  So the fixture contexts in `spike/contracts/analysis-context.json` must
+  NOT declare the new ids as observed — that would fabricate observation.
+- The Spring fixture's `Application#main` means the main family fires
+  end-to-end on real fixture source with no metadata dependency.
+
+Plan: add four `metadataSources` rows to
+`spike/contracts/framework-model.json` (`spring-listener-annotations`,
+`spring-scheduling-annotations` under spring-boot;
+`quarkus-cdi-observer-annotations`, `quarkus-scheduler-annotations` under
+quarkus), kind `source_annotations`, patterns = the §1 canonical FQNs,
+`supports: ["framework_entrypoint"]`, with per-fixture status rows in
+`analysis-context.json` recording that the pinned fixtures do not observe
+them (the not-observed direction; an abstention note, mirroring the
+`spring-bean-definition-registry` not_captured row shape). No new rows in
+`expected-call-facts.json`: the validator requires enrichment and
+semantic-facts observations to match expected ids exactly
+(`validate_spike.py:223,254`), the new kinds have no pinned fixture case,
+and regenerating those observations is out of scope. `make
+evidence-validate` must stay green on the amended contracts (the
+validator only requires non-empty metadataSources and valid
+rules/edge types). The #71 caller-facing note — "declare these ids to
+reach POSSIBLE for listener/scheduler families" — goes in RESOLUTION-84
+and the #84 close-out comment.
+
 ## 3. Cell matrix (equivalence classes, not examples)
 
 New test class `FrameworkEntrypointFactsTest` (fact-level, the
@@ -195,30 +231,68 @@ same-simple-name, no canonical import) → no fact, including on a
 @Component type; L4 canonical annotation on non-bean type → no fact;
 L5 @RabbitListener/@JmsListener/@EventListener mechanism coverage; L6
 @EventListener on a @Bean-registered type → fact; L7 fully-qualified
-spelling without import → fact.
+spelling without import → fact; L8 wildcard import
+(`import org.springframework.kafka.annotation.*;`) → no fact (on-demand
+import never resolves a canonical occurrence — `importedTypes` matches
+single-type imports only; documented abstention consistent with
+@RestController today); L9 private `@KafkaListener` on a registered bean
+→ fact emitted (characterization cell pinning the documented
+over-approximation, §2.5); L10 repeatable container spelling
+`@KafkaListeners({@KafkaListener(...)})` → fact (nested occurrence in
+the raw annotation block).
 Quarkus: Q1 @Observes (jakarta) + @ApplicationScoped + metadata →
 POSSIBLE; Q2 @Observes with arguments (`during = ...`) → fact (parameter
 fidelity); Q3 user-defined lookalike @Observes → no fact; Q4 javax
 spelling → fact; Q5 @Observes on non-bean → no fact; Q6 Quarkus
 @Scheduled (io.quarkus.scheduler) + metadata → POSSIBLE; Q7 user-defined
-lookalike @Scheduled → no fact.
+lookalike @Scheduled → no fact; Q8 cross-framework decline: Spring-canonical
+`@Scheduled` (org.springframework…) under a Quarkus scan → no
+quarkus-scheduled-task fact (and the symmetric Spring-side cell).
 Spring scheduled: S1 canonical + bean + metadata → POSSIBLE; S2 metadata
 absent → UNRESOLVED; S3 lookalike → none; S4 non-bean → none.
 Main: M1 `public static void main(String[] args)` → POSSIBLE,
-caller `external JVM launcher`; M2 shape negatives (non-static,
-package-private-only… actually static-but-not-public, `String a`,
-non-void) → no fact; M3 boundary variants (`String... a`,
-`java.lang.String[] a`, `final String[] a`, `String a[]`) → fact; M4
-Quarkus main with `Quarkus.run(` in body → `quarkus-main-runner` fact;
-M5 `Quarkus.run(` only inside a string literal → plain main fact only;
-M6 two mains in one scan → two distinct bounded candidates.
+caller `external JVM launcher`; M2 shape negatives (static-but-not-public,
+public-but-not-static, `String a`, non-void return) → no fact — bounded
+to the classic JVM launch protocol; JEP 512 (JDK 25+) relaxed forms
+(instance main, non-public, no-arg) are a documented residual, not
+modeled; M3 boundary variants (`String... a`, `java.lang.String[] a`,
+`final String[] a`, `String a[]`, `final @SuppressWarnings("x") String[]
+a` — parameter-position annotations must be stripped by the shape
+normalization) → fact; M4 Quarkus main with `Quarkus.run(` in body →
+`quarkus-main-runner` fact; M5 `Quarkus.run(` only inside a string
+literal → plain main fact only; M6 two mains in one scan → two distinct
+bounded candidates.
 Interactions: I1 @KafkaListener + @Scheduled on one method → two facts
 (kind separation); I2 listener method that is also a @GetMapping route →
 route fact and entrypoint fact coexist; I3 main inside a @Component class
 → bean families and main fact independent.
 Adapter: A1 `analyze()` surfaces the new facts as `framework_entrypoint`
 with the certainty above (pass-through already proven by routes; pinned
-once).
+once). A2 the Spring fixture shape end-to-end: a `SpringApplication.run`
+main → plain jvm-main-entrypoint fact (no Quarkus runner).
+
+### 3.1 Documented over-approximations and residuals
+
+- On-demand imports (`import …kafka.annotation.*`) do not resolve a
+  canonical occurrence: abstention, pinned by L8. Manifestations: every
+  mechanism in §1 (same `importedTypes` machinery); same behavior as the
+  existing route/bean/proxy families — parity, not a new weakness.
+- Listener/scheduled method modifiers are not filtered: private, static,
+  or interface-default annotated methods on registered bean types still
+  emit POSSIBLE facts (L9 pins it). Rationale: the container processors
+  (@KafkaListener/@Scheduled post-processors) accept non-public methods
+  via reflection in at least the common configurations; modeling the
+  per-processor policy is out of bounded scope, and the failure direction
+  is an over-broad POSSIBLE, never a fabricated DEFINITE.
+- `cdiBean` is a simple-name gate (TextLayer13:133-137): a user-defined
+  same-simple-name scope lookalike satisfies the Quarkus bean
+  requirement. Documented residual shared with the existing
+  injection/proxy Quarkus paths (FrameworkLayer00:180); Q9 cell
+  (lookalike `@ApplicationScoped` + canonical `@Observes` → fact) pins
+  the current behavior instead of leaving it accidental.
+- JEP 512 relaxed main forms are not modeled (M2): abstention.
+- Main in a nested type is emitted (JVM can launch `Outer$Inner`); no
+  top-level filter, unlike routes.
 
 ## 4. TDD sequencing and gates
 
@@ -233,10 +307,20 @@ once).
   of literal-masked source ⇒ M5; (f) slice `parameters()` from the masked
   source ⇒ Q2. Gates after every item: `make adapter-test` (floor read
   off main: 801 executions; raised by the new cell count),
-  `make java-lint` (0 new findings; production touch is new-file-only so
-  the #64 helios08 cross-check triggers only if PMD measures the new
-  files differently — verify on helios08 with ~/jdk17 if any doubt),
-  `make evidence-validate`.
+  `make java-lint` (0 new findings), `make evidence-validate`.
+- Existing files touched (honest list, so the #64 lint cross-check can be
+  scoped): `BoundedFrameworkModel.java` (extends clause + one
+  `enrich()` call — `enrich` itself is already `final` at :758 and is NOT
+  edited beyond adding the `entrypointFacts` call), `SourceMetadataScanner.java`
+  (three facade methods), `SourceMetadataScannerState.java` (one record),
+  `Makefile` (SurefireTestCounter floor), `spike/contracts/framework-model.json`
+  + `analysis-context.json` (§2.4 rows). All other production changes are
+  new files (`FrameworkEntrypointScanning`,
+  `BoundedFrameworkModelEntrypointFacts`, `FrameworkEntrypointFactsTest`).
+  `make java-lint` runs on the local JDK; if PMD measures any MODIFIED
+  file differently than CI's JDK 17 (the #64 GodClass-measurement trap),
+  verify on helios08 with `~/jdk17` and a scratch checkout before
+  pushing.
 - Zero edits to existing tests; Makefile floor update only.
 - Post-push: `@coderabbitai full review`; reply red-first with mutation
   checks; no manual thread resolution; no merge (user decides).
