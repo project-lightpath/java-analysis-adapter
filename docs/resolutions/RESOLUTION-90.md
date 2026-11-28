@@ -147,6 +147,27 @@ guards, attribute keys, certainty semantics, status, fact-ID schemes.
   the owner is the innermost declaring type, not necessarily
   top-level) fixed in REVIEW_90_1. Round 2: diff re-read after the
   NIT fix — no new addressable findings.
+- **Implementation review round 2 (REVIEW_90_2, independent)**: a
+  fresh subagent (this session; the depth-1 block did not apply)
+  reviewed the full `3e0f3d0..HEAD` diff adversarially with
+  engram-zvec-grep/rg. Verdict: loop closes, no MAJOR findings.
+  Production diff confinement, swap semantics, hidden consumers
+  (injectionFactId, injectionOwnerMatches, memberFor — all move in
+  the abstention-safe direction), residual non-divergence for
+  constructor/field anchors, test purity/non-vacuity, and the
+  Makefile floor all verified clean. Three doc-precision findings,
+  all addressed in REVIEW_90_2: (1) MINOR — the residual section
+  misclassified three reflection-layer uses as site-offset semantics
+  when `ReflectionLayer02` :69, `TextLayer18` :63, `TextLayer19` :66
+  are raw `method.start()` member anchors in #90's divergence family
+  (mostly abstention-safe; `hasVisibleMethodNamed` has one
+  over-approximation edge) — Residuals rewritten, follow-up
+  candidate; (2) NIT — PLAN-90's floor prediction (805) undercounted
+  its own five-cell list — amendment note added; (3) QUESTION — the
+  route seam comment's "shares the normalization" could be read as
+  "uses the same helper" (the filter resolves through
+  `innermostType`, the mirror owner through `typeContaining`) —
+  comment tightened.
 
 ## Residuals
 
@@ -156,11 +177,22 @@ guards, attribute keys, certainty semantics, status, fact-ID schemes.
   after the nested type's end); a nested-type-INTERNAL member
   resolves the same owner both ways. No known constructible
   divergence; noted for completeness.
-- Reflection-layer `typeContaining(site offset)` uses
-  (`SourceMetadataScannerReflectionLayer00` :152, `TextLayer02` :62,
-  `TextLayer03` :49, `TextLayer18` :43) are site-offset semantics
-  (inside a method body), not member-declaration anchors — a
-  different family, out of #90's scope.
+- Reflection-layer `typeContaining` uses split into two families
+  (implementation-review round 2 correction): the site-offset uses
+  (`SourceMetadataScannerReflectionLayer00` :152, `TextLayer03` :49)
+  are inside-method-body semantics, a different family, out of #90's
+  scope. But `TextLayer02` :62 (the `siteType` argument), and the
+  member-declaration anchors `ReflectionLayer02` :69
+  (`typeContaining(candidate, method.start())` in
+  `hasVisibleMethodNamed`), `TextLayer18` :63, and `TextLayer19` :66
+  (`isAccessibleMethod`) ARE raw `method.start()` member anchors —
+  the exact divergence family #90 fixes (the METHOD regex can consume
+  the preceding nested type's `}`). Divergence direction is mostly
+  abstention-safe there (misattribution to the nested type makes the
+  method invisible → decline), with one over-approximation edge:
+  `hasVisibleMethodNamed` with a nested-type `siteType` could count an
+  outer member whose raw anchor lands in the nested span. Follow-up
+  candidate, not addressable on this PR without scope creep.
 - The injection fact ID/input-name churn for divergent shapes
   (misattributed today) is a breaking observable for downstream
   consumers keyed on those strings — the corrected identity is the

@@ -196,7 +196,9 @@ type members, not name resolution or scoping.
   Gates: `make adapter-test` (floor 801 → 801 + 4 = 805 expected; the
   Makefile :24 literal is raised to the observed count with
   EVIDENCE_90), `make java-lint` (zero findings), `make
-  evidence-validate`.
+  evidence-validate`. [Review-round amendment: the prediction
+  undercounted the cell list — five cells (M1, M1b, M2, M3, M4) ran,
+  observed 806 = 801 + 5, recorded in RESOLUTION-90 §Acceptance.]
 - **EVIDENCE_90**: gates + mutation receipts + 
   `docs/resolutions/RESOLUTION-90.md`.
 - **REVIEW_90_n**: implementation-review rounds, appended.
