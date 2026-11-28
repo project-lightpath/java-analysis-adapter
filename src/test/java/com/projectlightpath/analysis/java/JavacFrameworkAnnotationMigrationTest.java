@@ -786,7 +786,17 @@ class JavacFrameworkAnnotationMigrationTest {
   }
 
   @Test
-  void unescapedQuoteInRenderedValueFallsBackToTextual() throws IOException {
+  void renderIsUsableToleratesEscapedQuotes() {
+    // #48: an escaped rendering keeps an even effective quote count; an
+    // unbalanced one (what the pre-fix renderer emitted for a value
+    // containing a quote) still declines.
+    assertTrue(JavacFrameworkAnnotations.renderIsUsable("value=\"a\\\"b\""));
+    assertTrue(JavacFrameworkAnnotations.renderIsUsable("ch=\"\\\\\""));
+    assertFalse(JavacFrameworkAnnotations.renderIsUsable("value=\"a\"b\""));
+  }
+
+  @Test
+  void escapedQuoteInRenderedValueKeepsMirrorParity() throws IOException {
     Map<String, String> files = Map.of(
         "org/springframework/stereotype/Component.java",
         "package org.springframework.stereotype; public @interface Component {}",
@@ -808,9 +818,11 @@ class JavacFrameworkAnnotationMigrationTest {
     List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
     List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
-    // The renderer does not re-escape the quote inside "a\"b", so the
-    // rendered arguments end with an odd quote count and the mirror is
-    // declined per occurrence — the textual answer survives (#48).
+    // #48 fixed: the renderer re-escapes the quote inside "a\"b", so the
+    // rendered arguments keep an even effective quote count and the
+    // mirror stands in for the Label occurrence; Foo/Role still decline
+    // per occurrence via the nested-@ rule (not quotes). The textual
+    // answer and the mirror answer stay equal.
     assertEquals(off, on);
     assertTrue(on.contains("Label") && on.contains("Foo") && on.contains("Role"),
         on.toString());

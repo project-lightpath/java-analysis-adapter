@@ -119,6 +119,46 @@ class JavacAnnotationMigrationTest {
   }
 
   @Test
+  void annotationValuesRenderAsEscapedStringLiterals() throws IOException {
+    // #48: the renderer must emit a valid Java string literal denoting
+    // the value — the source spelling the textual leaf functions read —
+    // not the raw runtime string.
+    AnalysisContext context = context("escaped", Map.of(
+        "demo/Esc.java", """
+            package demo;
+            import java.lang.annotation.*;
+            @Retention(RetentionPolicy.RUNTIME) public @interface Esc {
+              String name();
+              String back();
+              String nl();
+              char ch();
+            }
+            """,
+        "demo/EscUser.java", """
+            package demo;
+            public class EscUser {
+              @Esc(name = "a\\"b", back = "a\\\\b", nl = "a\\nb", ch = '\\\\')
+              private String field;
+            }
+            """));
+    JavacSourceSymbolIndex index = withFlag(() -> JavacSourceSymbolIndex.of(context))
+        .orElseThrow();
+    Map<String, String> values = index
+        .type("demo.EscUser").get(0).members().stream()
+        .filter(member -> member.name().equals("field"))
+        .findFirst().orElseThrow().annotations().get(0).values();
+    // The quote is re-escaped: "a\"b" (6 chars).
+    assertEquals("\"a\\\"b\"", values.get("name"), values.toString());
+    // The backslash is re-escaped: "a\\b" (5 chars).
+    assertEquals("\"a\\\\b\"", values.get("back"), values.toString());
+    // The newline renders as its letter escape, not the raw character.
+    assertEquals("\"a\\nb\"", values.get("nl"), values.toString());
+    // A char member whose value is a backslash renders through the same
+    // escape helper, quote-wrapped (never a bare backslash).
+    assertEquals("\"\\\\\"", values.get("ch"), values.toString());
+  }
+
+  @Test
   void annotationValuesRenderMinusQuoting() throws IOException {
     AnalysisContext context = context("values", Map.of(
         "demo/Val.java", """
