@@ -786,11 +786,13 @@ class JavacFrameworkAnnotationMigrationTest {
   }
 
   @Test
-  void renderIsUsableToleratesEscapedQuotes() {
-    // #48: an escaped rendering keeps an even effective quote count; an
-    // unbalanced one (what the pre-fix renderer emitted for a value
-    // containing a quote) still declines.
-    assertTrue(JavacFrameworkAnnotations.renderIsUsable("value=\"a\\\"b\""));
+  void renderIsUsableDeclinesDecodedQuotes() {
+    // #48 + coderabbit 85-1: a decoded quote (rendered \") truncates in
+    // the escape-blind QUOTED extraction and can collapse distinct
+    // source spellings, so the mirror declines and the textual answer
+    // survives. A backslash pair carries no quote and stays usable; an
+    // unbalanced rendering (the pre-fix quote spelling) still declines.
+    assertFalse(JavacFrameworkAnnotations.renderIsUsable("value=\"a\\\"b\""));
     assertTrue(JavacFrameworkAnnotations.renderIsUsable("ch=\"\\\\\""));
     assertFalse(JavacFrameworkAnnotations.renderIsUsable("value=\"a\"b\""));
   }
@@ -816,7 +818,7 @@ class JavacFrameworkAnnotationMigrationTest {
             import org.springframework.beans.factory.annotation.Autowired;
             import org.springframework.beans.factory.annotation.Qualifier;
             @Component public class Octal {
-              @Autowired @Qualifier("\042red") private String value;
+              @Autowired @Qualifier("\\042red") private String value;
             }
             """);
     AnalysisContext context = springContext("octal-quote", files);
@@ -851,14 +853,14 @@ class JavacFrameworkAnnotationMigrationTest {
     List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
     List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
-    // #48 fixed: the renderer re-escapes the quote inside "a\"b", so the
-    // rendered arguments keep an even effective quote count and the
-    // mirror no longer declines the Label occurrence on quote count
-    // (Foo/Role still decline via the nested-@ rule). This cell pins
-    // OUTPUT parity only — the mirror-stands-in mechanism itself is
-    // pinned by the unit cells (rendered spellings, renderIsUsable
-    // tolerance) and their mutation receipts; the textual answer and
-    // the mirror answer stay equal either way.
+    // #48 + coderabbit 85-1: the renderer re-escapes the quote inside
+    // "a\"b", but a DECODED quote declines the mirror (renderIsUsable):
+    // the escape-blind QUOTED extraction truncates at the escaped quote,
+    // and distinct source spellings of quote-bearing values would
+    // collapse to one extracted prefix (the octal-spelled red cell pins
+    // that collapse). The textual answer survives; backslash and
+    // control-char values keep mirror parity (pinned by the unit cells
+    // and their mutation receipts).
     assertEquals(off, on);
     assertTrue(on.contains("Label") && on.contains("Foo") && on.contains("Role"),
         on.toString());

@@ -57,6 +57,9 @@ parity, not correctness of the extraction itself).
 
 ### Mutation checks (executed, red under exactly their own mutation)
 
+0. Remove the decoded-quote decline (coderabbit 85-1) ⇒ the octal
+   cell AND the renderIsUsable cell (observed `[Qualifier:\]`
+   collapse; `true` where `false` expected).
 1. Revert the String-branch escaping ⇒ the quote arm (observed
    `"a"b"`).
 2. Revert `renderIsUsable` to the naive quote counter ⇒ the
@@ -69,8 +72,9 @@ parity, not correctness of the extraction itself).
 
 ### Gates
 
-`make adapter-test` **800 executions** (default=686, large=1,
-sootup=113; main's floor 798 + the 2 new cells), zero failures;
+`make adapter-test` **801 executions** (default=687, large=1,
+sootup=113; main's floor 798 + the 3 new cells — the two #48 cells
+plus the coderabbit octal cell), zero failures;
 `make java-lint` PASS with 0 new findings (local JDK — a two-file
 production touch with no PMD-relevant structural change, so the #64
 helios08 cross-check is not triggered); `make evidence-validate` pass.
@@ -94,7 +98,7 @@ the QUOTED wontfix family on #85.
 | Item | Disposition |
 |---|---|
 | #9 deferred ServiceLoader/test-runner gaps | **closed superseded-in-part** with per-item mapping (see #9); two scoped issues filed (#87 provider eligibility; #88 multi-statement derived chains + receiver-mismatch); superclass residuals folded into the FLPATH-5124 tracker (AGENTS.md); items T/Q recorded as accepted adjacent changes of PR #7 (Q is wontfix: perf-only); test-runtime sharding superseded by PR #18; TCCL policy wontfix-with-reason; the stale `issue-9/service-loader-deferred` branch dispositioned superseded (grounded in deleted textual-resolver machinery) |
-| #48 renderer escaping | **fixed in this PR** |
+| #48 renderer escaping | **fixed in this PR** (decoded quotes decline — coderabbit 85-1 guard) |
 | post-#61: `proxyTargetTypeMatches` unmigrated | **#89 filed** |
 | post-#61: metadata-side spellings (binding/proxy rows, C6) | **wontfix-with-reason on #85** (external spellings; tightening C6 loses true answers) |
 | post-#61: generic binding rows, producer generic tail | **wontfix-with-reason on #85** (the index is erased by construction) |
@@ -110,6 +114,19 @@ the QUOTED wontfix family on #85.
   issue-9 branch disposition (round 1); the Character-arm closure and
   floor arithmetic (round 2); the char-member residual scoping and
   cell-3 comment scope (round 3). Loop closed at confidence **0.88**.
+- **CodeRabbit full review** (post-push): 1 Major finding — octal-
+  spelled quotes (`@Qualifier("\042red")`) decode to quote-bearing
+  values whose escaped rendering truncates in the escape-blind QUOTED
+  extraction, collapsing distinct source spellings flag-on (verified:
+  `[Qualifier:\042red]` vs `[Qualifier:\]` without the guard).
+  Addressed red-first in CODERABBIT_85_1: `renderIsUsable` declines a
+  DECODED quote (rendered `\"`) so the textual answer survives; the
+  octal cell pins the distinctness end-to-end and the mutation receipt
+  (guard removed) reproduces the collapse exactly. Backslash-bearing
+  and control-char values carry no quote, do not truncate, and keep
+  mirror parity (probe-verified on five constructs: plain, octal
+  quote, standard quote, backslash, newline — flag-on == flag-off on
+  all five).
 - **Implementation review**: round 1 (fresh Engram-grounded
   adversarial subagent) verified the core change, the parity traces,
   the blast radius (including the condition-evidence consumers), and

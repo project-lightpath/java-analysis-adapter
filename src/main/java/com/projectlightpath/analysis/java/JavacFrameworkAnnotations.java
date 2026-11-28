@@ -184,6 +184,9 @@ final class JavacFrameworkAnnotations {
     for (int index = 0; index < rendered.length(); index++) {
       char character = rendered.charAt(index);
       if (character == '\\') {
+        if (index + 1 < rendered.length() && rendered.charAt(index + 1) == '"') {
+          return false;
+        }
         index++;
       } else if (character == '"') {
         quoted = !quoted;
