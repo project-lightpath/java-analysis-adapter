@@ -155,8 +155,11 @@ string/char contexts, each immediately followed by their escaped
 character — is made true by construction: the Character arm of `render`
 (`String.valueOf(unwrapped)`, :1086) currently emits a BARE backslash
 for `@Val(c = '\\')`; it is routed through the same escape helper
-(and a char value is wrapped in quotes, matching the source spelling
-`'\\'` → the rendered argument spelling `c="\\"`). Enum/class/number
+(and a char value is wrapped in quotes — required to satisfy the
+skip-rule precondition; note this is NOT extraction parity: the textual
+leaf's QUOTED regex reads single-quoted `'\\'` spellings, so char
+members with `"` or `\` values flip from decline to stands-in-with-a-
+divergent-value, joining the documented residual below). Enum/class/number
 renderings contain no backslashes. Precondition and rule stated in the
 javadoc; pinned by the char arm of cell 1.
 
@@ -173,7 +176,9 @@ backslashes ALREADY diverged silently pre-fix (the mirror stood in with
 the raw character) — the fix neither creates nor worsens that class.
 The divergence is a value-spelling difference in the mirror-replaced
 answer, never a fabricated call fact, and strictly rarer than the
-constructs the fix repairs. Recorded on #85 with the
+constructs the fix repairs. Char-typed annotation members with `"` or `\` values belong to this
+residual family too (single-quote source spellings vs the quote-wrapped
+mirror rendering). Recorded on #85 with the
 QUOTED wontfix family; a fixture that needs it reopens both.
 
 
@@ -195,8 +200,10 @@ QUOTED wontfix family; a fixture that needs it reopens both.
    test touched): `unescapedQuoteInRenderedValueFallsBackToTextual`
    (JavacFrameworkAnnotationMigrationTest:789) — the mirror no longer
    declines per occurrence, so the comment is rewritten and the cell
-   renamed to pin mirror-stands-in parity (the on/off equality assertion
-   itself is unchanged and stays load-bearing).
+   renamed to pin mirror-stands-in parity, with the comment SCOPED to the
+   `Label` occurrence (`Foo`/`Role` still decline via the nested-`@`
+   rule, not quotes) (the on/off equality assertion itself is unchanged
+   and stays load-bearing).
 
 Floor: 798 → 800 (two new test methods — cell 1 and cell 2; cell 3 renames an existing method, no count change; Makefile:24 literal raised with EVIDENCE).
 
@@ -213,8 +220,8 @@ Floor: 798 → 800 (two new test methods — cell 1 and cell 2; cell 3 renames a
 
 ### EVIDENCE_85
 
-- Gates: `make adapter-test` (802, zero failures; Makefile floor literal
-  798 → 802), `make java-lint` (zero findings — a two-file touch with no
+- Gates: `make adapter-test` (800, zero failures; Makefile floor literal
+  798 → 800), `make java-lint` (zero findings — a two-file touch with no
   PMD-relevant structure; the #64 helios08 cross-check is not
   triggered), `make evidence-validate`.
 - Mutation receipts: (1) revert the render escaping ⇒ cell 1 red
