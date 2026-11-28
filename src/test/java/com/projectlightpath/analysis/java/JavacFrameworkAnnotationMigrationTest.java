@@ -932,6 +932,46 @@ class JavacFrameworkAnnotationMigrationTest {
         on.toString());
   }
 
+  // M3 (#90): the route mirror lookup's owner is normalized — a route
+  // method declared after a nested type resolves its folded-constant
+  // @Path through the mirror against the TRUE owner (the raw anchor
+  // resolved the nested type, the mirror lookup failed, and the
+  // textual extraction cannot fold — so no route existed). The
+  // flag-off twin keeps the cell non-vacuous: opt-out, the folded
+  // constant is mirror-only and the route must stay absent.
+  @Test
+  void routeAfterANestedTypeResolvesItsFoldedPathThroughTheMirror()
+      throws IOException {
+    Map<String, String> files = Map.of(
+        "jakarta/ws/rs/Path.java",
+        "package jakarta.ws.rs; public @interface Path { String value() default \"\"; }",
+        "jakarta/ws/rs/POST.java",
+        "package jakarta.ws.rs; public @interface POST {}",
+        "demo/FoldedAfterNested.java", """
+            package demo;
+            import jakarta.ws.rs.Path;
+            import jakarta.ws.rs.POST;
+            @Path("/items") public class FoldedAfterNested {
+              class Helper { }
+              @POST @Path("greet" + "ing") public String hello() { return ""; }
+            }
+            """);
+    AnalysisContext context = context(
+        "quarkus-folded-nested", AnalysisContext.Framework.QUARKUS, files);
+    System.setProperty(FLAG, "true");
+    List<SourceMetadataScannerState.Route> on = new SourceMetadataScanner(context)
+        .routes(AnalysisContext.Framework.QUARKUS);
+    assertTrue(on.stream().anyMatch(route ->
+        route.path().equals("/items/greeting") && route.httpMethod().equals("POST")),
+        "the member mirror lookup runs against the true owner, so the "
+            + "folded constant resolves: " + on);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
+    List<SourceMetadataScannerState.Route> off = new SourceMetadataScanner(context)
+        .routes(AnalysisContext.Framework.QUARKUS);
+    assertTrue(off.isEmpty(),
+        "flag-off the folded constant is mirror-only — no route: " + off);
+  }
+
   @Test
   void dollarNamedWithArgumentsAtFieldSiteIsUndiscoverable() throws IOException {
     // jakarta.inject.Named is deliberately NOT declared (unresolved).

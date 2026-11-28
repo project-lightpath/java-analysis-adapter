@@ -183,7 +183,13 @@ final class FrameworkRouteScanning {
           javac.typeAnnotations(file).orElse(List.of());
       List<JavacSourceSymbolIndex.AnnotationInfo> methodMirrors =
           javac.memberAnnotations(
-              scanner.typeContaining(file, method.start()), method.name(), "method",
+              // #90: the mirror lookup's owner uses the same
+              // declarationStart anchor normalization as the
+              // routesForFile filter above (which resolves it through
+              // innermostType instead of typeContaining), so the pair
+              // cannot diverge for a member declared after a nested
+              // type.
+              scanner.ownerTypeFor(file, method), method.name(), "method",
               JavacFrameworkAnnotations.parameterArity(method.parameters()))
           .orElse(List.of());
       List<Route> result = new ArrayList<>();

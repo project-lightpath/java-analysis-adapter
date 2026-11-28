@@ -343,6 +343,217 @@ class JavacAbstentionEvidenceTest {
         "the producer type keeps its textual spelling: " + binding.evidence());
   }
 
+  // M1 (#90): the producer mirror lookup's owner is normalized — a
+  // producer method declared after a nested type looks up its mirrors
+  // against the TRUE owner, so a same-arity overload group declines
+  // mirror_member_ambiguous with the NORMALIZED identity instead of
+  // naming the nested type the raw extraction start anchored on.
+  @Test
+  void producerMirrorAbstentionNamesTheNormalizedOwner() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public class Thing { }
+        """, """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.stereotype.Service;
+        @Service public class AmbiguousAfterNested {
+          class Helper { }
+          @Bean public Thing make(java.lang.String value) { return null; }
+          public Thing make(java.lang.Integer count) { return null; }
+        }
+        """, """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Thing thing) { }
+        }
+        """));
+    SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            evidence.attributes().getOrDefault("candidateId", "")
+                .startsWith("demo.AmbiguousAfterNested#make")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals("mirror_member_ambiguous",
+        attribute(binding, "javacMirrorAbstention"), binding.evidence().toString());
+    assertEquals("demo.AmbiguousAfterNested#make(1)",
+        attribute(binding, "javacMirrorAbstentionMember"), binding.evidence().toString());
+  }
+
+  // M1b (#90): the succeeds-shape control — a SINGLE producer method
+  // declared after a nested type correlates its mirrors against the
+  // true owner (the lookup succeeds, so the mirror decline and its
+  // nested-owner identity are gone), while the sibling seams on the
+  // same fact still abstain (non-vacuity: the flag is on and the
+  // descriptor/producer-type declines survive).
+  @Test
+  void producerMirrorLookupSucceedsAgainstTheNormalizedOwner() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public class Thing { }
+        """, """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.stereotype.Service;
+        @Service public class SingleAfterNested {
+          class Helper { }
+          @Bean public Thing build(java.lang.String value) { return null; }
+        }
+        """, """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Thing thing) { }
+        }
+        """));
+    SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            evidence.attributes().getOrDefault("candidateId", "")
+                .startsWith("demo.SingleAfterNested#build")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertNull(attribute(binding, "javacMirrorAbstention"),
+        "the mirror lookup runs against the true owner and succeeds: "
+            + binding.evidence());
+    assertNull(attribute(binding, "javacMirrorAbstentionMember"),
+        "no nested-owner mirror identity may remain: " + binding.evidence());
+    assertEquals("multi_type_file", attribute(binding, "javacAbstention"),
+        "the sibling seams still abstain (non-vacuity): "
+            + binding.evidence());
+    assertEquals("demo.SingleAfterNested#build(1)",
+        attribute(binding, "javacProducerTypeAbstentionMember"),
+        binding.evidence().toString());
+  }
+
+  // M2 (#90): the injection-point seam's owner is normalized — a
+  // setter declared after a nested type in a component names the
+  // TOP-LEVEL owner in the fact identity, and the binding row naming
+  // the true owner can select it (today the misattributed nested
+  // owner blocks the row match, leaving the injection unresolved).
+  @Test
+  void injectionPointAfterANestedTypeNamesTheTrueOwnerAndSelectsItsRow()
+      throws IOException {
+    Path sourceRoot = temp.resolve("abstention-m2/src/main/java");
+    write(sourceRoot.resolve("demo/Thing.java"), """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Thing { }
+        """);
+    writeSources(sourceRoot, List.of("""
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          class Helper { }
+          @Autowired void setThing(Thing thing) { }
+        }
+        """));
+    AnalysisContext context = AnalysisContext.builder()
+        .id("spring-boot-production")
+        .framework(AnalysisContext.Framework.SPRING_BOOT)
+        .frameworkVersion("2.7.18")
+        .fixtureId("fsi-spring-boot")
+        .javaRelease(17)
+        .repositoryRoot(temp)
+        .applicationClasses(temp.resolve("abstention-m2/classes"))
+        .selectedProfile("production")
+        .analysisScope(AnalysisContext.Scope.PRODUCTION)
+        .sourceRoot("src/main/java", sourceRoot, AnalysisContext.Scope.PRODUCTION, true)
+        .dependencyClasspath(List.of())
+        .dependencyClasspathRequired(false)
+        .frameworkMetadata(new AnalysisContext.FrameworkMetadata(
+            "spring-bean-annotations", "source_annotations",
+            AnalysisContext.MetadataStatus.OBSERVED, "src/main/java"))
+        .frameworkBindingMetadata(new AnalysisContext.FrameworkBindingMetadata(
+            "0.1.0",
+            List.of(new AnalysisContext.BindingCandidateMetadata(
+                "thing-bean", "demo.Thing", List.of(), List.of(), "bean",
+                true, false, false)),
+            List.of(new AnalysisContext.ResolvedBindingMetadata(
+                "thing-binding",
+                "demo.Consumer",
+                "setThing",
+                "Thing",
+                null,
+                List.of(),
+                "thing-bean",
+                true,
+                true,
+                "selected binding naming the true owner",
+                null,
+                null)),
+            List.of()))
+        .provenance(AnalysisContext.Provenance.forTesting())
+        .build();
+    SemanticCallFacts facts = new JavaAnalysisAdapter().analyze(
+        context, AnalysisGraph.empty());
+    SemanticCallFacts.Fact injection = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            evidence.attributes().getOrDefault("injectionKind", "")
+                .equals("method")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals("spring:injection:demo.Consumer#setThing(Thing)",
+        injection.caller(), injection.evidence().toString());
+    assertTrue(injection.evidence().stream()
+            .anyMatch(evidence -> evidence.symbols()
+                .contains("demo.Consumer#setThing(Thing)")),
+        "the evidence symbol names the true owner: " + injection.evidence());
+    assertEquals("demo.Thing#<init>", injection.callee(),
+        "the binding row naming the true owner selects the candidate: "
+            + injection.evidence());
+  }
+
+  // M4 (#90, kills RESOLUTION-77 mutation 3's equivalent mutant): a
+  // producer declared INSIDE a nested type — the producer-type seam's
+  // ownerTypeFor names the nested type because that IS the true owner
+  // (file.typeName() would name the top-level type; the mutant is red
+  // under this cell). Expected-green control on both trees.
+  @Test
+  void producerInsideANestedTypeNamesTheNestedOwner() throws IOException {
+    SemanticCallFacts facts = analyze(List.of("""
+        package demo;
+        public class Thing { }
+        """, """
+        package demo;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.stereotype.Service;
+        @Service public class Config {
+          class Helper {
+            @Bean public Thing make(java.lang.String value) { return null; }
+          }
+        }
+        """, """
+        package demo;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(Thing thing) { }
+        }
+        """));
+    SemanticCallFacts.Fact binding = facts.frameworkFacts().stream()
+        .filter(item -> item.relationshipType().equals("dependency_injection"))
+        .filter(item -> item.evidence().stream().anyMatch(evidence ->
+            evidence.attributes().getOrDefault("candidateId", "")
+                .startsWith("demo.Config#make")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(facts.frameworkFacts().toString()));
+    assertEquals("multi_type_file",
+        attribute(binding, "javacProducerTypeAbstention"),
+        binding.evidence().toString());
+    assertEquals("demo.Config$Helper#make(1)",
+        attribute(binding, "javacProducerTypeAbstentionMember"),
+        "the nested type is the TRUE owner of a member declared inside "
+            + "it (ownerTypeFor, not file.typeName()): "
+            + binding.evidence());
+  }
+
   /** The N1 divergence fixture, shared by the cell and its flag-off
    * twin so the twin cannot drift from the cell it gates. */
   private static List<String> quarkusDivergenceSources() {
