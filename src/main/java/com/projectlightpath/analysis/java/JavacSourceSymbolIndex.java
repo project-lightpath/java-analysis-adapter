@@ -1062,7 +1062,14 @@ final class JavacSourceSymbolIndex {
     private static String render(AnnotationValue value) {
       Object unwrapped = value.getValue();
       if (unwrapped instanceof String text) {
-        return "\"" + text + "\"";
+        return "\"" + escaped(text) + "\"";
+      }
+      if (unwrapped instanceof Character character) {
+        // #48: a char member renders through the same escape helper,
+        // quote-wrapped, so renderer output never carries a bare
+        // backslash or quote outside an escaped string context (the
+        // renderIsUsable skip-rule precondition).
+        return "\"" + escaped(character.toString()) + "\"";
       }
       if (unwrapped instanceof VariableElement enumConstant) {
         return enumConstant.getEnclosingElement() instanceof TypeElement owner
@@ -1084,6 +1091,42 @@ final class JavacSourceSymbolIndex {
         return renderNested(nested);
       }
       return String.valueOf(unwrapped);
+    }
+
+    /**
+     * Escapes one string or char value into its Java string-literal
+     * interior (#48): {@code \} and {@code "} per the literal rules, the
+     * JLS letter escapes for the control characters b t n f r, a
+     * backslash-u hex spelling for any remaining control character,
+     * and the raw character otherwise (non-ASCII included). The
+     * are fed to the UNCHANGED textual leaf functions, which read the
+     * source spelling — emitting the literal spelling keeps the mirror
+     * extraction identical to the textual one. A source that spells the
+     * spells the same value through backslash-u hex or octal escapes
+     * is a documented residual (PLAN-85 section 3).
+     */
+    private static String escaped(String text) {
+      StringBuilder rendered = new StringBuilder(text.length() + 2);
+      for (int index = 0; index < text.length(); index++) {
+        char character = text.charAt(index);
+        switch (character) {
+          case '\\' -> rendered.append("\\\\");
+          case '"' -> rendered.append("\\\"");
+          case '\b' -> rendered.append("\\b");
+          case '\t' -> rendered.append("\\t");
+          case '\n' -> rendered.append("\\n");
+          case '\f' -> rendered.append("\\f");
+          case '\r' -> rendered.append("\\r");
+          default -> {
+            if (character < 0x20 || character == 0x7F) {
+              rendered.append(String.format("\\u%04x", (int) character));
+            } else {
+              rendered.append(character);
+            }
+          }
+        }
+      }
+      return rendered.toString();
     }
 
     private static String renderNested(AnnotationMirror nested) {
