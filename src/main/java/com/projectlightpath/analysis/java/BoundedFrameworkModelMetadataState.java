@@ -170,13 +170,16 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
   /**
    * One non-generic row spelling whose erased raw equals the shape.
    * Package-private: the TypeMatching associated-row arm shares this ONE
-   * row-spelling policy (CodeRabbit 4724438561). CodeRabbit 4724438554:
-   * an UNQUALIFIED spelling the resolution file cannot resolve falls
-   * back to the C6-style simple-name semantics (the repository's
-   * established tolerance for unqualified metadata values) — the shape
-   * is javac-proven, the row's simple name must match it, and no more
-   * than one selected source type may share that simple name. A QUALIFIED
-   * unresolvable spelling declines (conservative).
+   * row-spelling policy (CodeRabbit 4724438561). CodeRabbit 4724438554 /
+   * 4724558598: an UNQUALIFIED spelling the resolution file cannot
+   * resolve falls back to simple-name comparison against the
+   * javac-proven shape. The C6 declaredTypeNames count guard is
+   * deliberately NOT mirrored: C6 rejects on ambiguity to avoid
+   * fabricating a MATCH, but here rejection fabricates CERTAINTY (an
+   * excluded potential competitor can yield an unopposed DEFINITE) —
+   * the safety direction is inverted, so ambiguity resolves toward
+   * COUNTING the row (a downgrade to POSSIBLE, never a fabrication). A
+   * QUALIFIED unresolvable spelling still declines (conservative).
    */
   static boolean nonGenericRawEquals(
       SourceMetadataScanner scanner,
@@ -194,11 +197,7 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
     if (spelling.contains(".")) {
       return false;
     }
-    String trimmed = spelling.trim();
-    return simpleName(shape).equalsIgnoreCase(trimmed)
-        && scanner.declaredTypeNames().stream()
-            .filter(type -> simpleName(type).equalsIgnoreCase(trimmed))
-            .count() <= 1;
+    return simpleName(shape).equalsIgnoreCase(spelling.trim());
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */

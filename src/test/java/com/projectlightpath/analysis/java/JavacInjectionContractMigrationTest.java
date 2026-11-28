@@ -987,7 +987,12 @@ class JavacInjectionContractMigrationTest {
   @Test
   void samePackageExternalRungFallsToNestedShape() throws IOException {
     Path sourceRoot = root("d8");
-    Path project = sourceRoot.getParent().getParent();
+    // Three parent calls, matching the context() helper's project
+    // derivation (CodeRabbit 4724553338: with two, the external Item
+    // compiled into temp/d8/src/classes while javac's classpath is
+    // temp/d8/classes — the rung was NOT populated and the cell
+    // degenerated to D6b).
+    Path project = sourceRoot.getParent().getParent().getParent();
     Path classes = java.nio.file.Files.createDirectories(
         project.resolve("classes"));
     Path external = java.nio.file.Files.createDirectories(
@@ -1709,6 +1714,50 @@ class JavacInjectionContractMigrationTest {
             + "present");
   }
 
+  // CR3-8554 (CodeRabbit 4724558598): the ambiguity case — with TWO
+  // selected source types sharing the simple name (a.List, b.List), the
+  // unresolvable simple-name contract is genuinely ambiguous, and the
+  // ambiguity must resolve toward COUNTING the row (uncertainty
+  // preserved): excluding it would risk an unopposed DEFINITE, the
+  // repo's primary bug class. Red at HEAD (the C6 count guard rejects
+  // the row -> DEFINITE).
+  @Test
+  void ambiguousSimpleNameRowContractPreservesUncertainty()
+      throws IOException {
+    Path sourceRoot = root("cr7");
+    write(sourceRoot, "a/List.java", "package a; public class List { }\n");
+    write(sourceRoot, "b/List.java", "package b; public class List { }\n");
+    write(sourceRoot, "demo/Config.java", """
+        package demo;
+        import org.springframework.stereotype.Component;
+        @Component public class Config {
+          @org.springframework.context.annotation.Bean
+          public java.util.List<String> listBean() { return null; }
+        }
+        """);
+    write(sourceRoot, "demo/Consumer.java", """
+        package demo;
+        import java.util.*;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.stereotype.Component;
+        @Component public class Consumer {
+          @Autowired public Consumer(List list) { }
+        }
+        """);
+    AnalysisContext context = springContext(sourceRoot, List.of(
+        producerRow("listBean", "java.util.List", "demo.Config", "listBean"),
+        contractRow("ambiguous-row", "java.util.ArrayList", "demo.Outside",
+            "List")));
+    System.setProperty(FLAG, "true");
+    SemanticCallFacts on = analyze(context);
+    assertEquals(SemanticCallFacts.Certainty.POSSIBLE,
+        injection(on, "demo.Consumer").certainty(),
+        "an ambiguous simple-name row contract is a POTENTIAL competitor "
+            + "(a.List, b.List, or the shape's java.util.List — the row "
+            + "cannot be proven not to compete): the row is counted and "
+            + "the certainty stays POSSIBLE, never an unopposed DEFINITE");
+  }
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
@@ -1745,9 +1794,12 @@ class JavacInjectionContractMigrationTest {
 
   /**
    * Asserts byte-identical injection-fact parity between the flag states:
-   * a NONEMPTY snapshot (caller -> callee : certainty, sorted) must be
-   * equal, so a dropped fact or a changed identity fails (CodeRabbit
-   * 4724438585).
+   * a NONEMPTY snapshot of the COMPLETE facts (the record's toString —
+   * id, caller, callee, certainty, status, modelRule, evidence,
+   * limitation; sorted) must be equal, so a dropped fact, a changed
+   * identity, or any other field drift fails (CodeRabbit 4724438585 /
+   * 4724552001). Both runs analyze the SAME context, so temp paths and
+   * digests are identical and no normalization is needed.
    */
   private static void assertInjectionParity(
       SemanticCallFacts off, SemanticCallFacts on, String owner) {
@@ -1761,8 +1813,7 @@ class JavacInjectionContractMigrationTest {
   private static List<String> injectionSnapshot(
       SemanticCallFacts facts, String owner) {
     return injections(facts, owner).stream()
-        .map(fact -> fact.caller() + " -> " + fact.callee()
-            + " : " + fact.certainty())
+        .map(SemanticCallFacts.Fact::toString)
         .sorted()
         .toList();
   }
