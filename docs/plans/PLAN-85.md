@@ -55,17 +55,27 @@ Verified against current main:
   3. **Superclass residuals** (multi-level chains, nested-type
      qualifiers, superclasses outside selected files) — already tracked as
      the documented false-attribution residual in AGENTS.md, pointing at
-     FLPATH-5124 policy work → **folded** (no new issue; AGENTS.md is the
-     durable record).
-  4. **TCCL policy** — `setContextClassLoader` appears nowhere in src/
+     FLPATH-5124 policy work → **folded**: FLPATH-5124 is the agreed
+     tracker (stated explicitly in the #85 disposition comment; no
+     GitHub duplicate is filed to avoid double-tracking).
+  4. **The stale `issue-9/service-loader-deferred` branch** (plan-review
+     finding 2): it carries the TCCL guard and provider-eligibility check
+     grounded in the DELETED textual resolver machinery
+     (`StaticImportOwnerResolver`, `ServiceLoaderInheritance`,
+     `ServiceLoaderMemberTypes` — removed by PR #31) and is hundreds of
+     commits behind main → **superseded**: the closing comment on #9
+     dispositions the branch (archive/delete; do not rebase), and the new
+     provider-eligibility issue cites it as prior art only.
+  5. **TCCL policy** — `setContextClassLoader` appears nowhere in src/
      (rg, case-insensitive); the two-arg `ServiceLoader.load(Class,
      ClassLoader)` site already carries `explicitClassLoader` evidence and
      stays POSSIBLE (`ServiceLoaderCallSite` record :4-8;
      `SootUpBaseGraphProviderIntegrationTest.explicitLoaderWithClean
      ProviderRemainsPossible` :225). → **wontfix-with-reason on #85**: no
      bounded fixture installs a TCCL; the explicit-loader arm is already
-     the safe direction; guarding hypothetical TCCL installs corpus-wide
-     is speculative work with no observable today.
+     the safe direction; the old branch's guard targeted deleted machinery,
+     and guarding hypothetical TCCL installs corpus-wide is speculative
+     work with no observable today.
 
 Disposition: **close #9 as superseded-in-part** with the per-item mapping
 in the closing comment; file the two scoped issues above.
@@ -74,7 +84,7 @@ in the closing comment; file the two scoped issues above.
 
 ### Item 3 — post-#61 textual residuals (RESOLUTION-61 §Residuals)
 
-- `proxyTargetTypeMatches` (MetadataMatching:95) stays textual — the
+- `proxyTargetTypeMatches` (BoundedFrameworkModelMetadataMatching.java:98) stays textual — the
   resolution names it "its own follow-up" → **new issue**.
 - Metadata-side spellings (binding rows, proxy rows; C6's
   case-insensitive simple-name over-approximation) → **wontfix-with-reason
@@ -93,8 +103,8 @@ class, safe direction, three production sites + one equivalent mutant):
 
 - `FrameworkBeanScanning.producerCandidate`'s mirror lookup
   (`javacMirrorAbstentionMember` names the nested owner),
-- `FrameworkInjectionScanning.methodInjectionPoints:159`,
-- `FrameworkRouteScanning.routesForMethod:186`,
+- `FrameworkInjectionScanning.methodInjectionPoints:137`,
+- `FrameworkRouteScanning.routesForMethod:171`,
 - mutation 3's equivalent mutant (a producer declared inside a nested
   type).
 
@@ -115,8 +125,19 @@ extraction.
 
 ### Design invariant
 
-`AnnotationRenderer.render`'s String branch must produce the **Java
-source literal spelling** of the value: escape `\` → `\\` and `"` → `\"`.
+`AnnotationRenderer.render`'s String branch must produce a **valid Java
+string literal denoting the value** — not merely wrap it. Escaping is
+the full JLS letter set plus unicode fallback:
+
+- `\` → `\\`, `"` → `\"` (the #48 case),
+- `\b` `\t` `\n` `\f` `\r` → their letter escapes (a value spelled
+  `"a\nb"` in source must render `"a\nb"`, not a raw newline — javac's
+  `getValue()` hands the RUNTIME string, and the textual path reads the
+  source spelling; letter-escaping restores extraction parity),
+- any remaining control char (`c < 0x20 || c == 0x7F`) → `\uXXXX`,
+- non-ASCII (`c >= 0x80`) → raw character (parity with literal-spelled
+  sources; see the residual below).
+
 Every consumer of rendered arguments (`JavacFrameworkAnnotationValues`,
 `JavacFrameworkQualifierTable.mirrorFamilies`,
 `JavacFrameworkQualifierFamilies.mirrorCanReplace`) feeds the UNCHANGED
@@ -128,7 +149,24 @@ values containing `"` or `\` (today the mirror diverges or declines).
 
 `renderIsUsable` must become escape-aware (skip the character after
 `\`), else the escaped rendering `"a\"b"` still counts three quote
-characters and declines — the fix would be inert.
+characters and declines — the fix would be inert. The skip rule is
+sound because backslashes occur only inside string values in renderer
+output (enum/class/number renderings contain none); stated in the
+javadoc.
+
+### Documented residual (plan-review round 1, finding 1)
+
+Perfect byte-parity with the SOURCE spelling is unattainable from the
+mirror: a value can be spelled many ways in source (`\n` vs `\u000a`,
+`"` vs `\u0022`, octal escapes, `\uXXXX`-spelled non-ASCII). The escape
+set above restores parity for every STANDARD spelling (letter escapes,
+`\"`, `\\`, raw non-ASCII). A source that spells a value through
+`\uXXXX`/octal escapes diverges mirror-vs-textual after the fix where
+the quote cases declined before — a value-spelling divergence in the
+mirror-replaced answer, never a fabricated call fact, and strictly
+rarer than the constructs the fix repairs. Recorded on #85 with the
+QUOTED wontfix family; a fixture that needs it reopens both.
+
 
 ### Cells (RED_85)
 
@@ -136,12 +174,14 @@ characters and declines — the fix would be inert.
    `annotationValuesRenderMinusQuoting`): fixture
    `@Val(name = "a\"b", ...)` asserts
    `annotation.values().get("name")` equals the escaped rendering
-   `"a\"b"` (6 chars). Plus a backslash-only arm: `@Val(name = "a\\b")`
-   renders `"a\\b"`.
+   `"a\"b"` (6 chars). Backslash arm: `@Val(name = "a\\b")`
+   renders `"a\\b"`. Control-char arm (plan-review finding 1):
+   `@Val(name = "a\nb")` renders `"a\nb"` (the letter escape, not the
+   raw newline).
 2. **renderIsUsable cell** (new small test class or the migration test):
    `renderIsUsable("value=\"a\\\"b\"")` is TRUE after the fix (red today:
    the naive counter sees 3 quotes); an unbalanced rendering
-   (`"a"b"`) still declines.
+   (`"a"b"`) still declines; a `\\`-pair rendering stays usable.
 3. **End-to-end #24 value path** (sanctioned edit — the ONLY existing
    test touched): `unescapedQuoteInRenderedValueFallsBackToTextual`
    (JavacFrameworkAnnotationMigrationTest:789) — the mirror no longer
@@ -149,26 +189,30 @@ characters and declines — the fix would be inert.
    renamed to pin mirror-stands-in parity (the on/off equality assertion
    itself is unchanged and stays load-bearing).
 
-Floor: 798 → 801 (3 cells).
+Floor: 798 → 802 (4 cells; Makefile:24 literal raised with EVIDENCE).
 
 ### GREEN_85
 
-- `AnnotationRenderer.render` String branch:
-  `'"' + escaped(text) + '"'` escaping `\` and `"` per Java string-literal
-  rules (nested renderers and array joins route through `render`, so one
-  site covers all).
+- `AnnotationRenderer.render` String branch: wrap with the full escape
+  set of §3 Design invariant (one helper; nested renderers and array
+  joins route through `render`, so one site covers all).
 - `JavacFrameworkAnnotations.renderIsUsable`: escape-aware scan; javadoc
-  updated (the "#48 conservative decline" note becomes the escape rule).
+  updated (the "#48 conservative decline" note becomes the escape rule
+  and its precondition).
+- `JavacAnnotationAccess.unquoted` javadoc: one sentence noting the
+  interior keeps the literal (escaped) spelling post-#85.
 
 ### EVIDENCE_85
 
-- Gates: `make adapter-test` (801, zero failures), `make java-lint`
-  (zero findings — a two-file touch with no PMD-relevant structure; the
-  #64 helios08 cross-check is not triggered), `make evidence-validate`.
-- Mutation receipts: (1) revert the render escaping ⇒ cells 1 and 3's
-  parity comment obsolete / cell 1 red; (2) revert renderIsUsable to the
-  naive counter ⇒ cell 2 red; (3) escape only `"` not `\` ⇒ the
-  backslash arm of cell 1 red.
+- Gates: `make adapter-test` (802, zero failures; Makefile floor literal
+  798 → 802), `make java-lint` (zero findings — a two-file touch with no
+  PMD-relevant structure; the #64 helios08 cross-check is not
+  triggered), `make evidence-validate`.
+- Mutation receipts: (1) revert the render escaping ⇒ cell 1 red
+  (all three arms); (2) revert renderIsUsable to the naive counter ⇒
+  cell 2 red; (3) escape only `"` not `\` ⇒ the backslash arm of cell 1
+  red; (4) drop the letter escapes (raw newline) ⇒ the control-char arm
+  red.
 
 ## 4. Issue-filing checklist (executed at PR time, from this branch)
 
