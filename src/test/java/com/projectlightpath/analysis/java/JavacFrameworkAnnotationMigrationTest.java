@@ -786,7 +786,52 @@ class JavacFrameworkAnnotationMigrationTest {
   }
 
   @Test
-  void unescapedQuoteInRenderedValueFallsBackToTextual() throws IOException {
+  void renderIsUsableDeclinesDecodedQuotes() {
+    // #48 + coderabbit 85-1: a decoded quote (rendered \") truncates in
+    // the escape-blind QUOTED extraction and can collapse distinct
+    // source spellings, so the mirror declines and the textual answer
+    // survives. A backslash pair carries no quote and stays usable; an
+    // unbalanced rendering (the pre-fix quote spelling) still declines.
+    assertFalse(JavacFrameworkAnnotations.renderIsUsable("value=\"a\\\"b\""));
+    assertTrue(JavacFrameworkAnnotations.renderIsUsable("ch=\"\\\\\""));
+    assertFalse(JavacFrameworkAnnotations.renderIsUsable("value=\"a\"b\""));
+  }
+
+  @Test
+  void octalSpelledQuoteQualifierKeepsSourceDistinctness() throws IOException {
+    // CodeRabbit 85-1: a decoded quote (here octal-spelled \042) renders
+    // escaped, and the escape-blind QUOTED extraction truncates BOTH
+    // spellings to the same prefix — distinct source spellings would
+    // collapse to one qualifier value flag-on. The mirror must decline
+    // decoded quotes so the textual spelling survives.
+    Map<String, String> files = Map.of(
+        "org/springframework/stereotype/Component.java",
+        "package org.springframework.stereotype; public @interface Component {}",
+        "org/springframework/beans/factory/annotation/Autowired.java",
+        "package org.springframework.beans.factory.annotation; public @interface Autowired {}",
+        "org/springframework/beans/factory/annotation/Qualifier.java",
+        "package org.springframework.beans.factory.annotation; public @interface Qualifier {"
+            + " String value() default \"\"; }",
+        "demo/Octal.java", """
+            package demo;
+            import org.springframework.stereotype.Component;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.beans.factory.annotation.Qualifier;
+            @Component public class Octal {
+              @Autowired @Qualifier("\\042red") private String value;
+            }
+            """);
+    AnalysisContext context = springContext("octal-quote", files);
+    System.setProperty(FLAG, "false"); // opt-out golden (#66)
+    List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
+    System.setProperty(FLAG, "true");
+    List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
+    assertEquals(off, on);
+    assertTrue(off.toString().contains("\\042red"), off.toString());
+  }
+
+  @Test
+  void escapedQuoteInRenderedValueKeepsMirrorParity() throws IOException {
     Map<String, String> files = Map.of(
         "org/springframework/stereotype/Component.java",
         "package org.springframework.stereotype; public @interface Component {}",
@@ -808,9 +853,14 @@ class JavacFrameworkAnnotationMigrationTest {
     List<String> off = fieldQualifiers(new SourceMetadataScanner(context), "value");
     System.setProperty(FLAG, "true");
     List<String> on = fieldQualifiers(new SourceMetadataScanner(context), "value");
-    // The renderer does not re-escape the quote inside "a\"b", so the
-    // rendered arguments end with an odd quote count and the mirror is
-    // declined per occurrence — the textual answer survives (#48).
+    // #48 + coderabbit 85-1: the renderer re-escapes the quote inside
+    // "a\"b", but a DECODED quote declines the mirror (renderIsUsable):
+    // the escape-blind QUOTED extraction truncates at the escaped quote,
+    // and distinct source spellings of quote-bearing values would
+    // collapse to one extracted prefix (the octal-spelled red cell pins
+    // that collapse). The textual answer survives; backslash and
+    // control-char values keep mirror parity (pinned by the unit cells
+    // and their mutation receipts).
     assertEquals(off, on);
     assertTrue(on.contains("Label") && on.contains("Foo") && on.contains("Role"),
         on.toString());

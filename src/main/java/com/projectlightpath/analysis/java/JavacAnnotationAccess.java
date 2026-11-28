@@ -205,7 +205,12 @@ final class JavacAnnotationAccess {
     return separator < 0 ? canonical : canonical.substring(separator + 1);
   }
 
-  /** Strips the renderer's surrounding quotes from a string value. */
+  /**
+   * Strips the renderer's surrounding quotes from a string value. The
+   * interior keeps the literal (escaped) spelling — e.g. a value
+   * containing a quote renders as {@code a\"b} — matching what the
+   * textual leaf functions read from source (#48).
+   */
   static String unquoted(String renderedValue) {
     if (renderedValue != null && renderedValue.length() >= 2
         && renderedValue.startsWith("\"") && renderedValue.endsWith("\"")) {

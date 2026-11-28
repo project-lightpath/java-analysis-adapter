@@ -171,15 +171,24 @@ final class JavacFrameworkAnnotations {
    * nested annotation value ({@code @}), or an unresolved value
    * ({@code <error>}, e.g. an enum constant whose type the index could not
    * resolve), means the mirror cannot stand in for the textual answer. An
-   * odd quote count (the #21 renderer does not re-escape quotes inside
-   * string values, so a value containing {@code "} flips the tracking
-   * state) also declines — the conservative direction for #48.
+   * unbalanced effective quote count also declines — the conservative
+   * direction. Quote tracking is escape-aware (#48): the renderer emits
+   * Java string-literal spellings, so the character after every
+   * backslash belongs to that escape and never toggles the quote state;
+   * backslashes occur in renderer output only inside escaped string/char
+   * contexts, so a left-to-right greedy skip is sound. A {@code "} inside
+   * a value is spelled {@code \"} and does not toggle.
    */
   static boolean renderIsUsable(String rendered) {
     boolean quoted = false;
     for (int index = 0; index < rendered.length(); index++) {
       char character = rendered.charAt(index);
-      if (character == '"') {
+      if (character == '\\') {
+        if (index + 1 < rendered.length() && rendered.charAt(index + 1) == '"') {
+          return false;
+        }
+        index++;
+      } else if (character == '"') {
         quoted = !quoted;
       } else if (!quoted && (character == '@'
           || rendered.startsWith("<error>", index))) {
