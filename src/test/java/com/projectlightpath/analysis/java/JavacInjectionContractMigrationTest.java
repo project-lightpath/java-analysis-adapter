@@ -35,9 +35,21 @@ class JavacInjectionContractMigrationTest {
 
   @TempDir Path temp;
 
+  /** The flag value to restore after each test (CodeRabbit 4724438578). */
+  private String initialFlag;
+
+  @org.junit.jupiter.api.BeforeEach
+  void saveFlag() {
+    initialFlag = System.getProperty(FLAG);
+  }
+
   @AfterEach
   void clearFlag() {
-    System.clearProperty(FLAG);
+    if (initialFlag == null) {
+      System.clearProperty(FLAG);
+    } else {
+      System.setProperty(FLAG, initialFlag);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -313,9 +325,7 @@ class JavacInjectionContractMigrationTest {
     SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
-    assertEquals(injections(off, "demo.Consumer").size(),
-        injections(on, "demo.Consumer").size(),
-        "an ambiguous overload group abstains: flag-on is byte-identical");
+    assertInjectionParity(off, on, "demo.Consumer");
     for (SemanticCallFacts.Fact fact : injections(on, "demo.Consumer")) {
       assertEquals(SemanticCallFacts.Certainty.UNRESOLVED, fact.certainty(),
           "the ambiguous overload keeps the textual abstention: " + fact);
@@ -392,7 +402,10 @@ class JavacInjectionContractMigrationTest {
         "a duplicate binary name is flagged unusable: the unique-owner "
             + "lookup declines");
     SemanticCallFacts on = analyze(context);
-    assertTrue(injections(on, "demo.Consumer").stream()
+    List<SemanticCallFacts.Fact> ambiguous = injections(on, "demo.Consumer");
+    assertFalse(ambiguous.isEmpty(),
+        "the injection facts must be emitted, not dropped: " + on);
+    assertTrue(ambiguous.stream()
             .allMatch(fact -> fact.certainty()
                 == SemanticCallFacts.Certainty.UNRESOLVED),
         "the ambiguous owner keeps the textual abstention: " + on);
@@ -425,8 +438,7 @@ class JavacInjectionContractMigrationTest {
     SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
-    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
-        injection(off, "demo.Consumer").certainty());
+    assertInjectionParity(off, on, "demo.Consumer");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
         injection(on, "demo.Consumer").certainty(),
         "an error-typed member abstains: flag-on is byte-identical");
@@ -461,8 +473,7 @@ class JavacInjectionContractMigrationTest {
     SemanticCallFacts off = analyze(context);
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
-    assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
-        injection(off, "demo.Consumer").certainty());
+    assertInjectionParity(off, on, "demo.Consumer");
     assertEquals(SemanticCallFacts.Certainty.UNRESOLVED,
         injection(on, "demo.Consumer").certainty(),
         "a phantom constructor site declines the whole file: "
@@ -918,6 +929,15 @@ class JavacInjectionContractMigrationTest {
             + "DEFINITE promotion: " + on.providerFacts());
     assertTrue(on.diagnostics().isEmpty(),
         "the seam carries no evidence channel: " + on.diagnostics());
+    List<SemanticCallFacts.Fact> coexisting =
+        injections(on, "demo.Consumer");
+    assertFalse(coexisting.isEmpty(),
+        "the injection fact coexists with the ServiceLoader site: "
+            + on.frameworkFacts());
+    assertTrue(coexisting.stream()
+            .allMatch(fact -> fact.certainty()
+                == SemanticCallFacts.Certainty.UNRESOLVED),
+        "the abstaining injection stays UNRESOLVED: " + coexisting);
   }
 
   // ------------------------------------------------------------------
@@ -958,12 +978,22 @@ class JavacInjectionContractMigrationTest {
         "flag-off: the seam is empty");
   }
 
-  // D8: same-package x same-CU, repair form — the same-package simple name
-  // exists only OUTSIDE the selected file set, so the textual rung is empty
-  // and javac resolves the CU's own nested type.
+  // D8: same-package x same-CU, repair form — a REAL external
+  // same-package demo.Item is compiled onto the fixture classpath
+  // (CodeRabbit 4724438605: the rung must be genuinely populated): the
+  // textual same-package rung scans files() only and cannot see it, while
+  // javac can — and still resolves the CU's own nested type (JLS 6.5.5:
+  // the same-CU member type wins over the same-package binary type).
   @Test
   void samePackageExternalRungFallsToNestedShape() throws IOException {
     Path sourceRoot = root("d8");
+    Path project = sourceRoot.getParent().getParent();
+    Path classes = java.nio.file.Files.createDirectories(
+        project.resolve("classes"));
+    Path external = java.nio.file.Files.createDirectories(
+        project.resolve("external-src"));
+    write(external, "demo/Item.java",
+        "package demo; public class Item { }\n");
     write(sourceRoot, "demo/Consumer.java", """
         package demo;
         import org.springframework.beans.factory.annotation.Autowired;
@@ -973,6 +1003,9 @@ class JavacInjectionContractMigrationTest {
           @Autowired public Consumer(Item item) { }
         }
         """);
+    assertEquals(0, javax.tools.ToolProvider.getSystemJavaCompiler().run(
+        null, null, null, "--release", "17", "-d", classes.toString(),
+        external.resolve("demo/Item.java").toString()));
     System.setProperty(FLAG, "true");
     SourceMetadataScanner scanner =
         new SourceMetadataScanner(springContext(sourceRoot));
@@ -981,7 +1014,8 @@ class JavacInjectionContractMigrationTest {
     assertEquals(Optional.of("demo.Consumer.Item"),
         JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
         "an external same-package type is invisible to the textual rung "
-            + "(files() only); javac resolves the nested type");
+            + "(files() only); javac sees it on the classpath and still "
+            + "resolves the CU's own nested type");
     System.setProperty(FLAG, "false");
     SourceMetadataScanner textual =
         new SourceMetadataScanner(springContext(sourceRoot));
@@ -1037,12 +1071,12 @@ class JavacInjectionContractMigrationTest {
     Path sourceRoot = root("d9");
     write(sourceRoot, "demo/Consumer.java", """
         package demo;
-        import absent.pkg.*;
+        import java.util.*;
         import org.springframework.beans.factory.annotation.Autowired;
         import org.springframework.stereotype.Component;
         @Component public class Consumer {
-          public class Item { }
-          @Autowired public Consumer(Item item) { }
+          public class List { }
+          @Autowired public Consumer(List list) { }
         }
         """);
     System.setProperty(FLAG, "true");
@@ -1050,10 +1084,12 @@ class JavacInjectionContractMigrationTest {
         new SourceMetadataScanner(springContext(sourceRoot));
     SourceMetadataScannerState.InjectionPoint point = injectionPoint(
         scanner, "demo.Consumer", "<init>");
-    assertEquals(Optional.of("demo.Consumer.Item"),
+    assertEquals(Optional.of("demo.Consumer.List"),
         JavacInjectionTypeShapes.of(scanner).requestedShape(point, 0),
-        "an on-demand import of an absent package leaves the textual rung "
-            + "empty; javac resolves the nested type");
+        "a POPULATED on-demand import (java.util.*) cannot displace the "
+            + "CU's own nested type (JLS 6.5.5): javac resolves the nested "
+            + "List; the textual on-demand rung scans files() only and "
+            + "stays empty");
     System.setProperty(FLAG, "false");
     SourceMetadataScanner offScanner =
         new SourceMetadataScanner(springContext(sourceRoot));
@@ -1146,8 +1182,11 @@ class JavacInjectionContractMigrationTest {
         import org.springframework.stereotype.Component;
         @Component public class Greeter { }
         """);
-    write(sourceRoot, "other/Greeter.java",
-        "package other; public class Greeter { }\n");
+    write(sourceRoot, "other/Greeter.java", """
+        package other;
+        import org.springframework.stereotype.Component;
+        @Component public class Greeter { }
+        """);
     // D1: on-demand x same-package — the same-package rung wins.
     write(sourceRoot, "demo/SamePackageConsumer.java", """
         package demo;
@@ -1158,11 +1197,12 @@ class JavacInjectionContractMigrationTest {
           @Autowired public SamePackageConsumer(Greeter greeter) { }
         }
         """);
-    // D2: on-demand x single-type import — the import wins.
+    // D2: on-demand x single-type import — the import of a DISTINCT
+    // type wins over the same-package/on-demand competition.
     write(sourceRoot, "demo/ImportWinsConsumer.java", """
         package demo;
-        import demo.Greeter;
-        import other.*;
+        import other.Greeter;
+        import demo.*;
         import org.springframework.beans.factory.annotation.Autowired;
         import org.springframework.stereotype.Component;
         @Component public class ImportWinsConsumer {
@@ -1185,13 +1225,22 @@ class JavacInjectionContractMigrationTest {
     System.setProperty(FLAG, "true");
     SemanticCallFacts on = analyze(context);
     for (String owner : List.of("demo.SamePackageConsumer",
-        "demo.ImportWinsConsumer", "demo.ExplicitSamePackageConsumer")) {
+        "demo.ExplicitSamePackageConsumer")) {
       assertTrue(injection(off, owner).callee().contains("demo.Greeter#"),
           "flag-off golden (" + owner + "): the textual rung order answers");
       assertTrue(injection(on, owner).callee().contains("demo.Greeter#"),
           "flag-on (" + owner + "): a non-null textual answer is never "
               + "overridden");
     }
+    // D2: the DISTINCT single-type import (other.Greeter) wins over the
+    // same-package and on-demand competition — a different bean than D1.
+    assertTrue(injection(off, "demo.ImportWinsConsumer").callee()
+            .contains("other.Greeter#"),
+        "flag-off golden (D2): the single-type import of a distinct type "
+            + "wins");
+    assertTrue(injection(on, "demo.ImportWinsConsumer").callee()
+            .contains("other.Greeter#"),
+        "flag-on (D2): a non-null textual answer is never overridden");
   }
 
   // C5-positive: the metadata-row disjunct's observable — a metadata-only
@@ -1668,7 +1717,7 @@ class JavacInjectionContractMigrationTest {
     return new JavaAnalysisAdapter().analyze(context);
   }
 
-  private List<SemanticCallFacts.Fact> injections(
+  private static List<SemanticCallFacts.Fact> injections(
       SemanticCallFacts facts, String owner) {
     return facts.frameworkFacts().stream()
         .filter(item -> item.relationshipType().equals("dependency_injection"))
@@ -1692,6 +1741,30 @@ class JavacInjectionContractMigrationTest {
         .filter(point -> point.member().equals(member))
         .findFirst()
         .orElseThrow();
+  }
+
+  /**
+   * Asserts byte-identical injection-fact parity between the flag states:
+   * a NONEMPTY snapshot (caller -> callee : certainty, sorted) must be
+   * equal, so a dropped fact or a changed identity fails (CodeRabbit
+   * 4724438585).
+   */
+  private static void assertInjectionParity(
+      SemanticCallFacts off, SemanticCallFacts on, String owner) {
+    List<String> offSnapshot = injectionSnapshot(off, owner);
+    assertFalse(offSnapshot.isEmpty(),
+        "the flag-off facts must exist for a parity pin: " + owner);
+    assertEquals(offSnapshot, injectionSnapshot(on, owner),
+        "byte-identical parity: " + owner);
+  }
+
+  private static List<String> injectionSnapshot(
+      SemanticCallFacts facts, String owner) {
+    return injections(facts, owner).stream()
+        .map(fact -> fact.caller() + " -> " + fact.callee()
+            + " : " + fact.certainty())
+        .sorted()
+        .toList();
   }
 
   private SourceMetadataScannerState.SourceFile file(

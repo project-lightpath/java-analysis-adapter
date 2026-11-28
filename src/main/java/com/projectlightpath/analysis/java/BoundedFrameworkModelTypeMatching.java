@@ -86,9 +86,15 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
     if (requested.isEmpty()) {
       // Issue #61: the index contract disjunct is evaluated BEFORE this
       // early return can preempt it — the shape arm fires precisely in
-      // this textual-vacuum case.
+      // this textual-vacuum case. CodeRabbit 4724438561: the vacuum path
+      // must also run the ASSOCIATED-ROW contract arm the textual path
+      // runs (a scanned producer whose binding row declares the
+      // requested contract stays in the match set, so a competitor is
+      // never hidden and an unopposed DEFINITE is never emitted).
       return indexContract(scanner, injectionFile, requestedType,
-          requestedShape, candidate);
+          requestedShape, candidate)
+          || associatedContractMatches(
+              context, scanner, requestedType, requestedShape, candidate);
     }
     boolean sourceContract = candidate.contracts().stream()
         .anyMatch(contract -> contractMatchesType(
@@ -103,6 +109,29 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
     return sourceContract || metadataContract
         || indexContract(scanner, injectionFile, requestedType,
             requestedShape, candidate);
+  }
+
+  /**
+   * The associated-row contract arm for the vacuum path (CodeRabbit
+   * 4724438561): the candidate's binding rows' contract spellings
+   * compared against the requested shape through the SAME row-spelling
+   * policy as the metadata-only arm — the textual path counts these
+   * rows, so the vacuum repair must too.
+   */
+  private boolean associatedContractMatches(
+      AnalysisContext context,
+      SourceMetadataScanner scanner,
+      String requestedType,
+      Optional<String> requestedShape,
+      SourceMetadataScannerState.BeanCandidate candidate) {
+    if (hasGenericArguments(requestedType) || requestedShape.isEmpty()) {
+      return false;
+    }
+    return matchingCandidateMetadata(context, scanner, candidate).stream()
+        .flatMap(row -> row.contracts().stream())
+        .anyMatch(contract -> BoundedFrameworkModelMetadataState
+            .nonGenericRawEquals(scanner, candidate.file(), contract,
+                requestedShape.get()));
   }
 
   /**
@@ -132,8 +161,15 @@ abstract class BoundedFrameworkModelTypeMatching extends BoundedFrameworkModelMe
     if (requestedRaw.isEmpty()) {
       return false;
     }
-    if (requestedShape.isPresent()
-        && !requestedRaw.get().equals(requestedShape.get())) {
+    // CodeRabbit 4724039692 / 4724438566: the index arm admits a match
+    // only when javac's requested shape is KNOWN and agrees with the
+    // resolved identity. A divergent shape (a nested-type shadow over an
+    // imported name) or an ABSENT shape (a declined lookup — e.g. a
+    // same-arity overload ambiguity) leaves the requested identity
+    // unverified, and an unverified identity must not build an index
+    // match: abstention is the safe result.
+    if (requestedShape.isEmpty()
+        || !requestedRaw.get().equals(requestedShape.get())) {
       return false;
     }
     return JavacInjectionTypeShapes.of(scanner)

@@ -167,8 +167,18 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
                 scanner, injectionFile, contract, shape));
   }
 
-  /** One non-generic row spelling whose erased raw equals the shape. */
-  private static boolean nonGenericRawEquals(
+  /**
+   * One non-generic row spelling whose erased raw equals the shape.
+   * Package-private: the TypeMatching associated-row arm shares this ONE
+   * row-spelling policy (CodeRabbit 4724438561). CodeRabbit 4724438554:
+   * an UNQUALIFIED spelling the resolution file cannot resolve falls
+   * back to the C6-style simple-name semantics (the repository's
+   * established tolerance for unqualified metadata values) — the shape
+   * is javac-proven, the row's simple name must match it, and no more
+   * than one selected source type may share that simple name. A QUALIFIED
+   * unresolvable spelling declines (conservative).
+   */
+  static boolean nonGenericRawEquals(
       SourceMetadataScanner scanner,
       SourceMetadataScannerState.SourceFile injectionFile,
       String spelling,
@@ -176,9 +186,19 @@ abstract class BoundedFrameworkModelMetadataState extends BoundedFrameworkModelC
     if (hasGenericArguments(spelling)) {
       return false;
     }
-    return canonicalType(eraseGenericArguments(spelling), injectionFile, scanner)
-        .map(shape::equals)
-        .orElse(false);
+    Optional<String> raw = canonicalType(
+        eraseGenericArguments(spelling), injectionFile, scanner);
+    if (raw.isPresent()) {
+      return raw.get().equals(shape);
+    }
+    if (spelling.contains(".")) {
+      return false;
+    }
+    String trimmed = spelling.trim();
+    return simpleName(shape).equalsIgnoreCase(trimmed)
+        && scanner.declaredTypeNames().stream()
+            .filter(type -> simpleName(type).equalsIgnoreCase(trimmed))
+            .count() <= 1;
   }
 
   /** Applies only conservative metadata qualifier filtering for external candidates. */
