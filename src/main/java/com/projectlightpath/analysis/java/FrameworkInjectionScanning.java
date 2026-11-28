@@ -144,8 +144,8 @@ final class FrameworkInjectionScanning {
           continue;
         }
         // The owner keeps the #77/#90 declarationStart normalization:
-        // a member declared after a nested type is owned by the true
-        // (top-level) type, not the nested type the raw extraction
+        // a member declared after a nested type is owned by its true
+        // declaring type, not the nested type the raw extraction
         // start anchored on.
         String owner = scanner.ownerTypeFor(file, method);
         InjectionSite site = new InjectionSite(file, owner, method.name(), "method");

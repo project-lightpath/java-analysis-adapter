@@ -135,7 +135,18 @@ guards, attribute keys, certainty semantics, status, fact-ID schemes.
   subagents. The methodology's intent (independent adversarial
   pressure) is only partially met; the PR-stage CodeRabbit full
   review is the independent backstop.
-- **Implementation review**: see REVIEW rounds below.
+- **Implementation review**: round 1 (self-conducted, fresh pass over
+  the full `3e0f3d0..HEAD` diff): the production diff is exactly the
+  three sanctioned one-expression swaps plus seam comments and the
+  Makefile floor bump; the test diff is pure additions (251
+  insertions, 0 deletions — zero edits to existing tests, as
+  planned); no #84-adjacent surface touched; the double
+  `ownerTypeFor` call per producer (correlation + mirror lookup) is
+  covered by the per-offset `typeContaining` memoization. One NIT
+  (comment wording: "true (top-level) type" → "true declaring type",
+  the owner is the innermost declaring type, not necessarily
+  top-level) fixed in REVIEW_90_1. Round 2: diff re-read after the
+  NIT fix — no new addressable findings.
 
 ## Residuals
 
