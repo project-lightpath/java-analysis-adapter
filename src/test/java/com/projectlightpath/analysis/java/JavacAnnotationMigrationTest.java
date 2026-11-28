@@ -132,12 +132,14 @@ class JavacAnnotationMigrationTest {
               String back();
               String nl();
               char ch();
+              String ctrl();
             }
             """,
         "demo/EscUser.java", """
             package demo;
             public class EscUser {
-              @Esc(name = "a\\"b", back = "a\\\\b", nl = "a\\nb", ch = '\\\\')
+              @Esc(name = "a\\"b", back = "a\\\\b", nl = "a\\nb", ch = '\\\\',
+                   ctrl = "\1")
               private String field;
             }
             """));
